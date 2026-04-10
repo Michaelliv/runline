@@ -102,7 +102,9 @@ export async function loadPluginsFromConfig(configDir: string): Promise<void> {
       try {
         const plugin = await loadPluginFromPath(p);
         registry.register(plugin);
-      } catch {}
+      } catch (err) {
+        console.error(`[runline] Failed to load plugin from ${p}:`, (err as Error).message);
+      }
     }
   } catch {}
 }

@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsc && npm run build --workspaces --if-present",
     "prepublishOnly": "npm run build",
+    "postinstall": "node -e \"const{existsSync:e,symlinkSync:s,mkdirSync:m}=require('fs');const p='node_modules/runline';if(!e(p)){m(require('path').dirname(p),{recursive:true});s('..',p)}\"",
     "dev": "npx tsx src/main.ts",
     "test": "npx tsx --test src/tests/**/*.test.ts",
     "format": "npx @biomejs/biome format --write src/",

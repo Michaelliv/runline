@@ -1,5 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
-import { commandExists, syncExec } from "runline/utils/cli";
+import { commandExists, syncExec } from "runline";
 
 export default function docker(rl: RunlinePluginAPI) {
   rl.setName("docker");

@@ -1,9 +1,16 @@
 {
-  "name": "@runline/docker",
+  "name": "runline-plugin-docker",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
   "peerDependencies": {
-    "runline": "*"
+    "runline": ">=0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
   }
 }

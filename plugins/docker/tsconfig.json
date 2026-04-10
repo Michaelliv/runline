@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "module": "nodenext",
+    "target": "esnext",
+    "moduleResolution": "nodenext",
+    "moduleDetection": "force",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "baseUrl": ".",
+    "paths": {
+      "runline": ["../../dist/index.d.ts"],
+      "runline/utils/cli": ["../../dist/utils/cli.d.ts"]
+    }
+  },
+  "include": ["src"]
+}
