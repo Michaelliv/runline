@@ -1,0 +1,55 @@
+{
+  "name": "runline",
+  "version": "0.1.0",
+  "description": "Code mode for agents — turn any API or command into a callable action",
+  "type": "module",
+  "main": "dist/index.js",
+  "workspaces": [
+    "plugins/*"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./utils/http": "./dist/utils/http.js",
+    "./utils/cli": "./dist/utils/cli.js"
+  },
+  "bin": {
+    "runline": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && npm run build --workspaces --if-present",
+    "prepublishOnly": "npm run build",
+    "dev": "npx tsx src/main.ts",
+    "test": "npx tsx --test src/tests/**/*.test.ts",
+    "format": "npx @biomejs/biome format --write src/",
+    "lint": "npx @biomejs/biome lint src/",
+    "check": "npx @biomejs/biome check src/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Michaelliv/runline.git"
+  },
+  "homepage": "https://github.com/Michaelliv/runline#readme",
+  "keywords": [
+    "agent",
+    "tools",
+    "mcp",
+    "sandbox",
+    "cli"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "esbuild": "^0.25.0",
+    "quickjs-emscripten": "^0.34.0"
+  }
+}
