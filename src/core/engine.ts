@@ -108,9 +108,8 @@ export class ExecutionEngine {
         context.setProp(context.global, "__runline_invoke", actionBridge);
         actionBridge.dispose();
 
-        // Strip TS types and build execution source
-        const jsCode = await stripTypes(code);
-        const source = buildExecutionSource(jsCode);
+        // Build execution source, then strip TS types from the wrapped result
+        const source = await buildExecutionSource(code);
 
         const evaluated = context.evalCode(source, "runline-sandbox.js");
         if (evaluated.error) {
@@ -306,16 +305,16 @@ function formatError(cause: unknown): string {
   return String(cause);
 }
 
-async function stripTypes(code: string): Promise<string> {
+async function stripTypes(source: string): Promise<string> {
   const { transform } = await import("esbuild");
-  const result = await transform(code, {
+  const result = await transform(source, {
     loader: "ts",
     target: "es2022",
   });
   return result.code;
 }
 
-function buildExecutionSource(code: string): string {
+async function buildExecutionSource(code: string): Promise<string> {
   const trimmed = code.trim();
   const looksLikeArrow =
     (trimmed.startsWith("async") || trimmed.startsWith("(")) &&
@@ -325,7 +324,7 @@ function buildExecutionSource(code: string): string {
     ? `const __fn = (${trimmed});\nif (typeof __fn !== 'function') throw new Error('Code must evaluate to a function');\nreturn await __fn();`
     : code;
 
-  return `"use strict";
+  const wrapped = `"use strict";
 const __invoke = __runline_invoke;
 const __log = __runline_log;
 try { delete globalThis.__runline_invoke; } catch {}
@@ -363,4 +362,6 @@ const fetch = () => { throw new Error('fetch is disabled in runline sandbox'); }
 (async () => {
 ${body}
 })()`;
+
+  return stripTypes(wrapped);
 }
