@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { loadConfig } from "../config/loader.js";
 import { ExecutionEngine } from "../core/engine.js";
 import { loadAllPlugins } from "../plugin/loader.js";
@@ -16,10 +16,8 @@ export async function exec(
   // If it looks like a file path, read it
   let code = codeOrFile;
   if (
-    codeOrFile.endsWith(".ts") ||
-    codeOrFile.endsWith(".js") ||
-    codeOrFile.startsWith("./") ||
-    codeOrFile.startsWith("/")
+    (codeOrFile.endsWith(".js") || codeOrFile.startsWith("./") || codeOrFile.startsWith("/")) &&
+    existsSync(codeOrFile)
   ) {
     code = readFileSync(codeOrFile, "utf-8");
   }

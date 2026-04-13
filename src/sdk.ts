@@ -7,13 +7,11 @@ import { PluginRegistry } from "./plugin/registry.js";
 import type {
   ConnectionConfig,
   PluginDef,
-  RateLimitConfig,
 } from "./plugin/types.js";
 
 export interface RunlineOptions {
   plugins?: Array<PluginDef | PluginFunction>;
   connections?: ConnectionConfig[];
-  rateLimits?: Record<string, RateLimitConfig>;
   timeoutMs?: number;
   memoryLimitBytes?: number;
 }
@@ -32,7 +30,6 @@ export class Runline {
 
     const config: RunlineConfig = {
       connections: options.connections ?? [],
-      rateLimits: options.rateLimits ?? {},
       timeoutMs: options.timeoutMs ?? DEFAULT_CONFIG.timeoutMs,
       memoryLimitBytes:
         options.memoryLimitBytes ?? DEFAULT_CONFIG.memoryLimitBytes,
@@ -45,7 +42,7 @@ export class Runline {
     return new Runline(options);
   }
 
-  /** Execute TypeScript/JavaScript code in the sandbox. */
+  /** Execute JavaScript code in the sandbox. */
   async execute(code: string): Promise<ExecuteResult> {
     return this.engine.execute(code);
   }

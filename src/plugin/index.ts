@@ -29,5 +29,4 @@ export type {
   InputField,
   InputSchema,
   PluginDef,
-  RateLimitConfig,
 } from "./types.js";

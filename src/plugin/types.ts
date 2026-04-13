@@ -43,11 +43,6 @@ export interface PluginDef {
       env?: string;
     }
   >;
-  _initHooks?: Array<(config: Record<string, unknown>) => void>;
-}
-
-export interface RateLimitConfig {
-  maxPerSecond?: number;
-  maxPerMinute?: number;
-  maxConcurrent?: number;
+  /** @internal */
+  initHooks?: Array<(config: Record<string, unknown>) => void>;
 }

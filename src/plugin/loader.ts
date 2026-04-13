@@ -57,18 +57,24 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
     ) {
       try {
         plugins.push(await loadPluginFromPath(fullPath));
-      } catch {}
+      } catch (err) {
+        console.error(`[runline] Failed to load plugin from ${fullPath}:`, (err as Error).message);
+      }
     } else if (stat.isDirectory()) {
       const indexTs = join(fullPath, "index.ts");
       const indexJs = join(fullPath, "index.js");
       if (existsSync(indexTs)) {
         try {
           plugins.push(await loadPluginFromPath(indexTs));
-        } catch {}
+        } catch (err) {
+          console.error(`[runline] Failed to load plugin from ${indexTs}:`, (err as Error).message);
+        }
       } else if (existsSync(indexJs)) {
         try {
           plugins.push(await loadPluginFromPath(indexJs));
-        } catch {}
+        } catch (err) {
+          console.error(`[runline] Failed to load plugin from ${indexJs}:`, (err as Error).message);
+        }
       }
 
       const pkgJson = join(fullPath, "package.json");
@@ -79,7 +85,9 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
           for (const p of pluginPaths) {
             try {
               plugins.push(await loadPluginFromPath(join(fullPath, p)));
-            } catch {}
+            } catch (err) {
+              console.error(`[runline] Failed to load plugin from ${join(fullPath, p)}:`, (err as Error).message);
+            }
           }
         } catch {}
       }

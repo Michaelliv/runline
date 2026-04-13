@@ -19,9 +19,9 @@ export class PluginRegistry {
 
   getAllActions(): Array<{ plugin: string; action: ActionDef }> {
     const result: Array<{ plugin: string; action: ActionDef }> = [];
-    for (const [name, plugin] of this.plugins) {
+    for (const [pluginName, plugin] of this.plugins) {
       for (const action of plugin.actions) {
-        result.push({ plugin: name, action });
+        result.push({ plugin: pluginName, action });
       }
     }
     return result;

@@ -41,7 +41,6 @@ export type {
   InputField,
   InputSchema,
   PluginDef,
-  RateLimitConfig,
 } from "./plugin/types.js";
 export { Runline } from "./sdk.js";
 export type { RunlineOptions } from "./sdk.js";

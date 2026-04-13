@@ -34,7 +34,7 @@ program
     `
 Examples:
   $ runline exec 'const containers = await actions.docker.list(); return containers'
-  $ runline exec ./scripts/deploy.ts
+  $ runline exec ./scripts/deploy.js
   $ runline actions
   $ runline connection add gh --plugin github --set token=ghp_xxx
 
@@ -44,18 +44,16 @@ https://github.com/Michaelliv/runline`,
 program
   .command("exec <code>")
   .alias("e")
-  .description("Execute TypeScript/JavaScript code in the sandbox")
+  .description("Execute JavaScript code in the sandbox")
   .addHelpText(
     "after",
     `
 The code runs in a QuickJS sandbox with an \`actions\` proxy.
 Call plugin actions via: actions.<plugin>.<action>(input)
 
-TypeScript is supported — types are stripped before execution.
-
 Examples:
-  $ runline exec 'const r = await actions.docker.list(); return r'
-  $ runline exec ./my-script.ts
+  $ runline exec 'const r = await actions.docker["containers.list"](); return r'
+  $ runline exec ./my-script.js
   $ runline exec 'console.log(await actions.github.repos({ owner: "torvalds" }))'`,
   )
   .action(async (code, _opts, cmd) => {

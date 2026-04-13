@@ -79,7 +79,7 @@ export function createPluginAPI(pluginId: string): {
       connectionConfigSchema,
     };
     if (initHooks.length > 0) {
-      plugin._initHooks = initHooks;
+      plugin.initHooks = initHooks;
     }
     return plugin;
   }
