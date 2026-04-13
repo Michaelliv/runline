@@ -1,0 +1,9 @@
+{
+  "name": "runline-plugin-erpnext",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "runline": "*"
+  }
+}
