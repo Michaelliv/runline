@@ -12,14 +12,16 @@ export default function lingvanex(rl: RunlinePluginAPI) {
       to: { type: "string", required: true, description: "Target language code (e.g. en_GB, fr_FR)" },
       from: { type: "string", required: false, description: "Source language code (auto-detect if omitted)" },
       platform: { type: "string", required: false, description: "api (default)" },
+      translateMode: { type: "string", required: false, description: "'html' to translate preserving HTML structure, or omit for plain text" },
     },
     async execute(input, ctx) {
-      const { text, to, from: src, platform = "api" } = input as Record<string, unknown>;
+      const { text, to, from: src, platform = "api", translateMode } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { data: text, to, platform };
       if (src) body.from = src;
+      if (translateMode) body.translateMode = translateMode;
       const res = await fetch("https://api-b2b.backenster.com/b1/api/v3/translate", {
         method: "POST",
-        headers: { Authorization: ctx.connection.config.apiKey as string, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${ctx.connection.config.apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`Lingvanex error ${res.status}: ${await res.text()}`);

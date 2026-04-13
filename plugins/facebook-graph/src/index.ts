@@ -1,37 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
 
-async function graphRequest(
-  accessToken: string,
-  method: string,
-  host: string,
-  version: string,
-  node: string,
-  edge?: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-  fields?: string[],
-): Promise<unknown> {
-  const path = edge ? `/${version}/${node}/${edge}` : `/${version}/${node}`;
-  const url = new URL(`https://${host}${path}`);
-  url.searchParams.set("access_token", accessToken);
-  if (fields && fields.length > 0) url.searchParams.set("fields", fields.join(","));
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
-    method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET" && method !== "DELETE") {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) throw new Error(`Facebook Graph API error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
 export default function facebookGraph(rl: RunlinePluginAPI) {
   rl.setName("facebook-graph");
   rl.setVersion("0.1.0");
@@ -40,59 +8,67 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
     accessToken: { type: "string", required: true, description: "Facebook/Meta access token", env: "FACEBOOK_ACCESS_TOKEN" },
   });
 
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) => ctx.connection.config.accessToken as string;
-
-  rl.registerAction("graph.get", {
-    description: "GET request to Facebook Graph API",
+  rl.registerAction("request", {
+    description: "Make a request to the Facebook Graph API. Supports GET, POST, DELETE against any node/edge combination.",
     inputSchema: {
-      node: { type: "string", required: true, description: "Node ID (e.g. 'me', a page ID, user ID)" },
-      edge: { type: "string", required: false, description: "Edge name (e.g. 'posts', 'feed', 'photos')" },
-      fields: { type: "array", required: false, description: "Fields to request" },
-      version: { type: "string", required: false, description: "API version (default: v19.0)" },
-      queryParams: { type: "object", required: false, description: "Additional query parameters" },
+      hostUrl: { type: "string", required: false, description: "Host URL: 'graph.facebook.com' (default) or 'graph-video.facebook.com' for video uploads" },
+      method: { type: "string", required: false, description: "HTTP method: GET (default), POST, DELETE" },
+      graphApiVersion: { type: "string", required: false, description: "API version (e.g. 'v19.0'). Omit for default." },
+      node: { type: "string", required: true, description: "Node ID (e.g. 'me', a page/user/object ID)" },
+      edge: { type: "string", required: false, description: "Edge name (e.g. 'posts', 'feed', 'videos')" },
+      fields: { type: "array", required: false, description: "Fields to request (GET only), sent as comma-separated 'fields' param" },
+      queryParameters: { type: "object", required: false, description: "Additional query parameters as key-value pairs" },
+      body: { type: "object", required: false, description: "Request body for POST requests (sent as JSON)" },
     },
     async execute(input, ctx) {
-      const { node, edge, fields, version = "v19.0", queryParams } = input as Record<string, unknown>;
-      return graphRequest(tok(ctx), "GET", "graph.facebook.com", version as string, node as string, edge as string | undefined, undefined, queryParams as Record<string, unknown> | undefined, fields as string[] | undefined);
-    },
-  });
+      const {
+        hostUrl = "graph.facebook.com",
+        method = "GET",
+        graphApiVersion = "",
+        node,
+        edge,
+        fields,
+        queryParameters,
+        body,
+      } = input as Record<string, unknown>;
 
-  rl.registerAction("graph.post", {
-    description: "POST request to Facebook Graph API",
-    inputSchema: {
-      node: { type: "string", required: true, description: "Node ID" },
-      edge: { type: "string", required: false, description: "Edge name" },
-      body: { type: "object", required: true, description: "Request body" },
-      version: { type: "string", required: false, description: "API version (default: v19.0)" },
-    },
-    async execute(input, ctx) {
-      const { node, edge, body, version = "v19.0" } = input as Record<string, unknown>;
-      return graphRequest(tok(ctx), "POST", "graph.facebook.com", version as string, node as string, edge as string | undefined, body as Record<string, unknown>);
-    },
-  });
+      const versionPrefix = graphApiVersion ? `${graphApiVersion}/` : "";
+      let uri = `https://${hostUrl}/${versionPrefix}${node}`;
+      if (edge) uri = `${uri}/${edge}`;
 
-  rl.registerAction("graph.delete", {
-    description: "DELETE request to Facebook Graph API",
-    inputSchema: {
-      node: { type: "string", required: true, description: "Node ID to delete" },
-      version: { type: "string", required: false, description: "API version (default: v19.0)" },
-    },
-    async execute(input, ctx) {
-      const { node, version = "v19.0" } = input as Record<string, unknown>;
-      return graphRequest(tok(ctx), "DELETE", "graph.facebook.com", version as string, node as string);
-    },
-  });
+      const url = new URL(uri);
+      url.searchParams.set("access_token", ctx.connection.config.accessToken as string);
 
-  rl.registerAction("video.upload", {
-    description: "POST to the video upload endpoint (graph-video.facebook.com)",
-    inputSchema: {
-      node: { type: "string", required: true, description: "Node ID (page or user)" },
-      body: { type: "object", required: true, description: "Video metadata (title, description, file_url, etc.)" },
-      version: { type: "string", required: false, description: "API version (default: v19.0)" },
-    },
-    async execute(input, ctx) {
-      const { node, body, version = "v19.0" } = input as Record<string, unknown>;
-      return graphRequest(tok(ctx), "POST", "graph-video.facebook.com", version as string, node as string, "videos", body as Record<string, unknown>);
+      if (fields && Array.isArray(fields) && fields.length > 0) {
+        url.searchParams.set("fields", fields.join(","));
+      }
+
+      if (queryParameters && typeof queryParameters === "object") {
+        for (const [k, v] of Object.entries(queryParameters as Record<string, unknown>)) {
+          if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+        }
+      }
+
+      const httpMethod = (method as string).toUpperCase();
+      const opts: RequestInit = {
+        method: httpMethod,
+        headers: { Accept: "application/json,text/*;q=0.99" },
+      };
+
+      if (body && typeof body === "object" && Object.keys(body as object).length > 0 && httpMethod === "POST") {
+        (opts.headers as Record<string, string>)["Content-Type"] = "application/json";
+        opts.body = JSON.stringify(body);
+      }
+
+      const res = await fetch(url.toString(), opts);
+      if (!res.ok) throw new Error(`Facebook Graph API error ${res.status}: ${await res.text()}`);
+
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { message: text };
+      }
     },
   });
 }
