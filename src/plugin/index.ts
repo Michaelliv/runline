@@ -1,8 +1,3 @@
-export {
-  createPluginAPI,
-  isPluginFunction,
-  resolvePluginExport,
-} from "./api.js";
 export type {
   ActionDefinition,
   PluginFunction,
@@ -10,12 +5,17 @@ export type {
   SchemaField,
 } from "./api.js";
 export {
+  createPluginAPI,
+  isPluginFunction,
+  resolvePluginExport,
+} from "./api.js";
+export type { InstalledPlugin, PluginSource } from "./installer.js";
+export {
   installPlugin,
   listInstalled,
   parsePluginSource,
   removePlugin,
 } from "./installer.js";
-export type { InstalledPlugin, PluginSource } from "./installer.js";
 export {
   loadAllPlugins,
   loadPluginFromPath,

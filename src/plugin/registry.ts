@@ -28,7 +28,9 @@ export class PluginRegistry {
   }
 
   /** Resolve a dotted path like "docker.containers.list" to a plugin + action. */
-  resolveAction(path: string): { plugin: PluginDef; action: ActionDef } | undefined {
+  resolveAction(
+    path: string,
+  ): { plugin: PluginDef; action: ActionDef } | undefined {
     const dot = path.indexOf(".");
     if (dot < 0) return undefined;
 

@@ -25,7 +25,9 @@ export async function connectionAdd(
   if (options.json) {
     printJson({ ok: true, name, plugin: options.plugin });
   } else {
-    printSuccess(`Connection ${chalk.bold(name)} added (plugin: ${options.plugin})`);
+    printSuccess(
+      `Connection ${chalk.bold(name)} added (plugin: ${options.plugin})`,
+    );
   }
 }
 

@@ -1,13 +1,10 @@
 import type { RunlineConfig } from "./config/types.js";
 import { DEFAULT_CONFIG } from "./config/types.js";
-import { ExecutionEngine, type ExecuteResult } from "./core/engine.js";
+import { type ExecuteResult, ExecutionEngine } from "./core/engine.js";
 import type { PluginFunction } from "./plugin/api.js";
 import { resolvePluginExport } from "./plugin/api.js";
 import { PluginRegistry } from "./plugin/registry.js";
-import type {
-  ConnectionConfig,
-  PluginDef,
-} from "./plugin/types.js";
+import type { ConnectionConfig, PluginDef } from "./plugin/types.js";
 
 export interface RunlineOptions {
   plugins?: Array<PluginDef | PluginFunction>;

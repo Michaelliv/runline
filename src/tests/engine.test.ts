@@ -1,9 +1,9 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ExecutionEngine } from "../core/engine.js";
-import { PluginRegistry } from "../plugin/registry.js";
-import { createPluginAPI } from "../plugin/api.js";
+import { describe, it } from "node:test";
 import { DEFAULT_CONFIG } from "../config/types.js";
+import { ExecutionEngine } from "../core/engine.js";
+import { createPluginAPI } from "../plugin/api.js";
+import { PluginRegistry } from "../plugin/registry.js";
 
 function makeTestPlugin() {
   const { api, resolve } = createPluginAPI("test");
@@ -68,7 +68,7 @@ describe("ExecutionEngine", () => {
   it("calls a plugin action through the proxy", async () => {
     const engine = createEngine();
     const result = await engine.execute(
-      'return await actions.math.add({ a: 10, b: 20 })',
+      "return await actions.math.add({ a: 10, b: 20 })",
     );
     assert.equal(result.error, undefined);
     assert.deepEqual(result.result, { sum: 30 });
@@ -155,6 +155,9 @@ describe("ExecutionEngine", () => {
     });
     const result = await engine.execute("while(true) {}");
     assert.ok(result.error);
-    assert.ok(result.error.includes("timed out") || result.error.includes("interrupted"));
+    assert.ok(
+      result.error.includes("timed out") ||
+        result.error.includes("interrupted"),
+    );
   });
 });

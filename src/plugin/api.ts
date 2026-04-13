@@ -100,11 +100,7 @@ export function resolvePluginExport(
     exported(api);
     return resolve();
   }
-  if (
-    exported &&
-    typeof exported === "object" &&
-    "actions" in exported
-  ) {
+  if (exported && typeof exported === "object" && "actions" in exported) {
     return exported as PluginDef;
   }
   throw new Error(

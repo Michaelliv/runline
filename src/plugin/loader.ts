@@ -24,7 +24,10 @@ export async function loadPluginFromPath(path: string): Promise<PluginDef> {
         const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
         if (pkg.main) candidates.unshift(join(absPath, pkg.main));
       } catch (err) {
-        console.error(`[runline] Failed to parse ${pkgPath}:`, (err as Error).message);
+        console.error(
+          `[runline] Failed to parse ${pkgPath}:`,
+          (err as Error).message,
+        );
       }
     }
 
@@ -60,7 +63,10 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
       try {
         plugins.push(await loadPluginFromPath(fullPath));
       } catch (err) {
-        console.error(`[runline] Failed to load plugin from ${fullPath}:`, (err as Error).message);
+        console.error(
+          `[runline] Failed to load plugin from ${fullPath}:`,
+          (err as Error).message,
+        );
       }
     } else if (stat.isDirectory()) {
       const indexTs = join(fullPath, "index.ts");
@@ -69,13 +75,19 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
         try {
           plugins.push(await loadPluginFromPath(indexTs));
         } catch (err) {
-          console.error(`[runline] Failed to load plugin from ${indexTs}:`, (err as Error).message);
+          console.error(
+            `[runline] Failed to load plugin from ${indexTs}:`,
+            (err as Error).message,
+          );
         }
       } else if (existsSync(indexJs)) {
         try {
           plugins.push(await loadPluginFromPath(indexJs));
         } catch (err) {
-          console.error(`[runline] Failed to load plugin from ${indexJs}:`, (err as Error).message);
+          console.error(
+            `[runline] Failed to load plugin from ${indexJs}:`,
+            (err as Error).message,
+          );
         }
       }
 
@@ -88,11 +100,17 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
             try {
               plugins.push(await loadPluginFromPath(join(fullPath, p)));
             } catch (err) {
-              console.error(`[runline] Failed to load plugin from ${join(fullPath, p)}:`, (err as Error).message);
+              console.error(
+                `[runline] Failed to load plugin from ${join(fullPath, p)}:`,
+                (err as Error).message,
+              );
             }
           }
         } catch (err) {
-          console.error(`[runline] Failed to parse ${pkgJson}:`, (err as Error).message);
+          console.error(
+            `[runline] Failed to parse ${pkgJson}:`,
+            (err as Error).message,
+          );
         }
       }
     }
@@ -115,11 +133,17 @@ export async function loadPluginsFromConfig(configDir: string): Promise<void> {
         const plugin = await loadPluginFromPath(p);
         registry.register(plugin);
       } catch (err) {
-        console.error(`[runline] Failed to load plugin from ${p}:`, (err as Error).message);
+        console.error(
+          `[runline] Failed to load plugin from ${p}:`,
+          (err as Error).message,
+        );
       }
     }
   } catch (err) {
-    console.error(`[runline] Failed to parse ${pluginsFile}:`, (err as Error).message);
+    console.error(
+      `[runline] Failed to parse ${pluginsFile}:`,
+      (err as Error).message,
+    );
   }
 }
 

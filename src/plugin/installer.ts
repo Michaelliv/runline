@@ -146,12 +146,13 @@ export async function installPlugin(
       break;
     }
     case "git": {
-      const url = new URL(parsed.url!);
+      const gitUrl = parsed.url as string;
+      const urlObj = new URL(gitUrl);
       const gitDir = join(
         pluginsDir,
         "git",
-        url.hostname,
-        url.pathname.replace(/\.git$/, ""),
+        urlObj.hostname,
+        urlObj.pathname.replace(/\.git$/, ""),
       );
       if (existsSync(gitDir)) {
         execSync("git pull", { cwd: gitDir, stdio: "pipe" });
@@ -169,10 +170,11 @@ export async function installPlugin(
       break;
     }
     case "local": {
-      if (!existsSync(parsed.path!)) {
-        throw new Error(`Path does not exist: ${parsed.path}`);
+      const localPath = parsed.path as string;
+      if (!existsSync(localPath)) {
+        throw new Error(`Path does not exist: ${localPath}`);
       }
-      installPath = parsed.path!;
+      installPath = localPath;
       break;
     }
   }

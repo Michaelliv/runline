@@ -1,19 +1,19 @@
 import {
   getQuickJS,
-  shouldInterruptAfterDeadline,
   type QuickJSContext,
   type QuickJSDeferredPromise,
   type QuickJSHandle,
   type QuickJSRuntime,
+  shouldInterruptAfterDeadline,
 } from "quickjs-emscripten";
 import { applyEnvOverrides } from "../config/loader.js";
 import type { RunlineConfig } from "../config/types.js";
+import type { PluginRegistry } from "../plugin/registry.js";
 import type {
   ActionContext,
   ConnectionConfig,
   PluginDef,
 } from "../plugin/types.js";
-import type { PluginRegistry } from "../plugin/registry.js";
 
 export interface ExecuteResult {
   result: unknown;
@@ -94,8 +94,7 @@ export class ExecutionEngine {
               },
               (err) => {
                 if (!deferred.alive) return;
-                const msg =
-                  err instanceof Error ? err.message : String(err);
+                const msg = err instanceof Error ? err.message : String(err);
                 const handle = context.newError(msg);
                 deferred.reject(handle);
                 handle.dispose();
@@ -143,8 +142,7 @@ export class ExecutionEngine {
             timeoutMs,
           );
 
-          const settled =
-            readProp(context, stateHandle, "settled") === true;
+          const settled = readProp(context, stateHandle, "settled") === true;
           if (!settled) {
             return {
               result: null,
@@ -180,10 +178,7 @@ export class ExecutionEngine {
     }
   }
 
-  private async invokeAction(
-    path: string,
-    args: unknown,
-  ): Promise<unknown> {
+  private async invokeAction(path: string, args: unknown): Promise<unknown> {
     const resolved = this.registry.resolveAction(path);
     if (!resolved) {
       throw new Error(`Unknown action: ${path}`);
@@ -204,9 +199,7 @@ export class ExecutionEngine {
   }
 
   private resolveConnection(plugin: PluginDef): ConnectionConfig {
-    const conn = this.config.connections.find(
-      (c) => c.plugin === plugin.name,
-    );
+    const conn = this.config.connections.find((c) => c.plugin === plugin.name);
     const base = conn ?? {
       name: "default",
       plugin: plugin.name,
@@ -233,15 +226,11 @@ export class ExecutionEngine {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([
-          Promise.race(
-            [...pendingDeferreds].map((d) => d.settled),
-          ),
+          Promise.race([...pendingDeferreds].map((d) => d.settled)),
           new Promise<never>((_, reject) => {
             timer = setTimeout(
               () =>
-                reject(
-                  new Error(`Execution timed out after ${timeoutMs}ms`),
-                ),
+                reject(new Error(`Execution timed out after ${timeoutMs}ms`)),
               remainingMs,
             );
           }),

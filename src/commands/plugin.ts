@@ -17,9 +17,7 @@ export async function pluginInstall(
     if (options.json) {
       printJson({ ok: true, ...result });
     } else {
-      printSuccess(
-        `Installed ${chalk.bold(result.name)} from ${source}`,
-      );
+      printSuccess(`Installed ${chalk.bold(result.name)} from ${source}`);
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

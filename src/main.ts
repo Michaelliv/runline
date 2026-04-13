@@ -19,7 +19,9 @@ const program = new Command();
 
 program
   .name("runline")
-  .description("Code mode for agents — turn any API or command into a callable action")
+  .description(
+    "Code mode for agents — turn any API or command into a callable action",
+  )
   .version(`runline ${version}`, "-v, --version")
   .option("--json", "Output as JSON")
   .option("-q, --quiet", "Suppress output")
@@ -59,7 +61,11 @@ Examples:
   )
   .action(async (code, opts, cmd) => {
     const globals = cmd.optsWithGlobals();
-    await exec(code, { file: opts.file, json: globals.json, quiet: globals.quiet });
+    await exec(code, {
+      file: opts.file,
+      json: globals.json,
+      quiet: globals.quiet,
+    });
   });
 
 program
