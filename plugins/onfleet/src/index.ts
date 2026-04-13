@@ -224,6 +224,55 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
   });
 
+  // ── Container ────────────────────────────────────────
+
+  rl.registerAction("container.get", {
+    description: "Get a container by type and ID",
+    inputSchema: {
+      containerType: { type: "string", required: true, description: "workers, teams, or organizations" },
+      containerId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(key(ctx), "GET", `containers/${p.containerType}/${p.containerId}`);
+    },
+  });
+
+  rl.registerAction("container.updateTasks", {
+    description: "Update tasks in a container",
+    inputSchema: {
+      containerType: { type: "string", required: true, description: "workers, teams, or organizations" },
+      containerId: { type: "string", required: true },
+      tasks: { type: "object", required: true, description: "Array of task IDs" },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(key(ctx), "PUT", `containers/${p.containerType}/${p.containerId}`, { tasks: p.tasks });
+    },
+  });
+
+  rl.registerAction("team.getTimeEstimates", {
+    description: "Get driver time estimates for a team",
+    inputSchema: {
+      id: { type: "string", required: true },
+      dropoffLocation: { type: "string", required: false, description: "lng,lat" },
+      pickupLocation: { type: "string", required: false, description: "lng,lat" },
+    },
+    async execute(input, ctx) {
+      const { id, ...qs } = input as Record<string, unknown>;
+      return apiRequest(key(ctx), "GET", `teams/${id}/estimate`, undefined, qs);
+    },
+  });
+
+  rl.registerAction("team.autoDispatch", {
+    description: "Auto-dispatch tasks for a team",
+    inputSchema: { id: { type: "string", required: true }, data: { type: "object", required: false } },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(key(ctx), "POST", `teams/${p.id}/dispatch`, p.data ?? {});
+    },
+  });
+
   // ── Destination ─────────────────────────────────────
 
   rl.registerAction("destination.create", {
