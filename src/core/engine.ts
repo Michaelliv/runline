@@ -107,7 +107,8 @@ export class ExecutionEngine {
         context.setProp(context.global, "__runline_invoke", actionBridge);
         actionBridge.dispose();
 
-        const source = buildExecutionSource(code);
+        const pluginNames = this.registry.listPlugins().map((p) => p.name);
+        const source = buildExecutionSource(code, pluginNames);
 
         const evaluated = context.evalCode(source, "runline-sandbox.js");
         if (evaluated.error) {
@@ -293,7 +294,10 @@ function formatError(cause: unknown): string {
   return String(cause);
 }
 
-function buildExecutionSource(code: string): string {
+function buildExecutionSource(
+  code: string,
+  pluginNames: string[] = [],
+): string {
   const trimmed = code.trim();
   const looksLikeArrow =
     (trimmed.startsWith("async") || trimmed.startsWith("(")) &&
@@ -327,6 +331,7 @@ const __makeProxy = (path = []) => new Proxy(() => undefined, {
   },
 });
 const actions = __makeProxy();
+${pluginNames.map((n) => `const ${n} = __makeProxy(['${n}']);`).join("\n")}
 
 const console = {
   log: (...a) => __log('log', a.map(__fmt).join(' ')),

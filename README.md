@@ -189,7 +189,7 @@ Agent code runs in a [QuickJS](https://bellard.org/quickjs/) WASM sandbox:
 - **Timeout** — configurable, kills infinite loops
 - **Memory limit** — configurable, prevents OOM
 - **`console.log`** — captured and returned in `result.logs`
-- **`actions` proxy** — `actions.<plugin>["<action>"](input)` calls plugin code outside the sandbox
+- **Plugin globals** — each installed plugin is a top-level proxy (e.g. `github`, `slack`, `brandfetch`). Dot-chain into resource and action: `github.issue.create(input)`
 
 ## For Agents
 
@@ -212,7 +212,7 @@ const rl = Runline.create({
 });
 
 const result = await rl.execute(`
-  const colors = await actions.brandfetch["brand.getColors"]({ domain: "stripe.com" });
+  const colors = await brandfetch.brand.getColors({ domain: "stripe.com" });
   return colors.filter(c => c.type === "accent");
 `);
 

@@ -41,6 +41,11 @@ export function createPluginAPI(pluginId: string): {
 
   const api: RunlinePluginAPI = {
     setName(n: string) {
+      if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(n)) {
+        throw new Error(
+          `Invalid plugin name "${n}": must be a valid JS identifier (no hyphens, no dots). Use camelCase.`,
+        );
+      }
       name = n;
     },
     setVersion(v: string) {

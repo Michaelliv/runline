@@ -35,7 +35,7 @@ program
     "after",
     `
 Examples:
-  $ runline exec 'const containers = await actions.docker.list(); return containers'
+  $ runline exec 'return await docker.containers.list()'
   $ runline exec -f ./scripts/deploy.js
   $ runline actions
   $ runline connection add gh --plugin github --set token=ghp_xxx
@@ -52,12 +52,12 @@ program
     "after",
     `
 The code runs in a QuickJS sandbox with an \`actions\` proxy.
-Call plugin actions via: actions.<plugin>.<action>(input)
+Each installed plugin is a top-level global. Dot-chain into resource and action.
 
 Examples:
-  $ runline exec 'const r = await actions.docker["containers.list"](); return r'
+  $ runline exec 'return await docker.containers.list()'
   $ runline exec -f ./scripts/deploy.js
-  $ runline exec 'console.log(await actions.github.repos({ owner: "torvalds" }))'`,
+  $ runline exec 'return await github.repo.list({ owner: "torvalds" })'`,
   )
   .action(async (code, opts, cmd) => {
     const globals = cmd.optsWithGlobals();

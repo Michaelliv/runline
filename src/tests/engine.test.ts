@@ -65,13 +65,22 @@ describe("ExecutionEngine", () => {
     assert.equal(result.result, 3);
   });
 
-  it("calls a plugin action through the proxy", async () => {
+  it("calls a plugin action through the actions proxy", async () => {
     const engine = createEngine();
     const result = await engine.execute(
       "return await actions.math.add({ a: 10, b: 20 })",
     );
     assert.equal(result.error, undefined);
     assert.deepEqual(result.result, { sum: 30 });
+  });
+
+  it("calls a plugin action as a top-level global", async () => {
+    const engine = createEngine();
+    const result = await engine.execute(
+      "return await math.add({ a: 3, b: 4 })",
+    );
+    assert.equal(result.error, undefined);
+    assert.deepEqual(result.result, { sum: 7 });
   });
 
   it("calls echo action", async () => {
