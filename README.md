@@ -15,17 +15,17 @@ runline init
 runline plugin install git:github.com/Michaelliv/runline#plugins/brandfetch
 runline connection add bf --plugin brandfetch --set apiKey=xxx
 
-runline exec 'return await actions.brandfetch["brand.getColors"]({ domain: "nike.com" })'
+runline exec 'return await brandfetch.brand.getColors({ domain: "nike.com" })'
 # => [{ hex: "#E5E5E5", type: "accent" }, { hex: "#111111", type: "dark" }, ...]
 ```
 
-Agent code runs in a QuickJS sandbox with an `actions` proxy. Plugins execute outside the sandbox with full network access — the agent can only reach APIs through the actions you've installed.
+Agent code runs in a QuickJS sandbox. Each installed plugin is a top-level global — no bracket notation, just dot-chain into resource and action. Plugins execute outside the sandbox with full network access; the agent can only reach APIs through the actions you've installed.
 
 ```js
 // agent writes this
-const company = await actions.brandfetch["brand.getCompany"]({ domain: "stripe.com" });
-const deals = await actions.pipedrive["deal.list"]({ limit: 10 });
-const issue = await actions.github["issue.create"]({
+const company = await brandfetch.brand.getCompany({ domain: "stripe.com" });
+const deals = await pipedrive.deal.list({ limit: 10 });
+const issue = await github.issue.create({
   owner: "acme", repo: "api",
   title: `New lead: ${company.name}`,
   body: `${deals.length} open deals`
@@ -76,7 +76,7 @@ All plugins install via `runline plugin install git:github.com/Michaelliv/runlin
 <details>
 <summary>All 188 plugins</summary>
 
-action-network, active-campaign, adalo, affinity, agile-crm, airtable, airtop, api-template-io, asana, autopilot, bamboo-hr, bannerbear, baserow, beeminder, bitly, bitwarden, box, brandfetch, brevo, bubble, chargebee, circleci, cisco-webex, clearbit, clickup, clockify, cloudflare, cockpit, coda, coingecko, contentful, convertkit, copper, cortex, currents, customer-io, databricks, deepl, demio, dhl, discord, discourse, disqus, docker, drift, dropbox, dropcontact, egoi, elasticsearch, emelia, erpnext, facebook-graph, freshdesk, freshservice, freshworks-crm, getresponse, ghost, github, gitlab, gong, gotify, gotowebinar, grafana, graphql, grist, hackernews, halopsa, harvest, helpscout, highlevel, home-assistant, hubspot, humantic-ai, hunter, intercom, iterable, jenkins, jira, keap, kobotoolbox, lemlist, line, linear, lingvanex, linkedin, lonescale, magento, mailcheck, mailchimp, mailerlite, mailgun, mailjet, mandrill, marketstack, matrix, mattermost, mautic, medium, messagebird, metabase, misp, mocean, monday, monica-crm, msg91, nasa, netlify, netscaler-adc, nextcloud, nocodb, notion, npm, odoo, okta, one-simple-api, onfleet, open-thesaurus, openweathermap, oura, paddle, pagerduty, paypal, peekalink, phantombuster, philips-hue, pipedrive, plivo, postbin, posthog, profitwell, pushbullet, pushcut, pushover, quickbase, quickbooks, quickchart, raindrop, reddit, rocketchat, rundeck, salesforce, salesmate, security-scorecard, segment, sendgrid, sendy, sentry, servicenow, shopify, signl4, slack, sms77, splunk, spotify, stackby, storyblok, strapi, strava, stripe, supabase, syncromsp, tapfiliate, telegram, thehive, thehive-project, todoist, travisci, trello, twake, twilio, twist, twitter, unleashed-software, uplead, uproc, uptimerobot, urlscanio, vero, vonage, wekan, woocommerce, wordpress, xero, yourls, zammad, zendesk, zoho, zoom, zulip
+actionNetwork, activeCampaign, adalo, affinity, agileCrm, airtable, airtop, apiTemplateIo, asana, autopilot, bambooHr, bannerbear, baserow, beeminder, bitly, bitwarden, box, brandfetch, brevo, bubble, chargebee, circleci, ciscoWebex, clearbit, clickup, clockify, cloudflare, cockpit, coda, coingecko, contentful, convertkit, copper, cortex, currents, customerIo, databricks, deepl, demio, dhl, discord, discourse, disqus, docker, drift, dropbox, dropcontact, egoi, elasticsearch, emelia, erpnext, facebookGraph, freshdesk, freshservice, freshworksCrm, getresponse, ghost, github, gitlab, gong, gotify, gotowebinar, grafana, graphql, grist, hackernews, halopsa, harvest, helpscout, highlevel, homeAssistant, hubspot, humanticAi, hunter, intercom, iterable, jenkins, jira, keap, kobotoolbox, lemlist, line, linear, lingvanex, linkedin, lonescale, magento, mailcheck, mailchimp, mailerlite, mailgun, mailjet, mandrill, marketstack, matrix, mattermost, mautic, medium, messagebird, metabase, misp, mocean, monday, monicaCrm, msg91, nasa, netlify, netscalerAdc, nextcloud, nocodb, notion, npm, odoo, okta, oneSimpleApi, onfleet, openThesaurus, openweathermap, oura, paddle, pagerduty, paypal, peekalink, phantombuster, philipsHue, pipedrive, plivo, postbin, posthog, profitwell, pushbullet, pushcut, pushover, quickbase, quickbooks, quickchart, raindrop, reddit, rocketchat, rundeck, salesforce, salesmate, securityScorecard, segment, sendgrid, sendy, sentry, servicenow, shopify, signl4, slack, sms77, splunk, spotify, stackby, storyblok, strapi, strava, stripe, supabase, syncromsp, tapfiliate, telegram, thehive, thehiveProject, todoist, travisci, trello, twake, twilio, twist, twitter, unleashedSoftware, uplead, uproc, uptimerobot, urlscanio, vero, vonage, wekan, woocommerce, wordpress, xero, yourls, zammad, zendesk, zoho, zoom, zulip
 
 </details>
 
@@ -87,11 +87,11 @@ action-network, active-campaign, adalo, affinity, agile-crm, airtable, airtop, a
 runline actions
 
 # Get Nike's brand colors
-runline exec 'return await actions.brandfetch["brand.getColors"]({ domain: "nike.com" })'
+runline exec 'return await brandfetch.brand.getColors({ domain: "nike.com" })'
 
 # Create a GitHub issue
 runline exec '
-  return await actions.github["issue.create"]({
+  return await github.issue.create({
     owner: "acme", repo: "api",
     title: "Bug: login broken",
     labels: ["bug", "urgent"]
@@ -99,20 +99,24 @@ runline exec '
 '
 
 # Search Pipedrive deals
-runline exec 'return await actions.pipedrive["deal.search"]({ term: "Acme" })'
+runline exec 'return await pipedrive.deal.search({ term: "Acme" })'
 
 # Chain actions together
 runline exec '
-  const contact = await actions.hubspot["contact.get"]({ id: "123" });
-  const task = await actions.todoist["task.create"]({
+  const contact = await hubspot.contact.get({ id: "123" });
+  const task = await todoist.task.create({
     content: `Follow up with ${contact.properties.firstname}`,
     priority: 4
   });
   return { contact: contact.properties.email, taskId: task.id };
 '
 
+# Discover actions from inside the sandbox
+runline exec 'return brandfetch.help()'
+runline exec 'return help()'
+
 # Output as JSON (for agents)
-runline exec 'return await actions.github["repo.list"]({ owner: "torvalds" })' --json
+runline exec 'return await github.repo.list({ owner: "torvalds" })' --json
 ```
 
 ## Writing a Plugin
