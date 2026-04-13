@@ -6,20 +6,19 @@ import { registry } from "../plugin/registry.js";
 import { printError, printJson } from "../utils/output.js";
 
 export async function exec(
-  codeOrFile: string,
-  options: { json?: boolean; quiet?: boolean },
+  code: string,
+  options: { file?: boolean; json?: boolean; quiet?: boolean },
 ): Promise<void> {
   await loadAllPlugins();
   const config = loadConfig();
   const engine = new ExecutionEngine(registry, config);
 
-  // If it looks like a file path, read it
-  let code = codeOrFile;
-  if (
-    (codeOrFile.endsWith(".js") || codeOrFile.startsWith("./") || codeOrFile.startsWith("/")) &&
-    existsSync(codeOrFile)
-  ) {
-    code = readFileSync(codeOrFile, "utf-8");
+  if (options.file) {
+    if (!existsSync(code)) {
+      printError(`File not found: ${code}`);
+      process.exit(1);
+    }
+    code = readFileSync(code, "utf-8");
   }
 
   const result = await engine.execute(code);

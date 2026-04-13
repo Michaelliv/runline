@@ -34,7 +34,7 @@ program
     `
 Examples:
   $ runline exec 'const containers = await actions.docker.list(); return containers'
-  $ runline exec ./scripts/deploy.js
+  $ runline exec -f ./scripts/deploy.js
   $ runline actions
   $ runline connection add gh --plugin github --set token=ghp_xxx
 
@@ -45,6 +45,7 @@ program
   .command("exec <code>")
   .alias("e")
   .description("Execute JavaScript code in the sandbox")
+  .option("-f, --file", "Treat <code> as a file path")
   .addHelpText(
     "after",
     `
@@ -53,12 +54,12 @@ Call plugin actions via: actions.<plugin>.<action>(input)
 
 Examples:
   $ runline exec 'const r = await actions.docker["containers.list"](); return r'
-  $ runline exec ./my-script.js
+  $ runline exec -f ./scripts/deploy.js
   $ runline exec 'console.log(await actions.github.repos({ owner: "torvalds" }))'`,
   )
-  .action(async (code, _opts, cmd) => {
+  .action(async (code, opts, cmd) => {
     const globals = cmd.optsWithGlobals();
-    await exec(code, { json: globals.json, quiet: globals.quiet });
+    await exec(code, { file: opts.file, json: globals.json, quiet: globals.quiet });
   });
 
 program
