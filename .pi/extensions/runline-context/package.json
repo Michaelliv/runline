@@ -1,0 +1,17 @@
+{
+  "name": "@miclivs/pi-runline-context",
+  "version": "0.1.0",
+  "description": "Pi extension — injects runline actions into agent context",
+  "type": "commonjs",
+  "keywords": ["pi-package"],
+  "files": ["index.ts", "README.md"],
+  "pi": {
+    "extensions": ["."]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*"
+  },
+  "author": "michaelliv",
+  "license": "MIT"
+}

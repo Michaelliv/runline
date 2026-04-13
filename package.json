@@ -16,8 +16,14 @@
     "runline": "./dist/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    ".pi/extensions"
   ],
+  "pi": {
+    "extensions": [
+      ".pi/extensions/runline-context"
+    ]
+  },
   "scripts": {
     "build": "tsc && npm run build --workspaces --if-present",
     "prepublishOnly": "npm run build",

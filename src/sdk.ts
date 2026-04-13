@@ -1,10 +1,21 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { loadConfig } from "./config/loader.js";
 import type { RunlineConfig } from "./config/types.js";
 import { DEFAULT_CONFIG } from "./config/types.js";
 import { type ExecuteResult, ExecutionEngine } from "./core/engine.js";
 import type { PluginFunction } from "./plugin/api.js";
 import { resolvePluginExport } from "./plugin/api.js";
-import { PluginRegistry } from "./plugin/registry.js";
-import type { ConnectionConfig, PluginDef } from "./plugin/types.js";
+import { loadAllPlugins } from "./plugin/loader.js";
+import {
+  registry as globalRegistry,
+  PluginRegistry,
+} from "./plugin/registry.js";
+import type {
+  ConnectionConfig,
+  InputSchema,
+  PluginDef,
+} from "./plugin/types.js";
 
 export interface RunlineOptions {
   plugins?: Array<PluginDef | PluginFunction>;
@@ -49,11 +60,13 @@ export class Runline {
     plugin: string;
     action: string;
     description?: string;
+    inputSchema?: InputSchema;
   }> {
     return this._registry.getAllActions().map(({ plugin, action }) => ({
       plugin,
       action: action.name,
       description: action.description,
+      inputSchema: action.inputSchema,
     }));
   }
 
@@ -65,4 +78,48 @@ export class Runline {
       actions: p.actions.map((a) => a.name),
     }));
   }
+
+  /**
+   * Load runline from a project directory.
+   * Discovers .runline/ config and installed plugins, just like the CLI.
+   */
+  static async fromProject(cwd?: string): Promise<Runline | null> {
+    const dir = cwd ?? process.cwd();
+    const configDir = findRunlineDir(dir);
+    if (!configDir) return null;
+
+    // Temporarily change cwd so loaders find the right .runline/
+    const prevCwd = process.cwd();
+    try {
+      process.chdir(dir);
+      await loadAllPlugins();
+      const config = loadConfig();
+
+      const rl = new Runline({
+        connections: config.connections,
+        timeoutMs: config.timeoutMs,
+        memoryLimitBytes: config.memoryLimitBytes,
+      });
+
+      // Copy plugins from global registry into this instance
+      for (const plugin of globalRegistry.listPlugins()) {
+        rl._registry.register(plugin);
+      }
+
+      return rl;
+    } finally {
+      process.chdir(prevCwd);
+    }
+  }
+}
+
+function findRunlineDir(from: string): string | null {
+  let dir = from;
+  while (true) {
+    if (existsSync(join(dir, ".runline"))) return join(dir, ".runline");
+    const parent = join(dir, "..");
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }
