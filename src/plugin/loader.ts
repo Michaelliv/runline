@@ -119,9 +119,12 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
   return plugins;
 }
 
-export async function loadPluginsFromConfig(configDir: string): Promise<void> {
+export async function loadPluginsFromConfig(
+  configDir: string,
+): Promise<PluginDef[]> {
+  const plugins: PluginDef[] = [];
   const pluginsFile = join(configDir, "plugins.json");
-  if (!existsSync(pluginsFile)) return;
+  if (!existsSync(pluginsFile)) return plugins;
 
   try {
     const data = JSON.parse(readFileSync(pluginsFile, "utf-8"));
@@ -130,8 +133,7 @@ export async function loadPluginsFromConfig(configDir: string): Promise<void> {
     for (const entry of entries) {
       const p = typeof entry === "string" ? entry : entry.path;
       try {
-        const plugin = await loadPluginFromPath(p);
-        registry.register(plugin);
+        plugins.push(await loadPluginFromPath(p));
       } catch (err) {
         console.error(
           `[runline] Failed to load plugin from ${p}:`,
@@ -145,29 +147,50 @@ export async function loadPluginsFromConfig(configDir: string): Promise<void> {
       (err as Error).message,
     );
   }
+  return plugins;
 }
 
-export async function loadAllPlugins(): Promise<void> {
+/**
+ * Discover and return all plugins from a config directory and global dir.
+ * Does NOT mutate any global state.
+ */
+export async function discoverPlugins(
+  configDir?: string | null,
+): Promise<PluginDef[]> {
   const loaded = new Set<string>();
+  const result: PluginDef[] = [];
 
-  function registerIfNew(plugin: PluginDef) {
+  function addIfNew(plugin: PluginDef) {
     if (!loaded.has(plugin.name)) {
-      registry.register(plugin);
+      result.push(plugin);
       loaded.add(plugin.name);
     }
   }
 
-  const configDir = findConfigDir();
   if (configDir) {
     const projectPluginsDir = join(configDir, "plugins");
     const projectPlugins = await loadFromDirectory(projectPluginsDir);
-    for (const p of projectPlugins) registerIfNew(p);
+    for (const p of projectPlugins) addIfNew(p);
 
-    await loadPluginsFromConfig(configDir);
-    for (const p of registry.listPlugins()) loaded.add(p.name);
+    const configPlugins = await loadPluginsFromConfig(configDir);
+    for (const p of configPlugins) addIfNew(p);
   }
 
   const globalDir = join(homedir(), ".runline", "plugins");
   const globalPlugins = await loadFromDirectory(globalDir);
-  for (const p of globalPlugins) registerIfNew(p);
+  for (const p of globalPlugins) addIfNew(p);
+
+  return result;
+}
+
+/**
+ * Load all plugins and register them into the global registry.
+ * Used by the CLI.
+ */
+export async function loadAllPlugins(): Promise<void> {
+  const configDir = findConfigDir();
+  const plugins = await discoverPlugins(configDir);
+  for (const p of plugins) {
+    registry.register(p);
+  }
 }

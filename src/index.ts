@@ -29,6 +29,7 @@ export {
   removePlugin,
 } from "./plugin/installer.js";
 export {
+  discoverPlugins,
   loadAllPlugins,
   loadPluginFromPath,
   loadPluginsFromConfig,

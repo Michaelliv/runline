@@ -1,16 +1,12 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig } from "./config/loader.js";
 import type { RunlineConfig } from "./config/types.js";
 import { DEFAULT_CONFIG } from "./config/types.js";
 import { type ExecuteResult, ExecutionEngine } from "./core/engine.js";
 import type { PluginFunction } from "./plugin/api.js";
 import { resolvePluginExport } from "./plugin/api.js";
-import { loadAllPlugins } from "./plugin/loader.js";
-import {
-  registry as globalRegistry,
-  PluginRegistry,
-} from "./plugin/registry.js";
+import { discoverPlugins } from "./plugin/loader.js";
+import { PluginRegistry } from "./plugin/registry.js";
 import type {
   ConnectionConfig,
   InputSchema,
@@ -25,8 +21,8 @@ export interface RunlineOptions {
 }
 
 export class Runline {
-  private engine: ExecutionEngine;
   private _registry: PluginRegistry;
+  private _config: RunlineConfig;
 
   private constructor(options: RunlineOptions) {
     this._registry = new PluginRegistry();
@@ -36,14 +32,12 @@ export class Runline {
       this._registry.register(plugin);
     }
 
-    const config: RunlineConfig = {
+    this._config = {
       connections: options.connections ?? [],
       timeoutMs: options.timeoutMs ?? DEFAULT_CONFIG.timeoutMs,
       memoryLimitBytes:
         options.memoryLimitBytes ?? DEFAULT_CONFIG.memoryLimitBytes,
     };
-
-    this.engine = new ExecutionEngine(this._registry, config);
   }
 
   static create(options: RunlineOptions = {}): Runline {
@@ -52,7 +46,23 @@ export class Runline {
 
   /** Execute JavaScript code in the sandbox. */
   async execute(code: string): Promise<ExecuteResult> {
-    return this.engine.execute(code);
+    const engine = new ExecutionEngine(this._registry, this._config);
+    return engine.execute(code);
+  }
+
+  /** Register an additional plugin after creation. */
+  addPlugin(
+    pluginOrFn: PluginDef | PluginFunction,
+    connections?: ConnectionConfig[],
+  ): void {
+    const plugin = resolvePluginExport(pluginOrFn, "unknown");
+    this._registry.register(plugin);
+    if (connections) {
+      this._config = {
+        ...this._config,
+        connections: [...this._config.connections, ...connections],
+      };
+    }
   }
 
   /** List all available actions across all plugins. */
@@ -82,34 +92,27 @@ export class Runline {
   /**
    * Load runline from a project directory.
    * Discovers .runline/ config and installed plugins, just like the CLI.
+   * Fully self-contained — does not mutate global state.
    */
   static async fromProject(cwd?: string): Promise<Runline | null> {
     const dir = cwd ?? process.cwd();
     const configDir = findRunlineDir(dir);
     if (!configDir) return null;
 
-    // Temporarily change cwd so loaders find the right .runline/
-    const prevCwd = process.cwd();
-    try {
-      process.chdir(dir);
-      await loadAllPlugins();
-      const config = loadConfig();
+    const config = loadConfigFrom(configDir);
+    const plugins = await discoverPlugins(configDir);
 
-      const rl = new Runline({
-        connections: config.connections,
-        timeoutMs: config.timeoutMs,
-        memoryLimitBytes: config.memoryLimitBytes,
-      });
+    const rl = new Runline({
+      connections: config.connections,
+      timeoutMs: config.timeoutMs,
+      memoryLimitBytes: config.memoryLimitBytes,
+    });
 
-      // Copy plugins from global registry into this instance
-      for (const plugin of globalRegistry.listPlugins()) {
-        rl._registry.register(plugin);
-      }
-
-      return rl;
-    } finally {
-      process.chdir(prevCwd);
+    for (const plugin of plugins) {
+      rl._registry.register(plugin);
     }
+
+    return rl;
   }
 }
 
@@ -122,4 +125,15 @@ function findRunlineDir(from: string): string | null {
     dir = parent;
   }
   return null;
+}
+
+function loadConfigFrom(configDir: string): RunlineConfig {
+  const configPath = join(configDir, "config.json");
+  if (!existsSync(configPath)) return { ...DEFAULT_CONFIG };
+  try {
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    return { ...DEFAULT_CONFIG, ...raw };
+  } catch {
+    return { ...DEFAULT_CONFIG };
+  }
 }
