@@ -28,7 +28,7 @@ function iconFor(name) {
   for (const ext of ["svg", "png"]) {
     const file = `${name}.${ext}`;
     if (existsSync(join(ICONS_DIR, file))) {
-      return `<img src="${ICONS_URL_BASE}/${file}" width="16" height="16" valign="middle"> `;
+      return `<img src="${ICONS_URL_BASE}/${file}" width="16" height="16" style="vertical-align: middle"> `;
     }
   }
   return "";
