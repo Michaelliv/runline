@@ -11,17 +11,19 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.1.0",
+      "version": "0.2.2",
+      "dependencies": {
+        "runline": "^0.2.2",
+      },
       "peerDependencies": {
         "@mariozechner/pi-coding-agent": "*",
         "@mariozechner/pi-tui": "*",
         "@sinclair/typebox": "*",
-        "runline": "*",
       },
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.1.0",
+      "version": "0.2.2",
       "bin": {
         "runline": "./dist/main.js",
       },

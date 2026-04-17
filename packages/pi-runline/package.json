@@ -1,6 +1,6 @@
 {
   "name": "pi-runline",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Code mode for pi",
   "type": "commonjs",
   "keywords": [
@@ -21,11 +21,13 @@
     "lint": "biome check extensions/",
     "lint:fix": "biome check --write extensions/"
   },
+  "dependencies": {
+    "runline": "^0.2.2"
+  },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*",
-    "@sinclair/typebox": "*",
-    "runline": "^0.2.1"
+    "@sinclair/typebox": "*"
   },
   "author": "michaelliv",
   "license": "MIT"
