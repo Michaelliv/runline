@@ -8,8 +8,31 @@
  *   node scripts/generate-plugin-table.js --write   # update README.md in place
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { discoverPlugins } from "../dist/plugin/loader.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ICONS_DIR = join(
+  __dirname,
+  "..",
+  "..",
+  "runline-plugins",
+  "icons",
+);
+const ICONS_URL_BASE =
+  "https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons";
+
+function iconFor(name) {
+  for (const ext of ["svg", "png"]) {
+    const file = `${name}.${ext}`;
+    if (existsSync(join(ICONS_DIR, file))) {
+      return `<img src="${ICONS_URL_BASE}/${file}" width="16" height="16" align="center"> `;
+    }
+  }
+  return "";
+}
 
 const plugins = await discoverPlugins(null);
 plugins.sort((a, b) => a.name.localeCompare(b.name));
@@ -29,7 +52,7 @@ for (const p of plugins) {
     : "—";
 
   lines.push(
-    `| **${p.name}** | ${p.actions.length} | ${resourceList} | ${authFields} |`,
+    `| ${iconFor(p.name)}**${p.name}** | ${p.actions.length} | ${resourceList} | ${authFields} |`,
   );
 }
 
