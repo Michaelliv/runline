@@ -1,6 +1,6 @@
 {
   "name": "pi-runline",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Code mode for pi",
   "type": "commonjs",
   "keywords": ["pi-package"],
@@ -18,7 +18,7 @@
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*",
     "@sinclair/typebox": "*",
-    "runline": ">=0.2.0"
+    "runline": "^0.2.1"
   },
   "author": "michaelliv",
   "license": "MIT"
