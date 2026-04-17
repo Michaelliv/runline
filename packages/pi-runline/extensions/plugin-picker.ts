@@ -1,5 +1,5 @@
 import type { Component, TUI } from "@mariozechner/pi-tui";
-import { fuzzyFilter, Input } from "@mariozechner/pi-tui";
+import { fuzzyFilter, Input, visibleWidth } from "@mariozechner/pi-tui";
 import type { Theme } from "@mariozechner/pi-coding-agent";
 
 export interface PluginPickerItem {
@@ -18,7 +18,7 @@ export interface PluginPickerResult {
  * Keys:
  *   ↑ / ↓       — move highlight
  *   space       — toggle current item
- *   a           — toggle all (filtered view)
+ *   Ctrl-A      — toggle all (filtered view)
  *   enter       — save and close
  *   esc / C-c   — cancel
  *   type        — fuzzy filter
@@ -56,43 +56,45 @@ export class PluginPicker implements Component {
   }
 
   render(width: number): string[] {
-    const lines: string[] = [];
     const theme = this.theme;
+    // Reserve two columns for the border and one space of padding on each side.
+    const inner = Math.max(10, width - 4);
+    const body: string[] = [];
 
-    lines.push(
+    body.push(
       theme.fg(
         "mdHeading",
         `runline plugins · ${this.selected.size}/${this.items.length} enabled`,
       ),
     );
-    lines.push(
+    body.push(
       theme.fg(
         "dim",
-        "type to filter · space toggle · a toggle all · enter save · esc cancel",
+        "type to filter · space toggle · ^A toggle all · enter save · esc cancel",
       ),
     );
-    lines.push("");
+    body.push("");
 
     // Search input
     const searchPrefix = theme.fg("dim", "filter ❯ ");
-    const inputLines = this.input.render(Math.max(10, width - 10));
-    lines.push(searchPrefix + (inputLines[0] ?? ""));
-    lines.push("");
+    const inputLines = this.input.render(Math.max(10, inner - 10));
+    body.push(searchPrefix + (inputLines[0] ?? ""));
+    body.push("");
 
-    // List
-    if (this.filtered.length === 0) {
-      lines.push(theme.fg("dim", "  no matches"));
-      return lines;
-    }
-
-    const start = Math.max(
-      0,
-      Math.min(
-        this.cursor - Math.floor(this.maxRows / 2),
-        this.filtered.length - this.maxRows,
-      ),
-    );
-    const end = Math.min(start + this.maxRows, this.filtered.length);
+    // List — always render exactly maxRows item rows plus one status row so the
+    // overlay's height is stable while the filter narrows results.
+    const total = this.filtered.length;
+    const start =
+      total <= this.maxRows
+        ? 0
+        : Math.max(
+            0,
+            Math.min(
+              this.cursor - Math.floor(this.maxRows / 2),
+              total - this.maxRows,
+            ),
+          );
+    const end = Math.min(start + this.maxRows, total);
 
     for (let i = start; i < end; i++) {
       const item = this.filtered[i];
@@ -106,19 +108,37 @@ export class PluginPicker implements Component {
       const name = isCur ? theme.bold(item.name) : item.name;
       const count = theme.fg("dim", `  ${item.actionCount} actions`);
       const arrow = isCur ? theme.fg("accent", "❯ ") : "  ";
-      lines.push(`${arrow}${boxColored} ${name}${count}`);
+      body.push(`${arrow}${boxColored} ${name}${count}`);
     }
+    for (let i = end - start; i < this.maxRows; i++) body.push("");
 
-    if (start > 0 || end < this.filtered.length) {
-      lines.push(
-        theme.fg(
-          "dim",
-          `  (${this.cursor + 1}/${this.filtered.length})`,
-        ),
-      );
+    body.push(
+      total === 0
+        ? theme.fg("dim", "  no matches")
+        : theme.fg("dim", `  ${this.cursor + 1}/${total}`),
+    );
+
+    return this.drawBorder(body, width);
+  }
+
+  /**
+   * Wrap body lines in a Unicode box border with 1-column horizontal padding.
+   * The width of every line is normalized to inner+2 so the right border aligns.
+   */
+  private drawBorder(body: string[], width: number): string[] {
+    const theme = this.theme;
+    const inner = Math.max(10, width - 4);
+    const top = theme.fg("dim", `╭${"─".repeat(inner + 2)}╮`);
+    const bot = theme.fg("dim", `╰${"─".repeat(inner + 2)}╯`);
+    const side = theme.fg("dim", "│");
+    const out: string[] = [top];
+    for (const raw of body) {
+      const visible = visibleWidth(raw);
+      const pad = Math.max(0, inner - visible);
+      out.push(`${side} ${raw}${" ".repeat(pad)} ${side}`);
     }
-
-    return lines;
+    out.push(bot);
+    return out;
   }
 
   handleInput(data: string): void {
@@ -205,4 +225,3 @@ export function createPluginPickerFactory(
     return new PluginPicker(items, initiallySelected, theme, done);
   };
 }
-
