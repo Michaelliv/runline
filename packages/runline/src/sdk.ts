@@ -81,12 +81,23 @@ export class Runline {
   }
 
   /** List registered plugins. */
-  plugins(): Array<{ name: string; version: string; actions: string[] }> {
+  plugins(): Array<{
+    name: string;
+    version: string;
+    actions: string[];
+    connectionConfigSchema?: PluginDef["connectionConfigSchema"];
+  }> {
     return this._registry.listPlugins().map((p) => ({
       name: p.name,
       version: p.version,
       actions: p.actions.map((a) => a.name),
+      connectionConfigSchema: p.connectionConfigSchema,
     }));
+  }
+
+  /** Return all connections currently configured. */
+  connections(): ConnectionConfig[] {
+    return [...this._config.connections];
   }
 
   /**

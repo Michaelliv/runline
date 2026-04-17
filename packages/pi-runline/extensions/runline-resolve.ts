@@ -42,6 +42,8 @@ function getGlobalRunlineDir(): string | null {
 
 export interface RunlineExtConfig {
   showStatus: boolean;
+  /** Allowlist of plugin names exposed to the agent. undefined = none. */
+  piPlugins?: string[];
 }
 
 export function loadExtConfig(runlineDir: string): RunlineExtConfig {
@@ -49,8 +51,28 @@ export function loadExtConfig(runlineDir: string): RunlineExtConfig {
   if (!fs.existsSync(configPath)) return { showStatus: true };
   try {
     const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    return { showStatus: raw.showStatus !== false };
+    return {
+      showStatus: raw.showStatus !== false,
+      piPlugins: Array.isArray(raw.piPlugins) ? raw.piPlugins : undefined,
+    };
   } catch {
     return { showStatus: true };
   }
+}
+
+export function savePiPlugins(
+  runlineDir: string,
+  piPlugins: string[],
+): void {
+  const configPath = path.join(runlineDir, "config.json");
+  let raw: Record<string, unknown> = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    } catch {
+      raw = {};
+    }
+  }
+  raw.piPlugins = [...piPlugins].sort();
+  fs.writeFileSync(configPath, `${JSON.stringify(raw, null, 2)}\n`);
 }

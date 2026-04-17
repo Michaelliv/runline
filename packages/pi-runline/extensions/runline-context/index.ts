@@ -2,7 +2,13 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Markdown, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { Runline } from "runline";
-import { findRunlineDir, loadExtConfig } from "../runline-resolve.js";
+import { promptForCredentials } from "../connection-setup.js";
+import { createPluginPickerFactory } from "../plugin-picker.js";
+import {
+  findRunlineDir,
+  loadExtConfig,
+  savePiPlugins,
+} from "../runline-resolve.js";
 
 type ActionEntry = {
   plugin: string;
@@ -13,6 +19,15 @@ type ActionEntry = {
     { type: string; required?: boolean; description?: string }
   >;
 };
+
+function filterByAllowlist<T extends { name?: string; plugin?: string }>(
+  items: T[],
+  allow: string[] | undefined,
+): T[] {
+  if (!allow) return [];
+  const set = new Set(allow);
+  return items.filter((i) => set.has((i.name ?? i.plugin) as string));
+}
 
 function formatActions(actions: ActionEntry[]): string {
   const grouped = new Map<string, ActionEntry[]>();
@@ -118,15 +133,16 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
-    const actions = rl.actions();
-    const plugins = rl.plugins();
+    const { piPlugins } = loadExtConfig(runlineDir);
+    const actions = filterByAllowlist(rl.actions(), piPlugins);
+    const plugins = filterByAllowlist(rl.plugins(), piPlugins);
 
-    if (actions.length === 0) {
+    if (plugins.length === 0) {
       if (ctx.hasUI && showStatus) {
-        ctx.ui.setStatus(
-          "runline",
-          ctx.ui.theme.fg("dim", "runline: no plugins"),
-        );
+        const hint = piPlugins
+          ? "runline: no plugins enabled"
+          : "runline: /runline-plugins to enable";
+        ctx.ui.setStatus("runline", ctx.ui.theme.fg("dim", hint));
       }
       return;
     }
@@ -185,6 +201,11 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const rl = await getRunline(ctx.cwd);
+      // Note: the sandbox currently exposes every registered plugin as a
+      // global. The allowlist drives what the agent is told about in its
+      // injected context and list_runline_actions output, which is the only
+      // practical route for the agent to know what exists. Plumbing the
+      // allowlist through to the sandbox globals is a future improvement.
       const result = await rl.execute(params.code);
 
       const logs = result.logs?.length
@@ -227,15 +248,87 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const rl = await getRunline(ctx.cwd);
-      let actions = rl.actions();
+      const runlineDir = findRunlineDir(ctx.cwd);
+      const allow = runlineDir
+        ? loadExtConfig(runlineDir).piPlugins
+        : undefined;
+      let actions = filterByAllowlist(rl.actions(), allow);
       if (params.plugin) {
         actions = actions.filter((a) => a.plugin === params.plugin);
       }
       const text = formatActions(actions);
       return {
-        content: [{ type: "text", text: text || "No actions found." }],
+        content: [{ type: "text", text: text || "No actions enabled." }],
         details: { actions },
       };
+    },
+  });
+
+  // ── Commands ────────────────────────────────────────────────────
+
+  pi.registerCommand("runline-plugins", {
+    description: "Pick which runline plugins the agent can use",
+    handler: async (_args, ctx) => {
+      if (!ctx.hasUI) return;
+
+      const runlineDir = findRunlineDir(ctx.cwd);
+      if (!runlineDir) {
+        ctx.ui.notify("no .runline/ directory — run `runline init`", "error");
+        return;
+      }
+
+      let rl: Runline;
+      try {
+        rl = await getRunline(ctx.cwd);
+      } catch (err) {
+        ctx.ui.notify(
+          `runline failed to load: ${(err as Error).message}`,
+          "error",
+        );
+        return;
+      }
+
+      const items = rl.plugins().map((p) => ({
+        name: p.name,
+        actionCount: p.actions.length,
+      }));
+      const { piPlugins } = loadExtConfig(runlineDir);
+      const initial = piPlugins ?? [];
+
+      const result = await ctx.ui.custom(
+        createPluginPickerFactory(items, initial),
+        { overlay: true, overlayOptions: { width: "80%", maxHeight: "80%" } },
+      );
+
+      if (!result.selected) {
+        ctx.ui.notify("plugin selection cancelled", "info");
+        return;
+      }
+
+      savePiPlugins(runlineDir, result.selected);
+
+      const previous = new Set(initial);
+      const newlyEnabled = result.selected.filter((n) => !previous.has(n));
+
+      ctx.ui.notify(
+        `saved — ${result.selected.length} plugin(s) enabled`,
+        "info",
+      );
+
+      if (newlyEnabled.length > 0) {
+        const saved = await promptForCredentials(
+          ctx,
+          runlineDir,
+          rl.plugins(),
+          newlyEnabled,
+        );
+        if (saved.length > 0) {
+          ctx.ui.notify(
+            `credentials saved for ${saved.length} plugin(s)`,
+            "info",
+          );
+        }
+      }
     },
   });
 }
