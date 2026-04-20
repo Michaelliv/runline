@@ -11,8 +11,21 @@ export type { RunlineConfig } from "./config/types.js";
 export { DEFAULT_CONFIG } from "./config/types.js";
 export type { EngineOptions, ExecuteResult } from "./core/engine.js";
 export { ExecutionEngine } from "./core/engine.js";
-export type { OAuthTokens, RunOAuthOptions } from "./core/oauth.js";
-export { OAUTH_CALLBACK_PORT, runOAuth } from "./core/oauth.js";
+export type {
+  BuildAuthUrlOptions,
+  ExchangeCodeOptions,
+  OAuthTokens,
+  PKCEPair,
+  RunOAuthOptions,
+} from "./core/oauth.js";
+export {
+  buildAuthUrl,
+  exchangeAuthCode,
+  generatePKCE,
+  OAUTH_CALLBACK_PORT,
+  OAUTH_CALLBACK_URI,
+  runOAuth,
+} from "./core/oauth.js";
 export type {
   ActionDefinition,
   PluginFunction,
