@@ -61,6 +61,31 @@ describe("createPluginAPI", () => {
     assert.equal(plugin.connectionConfigSchema.apiKey.env, "MY_API_KEY");
   });
 
+  it("records OAuth config when setOAuth is called", () => {
+    const { api, resolve } = createPluginAPI("test");
+    api.setName("oauthy");
+    api.setOAuth({
+      authUrl: "https://example.com/authorize",
+      tokenUrl: "https://example.com/token",
+      scopes: ["a", "b"],
+      authParams: { access_type: "offline" },
+    });
+
+    const plugin = resolve();
+    assert.ok(plugin.oauth);
+    assert.equal(plugin.oauth.authUrl, "https://example.com/authorize");
+    assert.equal(plugin.oauth.tokenUrl, "https://example.com/token");
+    assert.deepEqual(plugin.oauth.scopes, ["a", "b"]);
+    assert.deepEqual(plugin.oauth.authParams, { access_type: "offline" });
+  });
+
+  it("omits oauth when setOAuth is never called", () => {
+    const { api, resolve } = createPluginAPI("test");
+    api.setName("noauth");
+    const plugin = resolve();
+    assert.equal(plugin.oauth, undefined);
+  });
+
   it("registers init hooks", () => {
     const calls: unknown[] = [];
     const { api, resolve } = createPluginAPI("test");

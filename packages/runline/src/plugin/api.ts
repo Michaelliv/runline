@@ -1,4 +1,9 @@
-import type { ActionDef, InputSchema, PluginDef } from "./types.js";
+import type {
+  ActionDef,
+  InputSchema,
+  OAuthConfig,
+  PluginDef,
+} from "./types.js";
 
 export interface SchemaField {
   type: "string" | "number" | "boolean";
@@ -19,6 +24,12 @@ export interface RunlinePluginAPI {
   setConnectionSchema(schema: Record<string, SchemaField>): void;
   setName(name: string): void;
   setVersion(version: string): void;
+  /**
+   * Declare OAuth2 configuration so `runline auth <plugin>` can
+   * run the browser login flow and seed this plugin's connection
+   * with refreshable tokens.
+   */
+  setOAuth(oauth: OAuthConfig): void;
   onInit(fn: (config: Record<string, unknown>) => void): void;
   log: {
     info(msg: string): void;
@@ -37,6 +48,7 @@ export function createPluginAPI(pluginId: string): {
   let version = "0.0.0";
   const actions: ActionDef[] = [];
   let connectionConfigSchema: PluginDef["connectionConfigSchema"];
+  let oauth: OAuthConfig | undefined;
   const initHooks: Array<(config: Record<string, unknown>) => void> = [];
 
   const api: RunlinePluginAPI = {
@@ -59,6 +71,9 @@ export function createPluginAPI(pluginId: string): {
       for (const [key, field] of Object.entries(schema)) {
         connectionConfigSchema[key] = { ...field };
       }
+    },
+    setOAuth(cfg: OAuthConfig) {
+      oauth = { ...cfg };
     },
     onInit(fn) {
       initHooks.push(fn);
@@ -83,6 +98,9 @@ export function createPluginAPI(pluginId: string): {
       actions,
       connectionConfigSchema,
     };
+    if (oauth) {
+      plugin.oauth = oauth;
+    }
     if (initHooks.length > 0) {
       plugin.initHooks = initHooks;
     }

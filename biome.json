@@ -9,9 +9,9 @@
     "ignoreUnknown": false,
     "includes": [
       "**",
-      "!**/dist/**",
-      "!**/node_modules/**",
-      "!packages/runline-plugins/**"
+      "!**/dist",
+      "!**/node_modules",
+      "!packages/runline-plugins"
     ]
   },
   "formatter": {

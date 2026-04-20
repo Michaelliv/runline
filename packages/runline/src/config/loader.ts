@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import lockfile from "proper-lockfile";
 import type { ConnectionConfig } from "../plugin/types.js";
 import { DEFAULT_CONFIG, type RunlineConfig } from "./types.js";
 
@@ -66,6 +67,52 @@ export function removeConnection(name: string): boolean {
   config.connections.splice(idx, 1);
   saveConfig(config);
   return true;
+}
+
+/**
+ * Merge a partial config patch into an existing connection, atomically.
+ *
+ * Used by plugins that need to persist refreshed OAuth tokens (or any
+ * other runtime-mutated credential) back to disk. The whole read-
+ * modify-write is guarded by a file lock so two concurrent `runline
+ * exec` processes refreshing the same token don't stomp each other.
+ *
+ * If the connection doesn't exist the call is a no-op.
+ */
+export async function updateConnectionConfig(
+  name: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const configDir = findConfigDir() ?? join(process.cwd(), CONFIG_DIR_NAME);
+  mkdirSync(configDir, { recursive: true });
+  const configPath = join(configDir, CONFIG_FILE);
+  if (!existsSync(configPath)) writeFileSync(configPath, "{}\n");
+
+  const release = await lockfile.lock(configPath, {
+    retries: { retries: 10, factor: 2, minTimeout: 50, maxTimeout: 2_000 },
+    stale: 30_000,
+    realpath: false,
+  });
+  try {
+    let raw: RunlineConfig;
+    try {
+      raw = {
+        ...DEFAULT_CONFIG,
+        ...JSON.parse(readFileSync(configPath, "utf-8")),
+      };
+    } catch {
+      raw = { ...DEFAULT_CONFIG };
+    }
+    const idx = raw.connections.findIndex((c) => c.name === name);
+    if (idx < 0) return;
+    raw.connections[idx] = {
+      ...raw.connections[idx],
+      config: { ...raw.connections[idx].config, ...patch },
+    };
+    writeFileSync(configPath, `${JSON.stringify(raw, null, 2)}\n`);
+  } finally {
+    await release();
+  }
 }
 
 export function getConnection(

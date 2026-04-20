@@ -3,6 +3,7 @@
 import { createRequire } from "node:module";
 import { Command } from "commander";
 import { actions } from "./commands/actions.js";
+import { auth } from "./commands/auth.js";
 import {
   connectionAdd,
   connectionList,
@@ -39,6 +40,7 @@ Examples:
   $ runline exec -f ./scripts/deploy.js
   $ runline actions
   $ runline connection add gh --plugin github --set token=ghp_xxx
+  $ runline auth gmail
 
 https://github.com/Michaelliv/runline`,
   );
@@ -148,6 +150,39 @@ pluginCmd
   });
 
 // ── init ────────────────────────────────────────────────
+
+program
+  .command("auth <plugin>")
+  .description("Run the OAuth login flow for a plugin and save the connection")
+  .option("-n, --name <name>", "Connection name (default: plugin name)")
+  .option("--client-id <id>", "OAuth client ID (falls back to env or prompt)")
+  .option(
+    "--client-secret <secret>",
+    "OAuth client secret (falls back to env or prompt)",
+  )
+  .addHelpText(
+    "after",
+    `
+The plugin must declare OAuth config via setOAuth(). The flow
+opens your browser to the provider's consent screen, catches the
+redirect on a localhost port, exchanges the code for tokens, and
+writes a connection into .runline/config.json.
+
+Examples:
+  $ runline auth gmail
+  $ runline auth gmail --name gmail-work
+  $ runline auth gmail --client-id $CLIENT --client-secret $SECRET`,
+  )
+  .action(async (plugin, opts, cmd) => {
+    const globals = cmd.optsWithGlobals();
+    await auth(plugin, {
+      name: opts.name,
+      clientId: opts.clientId,
+      clientSecret: opts.clientSecret,
+      json: globals.json,
+      quiet: globals.quiet,
+    });
+  });
 
 program
   .command("init")

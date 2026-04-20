@@ -5,11 +5,14 @@ export {
   loadConfig,
   removeConnection,
   saveConfig,
+  updateConnectionConfig,
 } from "./config/loader.js";
 export type { RunlineConfig } from "./config/types.js";
 export { DEFAULT_CONFIG } from "./config/types.js";
 export type { EngineOptions, ExecuteResult } from "./core/engine.js";
 export { ExecutionEngine } from "./core/engine.js";
+export type { OAuthTokens, RunOAuthOptions } from "./core/oauth.js";
+export { OAUTH_CALLBACK_PORT, runOAuth } from "./core/oauth.js";
 export type {
   ActionDefinition,
   PluginFunction,
@@ -41,6 +44,7 @@ export type {
   ConnectionConfig,
   InputField,
   InputSchema,
+  OAuthConfig,
   PluginDef,
 } from "./plugin/types.js";
 export type { RunlineOptions } from "./sdk.js";

@@ -6,7 +6,7 @@ import {
   type QuickJSRuntime,
   shouldInterruptAfterDeadline,
 } from "quickjs-emscripten";
-import { applyEnvOverrides } from "../config/loader.js";
+import { applyEnvOverrides, updateConnectionConfig } from "../config/loader.js";
 import type { RunlineConfig } from "../config/types.js";
 import type { PluginRegistry } from "../plugin/registry.js";
 import type {
@@ -195,6 +195,12 @@ export class ExecutionEngine {
         info: (msg) => console.log(`[${plugin.name}] ${msg}`),
         warn: (msg) => console.warn(`[${plugin.name}] ${msg}`),
         error: (msg) => console.error(`[${plugin.name}] ${msg}`),
+      },
+      updateConnection: async (patch) => {
+        // Mutate the in-memory copy so the rest of this action
+        // sees the new values without re-reading disk.
+        Object.assign(connection.config, patch);
+        await updateConnectionConfig(connection.name, patch);
       },
     };
 
