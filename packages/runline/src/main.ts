@@ -73,9 +73,13 @@ Examples:
 program
   .command("actions")
   .description("List all available actions and their schemas")
-  .action(async (_opts, cmd) => {
+  .option(
+    "-c, --connected",
+    "Only show actions for plugins with configured connections",
+  )
+  .action(async (opts, cmd) => {
     const globals = cmd.optsWithGlobals();
-    await actions({ json: globals.json });
+    await actions({ json: globals.json, connected: opts.connected });
   });
 
 // ── connection ──────────────────────────────────────────

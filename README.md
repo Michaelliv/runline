@@ -244,6 +244,8 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 ```bash
 # List all available actions
 runline actions
+# List actions only for connected services
+runline actions --connected
 
 # Get Nike's brand colors
 runline exec 'return await brandfetch.brand.getColors({ domain: "nike.com" })'
@@ -360,6 +362,7 @@ Every command supports `--json`. Use `runline actions --json` for full schemas w
 
 ```bash
 runline actions --json          # all actions with schemas
+runline actions --connected --json  # only connected services
 runline exec '<code>' --json    # structured { result, logs } output
 ```
 
@@ -388,6 +391,7 @@ console.log(result.result);  // [{ hex: "#635BFF", type: "accent", brightness: 1
 runline exec "<code>"                  # execute JS in sandbox
 runline exec -f ./script.js            # execute a file
 runline actions                        # list all actions
+runline actions --connected            # only actions for configured connections
 runline plugin install <source>        # install from git/npm/local
 runline plugin list                    # list installed plugins
 runline plugin remove <name>           # remove a plugin
