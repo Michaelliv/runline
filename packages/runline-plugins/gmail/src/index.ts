@@ -361,7 +361,7 @@ const REPLY_METADATA_HEADERS = [
 /**
  * Translate a friendly filter bag into Gmail's list query shape.
  *
- * Mirrors n8n's `prepareQuery` helper: `sender`, `readStatus`,
+ * `sender`, `readStatus`,
  * `receivedAfter`, `receivedBefore` fold into the `q=` search
  * expression (which itself can be combined with an explicit `q`).
  * `labelIds`, `includeSpamTrash`, `pageToken`, `maxResults` pass
@@ -729,7 +729,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const email: EmailInput = {
         to: normalizeAddressList(p.to as string)!,
         cc: normalizeAddressList(p.cc as string | undefined),
@@ -761,7 +761,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       attachments: { type: "array", required: false },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       return replyToMessage(ctx, p.messageId as string, p);
     },
   });
@@ -784,7 +784,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
       if (p.metadataHeaders) qs.metadataHeaders = p.metadataHeaders;
       const raw = (await gmailRequest(
@@ -828,7 +828,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const qs = buildListQuery(p);
       if (p.returnAll) {
         return paginateAll(ctx, "/messages", "messages", qs);
@@ -951,7 +951,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
       if (p.metadataHeaders) qs.metadataHeaders = p.metadataHeaders;
       const raw = (await gmailRequest(
@@ -983,7 +983,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       returnAll: { type: "boolean", required: false },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const qs = buildListQuery(p);
       if (p.returnAll) return paginateAll(ctx, "/threads", "threads", qs);
       if (p.maxResults) qs.maxResults = p.maxResults;
@@ -1060,7 +1060,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       attachments: { type: "array", required: false },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const thread = (await gmailRequest(
         ctx,
         "GET",
@@ -1099,7 +1099,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       attachments: { type: "array", required: false },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const from = (p.from as string | undefined) ?? (p.fromAlias as string | undefined);
       const email: EmailInput = {
         to: normalizeAddressList(p.to as string | undefined) ?? "",
@@ -1145,7 +1145,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       format: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
       return gmailRequest(ctx, "GET", `/drafts/${p.id}`, undefined, qs);
     },
@@ -1161,7 +1161,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       returnAll: { type: "boolean", required: false },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (p.q) qs.q = p.q;
       if (p.includeSpamTrash) qs.includeSpamTrash = true;
@@ -1208,7 +1208,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = { name: p.name };
       if (p.labelListVisibility) body.labelListVisibility = p.labelListVisibility;
       if (p.messageListVisibility)
@@ -1254,7 +1254,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       messageListVisibility: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
+      const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = {};
       if (p.name) body.name = p.name;
       if (p.labelListVisibility) body.labelListVisibility = p.labelListVisibility;

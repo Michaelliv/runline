@@ -41,6 +41,7 @@ for (const p of plugins) {
 
   const authFields = p.connectionConfigSchema
     ? Object.entries(p.connectionConfigSchema)
+        .filter(([, field]) => field.required !== false)
         .map(([key, field]) => (field.env ? `\`${field.env}\`` : `\`${key}\``))
         .join(", ")
     : "—";

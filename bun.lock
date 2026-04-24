@@ -11,7 +11,7 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.2.2",
+      "version": "0.3.3",
       "dependencies": {
         "runline": "^0.2.2",
       },
@@ -23,7 +23,7 @@
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.2.2",
+      "version": "0.3.3",
       "bin": {
         "runline": "./dist/main.js",
       },
@@ -32,6 +32,7 @@
         "commander": "^14.0.3",
         "proper-lockfile": "^4.1.2",
         "quickjs-emscripten": "^0.32.0",
+        "rrule": "^2.8.1",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.3.14",
@@ -526,6 +527,8 @@
     "require-from-string": ["require-from-string@2.0.2", "", {}, "sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw=="],
 
     "retry": ["retry@0.12.0", "", {}, "sha512-9LkiTwjUh6rT555DtE9rTX+BKByPfrMzEAtnlEtdEwr3Nkffwiihqe2bWADg+OQRjt9gl6ICdmB/ZFDCGAtSow=="],
+
+    "rrule": ["rrule@2.8.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-hM3dHSBMeaJ0Ktp7W38BJZ7O1zOgaFEsn41PDk+yHoEtfLV+PoJt9E9xAlZiWgf/iqEqionN0ebHFZIDAp+iGw=="],
 
     "runline": ["runline@workspace:packages/runline"],
 
