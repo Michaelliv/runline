@@ -11,7 +11,7 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "runline": "^0.2.2",
       },
@@ -23,14 +23,13 @@
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "bin": {
         "runline": "./dist/main.js",
       },
       "dependencies": {
         "chalk": "^5.6.2",
         "commander": "^14.0.3",
-        "minisearch": "^7.2.0",
         "proper-lockfile": "^4.1.2",
         "quickjs-emscripten": "^0.32.0",
         "rrule": "^2.8.1",
@@ -40,6 +39,7 @@
         "@types/bun": "^1.2.17",
         "@types/node": "^25.5.0",
         "@types/proper-lockfile": "^4.1.4",
+        "minisearch": "^7.2.0",
         "typescript": "^5.8.0",
       },
     },

@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import {
   getQuickJS,
   type QuickJSContext,
@@ -304,15 +303,17 @@ function formatError(cause: unknown): string {
   return String(cause);
 }
 
-// MiniSearch UMD bundle, loaded once and inlined into the sandbox source.
-// UMD assigns to globalThis.MiniSearch when run in a non-CJS / non-AMD env
-// (which QuickJS is), so we just paste the file in and use the global.
-const __minisearchSource = (() => {
-  const req = createRequire(import.meta.url);
-  const pkg = req.resolve("minisearch/package.json");
-  const path = pkg.replace(/package\.json$/, "dist/umd/index.js");
-  return readFileSync(path, "utf8");
-})();
+// MiniSearch UMD bundle, vendored at the package root and inlined into the
+// sandbox source. UMD attaches `MiniSearch` to globalThis in a non-CJS /
+// non-AMD env (QuickJS), so pasting the file is enough.
+//
+// `../../vendor/...` resolves identically from src/core/engine.ts (dev) and
+// dist/core/engine.js (published) because tsc preserves the `core/` subdir.
+// See vendor/README.md for the upgrade procedure.
+const __minisearchSource = readFileSync(
+  new URL("../../vendor/minisearch.umd.js", import.meta.url),
+  "utf8",
+);
 
 interface HelpInput {
   type: string;

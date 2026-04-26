@@ -1,6 +1,6 @@
 {
   "name": "runline",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Code mode for agents — turn any API or command into a callable action",
   "type": "module",
   "main": "dist/index.js",
@@ -25,7 +25,8 @@
     "runline": "./dist/main.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "vendor"
   ],
   "scripts": {
     "build": "tsc && bun --filter runline-plugins build && rm -rf dist/plugins && cp -R ../runline-plugins/dist dist/plugins",
@@ -58,12 +59,12 @@
     "@types/bun": "^1.2.17",
     "@types/node": "^25.5.0",
     "@types/proper-lockfile": "^4.1.4",
+    "minisearch": "^7.2.0",
     "typescript": "^5.8.0"
   },
   "dependencies": {
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
-    "minisearch": "^7.2.0",
     "proper-lockfile": "^4.1.2",
     "quickjs-emscripten": "^0.32.0",
     "rrule": "^2.8.1"
