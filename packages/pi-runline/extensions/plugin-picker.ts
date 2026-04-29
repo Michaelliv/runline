@@ -28,7 +28,7 @@ export interface PluginPickerResult {
  * Keys:
  *   ↑ / ↓       — move highlight
  *   space       — toggle current item
- *   Ctrl-A      — toggle all (filtered view)
+ *   alt-r       — reconfigure highlighted plugin (when connected)
  *   enter       — save and close
  *   esc / C-c   — cancel
  *   type        — fuzzy filter
