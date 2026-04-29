@@ -303,13 +303,22 @@ export default function (pi: ExtensionAPI) {
           ),
       );
 
-      const toReconfigure: string[] = [];
-      for (const name of reconfigurable) {
-        const yes = await ctx.ui.confirm(
-          `Reconfigure ${name}?`,
-          `${name} already has saved credentials. Re-enter them?`,
+      let toReconfigure: string[] = [];
+      if (reconfigurable.length > 0) {
+        // Single multi-select picker so the user gets one screen instead of
+        // a chain of Y/N confirms.
+        const reconfigureItems = reconfigurable.map((name) => {
+          const p = allPlugins.find((pl) => pl.name === name);
+          return { name, actionCount: p?.actions.length ?? 0 };
+        });
+        const reconfigureResult = await ctx.ui.custom(
+          createPluginPickerFactory(reconfigureItems, []),
+          {
+            overlay: true,
+            overlayOptions: { width: "80%", maxHeight: "80%" },
+          },
         );
-        if (yes) toReconfigure.push(name);
+        toReconfigure = reconfigureResult.selected ?? [];
       }
 
       if (toReconfigure.length > 0) {
