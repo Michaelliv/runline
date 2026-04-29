@@ -5,11 +5,15 @@ import { fuzzyFilter, Input, visibleWidth } from "@mariozechner/pi-tui";
 export interface PluginPickerItem {
   name: string;
   actionCount: number;
+  /** Plugin already has a stored connection — eligible for Ctrl-R reconfigure. */
+  connected?: boolean;
 }
 
 export interface PluginPickerResult {
   /** undefined = cancelled */
   selected?: string[];
+  /** Set when the user pressed Ctrl-R on a connected plugin. */
+  reconfigure?: string;
 }
 
 /**
@@ -70,7 +74,7 @@ export class PluginPicker implements Component {
     body.push(
       theme.fg(
         "dim",
-        "type to filter · space toggle · ^A toggle all · enter save · esc cancel",
+        "type to filter · space toggle · ^A toggle all · ^R reconfigure · enter save · esc cancel",
       ),
     );
     body.push("");
@@ -106,9 +110,12 @@ export class PluginPicker implements Component {
         ? theme.fg("success", box)
         : theme.fg("dim", box);
       const name = isCur ? theme.bold(item.name) : item.name;
+      const connectedTag = item.connected
+        ? theme.fg("success", " • connected")
+        : "";
       const count = theme.fg("dim", `  ${item.actionCount} actions`);
       const arrow = isCur ? theme.fg("accent", "❯ ") : "  ";
-      body.push(`${arrow}${boxColored} ${name}${count}`);
+      body.push(`${arrow}${boxColored} ${name}${connectedTag}${count}`);
     }
     for (let i = end - start; i < this.maxRows; i++) body.push("");
 
@@ -174,6 +181,15 @@ export class PluginPicker implements Component {
       for (const i of this.filtered) {
         if (allSelected) this.selected.delete(i.name);
         else this.selected.add(i.name);
+      }
+      return;
+    }
+    if (data === "\x12") {
+      // Ctrl-R — reconfigure the highlighted plugin if it already has
+      // saved credentials. No-op otherwise.
+      const item = this.filtered[this.cursor];
+      if (item?.connected) {
+        this.onDone({ reconfigure: item.name });
       }
       return;
     }

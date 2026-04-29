@@ -244,9 +244,11 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
+      const connectedNames = getConnectedPluginNames(runlineDir);
       const items = allPlugins.map((p) => ({
         name: p.name,
         actionCount: p.actions.length,
+        connected: connectedNames.has(p.name),
       }));
       const { piPlugins } = loadExtConfig(runlineDir);
       const initial = piPlugins ?? [];
@@ -255,6 +257,27 @@ export default function (pi: ExtensionAPI) {
         createPluginPickerFactory(items, initial),
         { overlay: true, overlayOptions: { width: "80%", maxHeight: "80%" } },
       );
+
+      // Ctrl-R inside the picker — reconfigure a single plugin and stop.
+      // Selection state isn't saved (user didn't press enter); they can
+      // re-open `/runline-plugins` to make selection changes.
+      if (result.reconfigure) {
+        const target = result.reconfigure;
+        const updated = await promptForCredentials(
+          ctx,
+          runlineDir,
+          allPlugins,
+          [target],
+          { force: true },
+        );
+        ctx.ui.notify(
+          updated.length > 0
+            ? `credentials updated for ${target}`
+            : `reconfigure cancelled for ${target}`,
+          "info",
+        );
+        return;
+      }
 
       if (!result.selected) {
         ctx.ui.notify("plugin selection cancelled", "info");
@@ -281,57 +304,6 @@ export default function (pi: ExtensionAPI) {
         if (saved.length > 0) {
           ctx.ui.notify(
             `credentials saved for ${saved.length} plugin(s)`,
-            "info",
-          );
-        }
-      }
-
-      // Offer to reconfigure credentials for plugins that were already
-      // enabled and already have a stored connection. Without this, there
-      // is no path through `/runline-plugins` to re-enter an expired or
-      // mistyped token.
-      const connected = getConnectedPluginNames(runlineDir);
-      const reconfigurable = result.selected.filter(
-        (n) =>
-          previous.has(n) &&
-          connected.has(n) &&
-          allPlugins.some(
-            (p) =>
-              p.name === n &&
-              p.connectionConfigSchema &&
-              Object.keys(p.connectionConfigSchema).length > 0,
-          ),
-      );
-
-      let toReconfigure: string[] = [];
-      if (reconfigurable.length > 0) {
-        // Single multi-select picker so the user gets one screen instead of
-        // a chain of Y/N confirms.
-        const reconfigureItems = reconfigurable.map((name) => {
-          const p = allPlugins.find((pl) => pl.name === name);
-          return { name, actionCount: p?.actions.length ?? 0 };
-        });
-        const reconfigureResult = await ctx.ui.custom(
-          createPluginPickerFactory(reconfigureItems, []),
-          {
-            overlay: true,
-            overlayOptions: { width: "80%", maxHeight: "80%" },
-          },
-        );
-        toReconfigure = reconfigureResult.selected ?? [];
-      }
-
-      if (toReconfigure.length > 0) {
-        const updated = await promptForCredentials(
-          ctx,
-          runlineDir,
-          allPlugins,
-          toReconfigure,
-          { force: true },
-        );
-        if (updated.length > 0) {
-          ctx.ui.notify(
-            `credentials updated for ${updated.length} plugin(s)`,
             "info",
           );
         }
