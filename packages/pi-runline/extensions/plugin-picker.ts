@@ -1,6 +1,12 @@
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import type { Component, TUI } from "@mariozechner/pi-tui";
-import { fuzzyFilter, Input, visibleWidth } from "@mariozechner/pi-tui";
+import {
+  fuzzyFilter,
+  Input,
+  Key,
+  matchesKey,
+  visibleWidth,
+} from "@mariozechner/pi-tui";
 
 export interface PluginPickerItem {
   name: string;
@@ -74,7 +80,7 @@ export class PluginPicker implements Component {
     body.push(
       theme.fg(
         "dim",
-        "type to filter · space toggle · ^A toggle all · ^R reconfigure · enter save · esc cancel",
+        "type to filter · space toggle · ^A toggle all · alt+r reconfigure · enter save · esc cancel",
       ),
     );
     body.push("");
@@ -184,9 +190,10 @@ export class PluginPicker implements Component {
       }
       return;
     }
-    if (data === "\x12") {
-      // Ctrl-R — reconfigure the highlighted plugin if it already has
-      // saved credentials. No-op otherwise.
+    if (matchesKey(data, Key.alt("r"))) {
+      // Alt-R — reconfigure the highlighted plugin if it already has
+      // saved credentials. No-op otherwise. (Ctrl-R is reserved by pi
+      // for `app.session.rename` and never reaches handleInput.)
       const item = this.filtered[this.cursor];
       if (item?.connected) {
         this.onDone({ reconfigure: item.name });
