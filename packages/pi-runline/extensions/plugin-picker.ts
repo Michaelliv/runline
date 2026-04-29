@@ -80,7 +80,7 @@ export class PluginPicker implements Component {
     body.push(
       theme.fg(
         "dim",
-        "type to filter · space toggle · ^A toggle all · alt+r reconfigure · enter save · esc cancel",
+        "type to filter · space toggle · alt+r reconfigure · enter save · esc cancel",
       ),
     );
     body.push("");
@@ -178,15 +178,6 @@ export class PluginPicker implements Component {
       if (item) {
         if (this.selected.has(item.name)) this.selected.delete(item.name);
         else this.selected.add(item.name);
-      }
-      return;
-    }
-    if (data === "\x01") {
-      // Ctrl-A — toggle all visible
-      const allSelected = this.filtered.every((i) => this.selected.has(i.name));
-      for (const i of this.filtered) {
-        if (allSelected) this.selected.delete(i.name);
-        else this.selected.add(i.name);
       }
       return;
     }
