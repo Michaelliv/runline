@@ -60,6 +60,25 @@ export function loadExtConfig(runlineDir: string): RunlineExtConfig {
   }
 }
 
+/** Plugin names that already have a saved connection in .runline/config.json */
+export function getConnectedPluginNames(runlineDir: string): Set<string> {
+  const configPath = path.join(runlineDir, "config.json");
+  if (!fs.existsSync(configPath)) return new Set();
+  try {
+    const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    const conns = Array.isArray(raw.connections) ? raw.connections : [];
+    return new Set(
+      conns
+        .map((c: { plugin?: unknown }) =>
+          typeof c.plugin === "string" ? c.plugin : null,
+        )
+        .filter((n: string | null): n is string => n !== null),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 export function savePiPlugins(runlineDir: string, piPlugins: string[]): void {
   const configPath = path.join(runlineDir, "config.json");
   let raw: Record<string, unknown> = {};
