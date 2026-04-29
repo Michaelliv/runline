@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Markdown, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { Runline } from "runline";
+import { discoverPlugins, Runline } from "runline";
 import { promptForCredentials } from "../connection-setup.js";
 import { createPluginPickerFactory } from "../plugin-picker.js";
 import {
@@ -228,18 +228,22 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      let rl: Runline;
+      // Load the full bundled catalog directly — `Runline.fromProject`
+      // gates builtins by `connections[].plugin`, which is the wrong
+      // surface for the picker (the picker is HOW you decide which
+      // plugins to enable in the first place).
+      let allPlugins: Awaited<ReturnType<typeof discoverPlugins>>;
       try {
-        rl = await getRunline(ctx.cwd);
+        allPlugins = await discoverPlugins(runlineDir);
       } catch (err) {
         ctx.ui.notify(
-          `runline failed to load: ${(err as Error).message}`,
+          `runline failed to load plugins: ${(err as Error).message}`,
           "error",
         );
         return;
       }
 
-      const items = rl.plugins().map((p) => ({
+      const items = allPlugins.map((p) => ({
         name: p.name,
         actionCount: p.actions.length,
       }));
@@ -270,7 +274,7 @@ export default function (pi: ExtensionAPI) {
         const saved = await promptForCredentials(
           ctx,
           runlineDir,
-          rl.plugins(),
+          allPlugins,
           newlyEnabled,
         );
         if (saved.length > 0) {
