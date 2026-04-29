@@ -185,31 +185,49 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.search", {
-    description: "Search issues using JQL",
+    description:
+      "Search issues using JQL (uses /rest/api/3/search/jql; pagination is cursor-based via nextPageToken)",
     inputSchema: {
       jql: { type: "string", required: true, description: "JQL query" },
       fields: {
         type: "array",
         required: false,
-        description: "Fields to return",
+        description:
+          "Fields to return (e.g. ['summary','status']). Defaults to ['*all'] to match the legacy /search behavior.",
       },
       maxResults: {
         type: "number",
         required: false,
-        description: "Max results",
+        description: "Max results per page (server caps at 100)",
       },
-      startAt: { type: "number", required: false, description: "Start index" },
+      nextPageToken: {
+        type: "string",
+        required: false,
+        description:
+          "Cursor returned by the previous response. Pass to fetch the next page.",
+      },
+      expand: {
+        type: "string",
+        required: false,
+        description: "Comma-separated expansions",
+      },
     },
     async execute(input, ctx) {
-      const { jql, fields, maxResults, startAt } = input as Record<
-        string,
-        unknown
-      >;
-      const body: Record<string, unknown> = { jql };
-      if (fields) body.fields = fields;
+      const { jql, fields, maxResults, nextPageToken, expand } =
+        input as Record<string, unknown>;
+      const body: Record<string, unknown> = {
+        jql,
+        // The new endpoint returns only id+key by default; preserve the old
+        // "all navigable fields" behavior unless the caller specifies.
+        fields: Array.isArray(fields) ? fields : ["*all"],
+      };
       if (maxResults) body.maxResults = maxResults;
-      if (startAt) body.startAt = startAt;
-      return jr(ctx, "POST", "/api/2/search", body);
+      if (nextPageToken) body.nextPageToken = nextPageToken;
+      if (expand) body.expand = expand;
+      // Atlassian removed POST /rest/api/2|3/search (CHANGE-2046).
+      // The replacement endpoint is POST /rest/api/3/search/jql with
+      // cursor-based pagination.
+      return jr(ctx, "POST", "/api/3/search/jql", body);
     },
   });
 

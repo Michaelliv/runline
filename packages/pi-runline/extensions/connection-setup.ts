@@ -75,7 +75,9 @@ export async function promptForCredentials(
   runlineDir: string,
   plugins: PluginSummary[],
   newlyEnabled: string[],
+  options: { force?: boolean } = {},
 ): Promise<string[]> {
+  const force = options.force === true;
   const config = readConfig(runlineDir);
   const connections = getConnections(config);
   const saved: string[] = [];
@@ -87,16 +89,17 @@ export async function promptForCredentials(
     const schema = plugin.connectionConfigSchema;
     if (isSchemaEmpty(schema)) continue; // no creds needed
 
-    if (connectionFor(connections, name)) continue; // already configured
+    if (!force && connectionFor(connections, name)) continue; // already configured
 
     // Check env — if every required field has an env var set, skip the prompt.
+    // Skipped on `force` (the user explicitly asked to re-enter values).
     const requiredFields = Object.entries(schema!).filter(
       ([, f]) => f.required,
     );
     const allFromEnv = requiredFields.every(
       ([, f]) => f.env && process.env[f.env],
     );
-    if (requiredFields.length > 0 && allFromEnv) continue;
+    if (!force && requiredFields.length > 0 && allFromEnv) continue;
 
     const wantSetup = await ctx.ui.confirm(
       `Set up ${name}?`,
@@ -137,7 +140,12 @@ export async function promptForCredentials(
       plugin: name,
       config: values,
     };
-    connections.push(conn);
+    const existingIdx = connections.findIndex((c) => c.plugin === name);
+    if (existingIdx >= 0) {
+      connections[existingIdx] = conn;
+    } else {
+      connections.push(conn);
+    }
     saved.push(name);
   }
 

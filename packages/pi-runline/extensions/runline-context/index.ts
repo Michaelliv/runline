@@ -1,11 +1,12 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Markdown, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { Runline } from "runline";
+import { discoverPlugins, Runline } from "runline";
 import { promptForCredentials } from "../connection-setup.js";
 import { createPluginPickerFactory } from "../plugin-picker.js";
 import {
   findRunlineDir,
+  getConnectedPluginNames,
   loadExtConfig,
   savePiPlugins,
 } from "../runline-resolve.js";
@@ -228,20 +229,26 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      let rl: Runline;
+      // Load the full bundled catalog directly — `Runline.fromProject`
+      // gates builtins by `connections[].plugin`, which is the wrong
+      // surface for the picker (the picker is HOW you decide which
+      // plugins to enable in the first place).
+      let allPlugins: Awaited<ReturnType<typeof discoverPlugins>>;
       try {
-        rl = await getRunline(ctx.cwd);
+        allPlugins = await discoverPlugins(runlineDir);
       } catch (err) {
         ctx.ui.notify(
-          `runline failed to load: ${(err as Error).message}`,
+          `runline failed to load plugins: ${(err as Error).message}`,
           "error",
         );
         return;
       }
 
-      const items = rl.plugins().map((p) => ({
+      const connectedNames = getConnectedPluginNames(runlineDir);
+      const items = allPlugins.map((p) => ({
         name: p.name,
         actionCount: p.actions.length,
+        connected: connectedNames.has(p.name),
       }));
       const { piPlugins } = loadExtConfig(runlineDir);
       const initial = piPlugins ?? [];
@@ -250,6 +257,27 @@ export default function (pi: ExtensionAPI) {
         createPluginPickerFactory(items, initial),
         { overlay: true, overlayOptions: { width: "80%", maxHeight: "80%" } },
       );
+
+      // Ctrl-R inside the picker — reconfigure a single plugin and stop.
+      // Selection state isn't saved (user didn't press enter); they can
+      // re-open `/runline-plugins` to make selection changes.
+      if (result.reconfigure) {
+        const target = result.reconfigure;
+        const updated = await promptForCredentials(
+          ctx,
+          runlineDir,
+          allPlugins,
+          [target],
+          { force: true },
+        );
+        ctx.ui.notify(
+          updated.length > 0
+            ? `credentials updated for ${target}`
+            : `reconfigure cancelled for ${target}`,
+          "info",
+        );
+        return;
+      }
 
       if (!result.selected) {
         ctx.ui.notify("plugin selection cancelled", "info");
@@ -270,7 +298,7 @@ export default function (pi: ExtensionAPI) {
         const saved = await promptForCredentials(
           ctx,
           runlineDir,
-          rl.plugins(),
+          allPlugins,
           newlyEnabled,
         );
         if (saved.length > 0) {

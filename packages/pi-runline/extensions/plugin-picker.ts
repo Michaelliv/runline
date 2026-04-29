@@ -1,15 +1,25 @@
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import type { Component, TUI } from "@mariozechner/pi-tui";
-import { fuzzyFilter, Input, visibleWidth } from "@mariozechner/pi-tui";
+import {
+  fuzzyFilter,
+  Input,
+  Key,
+  matchesKey,
+  visibleWidth,
+} from "@mariozechner/pi-tui";
 
 export interface PluginPickerItem {
   name: string;
   actionCount: number;
+  /** Plugin already has a stored connection — eligible for Ctrl-R reconfigure. */
+  connected?: boolean;
 }
 
 export interface PluginPickerResult {
   /** undefined = cancelled */
   selected?: string[];
+  /** Set when the user pressed Ctrl-R on a connected plugin. */
+  reconfigure?: string;
 }
 
 /**
@@ -18,7 +28,7 @@ export interface PluginPickerResult {
  * Keys:
  *   ↑ / ↓       — move highlight
  *   space       — toggle current item
- *   Ctrl-A      — toggle all (filtered view)
+ *   alt-r       — reconfigure highlighted plugin (when connected)
  *   enter       — save and close
  *   esc / C-c   — cancel
  *   type        — fuzzy filter
@@ -70,7 +80,7 @@ export class PluginPicker implements Component {
     body.push(
       theme.fg(
         "dim",
-        "type to filter · space toggle · ^A toggle all · enter save · esc cancel",
+        "type to filter · space toggle · alt+r reconfigure · enter save · esc cancel",
       ),
     );
     body.push("");
@@ -106,9 +116,12 @@ export class PluginPicker implements Component {
         ? theme.fg("success", box)
         : theme.fg("dim", box);
       const name = isCur ? theme.bold(item.name) : item.name;
+      const connectedTag = item.connected
+        ? theme.fg("success", " • connected")
+        : "";
       const count = theme.fg("dim", `  ${item.actionCount} actions`);
       const arrow = isCur ? theme.fg("accent", "❯ ") : "  ";
-      body.push(`${arrow}${boxColored} ${name}${count}`);
+      body.push(`${arrow}${boxColored} ${name}${connectedTag}${count}`);
     }
     for (let i = end - start; i < this.maxRows; i++) body.push("");
 
@@ -168,12 +181,13 @@ export class PluginPicker implements Component {
       }
       return;
     }
-    if (data === "\x01") {
-      // Ctrl-A — toggle all visible
-      const allSelected = this.filtered.every((i) => this.selected.has(i.name));
-      for (const i of this.filtered) {
-        if (allSelected) this.selected.delete(i.name);
-        else this.selected.add(i.name);
+    if (matchesKey(data, Key.alt("r"))) {
+      // Alt-R — reconfigure the highlighted plugin if it already has
+      // saved credentials. No-op otherwise. (Ctrl-R is reserved by pi
+      // for `app.session.rename` and never reaches handleInput.)
+      const item = this.filtered[this.cursor];
+      if (item?.connected) {
+        this.onDone({ reconfigure: item.name });
       }
       return;
     }

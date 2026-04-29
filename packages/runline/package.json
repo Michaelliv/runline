@@ -1,7 +1,7 @@
 {
   "name": "runline",
-  "version": "0.5.1",
-  "description": "Code mode for agents — turn any API or command into a callable action",
+  "version": "0.5.2",
+  "description": "Code mode for agents \u2014 turn any API or command into a callable action",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
