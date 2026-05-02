@@ -16,6 +16,6 @@
       "runline": ["../runline/dist"]
     }
   },
-  "include": ["*/src/**/*.ts"],
+  "include": ["*/src/**/*.ts", "_shared/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

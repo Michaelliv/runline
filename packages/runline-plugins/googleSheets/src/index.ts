@@ -30,15 +30,20 @@
  */
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
+import { googleAccessToken } from "../../_shared/googleAuth.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
 type Ctx = ActionContext;
 
 type GoogleSheetsConfig = {
-  clientId: string;
-  clientSecret: string;
-  refreshToken: string;
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+  serviceAccountJson?: string;
+  serviceAccountEmail?: string;
+  serviceAccountPrivateKey?: string;
+  serviceAccountSubject?: string;
   accessToken?: string;
   accessTokenExpiresAt?: number;
 };
@@ -64,52 +69,10 @@ interface BatchUpdateDatum {
 
 const ROW_NUMBER = "row_number";
 
-// ─── OAuth ───────────────────────────────────────────────────────
-
-const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const REFRESH_SKEW_MS = 60_000;
-
-async function refreshAccessToken(ctx: Ctx): Promise<string> {
-  const cfg = ctx.connection.config as unknown as GoogleSheetsConfig;
-  const { clientId, clientSecret, refreshToken } = cfg;
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      "googleSheets: missing clientId/clientSecret/refreshToken. Run the Sheets OAuth helper to seed these.",
-    );
-  }
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-    grant_type: "refresh_token",
-  });
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  if (!res.ok) {
-    throw new Error(`googleSheets: token refresh failed (${res.status}): ${await res.text()}`);
-  }
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  const expiresAt = Date.now() + data.expires_in * 1000;
-  await ctx.updateConnection({
-    accessToken: data.access_token,
-    accessTokenExpiresAt: expiresAt,
-  });
-  return data.access_token;
-}
+// ─── Auth ────────────────────────────────────────────────────────
 
 async function accessToken(ctx: Ctx): Promise<string> {
-  const cfg = ctx.connection.config as unknown as GoogleSheetsConfig;
-  if (
-    cfg.accessToken &&
-    typeof cfg.accessTokenExpiresAt === "number" &&
-    Date.now() < cfg.accessTokenExpiresAt - REFRESH_SKEW_MS
-  ) {
-    return cfg.accessToken;
-  }
-  return refreshAccessToken(ctx);
+  return googleAccessToken(ctx, "googleSheets", SCOPES);
 }
 
 // ─── Request ─────────────────────────────────────────────────────
@@ -519,21 +482,45 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   rl.setConnectionSchema({
     clientId: {
       type: "string",
-      required: true,
+      required: false,
       description: "Google OAuth2 client ID",
       env: "GOOGLE_SHEETS_CLIENT_ID",
     },
     clientSecret: {
       type: "string",
-      required: true,
+      required: false,
       description: "Google OAuth2 client secret",
       env: "GOOGLE_SHEETS_CLIENT_SECRET",
     },
     refreshToken: {
       type: "string",
-      required: true,
+      required: false,
       description: "OAuth2 refresh token",
       env: "GOOGLE_SHEETS_REFRESH_TOKEN",
+    },
+    serviceAccountJson: {
+      type: "string",
+      required: false,
+      description: "Google service account JSON credential",
+      env: "GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON",
+    },
+    serviceAccountEmail: {
+      type: "string",
+      required: false,
+      description: "Google service account email",
+      env: "GOOGLE_SHEETS_SERVICE_ACCOUNT_EMAIL",
+    },
+    serviceAccountPrivateKey: {
+      type: "string",
+      required: false,
+      description: "Google service account private key",
+      env: "GOOGLE_SHEETS_SERVICE_ACCOUNT_PRIVATE_KEY",
+    },
+    serviceAccountSubject: {
+      type: "string",
+      required: false,
+      description: "User email to impersonate with domain-wide delegation",
+      env: "GOOGLE_SHEETS_SERVICE_ACCOUNT_SUBJECT",
     },
     accessToken: { type: "string", required: false },
     accessTokenExpiresAt: { type: "number", required: false },

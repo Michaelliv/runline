@@ -38,15 +38,20 @@
 
 import { createReadStream, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
+import { googleAccessToken } from "../../_shared/googleAuth.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
 type Ctx = ActionContext;
 
 type GoogleDriveConfig = {
-  clientId: string;
-  clientSecret: string;
-  refreshToken: string;
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+  serviceAccountJson?: string;
+  serviceAccountEmail?: string;
+  serviceAccountPrivateKey?: string;
+  serviceAccountSubject?: string;
   accessToken?: string;
   accessTokenExpiresAt?: number;
 };
@@ -80,53 +85,10 @@ const DRIVE = {
   UNKNOWN: "application/vnd.google-apps.unknown",
 } as const;
 
-// ─── OAuth ───────────────────────────────────────────────────────
-
-const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const REFRESH_SKEW_MS = 60_000;
-
-async function refreshAccessToken(ctx: Ctx): Promise<string> {
-  const cfg = ctx.connection.config as unknown as GoogleDriveConfig;
-  const { clientId, clientSecret, refreshToken } = cfg;
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      "googleDrive: missing clientId/clientSecret/refreshToken. Run the Google Drive OAuth helper to seed these.",
-    );
-  }
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-    grant_type: "refresh_token",
-  });
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`googleDrive: token refresh failed (${res.status}): ${text}`);
-  }
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  const expiresAt = Date.now() + data.expires_in * 1000;
-  await ctx.updateConnection({
-    accessToken: data.access_token,
-    accessTokenExpiresAt: expiresAt,
-  });
-  return data.access_token;
-}
+// ─── Auth ────────────────────────────────────────────────────────
 
 async function accessToken(ctx: Ctx): Promise<string> {
-  const cfg = ctx.connection.config as unknown as GoogleDriveConfig;
-  if (
-    cfg.accessToken &&
-    typeof cfg.accessTokenExpiresAt === "number" &&
-    Date.now() < cfg.accessTokenExpiresAt - REFRESH_SKEW_MS
-  ) {
-    return cfg.accessToken;
-  }
-  return refreshAccessToken(ctx);
+  return googleAccessToken(ctx, "googleDrive", SCOPES);
 }
 
 // ─── Request ─────────────────────────────────────────────────────
@@ -491,21 +453,45 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   rl.setConnectionSchema({
     clientId: {
       type: "string",
-      required: true,
+      required: false,
       description: "Google OAuth2 client ID",
       env: "GOOGLE_DRIVE_CLIENT_ID",
     },
     clientSecret: {
       type: "string",
-      required: true,
+      required: false,
       description: "Google OAuth2 client secret",
       env: "GOOGLE_DRIVE_CLIENT_SECRET",
     },
     refreshToken: {
       type: "string",
-      required: true,
+      required: false,
       description: "OAuth2 refresh token",
       env: "GOOGLE_DRIVE_REFRESH_TOKEN",
+    },
+    serviceAccountJson: {
+      type: "string",
+      required: false,
+      description: "Google service account JSON credential",
+      env: "GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON",
+    },
+    serviceAccountEmail: {
+      type: "string",
+      required: false,
+      description: "Google service account email",
+      env: "GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL",
+    },
+    serviceAccountPrivateKey: {
+      type: "string",
+      required: false,
+      description: "Google service account private key",
+      env: "GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY",
+    },
+    serviceAccountSubject: {
+      type: "string",
+      required: false,
+      description: "User email to impersonate with domain-wide delegation",
+      env: "GOOGLE_DRIVE_SERVICE_ACCOUNT_SUBJECT",
     },
     accessToken: { type: "string", required: false },
     accessTokenExpiresAt: { type: "number", required: false },
