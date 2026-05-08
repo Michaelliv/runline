@@ -2,7 +2,7 @@
 
 Code mode for [pi](https://github.com/mariozechner/pi).
 
-An extension that plugs [runline](https://www.npmjs.com/package/runline) into coding agents. The agent gets one native tool, in-sandbox action discovery, a fuzzy picker for choosing which of the 188 built-in plugins to expose, and a guided credential prompt for the ones it hasn't seen before.
+An extension that plugs [runline](https://www.npmjs.com/package/runline) into coding agents. The agent gets one native tool, in-sandbox action discovery, a fuzzy picker for choosing which of the 202 built-in plugins to expose, and a guided credential prompt for the ones it hasn't seen before.
 
 ## Install
 
@@ -38,11 +38,11 @@ return await github.issue.create({ owner: "acme", repo: "api", title: "Bug" });
 
 ## `/runline-plugins` — the picker
 
-Typing `/runline-plugins` in a pi session opens a fuzzy multi-select over all 188 built-in plugins.
+Typing `/runline-plugins` in a pi session opens a fuzzy multi-select over all 202 built-in plugins.
 
 ```
 ╭─────────────────────────────────────────────╮
-│ runline plugins · 5/188 enabled             │
+│ runline plugins · 5/202 enabled             │
 │ type to filter · space toggle · ^A toggle   │
 │                                             │
 │ filter ❯ gith                               │
@@ -85,6 +85,6 @@ Fallback used when the current cwd has no `.runline/` anywhere up the tree. Usef
 
 ## How plugin allow-listing works
 
-The extension deliberately exposes nothing by default. That's on purpose — 2,410 actions is a lot of context budget. You pick the plugins that matter for a given project, commit the allowlist to `.runline/config.json`, and the agent only ever sees the ones you enabled in its primer.
+The extension deliberately exposes nothing by default. That's on purpose — 2,614 actions is a lot of context budget. You pick the plugins that matter for a given project, commit the allowlist to `.runline/config.json`, and the agent only ever sees the ones you enabled in its primer.
 
 Note that the QuickJS sandbox itself still registers every runline plugin as a global (and `actions.list()` will surface them all), so in principle an agent could guess and call a disabled plugin. In practice the primer only advertises the allowlisted ones, and unconfigured plugins error out at first action call anyway. Plumbing the allowlist into the sandbox registry is on the roadmap.

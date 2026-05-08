@@ -19,7 +19,7 @@ runline exec 'return await brandfetch.brand.getColors({ domain: "nike.com" })'
 # => [{ hex: "#E5E5E5", type: "accent" }, { hex: "#111111", type: "dark" }, ...]
 ```
 
-All 188 plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS sandbox: each plugin is a top-level global, dot-chain into resource and action. Plugin actions execute outside the sandbox with full network access; the agent can only reach APIs through the actions you've configured.
+All 202 plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS sandbox: each plugin is a top-level global, dot-chain into resource and action. Plugin actions execute outside the sandbox with full network access; the agent can only reach APIs through the actions you've configured.
 
 ```js
 // agent writes this
@@ -35,7 +35,7 @@ return { company: company.name, issue: issue.number };
 
 ## Plugins
 
-188 built-in plugins covering popular SaaS, DevOps, and productivity APIs. All ship with the package — no separate install needed.
+202 built-in plugins covering popular SaaS, DevOps, productivity, and image-generation APIs. All ship with the package — no separate install needed.
 
 Set the env var shown in the Auth column, add a connection, and go:
 
@@ -108,15 +108,16 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/ghost.svg" width="16" height="16" style="vertical-align: middle"> **ghost** | 5 | post | `GHOST_URL`, `GHOST_ADMIN_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/github.svg" width="16" height="16" style="vertical-align: middle"> **github** | 34 | file, issue, release, repository, review, user, organization, workflow | `GITHUB_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/gitlab.svg" width="16" height="16" style="vertical-align: middle"> **gitlab** | 17 | issue, release, repository, user, file | `GITLAB_TOKEN` |
-| **gmail** | 32 | message, thread, draft, label, profile, alias | `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` |
+| **gmail** | 32 | message, thread, draft, label, profile, alias |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/gong.svg" width="16" height="16" style="vertical-align: middle"> **gong** | 4 | call, user | `GONG_ACCESS_KEY`, `GONG_ACCESS_KEY_SECRET` |
-| **googleCalendar** | 11 | calendar, event | `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, `GOOGLE_CALENDAR_REFRESH_TOKEN` |
-| **googleContacts** | 10 | contact, group | `GOOGLE_CONTACTS_CLIENT_ID`, `GOOGLE_CONTACTS_CLIENT_SECRET`, `GOOGLE_CONTACTS_REFRESH_TOKEN` |
-| **googleDocs** | 21 | document | `GOOGLE_DOCS_CLIENT_ID`, `GOOGLE_DOCS_CLIENT_SECRET`, `GOOGLE_DOCS_REFRESH_TOKEN` |
-| **googleDrive** | 20 | file, folder, fileFolder, drive | `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN` |
-| **googleSheets** | 13 | spreadsheet, sheet | `GOOGLE_SHEETS_CLIENT_ID`, `GOOGLE_SHEETS_CLIENT_SECRET`, `GOOGLE_SHEETS_REFRESH_TOKEN` |
-| **googleSlides** | 7 | presentation, page | `GOOGLE_SLIDES_CLIENT_ID`, `GOOGLE_SLIDES_CLIENT_SECRET`, `GOOGLE_SLIDES_REFRESH_TOKEN` |
-| **googleTasks** | 12 | taskList, task | `GOOGLE_TASKS_CLIENT_ID`, `GOOGLE_TASKS_CLIENT_SECRET`, `GOOGLE_TASKS_REFRESH_TOKEN` |
+| **googleCalendar** | 11 | calendar, event |  |
+| **googleContacts** | 10 | contact, group |  |
+| **googleDocs** | 21 | document |  |
+| **googleDrive** | 20 | file, folder, fileFolder, drive |  |
+| **googleImage** | 1 | image | `GOOGLE_API_KEY` |
+| **googleSheets** | 13 | spreadsheet, sheet |  |
+| **googleSlides** | 7 | presentation, page |  |
+| **googleTasks** | 12 | taskList, task |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/gotify.png" width="16" height="16" style="vertical-align: middle"> **gotify** | 3 | message | `GOTIFY_URL`, `GOTIFY_APP_TOKEN`, `GOTIFY_CLIENT_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/gotowebinar.svg" width="16" height="16" style="vertical-align: middle"> **gotowebinar** | 20 | webinar, registrant, session, attendee, coorganizer, panelist | `GOTO_ACCESS_TOKEN`, `GOTO_ORGANIZER_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/grafana.svg" width="16" height="16" style="vertical-align: middle"> **grafana** | 17 | dashboard, team, teamMember, user | `GRAFANA_URL`, `GRAFANA_API_KEY` |
@@ -138,7 +139,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/keap.png" width="16" height="16" style="vertical-align: middle"> **keap** | 28 | company, contact, contactNote, contactTag, order, product, email, file | `KEAP_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/kobotoolbox.svg" width="16" height="16" style="vertical-align: middle"> **kobotoolbox** | 17 | form, submission, hook, file | `KOBOTOOLBOX_URL`, `KOBOTOOLBOX_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/lemlist.svg" width="16" height="16" style="vertical-align: middle"> **lemlist** | 15 | activity, campaign, lead, team, unsubscribe, enrich | `LEMLIST_API_KEY` |
-| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/linear.svg" width="16" height="16" style="vertical-align: middle"> **linear** | 7 | issue | `LINEAR_API_KEY` |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/linear.svg" width="16" height="16" style="vertical-align: middle"> **linear** | 79 | issue, comment, state, label, project, milestone, projectUpdate, cycle, initiative, team, user, attachment, org, webhook | `LINEAR_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/lingvanex.png" width="16" height="16" style="vertical-align: middle"> **lingvanex** | 1 | translate | `LINGVANEX_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/linkedin.svg" width="16" height="16" style="vertical-align: middle"> **linkedin** | 1 | post | `LINKEDIN_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/lonescale.svg" width="16" height="16" style="vertical-align: middle"> **lonescale** | 4 | list, item | `LONESCALE_API_KEY` |
@@ -172,6 +173,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/okta.svg" width="16" height="16" style="vertical-align: middle"> **okta** | 5 | user | `OKTA_URL`, `OKTA_API_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/oneSimpleApi.svg" width="16" height="16" style="vertical-align: middle"> **oneSimpleApi** | 10 | website, socialProfile, information, utility | `ONE_SIMPLE_API_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/onfleet.svg" width="16" height="16" style="vertical-align: middle"> **onfleet** | 34 | organization, task, worker, admin, hub, team, recipient, container, destination | `ONFLEET_API_KEY` |
+| **openai** | 1 | image | `OPENAI_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/openThesaurus.png" width="16" height="16" style="vertical-align: middle"> **openThesaurus** | 1 | synonyms |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/openweathermap.svg" width="16" height="16" style="vertical-align: middle"> **openweathermap** | 2 | weather | `OPENWEATHERMAP_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/oura.svg" width="16" height="16" style="vertical-align: middle"> **oura** | 4 | profile, summary | `OURA_ACCESS_TOKEN` |
@@ -193,7 +195,9 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/quickbooks.svg" width="16" height="16" style="vertical-align: middle"> **quickbooks** | 45 | bill, customer, employee, estimate, invoice, item, payment, purchase, vendor | `QUICKBOOKS_ACCESS_TOKEN`, `QUICKBOOKS_COMPANY_ID` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/quickchart.svg" width="16" height="16" style="vertical-align: middle"> **quickchart** | 1 | chart |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/raindrop.svg" width="16" height="16" style="vertical-align: middle"> **raindrop** | 13 | bookmark, collection, tag, user | `RAINDROP_ACCESS_TOKEN` |
+| **recraft** | 1 | image | `RECRAFT_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/reddit.svg" width="16" height="16" style="vertical-align: middle"> **reddit** | 10 | post, comment, subreddit, user |  |
+| **replicate** | 1 | image | `REPLICATE_API_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/rocketchat.svg" width="16" height="16" style="vertical-align: middle"> **rocketchat** | 1 | chat | `ROCKETCHAT_DOMAIN`, `ROCKETCHAT_USER_ID`, `ROCKETCHAT_AUTH_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/rundeck.svg" width="16" height="16" style="vertical-align: middle"> **rundeck** | 2 | job | `RUNDECK_URL`, `RUNDECK_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/salesforce.svg" width="16" height="16" style="vertical-align: middle"> **salesforce** | 48 | account, contact, lead, opportunity, case, task, user, sobject, soql | `SALESFORCE_INSTANCE_URL`, `SALESFORCE_ACCESS_TOKEN` |
@@ -222,6 +226,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/thehive.svg" width="16" height="16" style="vertical-align: middle"> **thehive** | 23 | alert, case, observable, task, log | `THEHIVE_URL`, `THEHIVE_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/thehiveProject.svg" width="16" height="16" style="vertical-align: middle"> **thehiveProject** | 37 | alert, case, task, observable, comment, log, page, query | `THEHIVE_URL`, `THEHIVE_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/todoist.svg" width="16" height="16" style="vertical-align: middle"> **todoist** | 31 | task, project, section, comment, label | `TODOIST_API_TOKEN` |
+| **together** | 1 | image | `TOGETHER_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/travisci.svg" width="16" height="16" style="vertical-align: middle"> **travisci** | 5 | build | `TRAVISCI_API_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/trello.svg" width="16" height="16" style="vertical-align: middle"> **trello** | 37 | board, boardMember, card, cardComment, list, attachment, checklist, label | `TRELLO_API_KEY`, `TRELLO_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/twake.png" width="16" height="16" style="vertical-align: middle"> **twake** | 1 | message | `TWAKE_API_KEY` |
@@ -238,6 +243,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/wekan.svg" width="16" height="16" style="vertical-align: middle"> **wekan** | 24 | board, list, card, cardComment, checklist, checklistItem | `WEKAN_URL`, `WEKAN_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/woocommerce.svg" width="16" height="16" style="vertical-align: middle"> **woocommerce** | 15 | product, order, customer | `WOOCOMMERCE_URL`, `WOOCOMMERCE_CONSUMER_KEY`, `WOOCOMMERCE_CONSUMER_SECRET` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/wordpress.svg" width="16" height="16" style="vertical-align: middle"> **wordpress** | 15 | post, page, user | `WORDPRESS_URL`, `WORDPRESS_USERNAME`, `WORDPRESS_PASSWORD` |
+| **xai** | 1 | image | `XAI_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/xero.svg" width="16" height="16" style="vertical-align: middle"> **xero** | 8 | invoice, contact | `XERO_ACCESS_TOKEN`, `XERO_TENANT_ID` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/yourls.png" width="16" height="16" style="vertical-align: middle"> **yourls** | 3 | url | `YOURLS_URL`, `YOURLS_SIGNATURE` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/zammad.svg" width="16" height="16" style="vertical-align: middle"> **zammad** | 22 | user, organization, group, ticket | `ZAMMAD_URL`, `ZAMMAD_TOKEN` |
@@ -354,7 +360,7 @@ export default function orders(rl: RunlinePluginAPI) {
 
 Key points: `execute` runs **outside** the sandbox with full Node.js access (fetch, fs, etc). The sandbox can only call your actions through the proxy. `ctx.connection.config` holds the resolved config with env var overrides applied.
 
-See [`packages/runline-plugins/`](packages/runline-plugins) for 188 real-world examples.
+See [`packages/runline-plugins/`](packages/runline-plugins) for 202 real-world examples.
 
 ## Sandbox
 
@@ -431,7 +437,7 @@ Env vars override config values. Plugins declare env var names in their connecti
 
 ## Development
 
-Runline is a bun workspace monorepo: `packages/runline` (library + CLI), `packages/runline-plugins` (188 built-in plugins, bundled into runline's dist at build time), and `packages/pi-runline` (pi extension that exposes runline to agents).
+Runline is a bun workspace monorepo: `packages/runline` (library + CLI), `packages/runline-plugins` (202 built-in plugins, bundled into runline's dist at build time), and `packages/pi-runline` (pi extension that exposes runline to agents).
 
 ```bash
 bun install
@@ -446,7 +452,7 @@ The [`pi-runline`](packages/pi-runline) package is a [pi](https://github.com/mar
 
 - **`execute_runline`** — run JavaScript in the runline sandbox. Discovery happens inside the sandbox via `actions.list / find / describe / check`, so the agent never needs a separate listing tool.
 
-It ships with `/runline-plugins`, a fuzzy multi-select picker for choosing which of the 188 plugins the agent should see, plus a guided credential prompt for the ones you enable.
+It ships with `/runline-plugins`, a fuzzy multi-select picker for choosing which of the 202 plugins the agent should see, plus a guided credential prompt for the ones you enable.
 
 ```bash
 pi install npm:pi-runline
