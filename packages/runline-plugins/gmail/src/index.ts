@@ -40,6 +40,20 @@ type GmailConfig = {
   accessTokenExpiresAt?: number;
 };
 
+interface EmailAttachmentInput {
+  name?: string;
+  filename?: string;
+  mimeType?: string;
+  /** Base64-encoded file contents, or a Drive download-like object. */
+  contentBase64: string | { contentBase64?: unknown };
+}
+
+interface NormalizedAttachment {
+  name: string;
+  mimeType: string;
+  contentBase64: string;
+}
+
 interface EmailInput {
   to: string;
   from?: string;
@@ -51,12 +65,7 @@ interface EmailInput {
   html?: string;
   inReplyTo?: string;
   references?: string;
-  attachments?: Array<{
-    name: string;
-    mimeType: string;
-    /** Base64-encoded file contents. */
-    contentBase64: string;
-  }>;
+  attachments?: EmailAttachmentInput[];
 }
 
 // ─── Auth ────────────────────────────────────────────────────────
@@ -132,6 +141,7 @@ async function paginateAll(
 // ─── MIME encoding ───────────────────────────────────────────────
 
 const CRLF = "\r\n";
+const GMAIL_MAX_RAW_BYTES = 35 * 1024 * 1024;
 
 function base64url(bytes: string | Uint8Array): string {
   const buf =
@@ -164,29 +174,78 @@ function header(name: string, value: string | undefined): string {
   return `${name}: ${value}${CRLF}`;
 }
 
+function foldedBase64ByteLength(length: number): number {
+  return length === 0 ? 0 : length + Math.floor((length - 1) / 76) * CRLF.length;
+}
+
+function foldBase64(encoded: string): string {
+  let folded = "";
+  for (let i = 0; i < encoded.length; i += 76) {
+    if (i > 0) folded += CRLF;
+    folded += encoded.slice(i, i + 76);
+  }
+  return folded;
+}
+
+function assertAttachmentPayloadFits(atts: NormalizedAttachment[]): void {
+  const attachmentBodyBytes = atts.reduce(
+    (sum, att) => sum + foldedBase64ByteLength(att.contentBase64.length),
+    0,
+  );
+  if (attachmentBodyBytes > GMAIL_MAX_RAW_BYTES) {
+    throw new Error(
+      `gmail: attachment payload is ${attachmentBodyBytes} bytes after MIME folding; Gmail API raw messages must be <= ${GMAIL_MAX_RAW_BYTES} bytes`,
+    );
+  }
+}
+
 function textPart(body: string, mimeType: "text/plain" | "text/html"): string {
   const encoded = Buffer.from(body, "utf-8").toString("base64");
-  // Fold base64 to 76 chars per RFC 2045.
-  const folded = encoded.match(/.{1,76}/g)?.join(CRLF) ?? encoded;
   return (
     `Content-Type: ${mimeType}; charset="UTF-8"${CRLF}` +
     `Content-Transfer-Encoding: base64${CRLF}${CRLF}` +
-    `${folded}${CRLF}`
+    `${foldBase64(encoded)}${CRLF}`
   );
 }
 
-function attachmentPart(att: {
-  name: string;
-  mimeType: string;
-  contentBase64: string;
-}): string {
+function normalizeAttachment(
+  input: EmailAttachmentInput,
+  index: number,
+): NormalizedAttachment {
+  if (!input || typeof input !== "object") {
+    throw new Error(`gmail: attachment ${index} must be an object`);
+  }
+
+  const content = input.contentBase64;
+  const contentBase64 =
+    typeof content === "string"
+      ? content
+      : content &&
+          typeof content === "object" &&
+          typeof content.contentBase64 === "string"
+        ? content.contentBase64
+        : undefined;
+
+  if (typeof contentBase64 !== "string") {
+    throw new Error(
+      `gmail: attachment ${index} contentBase64 must be a base64 string`,
+    );
+  }
+
+  return {
+    name: input.name ?? input.filename ?? `attachment-${index + 1}`,
+    mimeType: input.mimeType ?? "application/octet-stream",
+    contentBase64,
+  };
+}
+
+function attachmentPart(att: NormalizedAttachment): string {
   const encodedName = encodeHeaderWord(att.name);
-  const folded = att.contentBase64.match(/.{1,76}/g)?.join(CRLF) ?? att.contentBase64;
   return (
     `Content-Type: ${att.mimeType}; name="${encodedName}"${CRLF}` +
     `Content-Disposition: attachment; filename="${encodedName}"${CRLF}` +
     `Content-Transfer-Encoding: base64${CRLF}${CRLF}` +
-    `${folded}${CRLF}`
+    `${foldBase64(att.contentBase64)}${CRLF}`
   );
 }
 
@@ -208,7 +267,10 @@ export function encodeEmail(email: EmailInput): string {
 
   const text = email.text ?? "";
   const html = email.html ?? "";
-  const atts = email.attachments ?? [];
+  const atts = (email.attachments ?? []).map((att, index) =>
+    normalizeAttachment(att, index),
+  );
+  assertAttachmentPayloadFits(atts);
   const hasAtt = atts.length > 0;
   const hasBoth = text && html;
 
@@ -254,6 +316,12 @@ export function encodeEmail(email: EmailInput): string {
   }
 
   const raw = `${headers.join("")}${rootType}${bodyBlock}`;
+  const rawBytes = Buffer.byteLength(raw, "utf-8");
+  if (rawBytes > GMAIL_MAX_RAW_BYTES) {
+    throw new Error(
+      `gmail: encoded message is ${rawBytes} bytes; Gmail API raw messages must be <= ${GMAIL_MAX_RAW_BYTES} bytes`,
+    );
+  }
   return base64url(raw);
 }
 
@@ -296,7 +364,10 @@ interface GmailMessage {
   payload?: GmailPayload;
 }
 
-function findHeader(payload: GmailPayload | undefined, name: string): string | undefined {
+function findHeader(
+  payload: GmailPayload | undefined,
+  name: string,
+): string | undefined {
   if (!payload?.headers) return undefined;
   const lower = name.toLowerCase();
   const h = payload.headers.find((h) => h.name.toLowerCase() === lower);
@@ -467,7 +538,11 @@ function simplifyMessage(
   }
 
   // Body + attachments only meaningful when format=full was used.
-  const acc = { text: [] as string[], html: [] as string[], attachments: [] as NonNullable<SimplifiedMessage["attachments"]> };
+  const acc = {
+    text: [] as string[],
+    html: [] as string[],
+    attachments: [] as NonNullable<SimplifiedMessage["attachments"]>,
+  };
   walkPayload(payload, acc);
   if (acc.text.length > 0) out.text = acc.text.join("\n");
   if (acc.html.length > 0) out.html = acc.html.join("\n");
@@ -545,7 +620,9 @@ async function replyToMessage(
     to,
     cc: normalizeAddressList(p.cc as string | undefined),
     bcc: normalizeAddressList(p.bcc as string | undefined),
-    subject: subject.toLowerCase().startsWith("re:") ? subject : `Re: ${subject}`,
+    subject: subject.toLowerCase().startsWith("re:")
+      ? subject
+      : `Re: ${subject}`,
     text: p.text as string | undefined,
     html: p.html as string | undefined,
     inReplyTo: messageIdHeader,
@@ -922,7 +999,11 @@ export default function gmail(rl: RunlinePluginAPI) {
     description: "Get a thread by ID",
     inputSchema: {
       id: { type: "string", required: true },
-      format: { type: "string", required: false, description: "minimal | full | metadata" },
+      format: {
+        type: "string",
+        required: false,
+        description: "minimal | full | metadata",
+      },
       metadataHeaders: { type: "array", required: false },
       simple: {
         type: "boolean",
@@ -1081,7 +1162,8 @@ export default function gmail(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const from = (p.from as string | undefined) ?? (p.fromAlias as string | undefined);
+      const from =
+        (p.from as string | undefined) ?? (p.fromAlias as string | undefined);
       const email: EmailInput = {
         to: normalizeAddressList(p.to as string | undefined) ?? "",
         cc: normalizeAddressList(p.cc as string | undefined),
@@ -1191,9 +1273,12 @@ export default function gmail(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = { name: p.name };
-      if (p.labelListVisibility) body.labelListVisibility = p.labelListVisibility;
-      if (p.messageListVisibility)
+      if (p.labelListVisibility) {
+        body.labelListVisibility = p.labelListVisibility;
+      }
+      if (p.messageListVisibility) {
         body.messageListVisibility = p.messageListVisibility;
+      }
       return gmailRequest(ctx, "POST", "/labels", body);
     },
   });
@@ -1238,9 +1323,12 @@ export default function gmail(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = {};
       if (p.name) body.name = p.name;
-      if (p.labelListVisibility) body.labelListVisibility = p.labelListVisibility;
-      if (p.messageListVisibility)
+      if (p.labelListVisibility) {
+        body.labelListVisibility = p.labelListVisibility;
+      }
+      if (p.messageListVisibility) {
         body.messageListVisibility = p.messageListVisibility;
+      }
       return gmailRequest(ctx, "PATCH", `/labels/${p.id}`, body);
     },
   });
