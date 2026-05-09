@@ -12,7 +12,7 @@
     "format": "bunx @biomejs/biome format --write ."
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.14",
+    "@biomejs/biome": "^2.4.12",
     "typescript": "^5.8.0"
   }
 }

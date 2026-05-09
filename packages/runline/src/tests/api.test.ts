@@ -135,12 +135,14 @@ describe("resolvePluginExport", () => {
   });
 
   it("throws on invalid exports", () => {
+    type PluginExport = Parameters<typeof resolvePluginExport>[0];
     assert.throws(
-      () => resolvePluginExport("not a plugin" as any, "bad"),
+      () =>
+        resolvePluginExport("not a plugin" as unknown as PluginExport, "bad"),
       /Invalid plugin export/,
     );
     assert.throws(
-      () => resolvePluginExport(42 as any, "bad"),
+      () => resolvePluginExport(42 as unknown as PluginExport, "bad"),
       /Invalid plugin export/,
     );
   });

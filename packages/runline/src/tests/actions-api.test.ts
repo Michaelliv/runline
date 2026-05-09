@@ -76,16 +76,18 @@ async function run<T = unknown>(code: string): Promise<T> {
 describe("actions.list", () => {
   it("returns every plugin.action path when called with no args", async () => {
     const result = await run<string[]>("return actions.list()");
-    assert.deepEqual(
-      [...result].sort(),
-      [
-        "github.issue.create",
-        "github.issue.list",
-        "github.user.listRepos",
-        "pipedrive.deal.list",
-        "plain.ping",
-      ].sort(),
-    );
+    const paths = new Set(result);
+    for (const path of [
+      "github.issue.create",
+      "github.issue.list",
+      "github.user.listRepos",
+      "pipedrive.deal.list",
+      "plain.ping",
+      "node.fs.readFile",
+      "node.process.execFile",
+    ]) {
+      assert.ok(paths.has(path), `expected ${path} in actions.list()`);
+    }
   });
 
   it("filters by plugin prefix", async () => {

@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { findConfigDir } from "../config/loader.js";
 import { resolvePluginExport } from "./api.js";
+import { registerNodePlugin } from "./node-plugin.js";
 import { registry } from "./registry.js";
 import type { PluginDef } from "./types.js";
 
@@ -228,4 +229,5 @@ export async function loadAllPlugins(): Promise<void> {
   for (const p of plugins) {
     registry.register(p);
   }
+  registerNodePlugin(registry);
 }

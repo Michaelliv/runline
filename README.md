@@ -2,7 +2,7 @@
 
 Code mode for agents.
 
-Turn any API into a callable action. Install a plugin, write JavaScript, call actions. The code runs in a QuickJS WASM sandbox — no filesystem, no network, just plugin actions via a proxy.
+Turn any API or host capability into a callable action. Install a plugin, write JavaScript, call actions. Code runs in a QuickJS WASM runtime with plugin globals — including a native `node` plugin for filesystem, path, OS, process, crypto, shell, and fetch work.
 
 ```bash
 npm install -g runline
@@ -19,7 +19,7 @@ runline exec 'return await brandfetch.brand.getColors({ domain: "nike.com" })'
 # => [{ hex: "#E5E5E5", type: "accent" }, { hex: "#111111", type: "dark" }, ...]
 ```
 
-All 202 plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS sandbox: each plugin is a top-level global, dot-chain into resource and action. Plugin actions execute outside the sandbox with full network access; the agent can only reach APIs through the actions you've configured.
+All 202 SaaS/API plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS runtime: each plugin is a top-level global, dot-chain into resource and action. A built-in `node` plugin is always available for host work like `node.fs.readFile`, `node.process.execFile`, `node.path.join`, `node.crypto.hash`, and `node.fetch`.
 
 ```js
 // agent writes this
@@ -286,7 +286,7 @@ runline exec '
   return { contact: contact.properties.email, taskId: task.id };
 '
 
-# Discover actions from inside the sandbox
+# Discover actions from inside the runtime
 runline exec 'return actions.list()'
 runline exec 'return actions.list("brandfetch")'
 runline exec 'return actions.find("create issue")'
@@ -358,20 +358,19 @@ export default function orders(rl: RunlinePluginAPI) {
 }
 ```
 
-Key points: `execute` runs **outside** the sandbox with full Node.js access (fetch, fs, etc). The sandbox can only call your actions through the proxy. `ctx.connection.config` holds the resolved config with env var overrides applied.
+Key points: plugin `execute` handlers run **outside** the QuickJS runtime with full Node.js access (fetch, fs, etc). Agent code calls them through plugin globals, including the built-in `node` global for host APIs. `ctx.connection.config` holds the resolved config with env var overrides applied.
 
 See [`packages/runline-plugins/`](packages/runline-plugins) for 202 real-world examples.
 
 ## Sandbox
 
-Agent code runs in a [QuickJS](https://bellard.org/quickjs/) WASM sandbox:
+Agent code runs in a [QuickJS](https://bellard.org/quickjs/) WASM runtime:
 
-- **No `fetch`** — network access is only through plugin actions
-- **No `fs`** — no filesystem access
 - **Timeout** — configurable, kills infinite loops
 - **Memory limit** — configurable, prevents OOM
 - **`console.log`** — captured and returned in `result.logs`
 - **Plugin globals** — each installed plugin is a top-level proxy (e.g. `github`, `slack`, `brandfetch`). Dot-chain into resource and action: `github.issue.create(input)`
+- **Native Node globals** — the built-in `node` plugin exposes host-backed actions such as `node.fs.readFile`, `node.fs.writeFile`, `node.path.join`, `node.os.info`, `node.process.execFile`, `node.crypto.hash`, and `node.fetch`
 
 ## For Agents
 
@@ -405,7 +404,7 @@ console.log(result.result);  // [{ hex: "#635BFF", type: "accent", brightness: 1
 ## CLI Reference
 
 ```bash
-runline exec "<code>"                  # execute JS in sandbox
+runline exec "<code>"                  # execute JS in the QuickJS runtime
 runline exec -f ./script.js            # execute a file
 runline actions                        # list all actions
 runline actions --connected            # only actions for configured connections
@@ -450,7 +449,7 @@ bun run check
 
 The [`pi-runline`](packages/pi-runline) package is a [pi](https://github.com/mariozechner/pi) extension that plugs runline into coding agents as a single native tool:
 
-- **`execute_runline`** — run JavaScript in the runline sandbox. Discovery happens inside the sandbox via `actions.list / find / describe / check`, so the agent never needs a separate listing tool.
+- **`execute_runline`** — run JavaScript in the runline runtime. Discovery happens inside the runtime via `actions.list / find / describe / check`, so the agent never needs a separate listing tool.
 
 It ships with `/runline-plugins`, a fuzzy multi-select picker for choosing which of the 202 plugins the agent should see, plus a guided credential prompt for the ones you enable.
 

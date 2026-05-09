@@ -51,12 +51,6 @@ function connectionFor(
   return connections.find((c) => c.plugin === plugin);
 }
 
-function isSchemaEmpty(
-  schema: PluginSummary["connectionConfigSchema"],
-): boolean {
-  return !schema || Object.keys(schema).length === 0;
-}
-
 function envOrSchemaDefault(field: ConnectionSchemaField): string | undefined {
   if (field.env && process.env[field.env]) return process.env[field.env];
   if (field.default !== undefined) return String(field.default);
@@ -87,15 +81,13 @@ export async function promptForCredentials(
     if (!plugin) continue;
 
     const schema = plugin.connectionConfigSchema;
-    if (isSchemaEmpty(schema)) continue; // no creds needed
+    if (!schema || Object.keys(schema).length === 0) continue; // no creds needed
 
     if (!force && connectionFor(connections, name)) continue; // already configured
 
     // Check env — if every required field has an env var set, skip the prompt.
     // Skipped on `force` (the user explicitly asked to re-enter values).
-    const requiredFields = Object.entries(schema!).filter(
-      ([, f]) => f.required,
-    );
+    const requiredFields = Object.entries(schema).filter(([, f]) => f.required);
     const allFromEnv = requiredFields.every(
       ([, f]) => f.env && process.env[f.env],
     );
@@ -109,7 +101,7 @@ export async function promptForCredentials(
 
     const values: Record<string, unknown> = {};
     let cancelled = false;
-    for (const [key, field] of Object.entries(schema!)) {
+    for (const [key, field] of Object.entries(schema)) {
       const placeholder = field.env
         ? `${field.description ?? key} (env: ${field.env})`
         : (field.description ?? key);

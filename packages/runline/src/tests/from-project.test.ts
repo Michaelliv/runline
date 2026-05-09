@@ -82,16 +82,13 @@ describe("Runline.fromProject", () => {
     );
   });
 
-  it("registers no builtins when connections is empty", async () => {
+  it("registers only native node when builtin connections are empty", async () => {
     writeRunlineDir({ connections: [] });
     const rl = await Runline.fromProject(tempDir, { builtinDir });
     assert.ok(rl);
-    assert.equal(
-      rl.plugins().length,
-      0,
-      "empty connections should yield no builtins",
-    );
-    assert.equal(rl.actions().length, 0);
+    const names = rl.plugins().map((p) => p.name);
+    assert.deepEqual(names, ["node"]);
+    assert.ok(rl.actions().some((a) => a.plugin === "node"));
   });
 
   it("still loads project-local plugins regardless of allowlist", async () => {
@@ -110,8 +107,9 @@ describe("Runline.fromProject", () => {
 
     const rl = await Runline.fromProject(tempDir, { builtinDir });
     assert.ok(rl);
-    const names = rl.plugins().map((p) => p.name);
-    assert.deepEqual(names, ["localOnly"]);
+    const names = new Set(rl.plugins().map((p) => p.name));
+    assert.ok(names.has("node"));
+    assert.ok(names.has("localOnly"));
   });
 
   it("merges project-local plugins with allowlisted builtins", async () => {

@@ -48,13 +48,14 @@ https://github.com/Michaelliv/runline`,
 program
   .command("exec <code>")
   .alias("e")
-  .description("Execute JavaScript code in the sandbox")
+  .description("Execute JavaScript code in the QuickJS runtime")
   .option("-f, --file", "Treat <code> as a file path")
   .addHelpText(
     "after",
     `
-The code runs in a QuickJS sandbox with an \`actions\` proxy.
+The code runs in a QuickJS runtime with an \`actions\` proxy.
 Each installed plugin is a top-level global. Dot-chain into resource and action.
+The built-in \`node\` global exposes host-backed fs/path/os/process/crypto/fetch actions.
 
 Examples:
   $ runline exec 'return await docker.containers.list()'
