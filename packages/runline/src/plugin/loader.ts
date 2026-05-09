@@ -4,7 +4,6 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { findConfigDir } from "../config/loader.js";
 import { resolvePluginExport } from "./api.js";
-import { registerNodePlugin } from "./node-plugin.js";
 import { registry } from "./registry.js";
 import type { PluginDef } from "./types.js";
 
@@ -223,11 +222,12 @@ export async function discoverPlugins(
  * Load all plugins and register them into the global registry.
  * Used by the CLI.
  */
-export async function loadAllPlugins(): Promise<void> {
+export async function loadAllPlugins(
+  options: DiscoverOptions = {},
+): Promise<void> {
   const configDir = findConfigDir();
-  const plugins = await discoverPlugins(configDir);
+  const plugins = await discoverPlugins(configDir, options);
   for (const p of plugins) {
     registry.register(p);
   }
-  registerNodePlugin(registry);
 }

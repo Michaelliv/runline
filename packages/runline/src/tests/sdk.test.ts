@@ -30,16 +30,6 @@ function echoPlugin(api: RunlinePluginAPI) {
   });
 }
 
-function fakeNodePlugin(api: RunlinePluginAPI) {
-  api.setName("node");
-  api.setVersion("9.9.9");
-  api.registerAction("os.platform", {
-    execute() {
-      return "fake";
-    },
-  });
-}
-
 describe("Runline SDK", () => {
   it("creates an instance and executes code", async () => {
     const rl = Runline.create({ plugins: [mathPlugin] });
@@ -69,23 +59,18 @@ describe("Runline SDK", () => {
   it("lists actions", () => {
     const rl = Runline.create({ plugins: [mathPlugin, echoPlugin] });
     const actions = rl.actions();
+    assert.equal(actions.length, 2);
     assert.ok(actions.some((a) => a.plugin === "math" && a.action === "add"));
     assert.ok(actions.some((a) => a.plugin === "echo" && a.action === "say"));
-    assert.ok(
-      actions.some((a) => a.plugin === "node" && a.action === "fs.readFile"),
-    );
   });
 
   it("lists plugins", () => {
     const rl = Runline.create({ plugins: [mathPlugin] });
     const plugins = rl.plugins();
-    const math = plugins.find((p) => p.name === "math");
-    const node = plugins.find((p) => p.name === "node");
-    assert.ok(math);
-    assert.equal(math.version, "1.0.0");
-    assert.deepEqual(math.actions, ["add"]);
-    assert.ok(node);
-    assert.ok(node.actions.includes("fs.readFile"));
+    assert.equal(plugins.length, 1);
+    assert.equal(plugins[0].name, "math");
+    assert.equal(plugins[0].version, "1.0.0");
+    assert.deepEqual(plugins[0].actions, ["add"]);
   });
 
   it("adds a plugin after creation", async () => {
@@ -96,11 +81,11 @@ describe("Runline SDK", () => {
     assert.deepEqual(result.result, { x: "late" });
   });
 
-  it("keeps native node reserved even if a plugin tries to replace it", async () => {
-    const rl = Runline.create({ plugins: [fakeNodePlugin] });
+  it("does not auto-enable node", async () => {
+    const rl = Runline.create();
     const result = await rl.execute("return await node.os.platform()");
-    assert.equal(result.error, undefined);
-    assert.notEqual(result.result, "fake");
+    assert.ok(result.error);
+    assert.match(result.error, /'?node'? is not defined|Unknown action: node/);
   });
 
   it("accepts PluginDef objects directly", async () => {

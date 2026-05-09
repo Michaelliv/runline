@@ -6,7 +6,6 @@ import { type ExecuteResult, ExecutionEngine } from "./core/engine.js";
 import type { PluginFunction } from "./plugin/api.js";
 import { resolvePluginExport } from "./plugin/api.js";
 import { discoverPlugins } from "./plugin/loader.js";
-import { registerNodePlugin } from "./plugin/node-plugin.js";
 import { PluginRegistry } from "./plugin/registry.js";
 import type {
   ConnectionConfig,
@@ -32,7 +31,6 @@ export class Runline {
       const plugin = resolvePluginExport(pluginOrFn, "unknown");
       this._registry.register(plugin);
     }
-    registerNodePlugin(this._registry);
 
     this._config = {
       connections: options.connections ?? [],
@@ -59,7 +57,6 @@ export class Runline {
   ): void {
     const plugin = resolvePluginExport(pluginOrFn, "unknown");
     this._registry.register(plugin);
-    registerNodePlugin(this._registry);
     if (connections) {
       this._config = {
         ...this._config,
@@ -148,7 +145,6 @@ export class Runline {
     for (const plugin of plugins) {
       rl._registry.register(plugin);
     }
-    registerNodePlugin(rl._registry);
 
     return rl;
   }

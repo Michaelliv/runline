@@ -55,7 +55,7 @@ program
     `
 The code runs in a QuickJS runtime with an \`actions\` proxy.
 Each installed plugin is a top-level global. Dot-chain into resource and action.
-The built-in \`node\` global exposes host-backed fs/path/os/process/crypto/fetch actions.
+Configure the built-in \`node\` plugin to expose host-backed fs/path/os/process/crypto/fetch actions.
 
 Examples:
   $ runline exec 'return await docker.containers.list()'

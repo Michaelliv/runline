@@ -2,7 +2,7 @@
 
 Code mode for agents.
 
-Turn any API or host capability into a callable action. Install a plugin, write JavaScript, call actions. Code runs in a QuickJS WASM runtime with plugin globals — including a native `node` plugin for filesystem, path, OS, process, crypto, shell, and fetch work.
+Turn any API or host capability into a callable action. Install a plugin, write JavaScript, call actions. Code runs in a QuickJS WASM runtime with plugin globals; enable the built-in `node` plugin when you want filesystem, path, OS, process, crypto, shell, and fetch actions.
 
 ```bash
 npm install -g runline
@@ -19,7 +19,7 @@ runline exec 'return await brandfetch.brand.getColors({ domain: "nike.com" })'
 # => [{ hex: "#E5E5E5", type: "accent" }, { hex: "#111111", type: "dark" }, ...]
 ```
 
-All 202 SaaS/API plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS runtime: each plugin is a top-level global, dot-chain into resource and action. A built-in `node` plugin is always available for host work like `node.fs.readFile`, `node.process.execFile`, `node.path.join`, `node.crypto.hash`, and `node.fetch`.
+All 203 built-in plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS runtime: each configured plugin is a top-level global, dot-chain into resource and action. Configure the built-in `node` plugin for host work like `node.fs.readFile`, `node.process.execFile`, `node.path.join`, `node.crypto.hash`, and `node.fetch`.
 
 ```js
 // agent writes this
@@ -35,7 +35,7 @@ return { company: company.name, issue: issue.number };
 
 ## Plugins
 
-202 built-in plugins covering popular SaaS, DevOps, productivity, and image-generation APIs. All ship with the package — no separate install needed.
+203 built-in plugins covering popular SaaS, DevOps, productivity, image-generation APIs, and host Node capabilities. All ship with the package — no separate install needed.
 
 Set the env var shown in the Auth column, add a connection, and go:
 
@@ -139,7 +139,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/keap.png" width="16" height="16" style="vertical-align: middle"> **keap** | 28 | company, contact, contactNote, contactTag, order, product, email, file | `KEAP_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/kobotoolbox.svg" width="16" height="16" style="vertical-align: middle"> **kobotoolbox** | 17 | form, submission, hook, file | `KOBOTOOLBOX_URL`, `KOBOTOOLBOX_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/lemlist.svg" width="16" height="16" style="vertical-align: middle"> **lemlist** | 15 | activity, campaign, lead, team, unsubscribe, enrich | `LEMLIST_API_KEY` |
-| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/linear.svg" width="16" height="16" style="vertical-align: middle"> **linear** | 79 | issue, comment, state, label, project, milestone, projectUpdate, cycle, initiative, team, user, attachment, org, webhook | `LINEAR_API_KEY` |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/linear.svg" width="16" height="16" style="vertical-align: middle"> **linear** | 88 | issue, comment, state, label, project, milestone, projectUpdate, view, cycle, initiative, team, user, attachment, org, webhook | `LINEAR_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/lingvanex.png" width="16" height="16" style="vertical-align: middle"> **lingvanex** | 1 | translate | `LINGVANEX_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/linkedin.svg" width="16" height="16" style="vertical-align: middle"> **linkedin** | 1 | post | `LINKEDIN_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/lonescale.svg" width="16" height="16" style="vertical-align: middle"> **lonescale** | 4 | list, item | `LONESCALE_API_KEY` |
@@ -167,6 +167,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/netscalerAdc.svg" width="16" height="16" style="vertical-align: middle"> **netscalerAdc** | 3 | certificate, file | `NETSCALER_URL`, `NETSCALER_USERNAME`, `NETSCALER_PASSWORD` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/nextcloud.svg" width="16" height="16" style="vertical-align: middle"> **nextcloud** | 13 | file, folder, user | `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME`, `NEXTCLOUD_PASSWORD` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/nocodb.svg" width="16" height="16" style="vertical-align: middle"> **nocodb** | 5 | row | `NOCODB_HOST`, `NOCODB_API_TOKEN` |
+| **node** | 38 | fs, path, os, process, crypto, fetch | — |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/notion.svg" width="16" height="16" style="vertical-align: middle"> **notion** | 14 | block, database, page, user | `NOTION_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/npm.svg" width="16" height="16" style="vertical-align: middle"> **npm** | 5 | package, distTag |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/odoo.svg" width="16" height="16" style="vertical-align: middle"> **odoo** | 6 | record, model | `ODOO_URL`, `ODOO_USERNAME`, `ODOO_PASSWORD` |
@@ -358,7 +359,7 @@ export default function orders(rl: RunlinePluginAPI) {
 }
 ```
 
-Key points: plugin `execute` handlers run **outside** the QuickJS runtime with full Node.js access (fetch, fs, etc). Agent code calls them through plugin globals, including the built-in `node` global for host APIs. `ctx.connection.config` holds the resolved config with env var overrides applied.
+Key points: plugin `execute` handlers run **outside** the QuickJS runtime with full Node.js access (fetch, fs, etc). Agent code calls them through configured plugin globals; add a `node` connection to expose host APIs through the built-in `node` plugin. `ctx.connection.config` holds the resolved config with env var overrides applied.
 
 See [`packages/runline-plugins/`](packages/runline-plugins) for 202 real-world examples.
 
@@ -370,7 +371,7 @@ Agent code runs in a [QuickJS](https://bellard.org/quickjs/) WASM runtime:
 - **Memory limit** — configurable, prevents OOM
 - **`console.log`** — captured and returned in `result.logs`
 - **Plugin globals** — each installed plugin is a top-level proxy (e.g. `github`, `slack`, `brandfetch`). Dot-chain into resource and action: `github.issue.create(input)`
-- **Native Node globals** — the built-in `node` plugin exposes host-backed actions such as `node.fs.readFile`, `node.fs.writeFile`, `node.path.join`, `node.os.info`, `node.process.execFile`, `node.crypto.hash`, and `node.fetch`
+- **Configured Node globals** — when configured, the built-in `node` plugin exposes host-backed actions such as `node.fs.readFile`, `node.fs.writeFile`, `node.path.join`, `node.os.info`, `node.process.execFile`, `node.crypto.hash`, and `node.fetch`
 
 ## For Agents
 
@@ -436,7 +437,7 @@ Env vars override config values. Plugins declare env var names in their connecti
 
 ## Development
 
-Runline is a bun workspace monorepo: `packages/runline` (library + CLI), `packages/runline-plugins` (202 built-in plugins, bundled into runline's dist at build time), and `packages/pi-runline` (pi extension that exposes runline to agents).
+Runline is a bun workspace monorepo: `packages/runline` (library + CLI), `packages/runline-plugins` (203 built-in plugins, bundled into runline's dist at build time), and `packages/pi-runline` (pi extension that exposes runline to agents).
 
 ```bash
 bun install

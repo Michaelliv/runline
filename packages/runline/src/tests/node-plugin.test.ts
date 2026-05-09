@@ -3,12 +3,15 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import nodePlugin from "../../../runline-plugins/node/src/index.js";
 import { DEFAULT_CONFIG } from "../config/types.js";
 import { ExecutionEngine } from "../core/engine.js";
+import { resolvePluginExport } from "../plugin/api.js";
 import { PluginRegistry } from "../plugin/registry.js";
 
 async function run<T = unknown>(code: string): Promise<T> {
   const registry = new PluginRegistry();
+  registry.register(resolvePluginExport(nodePlugin, "node"));
   const engine = new ExecutionEngine(registry, {
     ...DEFAULT_CONFIG,
     timeoutMs: 5000,
@@ -33,7 +36,7 @@ describe("built-in node plugin", () => {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   });
 
-  it("is available as a top-level global without explicit registration", async () => {
+  it("is available as a top-level global when registered", async () => {
     const result = await run<string>("return await node.os.platform()");
     assert.equal(typeof result, "string");
     assert.ok(result.length > 0);

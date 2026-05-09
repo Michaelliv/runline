@@ -9,7 +9,6 @@ import {
 } from "quickjs-emscripten";
 import { applyEnvOverrides, updateConnectionConfig } from "../config/loader.js";
 import type { RunlineConfig } from "../config/types.js";
-import { registerNodePlugin } from "../plugin/node-plugin.js";
 import type { PluginRegistry } from "../plugin/registry.js";
 import type {
   ActionContext,
@@ -35,7 +34,6 @@ export class ExecutionEngine {
   constructor(registry: PluginRegistry, config: RunlineConfig) {
     this.registry = registry;
     this.config = config;
-    registerNodePlugin(this.registry);
   }
 
   async execute(code: string, options?: EngineOptions): Promise<ExecuteResult> {

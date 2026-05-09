@@ -9,8 +9,10 @@ export async function exec(
   code: string,
   options: { file?: boolean; json?: boolean; quiet?: boolean },
 ): Promise<void> {
-  await loadAllPlugins();
   const config = loadConfig();
+  await loadAllPlugins({
+    builtinAllowlist: new Set(config.connections.map((c) => c.plugin)),
+  });
   const engine = new ExecutionEngine(registry, config);
 
   if (options.file) {
