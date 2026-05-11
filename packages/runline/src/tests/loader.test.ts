@@ -100,4 +100,50 @@ describe("loadPluginFromPath", () => {
       /No entry point found/,
     );
   });
+
+  it("loads external plugins that import runline", async () => {
+    const pluginFile = join(tempDir, "external.ts");
+    writeFileSync(
+      pluginFile,
+      `import type { RunlinePluginAPI } from "runline";
+import { commandExists } from "runline";
+
+export default function external(api: RunlinePluginAPI) {
+  void commandExists;
+  api.setName("external");
+  api.registerAction("ping", {
+    description: "Ping",
+    execute: () => "pong",
+  });
+}
+`,
+    );
+
+    const plugin = await loadPluginFromPath(pluginFile);
+    assert.equal(plugin.name, "external");
+    assert.equal(plugin.actions[0].name, "ping");
+  });
+
+  it("loads external plugins that import runline public subpaths", async () => {
+    const pluginFile = join(tempDir, "subpaths.ts");
+    writeFileSync(
+      pluginFile,
+      `import type { RunlinePluginAPI } from "runline";
+import { syncExec } from "runline/utils/cli";
+
+export default function subpaths(api: RunlinePluginAPI) {
+  void syncExec;
+  api.setName("subpaths");
+  api.registerAction("ping", {
+    description: "Ping",
+    execute: () => "pong",
+  });
+}
+`,
+    );
+
+    const plugin = await loadPluginFromPath(pluginFile);
+    assert.equal(plugin.name, "subpaths");
+    assert.equal(plugin.actions[0].name, "ping");
+  });
 });

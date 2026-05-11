@@ -11,7 +11,7 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.7.2",
+      "version": "0.7.4",
       "dependencies": {
         "runline": "^0.2.2",
       },
@@ -23,13 +23,14 @@
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.7.2",
+      "version": "0.7.4",
       "bin": {
         "runline": "./dist/main.js",
       },
       "dependencies": {
         "chalk": "^5.6.2",
         "commander": "^14.0.3",
+        "jiti": "^2.7.0",
         "proper-lockfile": "^4.1.2",
         "quickjs-emscripten": "^0.32.0",
         "rrule": "^2.8.1",
@@ -446,6 +447,8 @@
     "ip-address": ["ip-address@10.1.0", "", {}, "sha512-XXADHxXmvT9+CRxhXg56LJovE+bmWnEWB78LB83VZTprKTmaC5QfruXocxzTZ2Kl0DNwKuBdlIhjL8LeY8Sf8Q=="],
 
     "is-fullwidth-code-point": ["is-fullwidth-code-point@3.0.0", "", {}, "sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg=="],
+
+    "jiti": ["jiti@2.7.0", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ=="],
 
     "json-bigint": ["json-bigint@1.0.0", "", { "dependencies": { "bignumber.js": "^9.0.0" } }, "sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ=="],
 

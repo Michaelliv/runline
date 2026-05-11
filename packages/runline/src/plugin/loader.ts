@@ -1,13 +1,25 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { createJiti } from "jiti";
 import { findConfigDir } from "../config/loader.js";
+import type { PluginFunction } from "./api.js";
 import { resolvePluginExport } from "./api.js";
 import { registry } from "./registry.js";
 import type { PluginDef } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const jiti = createJiti(import.meta.url, {
+  moduleCache: false,
+  interopDefault: true,
+  tryNative: false,
+  alias: {
+    runline: new URL("../index.js", import.meta.url).pathname,
+    "runline/utils/cli": new URL("../utils/cli.js", import.meta.url).pathname,
+  },
+});
 
 export async function loadPluginFromPath(path: string): Promise<PluginDef> {
   let absPath = resolve(path);
@@ -41,9 +53,20 @@ export async function loadPluginFromPath(path: string): Promise<PluginDef> {
     }
   }
 
-  const mod = await import(pathToFileURL(absPath).href);
+  // Plugins may live outside the project/package tree. Load them
+  // through Runline's module context so documented imports like
+  // `from "runline"` work without requiring a node_modules folder next
+  // to the plugin file.
+  const mod = (await jiti.import(absPath)) as { default?: unknown } | unknown;
   const pluginId = absPath.replace(/.*\//, "").replace(/\.(ts|js)$/, "");
-  return resolvePluginExport(mod.default, pluginId);
+  const pluginExport =
+    typeof mod === "object" && mod !== null && "default" in mod
+      ? mod.default
+      : mod;
+  return resolvePluginExport(
+    pluginExport as PluginDef | PluginFunction,
+    pluginId,
+  );
 }
 
 async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
