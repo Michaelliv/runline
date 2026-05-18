@@ -27,6 +27,15 @@
  *     (Office-file comments live inside the bytes; revision.* is the
  *      recovery path when file.update overwrites a working draft.)
  *
+ *   changes.getStartPageToken / changes.list / changes.watch / changes.stop
+ *     (Drive change feed.)
+ *
+ *   permission.update — patch an existing share role / expiration.
+ *   accessProposal.list / accessProposal.resolve — Drive's "Request access" flow.
+ *   about.get — current user, quota, export formats.
+ *   file.export — native-doc export wrapper.
+ *   file.list — raw files.list (the wrapper is fileFolder.search).
+ *
  * Binary content conventions — every upload/download surface
  * speaks base64 or filesystem paths:
  *
@@ -1841,6 +1850,290 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       }
       const head = (await res.json()) as Record<string, unknown>;
       return { fileId, restoredFromRevisionId: revisionId, head };
+    },
+  });
+
+  // ─── Changes feed ───────────────────────────────────────────────
+  //
+  // Drive's change feed. Without these the agent has to poll comment.list
+  // per file. With them, a sensor can wake on any file change in the user's
+  // corpus or in a specific shared drive.
+
+  rl.registerAction("changes.getStartPageToken", {
+    description:
+      "Get the current Drive change-feed start page token. Use as the seed `pageToken` for the first `changes.list` call.",
+    inputSchema: {
+      driveId: { type: "string", required: false, description: "Shared-drive id; omit for the user's My Drive corpus." },
+      supportsAllDrives: { type: "boolean", required: false, default: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(ctx, "GET", `/drive/v3/changes/startPageToken`, undefined, {
+        driveId: p.driveId,
+        supportsAllDrives: p.supportsAllDrives ?? true,
+      });
+    },
+  });
+
+  rl.registerAction("changes.list", {
+    description:
+      "List changes to files and Shared Drives since the given `pageToken`. Returns `{ changes, newStartPageToken, nextPageToken? }`. Drive does not surface comment-level changes here — use this for file metadata/content changes; pair with comments.list for review activity.",
+    inputSchema: {
+      pageToken: { type: "string", required: true, description: "Token from `changes.getStartPageToken` or a prior `nextPageToken`." },
+      driveId: { type: "string", required: false },
+      spaces: { type: "string", required: false, description: "drive | photos | appDataFolder. Default drive." },
+      includeRemoved: { type: "boolean", required: false },
+      includeItemsFromAllDrives: { type: "boolean", required: false, default: true },
+      supportsAllDrives: { type: "boolean", required: false, default: true },
+      restrictToMyDrive: { type: "boolean", required: false },
+      pageSize: { type: "number", required: false },
+      fields: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(ctx, "GET", `/drive/v3/changes`, undefined, {
+        pageToken: p.pageToken,
+        driveId: p.driveId,
+        spaces: p.spaces,
+        includeRemoved: p.includeRemoved,
+        includeItemsFromAllDrives: p.includeItemsFromAllDrives ?? true,
+        supportsAllDrives: p.supportsAllDrives ?? true,
+        restrictToMyDrive: p.restrictToMyDrive,
+        pageSize: p.pageSize ?? 100,
+        fields:
+          (p.fields as string | undefined) ??
+          "kind,nextPageToken,newStartPageToken,changes(kind,removed,fileId,driveId,changeType,time,file(id,name,mimeType,modifiedTime,trashed,parents))",
+      });
+    },
+  });
+
+  rl.registerAction("changes.watch", {
+    description:
+      "Subscribe to push notifications on the change feed. Drive will POST to `address` whenever a change in this corpus is recorded. Returns a channel resource; pair with `channels.stop` (`changes.stop`) when done.",
+    inputSchema: {
+      pageToken: { type: "string", required: true },
+      address: { type: "string", required: true, description: "HTTPS URL Drive will POST notifications to." },
+      channelId: { type: "string", required: false, description: "Caller-chosen UUID. Auto-generated when omitted." },
+      token: { type: "string", required: false, description: "Optional opaque token Drive echoes on each delivery." },
+      expiration: { type: "number", required: false, description: "Unix ms at which Drive should expire the channel. Defaults ~1 hour." },
+      driveId: { type: "string", required: false },
+      supportsAllDrives: { type: "boolean", required: false, default: true },
+      includeItemsFromAllDrives: { type: "boolean", required: false, default: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = {
+        id: (p.channelId as string | undefined) ?? uuid(),
+        type: "web_hook",
+        address: p.address,
+      };
+      if (p.token) body.token = p.token;
+      if (p.expiration) body.expiration = String(p.expiration);
+      return driveRequest(ctx, "POST", `/drive/v3/changes/watch`, body, {
+        pageToken: p.pageToken,
+        driveId: p.driveId,
+        supportsAllDrives: p.supportsAllDrives ?? true,
+        includeItemsFromAllDrives: p.includeItemsFromAllDrives ?? true,
+      });
+    },
+  });
+
+  rl.registerAction("changes.stop", {
+    description: "Stop a previously-subscribed change channel. Pass the same `channelId` and `resourceId` returned by `changes.watch`.",
+    inputSchema: {
+      channelId: { type: "string", required: true },
+      resourceId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      await driveRequest(ctx, "POST", `/drive/v3/channels/stop`, { id: p.channelId, resourceId: p.resourceId });
+      return { success: true };
+    },
+  });
+
+  // ─── Permission update ──────────────────────────────────────────
+  //
+  // Patch an existing permission. The bundled `file.share` creates a new
+  // permission, and `file.deletePermission` removes one — but to promote a
+  // commenter to writer (or expire a permission) without re-sharing, you
+  // need the PATCH endpoint.
+
+  rl.registerAction("permission.update", {
+    description:
+      "Patch an existing file/folder permission. Use to change the role on an existing share, set an expiration time, or transfer ownership.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      permissionId: { type: "string", required: true },
+      role: { type: "string", required: false, description: "owner | organizer | fileOrganizer | writer | commenter | reader" },
+      expirationTime: { type: "string", required: false, description: "RFC 3339; only valid for writer/commenter/reader on My Drive files." },
+      transferOwnership: { type: "boolean", required: false },
+      removeExpiration: { type: "boolean", required: false },
+      useDomainAdminAccess: { type: "boolean", required: false },
+      supportsAllDrives: { type: "boolean", required: false, default: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = {};
+      if (p.role) body.role = p.role;
+      if (p.expirationTime) body.expirationTime = p.expirationTime;
+      const qs: Record<string, unknown> = { supportsAllDrives: p.supportsAllDrives ?? true };
+      if (p.transferOwnership) qs.transferOwnership = true;
+      if (p.removeExpiration) qs.removeExpiration = true;
+      if (p.useDomainAdminAccess) qs.useDomainAdminAccess = true;
+      if (Object.keys(body).length === 0 && !qs.removeExpiration) {
+        throw new Error("googleDrive.permission.update: pass at least one of role / expirationTime / removeExpiration.");
+      }
+      return driveRequest(ctx, "PATCH", `/drive/v3/files/${p.fileId}/permissions/${p.permissionId}`, body, qs);
+    },
+  });
+
+  // ─── Access proposals ───────────────────────────────────────────
+  //
+  // Drive's "Request access" flow. When a user clicks "Request access" on a
+  // file they can't open, Drive records an access proposal which the file's
+  // owner can resolve (accept and grant, or deny). These actions let the
+  // agent triage and resolve those requests programmatically.
+
+  rl.registerAction("accessProposal.list", {
+    description: "List access proposals (Request-access entries) on a file.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      pageSize: { type: "number", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const out: unknown[] = [];
+      let pageToken: string | undefined;
+      do {
+        const page = (await driveRequest(
+          ctx,
+          "GET",
+          `/drive/v3/files/${p.fileId}/accessproposals`,
+          undefined,
+          { pageSize: p.pageSize ?? 100, pageToken },
+        )) as { accessProposals?: unknown[]; nextPageToken?: string };
+        if (Array.isArray(page.accessProposals)) out.push(...page.accessProposals);
+        pageToken = page.nextPageToken;
+      } while (pageToken);
+      return { fileId: p.fileId, count: out.length, accessProposals: out };
+    },
+  });
+
+  rl.registerAction("accessProposal.resolve", {
+    description:
+      "Resolve an access proposal. `action` is one of 'ACCEPT' or 'DENY'. When accepting, pass `role` (default 'reader') to grant.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      proposalId: { type: "string", required: true },
+      action: { type: "string", required: true, description: "'ACCEPT' | 'DENY'" },
+      role: { type: "string", required: false, description: "Role to grant on ACCEPT. Default 'reader'." },
+      view: { type: "string", required: false, description: "Optional Drive scope view (e.g. 'published')." },
+      sendNotification: { type: "boolean", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = { action: p.action };
+      if (p.action === "ACCEPT") {
+        body.role = [(p.role as string | undefined) ?? "reader"];
+        if (p.view) body.view = p.view;
+      }
+      if (p.sendNotification !== undefined) body.sendNotification = p.sendNotification;
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${p.fileId}/accessproposals/${p.proposalId}:resolve`,
+        body,
+      );
+    },
+  });
+
+  // ─── About ───────────────────────────────────────────────────────
+
+  rl.registerAction("about.get", {
+    description:
+      "Current user info: storage quota, export formats, max upload size, importable mime types. Useful for healthchecks and conversion planning.",
+    inputSchema: {
+      fields: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(ctx, "GET", `/drive/v3/about`, undefined, {
+        fields:
+          (p.fields as string | undefined) ??
+          "user(displayName,emailAddress,permissionId,photoLink),storageQuota,maxUploadSize,canCreateDrives,exportFormats,importFormats",
+      });
+    },
+  });
+
+  // ─── File export (ergonomic wrapper) ────────────────────────────
+
+  rl.registerAction("file.export", {
+    description:
+      "Export a Google-native file (Doc/Sheet/Slide/Drawing/Form) to a non-native mimeType. Wrapper around the export endpoint; pass `savePath` to write to disk and get the path back, otherwise returns base64.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      mimeType: {
+        type: "string",
+        required: true,
+        description:
+          "Target export mime, e.g. application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/pdf, text/plain, text/csv.",
+      },
+      savePath: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const token = await accessToken(ctx);
+      const u = new URL(`${API_BASE}/drive/v3/files/${p.fileId}/export`);
+      u.searchParams.set("mimeType", p.mimeType as string);
+      const res = await fetch(u.toString(), { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        throw new Error(`googleDrive: export failed (${res.status}): ${await res.text()}`);
+      }
+      const bytes = Buffer.from(await res.arrayBuffer());
+      const contentType = res.headers.get("content-type") ?? (p.mimeType as string);
+      if (typeof p.savePath === "string") {
+        writeFileSync(p.savePath, bytes);
+        return { path: p.savePath, mimeType: contentType, size: bytes.byteLength };
+      }
+      return { mimeType: contentType, size: bytes.byteLength, contentBase64: bytes.toString("base64") };
+    },
+  });
+
+  // ─── Raw file.list ──────────────────────────────────────────────
+
+  rl.registerAction("file.list", {
+    description:
+      "Raw Drive `files.list`. Pass Drive search-syntax `q` and any combination of corpora / driveId / spaces / orderBy. `fileFolder.search` is the friendlier wrapper; reach for `file.list` only when you need the unwrapped surface.",
+    inputSchema: {
+      q: { type: "string", required: false },
+      corpora: { type: "string", required: false, description: "user | drive | allDrives" },
+      driveId: { type: "string", required: false },
+      spaces: { type: "string", required: false },
+      orderBy: { type: "string", required: false },
+      pageSize: { type: "number", required: false },
+      pageToken: { type: "string", required: false },
+      includeItemsFromAllDrives: { type: "boolean", required: false, default: true },
+      supportsAllDrives: { type: "boolean", required: false, default: true },
+      fields: { type: "string", required: false },
+      returnAll: { type: "boolean", required: false, description: "If true, follows pageToken until exhausted and returns the concatenated file list." },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const baseQs: Record<string, unknown> = {
+        q: p.q,
+        corpora: p.corpora,
+        driveId: p.driveId,
+        spaces: p.spaces,
+        orderBy: p.orderBy,
+        pageSize: p.pageSize ?? 100,
+        includeItemsFromAllDrives: p.includeItemsFromAllDrives ?? true,
+        supportsAllDrives: p.supportsAllDrives ?? true,
+        fields: (p.fields as string | undefined) ?? "kind,nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,owners(emailAddress),driveId,webViewLink)",
+      };
+      if (p.returnAll) {
+        return paginateAll(ctx, "/drive/v3/files", "files", baseQs);
+      }
+      return driveRequest(ctx, "GET", `/drive/v3/files`, undefined, { ...baseQs, pageToken: p.pageToken });
     },
   });
 }
