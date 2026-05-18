@@ -18,6 +18,15 @@
  *   drive.create / drive.get / drive.list / drive.update / drive.delete
  *     (Shared Drives / Team Drives)
  *
+ *   comment.list / comment.get / comment.create / comment.update /
+ *   comment.delete / comment.resolve / comment.reopen
+ *   reply.list / reply.create / reply.update / reply.delete
+ *
+ *   revision.list / revision.get / revision.download /
+ *   revision.update / revision.delete / revision.restore
+ *     (Office-file comments live inside the bytes; revision.* is the
+ *      recovery path when file.update overwrites a working draft.)
+ *
  * Binary content conventions — every upload/download surface
  * speaks base64 or filesystem paths:
  *
@@ -1311,6 +1320,527 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       await driveRequest(ctx, "DELETE", `/drive/v3/drives/${p.driveId}`);
       return { success: true };
+    },
+  });
+
+  // ─── Comments ────────────────────────────────────────────────────
+  //
+  // Drive's `comments` and `replies` resources. The comments live on
+  // the Drive side for both Google-native docs and Office files, and
+  // are distinct from in-document comments stored inside .docx /
+  // .xlsx / .pptx bytes (those round-trip through `revisions`).
+
+  const COMMENT_FIELDS =
+    "kind,id,createdTime,modifiedTime,resolved,deleted," +
+    "author(displayName,emailAddress)," +
+    "quotedFileContent(value,mimeType)," +
+    "anchor,content,htmlContent," +
+    "replies(kind,id,createdTime,modifiedTime,deleted,author(displayName,emailAddress),action,content,htmlContent)";
+  const COMMENT_LIST_FIELDS = `kind,nextPageToken,comments(${COMMENT_FIELDS})`;
+  const REPLY_FIELDS =
+    "kind,id,createdTime,modifiedTime,deleted," +
+    "author(displayName,emailAddress),action,content,htmlContent";
+  const REPLY_LIST_FIELDS = `kind,nextPageToken,replies(${REPLY_FIELDS})`;
+
+  rl.registerAction("comment.list", {
+    description:
+      "List all comments on a Drive file, including each comment's replies. Returns an array sorted by Drive's default (most recent first).",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      includeDeleted: {
+        type: "boolean",
+        required: false,
+        description: "Include deleted comments. Default false.",
+      },
+      pageSize: {
+        type: "number",
+        required: false,
+        description: "Max comments per page (Drive caps at 100).",
+      },
+      startModifiedTime: {
+        type: "string",
+        required: false,
+        description:
+          "RFC 3339 timestamp; only return comments modified at or after this time.",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const fileId = p.fileId as string;
+      const out: unknown[] = [];
+      const query: Record<string, unknown> = {
+        fields: COMMENT_LIST_FIELDS,
+        includeDeleted: p.includeDeleted ?? false,
+        pageSize: p.pageSize ?? 100,
+        startModifiedTime: p.startModifiedTime,
+      };
+      let pageToken: string | undefined;
+      do {
+        if (pageToken) query.pageToken = pageToken;
+        const page = (await driveRequest(
+          ctx,
+          "GET",
+          `/drive/v3/files/${fileId}/comments`,
+          undefined,
+          query,
+        )) as { comments?: unknown[]; nextPageToken?: string };
+        if (Array.isArray(page.comments)) out.push(...page.comments);
+        pageToken = page.nextPageToken;
+      } while (pageToken);
+      return { fileId, count: out.length, comments: out };
+    },
+  });
+
+  rl.registerAction("comment.get", {
+    description: "Fetch a single comment (with its replies) by ID.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      includeDeleted: { type: "boolean", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/files/${p.fileId}/comments/${p.commentId}`,
+        undefined,
+        { fields: COMMENT_FIELDS, includeDeleted: p.includeDeleted ?? false },
+      );
+    },
+  });
+
+  rl.registerAction("comment.create", {
+    description:
+      "Create a new top-level comment on a file. Pass quotedFileContent.value (and optionally mimeType) to anchor the comment to a specific snippet.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      content: { type: "string", required: true, description: "Comment body (plain text)." },
+      quotedFileContent: {
+        type: "object",
+        required: false,
+        description: "{ value: string, mimeType?: string }",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = { content: p.content };
+      if (p.quotedFileContent) body.quotedFileContent = p.quotedFileContent;
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${p.fileId}/comments`,
+        body,
+        { fields: COMMENT_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("comment.update", {
+    description:
+      "Edit the content of an existing comment. Caller must be the author or have edit rights.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      content: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${p.fileId}/comments/${p.commentId}`,
+        { content: p.content },
+        { fields: COMMENT_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("comment.delete", {
+    description: "Soft-delete a comment.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      await driveRequest(
+        ctx,
+        "DELETE",
+        `/drive/v3/files/${p.fileId}/comments/${p.commentId}`,
+      );
+      return { success: true };
+    },
+  });
+
+  rl.registerAction("comment.resolve", {
+    description:
+      "Resolve a comment thread by posting a resolution reply. `resolved` on a Comment is computed from replies; this is the canonical way to mark a thread done.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      content: {
+        type: "string",
+        required: false,
+        description: "Optional reply body. Defaults to 'Resolved.'",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${p.fileId}/comments/${p.commentId}/replies`,
+        { action: "resolve", content: (p.content as string) ?? "Resolved." },
+        { fields: REPLY_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("comment.reopen", {
+    description: "Re-open a previously resolved comment by posting a reopen reply.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      content: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${p.fileId}/comments/${p.commentId}/replies`,
+        { action: "reopen", content: (p.content as string) ?? "Reopened." },
+        { fields: REPLY_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("reply.list", {
+    description: "List replies on a specific comment.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      includeDeleted: { type: "boolean", required: false },
+      pageSize: { type: "number", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const out: unknown[] = [];
+      const query: Record<string, unknown> = {
+        fields: REPLY_LIST_FIELDS,
+        includeDeleted: p.includeDeleted ?? false,
+        pageSize: p.pageSize ?? 100,
+      };
+      let pageToken: string | undefined;
+      do {
+        if (pageToken) query.pageToken = pageToken;
+        const page = (await driveRequest(
+          ctx,
+          "GET",
+          `/drive/v3/files/${p.fileId}/comments/${p.commentId}/replies`,
+          undefined,
+          query,
+        )) as { replies?: unknown[]; nextPageToken?: string };
+        if (Array.isArray(page.replies)) out.push(...page.replies);
+        pageToken = page.nextPageToken;
+      } while (pageToken);
+      return { fileId: p.fileId, commentId: p.commentId, count: out.length, replies: out };
+    },
+  });
+
+  rl.registerAction("reply.create", {
+    description:
+      "Post a reply to a comment. Pass action: 'resolve' | 'reopen' to also flip the comment state.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      content: { type: "string", required: true },
+      action: {
+        type: "string",
+        required: false,
+        description: "'resolve' | 'reopen'. Omit for a plain reply.",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = { content: p.content };
+      if (p.action === "resolve" || p.action === "reopen") body.action = p.action;
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${p.fileId}/comments/${p.commentId}/replies`,
+        body,
+        { fields: REPLY_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("reply.update", {
+    description: "Edit the content of a reply.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      replyId: { type: "string", required: true },
+      content: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${p.fileId}/comments/${p.commentId}/replies/${p.replyId}`,
+        { content: p.content },
+        { fields: REPLY_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("reply.delete", {
+    description: "Soft-delete a reply.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      replyId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      await driveRequest(
+        ctx,
+        "DELETE",
+        `/drive/v3/files/${p.fileId}/comments/${p.commentId}/replies/${p.replyId}`,
+      );
+      return { success: true };
+    },
+  });
+
+  // ─── Revisions ──────────────────────────────────────────────────
+  //
+  // Drive retains prior bytes of every file. For Google-native docs
+  // that means snapshots of the doc state; for Office files (.docx,
+  // .xlsx, .pptx) it means the actual byte history. Exposing this
+  // matters because in-document review comments on Office files live
+  // *inside* the file bytes (`word/comments.xml`), not in Drive's
+  // `comments` resource. A call to `file.update({ contentPath })`
+  // silently destroys those comments; the only programmatic recovery
+  // path is reading prior revision bytes through these actions.
+  //
+  // Default retention is ~30 days / 100 revisions for Office files;
+  // set `keepForever: true` via `revision.update` on a known-good
+  // revision before any risky in-place update.
+
+  const REVISION_FIELDS =
+    "id,mimeType,modifiedTime,keepForever,originalFilename,size,md5Checksum," +
+    "lastModifyingUser(displayName,emailAddress)," +
+    "published,publishAuto,publishedOutsideDomain,publishedLink";
+  const REVISION_LIST_FIELDS = `kind,nextPageToken,revisions(${REVISION_FIELDS})`;
+
+  rl.registerAction("revision.list", {
+    description:
+      "List every revision Drive retains for a file, oldest first. For Office files the per-revision bytes are what `revision.download` returns.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      pageSize: { type: "number", required: false, description: "Default 200; Drive caps at 1000." },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const fileId = p.fileId as string;
+      const out: unknown[] = [];
+      const query: Record<string, unknown> = {
+        fields: REVISION_LIST_FIELDS,
+        pageSize: p.pageSize ?? 200,
+      };
+      let pageToken: string | undefined;
+      do {
+        if (pageToken) query.pageToken = pageToken;
+        const page = (await driveRequest(
+          ctx,
+          "GET",
+          `/drive/v3/files/${fileId}/revisions`,
+          undefined,
+          query,
+        )) as { revisions?: unknown[]; nextPageToken?: string };
+        if (Array.isArray(page.revisions)) out.push(...page.revisions);
+        pageToken = page.nextPageToken;
+      } while (pageToken);
+      return { fileId, count: out.length, revisions: out };
+    },
+  });
+
+  rl.registerAction("revision.get", {
+    description: "Fetch metadata for a single revision.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      revisionId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/files/${p.fileId}/revisions/${p.revisionId}`,
+        undefined,
+        { fields: REVISION_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("revision.download", {
+    description:
+      "Download the bytes of a specific revision. Pass savePath to write to disk and get back the path; otherwise returns { contentBase64, mimeType, size }. This is the recovery path when an in-place file.update has overwritten in-document comments on an Office file.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      revisionId: { type: "string", required: true },
+      savePath: {
+        type: "string",
+        required: false,
+        description: "Filesystem path to write the bytes to. If omitted, returns base64.",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const fileId = p.fileId as string;
+      const revisionId = p.revisionId as string;
+      const token = await accessToken(ctx);
+      const url = new URL(`${API_BASE}/drive/v3/files/${fileId}/revisions/${revisionId}`);
+      url.searchParams.set("alt", "media");
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new Error(
+          `googleDrive: revision download failed (${res.status}): ${await res.text()}`,
+        );
+      }
+      const bytes = Buffer.from(await res.arrayBuffer());
+      const mimeType = res.headers.get("content-type") ?? "application/octet-stream";
+      if (typeof p.savePath === "string") {
+        writeFileSync(p.savePath, bytes);
+        return { fileId, revisionId, mimeType, size: bytes.byteLength, savedTo: p.savePath };
+      }
+      return {
+        fileId,
+        revisionId,
+        mimeType,
+        size: bytes.byteLength,
+        contentBase64: bytes.toString("base64"),
+      };
+    },
+  });
+
+  rl.registerAction("revision.update", {
+    description:
+      "Patch revision metadata. The most useful flag is keepForever — without it Drive can garbage-collect revisions after 30 days / 100 versions on Office files. Set keepForever=true on the head revision before any risky file.update so prior bytes are guaranteed recoverable.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      revisionId: { type: "string", required: true },
+      keepForever: { type: "boolean", required: false },
+      published: { type: "boolean", required: false },
+      publishAuto: { type: "boolean", required: false },
+      publishedOutsideDomain: { type: "boolean", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = {};
+      for (const k of [
+        "keepForever",
+        "published",
+        "publishAuto",
+        "publishedOutsideDomain",
+      ] as const) {
+        if (p[k] !== undefined) body[k] = p[k];
+      }
+      if (Object.keys(body).length === 0) {
+        throw new Error(
+          "googleDrive.revision.update: pass at least one of keepForever / published / publishAuto / publishedOutsideDomain.",
+        );
+      }
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${p.fileId}/revisions/${p.revisionId}`,
+        body,
+        { fields: REVISION_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("revision.delete", {
+    description: "Permanently delete a revision (head revision cannot be deleted).",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      revisionId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      await driveRequest(
+        ctx,
+        "DELETE",
+        `/drive/v3/files/${p.fileId}/revisions/${p.revisionId}`,
+      );
+      return { success: true };
+    },
+  });
+
+  rl.registerAction("revision.restore", {
+    description:
+      "Restore an older revision as the head of the file. Downloads the revision bytes and re-uploads them via multipart so the head moves to that content. Drive's REST API has no native restore endpoint for binary files; this performs the equivalent in two calls. Returns the new head file resource.",
+    inputSchema: {
+      fileId: { type: "string", required: true },
+      revisionId: { type: "string", required: true, description: "Revision to restore as head." },
+      mimeType: {
+        type: "string",
+        required: false,
+        description: "Override mime type for the re-upload. Defaults to the revision's mime type.",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const fileId = p.fileId as string;
+      const revisionId = p.revisionId as string;
+      const token = await accessToken(ctx);
+
+      // 1. Pull the chosen revision's bytes.
+      const dl = await fetch(
+        `${API_BASE}/drive/v3/files/${fileId}/revisions/${revisionId}?alt=media`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!dl.ok) {
+        throw new Error(
+          `googleDrive: revision restore download failed (${dl.status}): ${await dl.text()}`,
+        );
+      }
+      const bytes = Buffer.from(await dl.arrayBuffer());
+      const mime =
+        (p.mimeType as string | undefined) ??
+        dl.headers.get("content-type") ??
+        "application/octet-stream";
+
+      // 2. Multipart-PATCH them as the new head of the same file.
+      const url = new URL(`${API_BASE}/upload/drive/v3/files/${fileId}`);
+      url.searchParams.set("uploadType", "multipart");
+      url.searchParams.set("supportsAllDrives", "true");
+      url.searchParams.set(
+        "fields",
+        "id,name,mimeType,modifiedTime,size,headRevisionId,webViewLink",
+      );
+      const body = buildMultipart({ mimeType: mime }, bytes, mime);
+      const res = await fetch(url.toString(), {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": `multipart/related; boundary=${MULTIPART_BOUNDARY}`,
+          "Content-Length": String(body.byteLength),
+        },
+        body: new Uint8Array(body),
+      });
+      if (!res.ok) {
+        throw new Error(
+          `googleDrive: revision restore upload failed (${res.status}): ${await res.text()}`,
+        );
+      }
+      const head = (await res.json()) as Record<string, unknown>;
+      return { fileId, restoredFromRevisionId: revisionId, head };
     },
   });
 }
