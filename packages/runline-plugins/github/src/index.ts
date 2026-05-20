@@ -577,6 +577,109 @@ export default function github(rl: RunlinePluginAPI) {
 
   // ── Repository ──────────────────────────────────────
 
+  rl.registerAction("commit.list", {
+    description:
+      "List repository commits, including latest commits on a branch or path",
+    inputSchema: {
+      owner: {
+        type: "string",
+        required: true,
+        description: "Repository owner",
+      },
+      repo: { type: "string", required: true, description: "Repository name" },
+      sha: {
+        type: "string",
+        required: false,
+        description: "SHA or branch to start listing commits from",
+      },
+      path: {
+        type: "string",
+        required: false,
+        description: "Only commits containing this file path",
+      },
+      author: {
+        type: "string",
+        required: false,
+        description: "GitHub username or email address",
+      },
+      since: {
+        type: "string",
+        required: false,
+        description: "Only commits after this ISO 8601 timestamp",
+      },
+      until: {
+        type: "string",
+        required: false,
+        description: "Only commits before this ISO 8601 timestamp",
+      },
+      perPage: {
+        type: "number",
+        required: false,
+        description: "Results per page (max: 100)",
+      },
+      page: { type: "number", required: false, description: "Page number" },
+    },
+    async execute(input, ctx) {
+      const { owner, repo, sha, path, author, since, until, perPage, page } =
+        (input ?? {}) as Record<string, unknown>;
+      const qs: Record<string, unknown> = {};
+      if (sha) qs.sha = sha;
+      if (path) qs.path = path;
+      if (author) qs.author = author;
+      if (since) qs.since = since;
+      if (until) qs.until = until;
+      if (perPage) qs.per_page = perPage;
+      if (page) qs.page = page;
+      return gh(ctx, "GET", `/repos/${owner}/${repo}/commits`, undefined, qs);
+    },
+  });
+
+  rl.registerAction("commit.get", {
+    description: "Get a repository commit by SHA, branch, or tag ref",
+    inputSchema: {
+      owner: {
+        type: "string",
+        required: true,
+        description: "Repository owner",
+      },
+      repo: { type: "string", required: true, description: "Repository name" },
+      ref: {
+        type: "string",
+        required: true,
+        description: "Commit SHA, branch name, or tag name",
+      },
+    },
+    async execute(input, ctx) {
+      const { owner, repo, ref } = input as Record<string, unknown>;
+      return gh(
+        ctx,
+        "GET",
+        `/repos/${owner}/${repo}/commits/${encodeURIComponent(String(ref))}`,
+      );
+    },
+  });
+
+  rl.registerAction("branch.get", {
+    description: "Get a repository branch, including its latest commit",
+    inputSchema: {
+      owner: {
+        type: "string",
+        required: true,
+        description: "Repository owner",
+      },
+      repo: { type: "string", required: true, description: "Repository name" },
+      branch: { type: "string", required: true, description: "Branch name" },
+    },
+    async execute(input, ctx) {
+      const { owner, repo, branch } = input as Record<string, unknown>;
+      return gh(
+        ctx,
+        "GET",
+        `/repos/${owner}/${repo}/branches/${encodeURIComponent(String(branch))}`,
+      );
+    },
+  });
+
   rl.registerAction("repository.get", {
     description: "Get repository details",
     inputSchema: {
