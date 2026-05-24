@@ -441,6 +441,24 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
+
+function a1RangeToGridRange(a1: string, sheetId: number): {
+  sheetId: number;
+  startRowIndex: number;
+  endRowIndex: number;
+  startColumnIndex: number;
+  endColumnIndex: number;
+} {
+  // Strip optional 'Sheet!' prefix
+  const m = a1.match(/^(?:[^!]+!)?([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
+  if (!m) throw new Error(`a1RangeToGridRange: cannot parse ${a1}; expected A1 form like A1:D20`);
+  const startCol = columnLetterToNumber(m[1]) - 1;
+  const startRow = parseInt(m[2], 10) - 1;
+  const endCol   = columnLetterToNumber(m[3]);
+  const endRow   = parseInt(m[4], 10);
+  return { sheetId, startRowIndex: startRow, endRowIndex: endRow, startColumnIndex: startCol, endColumnIndex: endCol };
+}
+
 export default function googleSheets(rl: RunlinePluginAPI) {
   rl.setName("googleSheets");
   rl.setVersion("0.1.0");
@@ -1173,4 +1191,278 @@ async function runUpdateOrUpsert(
     appended: prepared.appendData.length,
     newColumns: prepared.newColumns,
   };
+
+  // ─── Charts ─────────────────────────────────────────────────────
+
+  rl.registerAction("chart.add", {
+    description:
+      "Embed a chart on a sheet. Minimal signature: type ('COLUMN'|'BAR'|'LINE'|'AREA'|'PIE'|'SCATTER'|'COMBO'), data source (sheet name + A1 range), and target anchor cell. For full control pass a raw `chartSpec` object instead.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      title: { type: "string", required: false },
+      type: { type: "string", required: false, description: "Basic chart type. Default COLUMN. Ignored when `chartSpec` is provided." },
+      sourceSheet: { type: "string", required: false, description: "Sheet name holding the source range. Ignored when `chartSpec` is provided." },
+      sourceRange: { type: "string", required: false, description: "A1 range on `sourceSheet`, e.g. 'A1:D20'. Ignored when `chartSpec` is provided." },
+      legendPosition: { type: "string", required: false, description: "BOTTOM_LEGEND | TOP_LEGEND | RIGHT_LEGEND | LEFT_LEGEND | NO_LEGEND. Default BOTTOM_LEGEND." },
+      stackedType: { type: "string", required: false, description: "STACKED | PERCENT_STACKED — for COLUMN/BAR/AREA." },
+      anchorSheet: { type: "string", required: true, description: "Sheet to place the chart on." },
+      anchorRow: { type: "number", required: false, default: 0 },
+      anchorColumn: { type: "number", required: false, default: 0 },
+      widthPx: { type: "number", required: false, default: 600 },
+      heightPx: { type: "number", required: false, default: 371 },
+      chartSpec: { type: "object", required: false, description: "Raw ChartSpec object; bypasses the simple type+source builder." },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const spreadsheetId = p.spreadsheetId as string;
+      const anchorSheetId = await resolveSheetId(ctx, spreadsheetId, p.anchorSheet as string);
+      let spec: Record<string, unknown>;
+      if (p.chartSpec) {
+        spec = p.chartSpec as Record<string, unknown>;
+      } else {
+        const sourceSheetId = await resolveSheetId(ctx, spreadsheetId, p.sourceSheet as string);
+        const grid = a1RangeToGridRange(p.sourceRange as string, sourceSheetId);
+        spec = {
+          title: p.title,
+          basicChart: {
+            chartType: (p.type as string | undefined) ?? "COLUMN",
+            legendPosition: (p.legendPosition as string | undefined) ?? "BOTTOM_LEGEND",
+            stackedType: p.stackedType,
+            headerCount: 1,
+            domains: [{ domain: { sourceRange: { sources: [{
+              sheetId: grid.sheetId, startRowIndex: grid.startRowIndex, endRowIndex: grid.endRowIndex,
+              startColumnIndex: grid.startColumnIndex, endColumnIndex: grid.startColumnIndex + 1,
+            }]}}}],
+            series: [{ series: { sourceRange: { sources: [{
+              sheetId: grid.sheetId, startRowIndex: grid.startRowIndex, endRowIndex: grid.endRowIndex,
+              startColumnIndex: grid.startColumnIndex + 1, endColumnIndex: grid.endColumnIndex,
+            }]}}, targetAxis: "LEFT_AXIS" }],
+          },
+        };
+      }
+      const req = {
+        addChart: {
+          chart: {
+            spec,
+            position: {
+              overlayPosition: {
+                anchorCell: { sheetId: anchorSheetId, rowIndex: (p.anchorRow as number | undefined) ?? 0, columnIndex: (p.anchorColumn as number | undefined) ?? 0 },
+                widthPixels: (p.widthPx as number | undefined) ?? 600,
+                heightPixels: (p.heightPx as number | undefined) ?? 371,
+              },
+            },
+          },
+        },
+      };
+      return spreadsheetBatchUpdate(ctx, spreadsheetId, [req]);
+    },
+  });
+
+  rl.registerAction("chart.update", {
+    description: "Update an existing chart's spec by chartId.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      chartId: { type: "number", required: true },
+      chartSpec: { type: "object", required: true },
+      fields: { type: "string", required: false, default: "*" },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [
+        {
+          updateChartSpec: {
+            chartId: p.chartId,
+            spec: p.chartSpec,
+            fields: (p.fields as string | undefined) ?? "*",
+          },
+        },
+      ]);
+    },
+  });
+
+  rl.registerAction("chart.delete", {
+    description: "Delete a chart by its embedded-object id.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      chartId: { type: "number", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [
+        { deleteEmbeddedObject: { objectId: p.chartId } },
+      ]);
+    },
+  });
+
+  // ─── Named ranges ───────────────────────────────────────────────
+
+  rl.registerAction("namedRange.add", {
+    description: "Create a named range on a sheet (so formulas can reference it by name).",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      name: { type: "string", required: true },
+      sheet: { type: "string", required: true },
+      range: { type: "string", required: true, description: "A1 range on `sheet`, e.g. 'A1:D20'." },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const sheetId = await resolveSheetId(ctx, p.spreadsheetId as string, p.sheet as string);
+      const grid = a1RangeToGridRange(p.range as string, sheetId);
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [
+        { addNamedRange: { namedRange: { name: p.name, range: grid } } },
+      ]);
+    },
+  });
+
+  rl.registerAction("namedRange.delete", {
+    description: "Delete a named range by its id.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      namedRangeId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [
+        { deleteNamedRange: { namedRangeId: p.namedRangeId } },
+      ]);
+    },
+  });
+
+  // ─── Protected ranges ───────────────────────────────────────────
+
+  rl.registerAction("protectedRange.add", {
+    description:
+      "Protect a range from edits. Pass `editorEmails` to restrict who can still edit; without it, only the sheet owner can edit.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      sheet: { type: "string", required: true },
+      range: { type: "string", required: false, description: "A1 range. Omit to protect the whole sheet." },
+      description: { type: "string", required: false },
+      warningOnly: { type: "boolean", required: false, description: "When true, edits are allowed but show a warning." },
+      editorEmails: { type: "array", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const sheetId = await resolveSheetId(ctx, p.spreadsheetId as string, p.sheet as string);
+      const protectedRange: Record<string, unknown> = { description: p.description, warningOnly: p.warningOnly };
+      if (p.range) protectedRange.range = a1RangeToGridRange(p.range as string, sheetId);
+      else protectedRange.range = { sheetId };
+      if (Array.isArray(p.editorEmails)) {
+        protectedRange.editors = { users: p.editorEmails };
+      }
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [
+        { addProtectedRange: { protectedRange } },
+      ]);
+    },
+  });
+
+  rl.registerAction("protectedRange.delete", {
+    description: "Delete a protected range by its id.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      protectedRangeId: { type: "number", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [
+        { deleteProtectedRange: { protectedRangeId: p.protectedRangeId } },
+      ]);
+    },
+  });
+
+  // ─── Conditional formatting ─────────────────────────────────────
+
+  rl.registerAction("conditionalFormat.add", {
+    description:
+      "Add a single-condition conditional-format rule. For complex rules pass a raw `rule` object instead of the simple builder.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      sheet: { type: "string", required: true },
+      range: { type: "string", required: true },
+      condition: {
+        type: "object",
+        required: false,
+        description: "BooleanCondition, e.g. { type: 'NUMBER_GREATER', values: [{ userEnteredValue: '100' }] }.",
+      },
+      backgroundColorHex: { type: "string", required: false },
+      foregroundColorHex: { type: "string", required: false },
+      bold: { type: "boolean", required: false },
+      italic: { type: "boolean", required: false },
+      rule: { type: "object", required: false, description: "Raw ConditionalFormatRule; bypasses the simple builder." },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const sheetId = await resolveSheetId(ctx, p.spreadsheetId as string, p.sheet as string);
+      const grid = a1RangeToGridRange(p.range as string, sheetId);
+      let rule: Record<string, unknown>;
+      if (p.rule) rule = p.rule as Record<string, unknown>;
+      else {
+        const fmt: Record<string, unknown> = {};
+        if (p.backgroundColorHex) fmt.backgroundColor = hexToRgb(p.backgroundColorHex as string);
+        if (p.foregroundColorHex || p.bold || p.italic) {
+          const ts: Record<string, unknown> = {};
+          if (p.foregroundColorHex) ts.foregroundColor = hexToRgb(p.foregroundColorHex as string);
+          if (p.bold !== undefined) ts.bold = p.bold;
+          if (p.italic !== undefined) ts.italic = p.italic;
+          fmt.textFormat = ts;
+        }
+        rule = { ranges: [grid], booleanRule: { condition: p.condition, format: fmt } };
+      }
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [{ addConditionalFormatRule: { rule, index: 0 } }]);
+    },
+  });
+
+  rl.registerAction("conditionalFormat.delete", {
+    description: "Delete a conditional-format rule by its index within the sheet's rule list.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      sheet: { type: "string", required: true },
+      index: { type: "number", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const sheetId = await resolveSheetId(ctx, p.spreadsheetId as string, p.sheet as string);
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [
+        { deleteConditionalFormatRule: { sheetId, index: p.index } },
+      ]);
+    },
+  });
+
+  // ─── Data validation ────────────────────────────────────────────
+
+  rl.registerAction("dataValidation.set", {
+    description:
+      "Apply a data-validation rule to a range. Pass either `condition` (BooleanCondition) or `oneOfList` (array of values for ONE_OF_LIST). Use `clear: true` to remove validation.",
+    inputSchema: {
+      spreadsheetId: { type: "string", required: true },
+      sheet: { type: "string", required: true },
+      range: { type: "string", required: true },
+      condition: { type: "object", required: false },
+      oneOfList: { type: "array", required: false },
+      showCustomUi: { type: "boolean", required: false, default: true },
+      strict: { type: "boolean", required: false, default: true },
+      inputMessage: { type: "string", required: false },
+      clear: { type: "boolean", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const sheetId = await resolveSheetId(ctx, p.spreadsheetId as string, p.sheet as string);
+      const grid = a1RangeToGridRange(p.range as string, sheetId);
+      let rule: Record<string, unknown> | null = null;
+      if (!p.clear) {
+        let cond = p.condition as Record<string, unknown> | undefined;
+        if (!cond && Array.isArray(p.oneOfList)) {
+          cond = {
+            type: "ONE_OF_LIST",
+            values: (p.oneOfList as unknown[]).map((v) => ({ userEnteredValue: String(v) })),
+          };
+        }
+        if (!cond) throw new Error("googleSheets.dataValidation.set: pass condition or oneOfList, or set clear=true");
+        rule = { condition: cond, strict: p.strict ?? true, showCustomUi: p.showCustomUi ?? true, inputMessage: p.inputMessage };
+      }
+      return spreadsheetBatchUpdate(ctx, p.spreadsheetId as string, [
+        { setDataValidation: { range: grid, rule: rule ?? undefined } },
+      ]);
+    },
+  });
 }

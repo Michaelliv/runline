@@ -185,6 +185,18 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
+
+function hexToRgbF(hex: string): { red: number; green: number; blue: number } {
+  const h = hex.replace(/^#/, "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16);
+  return {
+    red:   ((n >> 16) & 0xff) / 255,
+    green: ((n >> 8) & 0xff)  / 255,
+    blue:  ( n        & 0xff) / 255,
+  };
+}
+
 export default function googleDocs(rl: RunlinePluginAPI) {
   rl.setName("googleDocs");
   rl.setVersion("0.1.0");
@@ -724,4 +736,350 @@ export default function googleDocs(rl: RunlinePluginAPI) {
       });
     },
   });
+
+  // ─── Discrete text / paragraph / table formatting ────────────────
+  //
+  // These wrap individual batchUpdate sub-requests so the agent gets a
+  // discoverable surface for the common formatting moves instead of having
+  // to assemble a full batchUpdate payload.
+
+  rl.registerAction("document.updateTextStyle", {
+    description:
+      "Apply text styling (bold, italic, underline, color, fontSize, fontFamily, link) to a range. Pass `fields` listing which TextStyle properties were set.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      startIndex: { type: "number", required: true },
+      endIndex: { type: "number", required: true },
+      bold: { type: "boolean", required: false },
+      italic: { type: "boolean", required: false },
+      underline: { type: "boolean", required: false },
+      strikethrough: { type: "boolean", required: false },
+      fontSizePt: { type: "number", required: false, description: "Font size in points." },
+      fontFamily: { type: "string", required: false },
+      foregroundColorHex: { type: "string", required: false, description: "Hex color, e.g. #1A73E8" },
+      backgroundColorHex: { type: "string", required: false },
+      link: { type: "string", required: false, description: "URL for the linked range." },
+      segmentId: { type: "string", required: false, description: "Header/footer/footnote id; omit for the body." },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const ts: Record<string, unknown> = {};
+      const fields: string[] = [];
+      if (p.bold !== undefined)            { ts.bold = p.bold;            fields.push("bold"); }
+      if (p.italic !== undefined)          { ts.italic = p.italic;        fields.push("italic"); }
+      if (p.underline !== undefined)       { ts.underline = p.underline;  fields.push("underline"); }
+      if (p.strikethrough !== undefined)   { ts.strikethrough = p.strikethrough; fields.push("strikethrough"); }
+      if (p.fontSizePt !== undefined)      { ts.fontSize = { magnitude: p.fontSizePt, unit: "PT" }; fields.push("fontSize"); }
+      if (p.fontFamily)                    { ts.weightedFontFamily = { fontFamily: p.fontFamily }; fields.push("weightedFontFamily"); }
+      if (p.foregroundColorHex)            {
+        const c = hexToRgbF(p.foregroundColorHex as string);
+        ts.foregroundColor = { color: { rgbColor: c } };
+        fields.push("foregroundColor");
+      }
+      if (p.backgroundColorHex)            {
+        const c = hexToRgbF(p.backgroundColorHex as string);
+        ts.backgroundColor = { color: { rgbColor: c } };
+        fields.push("backgroundColor");
+      }
+      if (p.link)                          { ts.link = { url: p.link }; fields.push("link"); }
+      if (fields.length === 0) {
+        throw new Error("googleDocs.document.updateTextStyle: at least one styling property required");
+      }
+      return runBatchUpdate(ctx, documentId, [
+        {
+          updateTextStyle: {
+            range: {
+              startIndex: p.startIndex,
+              endIndex: p.endIndex,
+              segmentId: p.segmentId,
+            },
+            textStyle: ts,
+            fields: fields.join(","),
+          },
+        },
+      ]);
+    },
+  });
+
+  rl.registerAction("document.updateParagraphStyle", {
+    description:
+      "Apply paragraph styling (alignment, named style, indents, spacing, direction) to the paragraphs intersecting the range.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      startIndex: { type: "number", required: true },
+      endIndex: { type: "number", required: true },
+      alignment: { type: "string", required: false, description: "START | CENTER | END | JUSTIFIED" },
+      namedStyleType: { type: "string", required: false, description: "NORMAL_TEXT | TITLE | SUBTITLE | HEADING_1 .. HEADING_6" },
+      direction: { type: "string", required: false, description: "LEFT_TO_RIGHT | RIGHT_TO_LEFT" },
+      indentFirstLinePt: { type: "number", required: false },
+      indentStartPt: { type: "number", required: false },
+      indentEndPt: { type: "number", required: false },
+      spaceAbovePt: { type: "number", required: false },
+      spaceBelowPt: { type: "number", required: false },
+      lineSpacing: { type: "number", required: false, description: "Percentage; 100 = single, 150 = 1.5x." },
+      segmentId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const ps: Record<string, unknown> = {};
+      const fields: string[] = [];
+      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
+      if (p.alignment)        { ps.alignment = p.alignment; fields.push("alignment"); }
+      if (p.namedStyleType)   { ps.namedStyleType = p.namedStyleType; fields.push("namedStyleType"); }
+      if (p.direction)        { ps.direction = p.direction; fields.push("direction"); }
+      if (p.indentFirstLinePt !== undefined) { ps.indentFirstLine = pt(p.indentFirstLinePt); fields.push("indentFirstLine"); }
+      if (p.indentStartPt !== undefined)     { ps.indentStart = pt(p.indentStartPt); fields.push("indentStart"); }
+      if (p.indentEndPt !== undefined)       { ps.indentEnd = pt(p.indentEndPt); fields.push("indentEnd"); }
+      if (p.spaceAbovePt !== undefined)      { ps.spaceAbove = pt(p.spaceAbovePt); fields.push("spaceAbove"); }
+      if (p.spaceBelowPt !== undefined)      { ps.spaceBelow = pt(p.spaceBelowPt); fields.push("spaceBelow"); }
+      if (p.lineSpacing !== undefined)       { ps.lineSpacing = p.lineSpacing; fields.push("lineSpacing"); }
+      if (fields.length === 0) {
+        throw new Error("googleDocs.document.updateParagraphStyle: at least one property required");
+      }
+      return runBatchUpdate(ctx, documentId, [
+        {
+          updateParagraphStyle: {
+            range: { startIndex: p.startIndex, endIndex: p.endIndex, segmentId: p.segmentId },
+            paragraphStyle: ps,
+            fields: fields.join(","),
+          },
+        },
+      ]);
+    },
+  });
+
+  rl.registerAction("document.updateTableCellStyle", {
+    description:
+      "Apply table-cell styling (background color, borders, padding) to a contiguous span of cells. Pass either a single cell via `tableStartLocation+rowIndex+columnIndex`, or a range via `tableStartLocation+rowSpan+columnSpan`.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      tableStartIndex: { type: "number", required: true, description: "The startIndex of the table element." },
+      rowIndex: { type: "number", required: true },
+      columnIndex: { type: "number", required: true },
+      rowSpan: { type: "number", required: false, default: 1 },
+      columnSpan: { type: "number", required: false, default: 1 },
+      backgroundColorHex: { type: "string", required: false },
+      paddingLeftPt: { type: "number", required: false },
+      paddingRightPt: { type: "number", required: false },
+      paddingTopPt: { type: "number", required: false },
+      paddingBottomPt: { type: "number", required: false },
+      contentAlignment: { type: "string", required: false, description: "TOP | MIDDLE | BOTTOM" },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const style: Record<string, unknown> = {};
+      const fields: string[] = [];
+      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
+      if (p.backgroundColorHex) {
+        style.backgroundColor = { color: { rgbColor: hexToRgbF(p.backgroundColorHex as string) } };
+        fields.push("backgroundColor");
+      }
+      if (p.paddingLeftPt !== undefined)   { style.paddingLeft = pt(p.paddingLeftPt); fields.push("paddingLeft"); }
+      if (p.paddingRightPt !== undefined)  { style.paddingRight = pt(p.paddingRightPt); fields.push("paddingRight"); }
+      if (p.paddingTopPt !== undefined)    { style.paddingTop = pt(p.paddingTopPt); fields.push("paddingTop"); }
+      if (p.paddingBottomPt !== undefined) { style.paddingBottom = pt(p.paddingBottomPt); fields.push("paddingBottom"); }
+      if (p.contentAlignment)              { style.contentAlignment = p.contentAlignment; fields.push("contentAlignment"); }
+      if (fields.length === 0) {
+        throw new Error("googleDocs.document.updateTableCellStyle: at least one style property required");
+      }
+      return runBatchUpdate(ctx, documentId, [
+        {
+          updateTableCellStyle: {
+            tableRange: {
+              tableCellLocation: {
+                tableStartLocation: { index: p.tableStartIndex },
+                rowIndex: p.rowIndex,
+                columnIndex: p.columnIndex,
+              },
+              rowSpan: (p.rowSpan as number | undefined) ?? 1,
+              columnSpan: (p.columnSpan as number | undefined) ?? 1,
+            },
+            tableCellStyle: style,
+            fields: fields.join(","),
+          },
+        },
+      ]);
+    },
+  });
+
+  rl.registerAction("document.mergeTableCells", {
+    description: "Merge a contiguous block of cells in a table.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      tableStartIndex: { type: "number", required: true },
+      rowIndex: { type: "number", required: true },
+      columnIndex: { type: "number", required: true },
+      rowSpan: { type: "number", required: true },
+      columnSpan: { type: "number", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      return runBatchUpdate(ctx, documentId, [
+        {
+          mergeTableCells: {
+            tableRange: {
+              tableCellLocation: {
+                tableStartLocation: { index: p.tableStartIndex },
+                rowIndex: p.rowIndex,
+                columnIndex: p.columnIndex,
+              },
+              rowSpan: p.rowSpan,
+              columnSpan: p.columnSpan,
+            },
+          },
+        },
+      ]);
+    },
+  });
+
+  rl.registerAction("document.unmergeTableCells", {
+    description: "Unmerge a previously merged block of cells.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      tableStartIndex: { type: "number", required: true },
+      rowIndex: { type: "number", required: true },
+      columnIndex: { type: "number", required: true },
+      rowSpan: { type: "number", required: true },
+      columnSpan: { type: "number", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      return runBatchUpdate(ctx, documentId, [
+        {
+          unmergeTableCells: {
+            tableRange: {
+              tableCellLocation: {
+                tableStartLocation: { index: p.tableStartIndex },
+                rowIndex: p.rowIndex,
+                columnIndex: p.columnIndex,
+              },
+              rowSpan: p.rowSpan,
+              columnSpan: p.columnSpan,
+            },
+          },
+        },
+      ]);
+    },
+  });
+
+  rl.registerAction("document.insertInlineImage", {
+    description: "Insert an inline image at the given location. `uri` must point to a publicly fetchable image.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      index: { type: "number", required: true },
+      uri: { type: "string", required: true },
+      widthPt: { type: "number", required: false },
+      heightPt: { type: "number", required: false },
+      segmentId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
+      const req: Record<string, unknown> = {
+        location: buildLocation(p.index as number, p.segmentId as string | undefined),
+        uri: p.uri,
+      };
+      if (p.widthPt !== undefined || p.heightPt !== undefined) {
+        req.objectSize = {};
+        if (p.widthPt !== undefined) (req.objectSize as Record<string, unknown>).width = pt(p.widthPt);
+        if (p.heightPt !== undefined) (req.objectSize as Record<string, unknown>).height = pt(p.heightPt);
+      }
+      return runBatchUpdate(ctx, documentId, [{ insertInlineImage: req }]);
+    },
+  });
+
+  rl.registerAction("document.replaceImage", {
+    description: "Replace an existing image (identified by its inline-object id) with a new image from a publicly fetchable URI.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      imageObjectId: { type: "string", required: true },
+      uri: { type: "string", required: true },
+      imageReplaceMethod: { type: "string", required: false, description: "CENTER_CROP (default) | (others as Docs API adds them)" },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      return runBatchUpdate(ctx, documentId, [
+        {
+          replaceImage: {
+            imageObjectId: p.imageObjectId,
+            uri: p.uri,
+            imageReplaceMethod: (p.imageReplaceMethod as string | undefined) ?? "CENTER_CROP",
+          },
+        },
+      ]);
+    },
+  });
+
+  rl.registerAction("document.insertSectionBreak", {
+    description: "Insert a section break at the given location.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      index: { type: "number", required: true },
+      sectionType: { type: "string", required: false, description: "CONTINUOUS | NEXT_PAGE. Default CONTINUOUS." },
+      segmentId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      return runBatchUpdate(ctx, documentId, [
+        {
+          insertSectionBreak: {
+            location: buildLocation(p.index as number, p.segmentId as string | undefined),
+            sectionType: (p.sectionType as string | undefined) ?? "CONTINUOUS",
+          },
+        },
+      ]);
+    },
+  });
+
+  rl.registerAction("document.updateDocumentStyle", {
+    description: "Update document-level style (page size, margins, page numbers, default direction).",
+    inputSchema: {
+      document: { type: "string", required: true },
+      pageMarginTopPt: { type: "number", required: false },
+      pageMarginBottomPt: { type: "number", required: false },
+      pageMarginLeftPt: { type: "number", required: false },
+      pageMarginRightPt: { type: "number", required: false },
+      pageSizeWidthPt: { type: "number", required: false },
+      pageSizeHeightPt: { type: "number", required: false },
+      useCustomHeaderFooterMargins: { type: "boolean", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const ds: Record<string, unknown> = {};
+      const fields: string[] = [];
+      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
+      if (p.pageMarginTopPt !== undefined)    { ds.marginTop = pt(p.pageMarginTopPt); fields.push("marginTop"); }
+      if (p.pageMarginBottomPt !== undefined) { ds.marginBottom = pt(p.pageMarginBottomPt); fields.push("marginBottom"); }
+      if (p.pageMarginLeftPt !== undefined)   { ds.marginLeft = pt(p.pageMarginLeftPt); fields.push("marginLeft"); }
+      if (p.pageMarginRightPt !== undefined)  { ds.marginRight = pt(p.pageMarginRightPt); fields.push("marginRight"); }
+      if (p.pageSizeWidthPt !== undefined || p.pageSizeHeightPt !== undefined) {
+        ds.pageSize = {};
+        if (p.pageSizeWidthPt !== undefined)  (ds.pageSize as Record<string, unknown>).width = pt(p.pageSizeWidthPt);
+        if (p.pageSizeHeightPt !== undefined) (ds.pageSize as Record<string, unknown>).height = pt(p.pageSizeHeightPt);
+        fields.push("pageSize");
+      }
+      if (p.useCustomHeaderFooterMargins !== undefined) {
+        ds.useCustomHeaderFooterMargins = p.useCustomHeaderFooterMargins;
+        fields.push("useCustomHeaderFooterMargins");
+      }
+      if (fields.length === 0) {
+        throw new Error("googleDocs.document.updateDocumentStyle: pass at least one property");
+      }
+      return runBatchUpdate(ctx, documentId, [{ updateDocumentStyle: { documentStyle: ds, fields: fields.join(",") } }]);
+    },
+  });
+
+  // ─── Small helper for Docs additions ────────────────────────────
+  // (declared at the bottom so it doesn't conflict with the
+  // upstream module-scope `hexToRgb` if one is added later)
+
 }

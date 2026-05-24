@@ -914,4 +914,199 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       );
     },
   });
+
+  // ─── FreeBusy ────────────────────────────────────────────────────
+
+  rl.registerAction("freeBusy.query", {
+    description:
+      "Query free/busy windows across one or more calendars in a time range. Returns an array of busy intervals per calendar id, plus any errors.",
+    inputSchema: {
+      calendarIds: { type: "array", required: true, description: "Calendar ids to query (use 'primary' for the user's own)." },
+      timeMin: { type: "string", required: true, description: "RFC 3339 lower bound." },
+      timeMax: { type: "string", required: true, description: "RFC 3339 upper bound." },
+      timeZone: { type: "string", required: false },
+      groupExpansionMax: { type: "number", required: false },
+      calendarExpansionMax: { type: "number", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body = {
+        timeMin: p.timeMin,
+        timeMax: p.timeMax,
+        timeZone: p.timeZone,
+        groupExpansionMax: p.groupExpansionMax,
+        calendarExpansionMax: p.calendarExpansionMax,
+        items: (p.calendarIds as string[]).map((id) => ({ id })),
+      };
+      return calRequest(ctx, "POST", `/freeBusy`, body);
+    },
+  });
+
+  // ─── Calendar list management ───────────────────────────────────
+
+  rl.registerAction("calendarList.list", {
+    description: "List calendars on the user's calendar list (the user's left sidebar).",
+    inputSchema: {
+      minAccessRole: { type: "string", required: false, description: "freeBusyReader | reader | writer | owner" },
+      showDeleted: { type: "boolean", required: false },
+      showHidden: { type: "boolean", required: false },
+      returnAll: { type: "boolean", required: false, default: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const qs = {
+        minAccessRole: p.minAccessRole,
+        showDeleted: p.showDeleted,
+        showHidden: p.showHidden,
+        maxResults: 250,
+      };
+      if (p.returnAll ?? true) return paginateAll(ctx, "/users/me/calendarList", "items", qs);
+      const res = (await calRequest(ctx, "GET", "/users/me/calendarList", undefined, qs)) as { items?: unknown[] };
+      return res.items ?? [];
+    },
+  });
+
+  rl.registerAction("calendarList.insert", {
+    description: "Add a calendar (by id) to the user's calendar list.",
+    inputSchema: {
+      calendarId: { type: "string", required: true },
+      colorRgbFormat: { type: "boolean", required: false },
+      defaultReminders: { type: "array", required: false },
+      summaryOverride: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = { id: p.calendarId };
+      if (p.summaryOverride) body.summaryOverride = p.summaryOverride;
+      if (Array.isArray(p.defaultReminders)) body.defaultReminders = p.defaultReminders;
+      return calRequest(ctx, "POST", "/users/me/calendarList", body, { colorRgbFormat: p.colorRgbFormat });
+    },
+  });
+
+  rl.registerAction("calendarList.patch", {
+    description: "Patch a calendar entry on the user's calendar list (colors, summary override, reminders, selected).",
+    inputSchema: {
+      calendarId: { type: "string", required: true },
+      colorId: { type: "string", required: false },
+      backgroundColor: { type: "string", required: false },
+      foregroundColor: { type: "string", required: false },
+      summaryOverride: { type: "string", required: false },
+      selected: { type: "boolean", required: false },
+      hidden: { type: "boolean", required: false },
+      defaultReminders: { type: "array", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = {};
+      for (const k of ["colorId","backgroundColor","foregroundColor","summaryOverride","selected","hidden","defaultReminders"] as const) {
+        if ((p as Record<string, unknown>)[k] !== undefined) body[k] = (p as Record<string, unknown>)[k];
+      }
+      return calRequest(
+        ctx, "PATCH",
+        `/users/me/calendarList/${encodeCalendarId(p.calendarId as string)}`,
+        body,
+        { colorRgbFormat: p.backgroundColor || p.foregroundColor ? true : undefined },
+      );
+    },
+  });
+
+  rl.registerAction("calendarList.delete", {
+    description: "Remove a calendar from the user's calendar list (does not delete the underlying calendar).",
+    inputSchema: { calendarId: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      await calRequest(ctx, "DELETE", `/users/me/calendarList/${encodeCalendarId(p.calendarId as string)}`);
+      return { success: true };
+    },
+  });
+
+  // ─── ACL (calendar sharing) ──────────────────────────────────────
+
+  rl.registerAction("acl.list", {
+    description: "List ACL rules on a calendar.",
+    inputSchema: {
+      calendarId: { type: "string", required: true },
+      returnAll: { type: "boolean", required: false, default: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const path = `/calendars/${encodeCalendarId(p.calendarId as string)}/acl`;
+      if (p.returnAll ?? true) return paginateAll(ctx, path, "items", { maxResults: 250 });
+      const res = (await calRequest(ctx, "GET", path)) as { items?: unknown[] };
+      return res.items ?? [];
+    },
+  });
+
+  rl.registerAction("acl.insert", {
+    description: "Add an ACL rule to a calendar. Roles: 'none' | 'freeBusyReader' | 'reader' | 'writer' | 'owner'.",
+    inputSchema: {
+      calendarId: { type: "string", required: true },
+      role: { type: "string", required: true },
+      scopeType: { type: "string", required: true, description: "'default' | 'user' | 'group' | 'domain'" },
+      scopeValue: { type: "string", required: false, description: "Email / domain depending on scopeType." },
+      sendNotifications: { type: "boolean", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body = { role: p.role, scope: { type: p.scopeType, value: p.scopeValue } };
+      return calRequest(
+        ctx, "POST",
+        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl`,
+        body,
+        { sendNotifications: p.sendNotifications },
+      );
+    },
+  });
+
+  rl.registerAction("acl.update", {
+    description: "Patch an ACL rule's role.",
+    inputSchema: {
+      calendarId: { type: "string", required: true },
+      ruleId: { type: "string", required: true },
+      role: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return calRequest(
+        ctx, "PATCH",
+        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl/${encodeURIComponent(p.ruleId as string)}`,
+        { role: p.role },
+      );
+    },
+  });
+
+  rl.registerAction("acl.delete", {
+    description: "Remove an ACL rule.",
+    inputSchema: {
+      calendarId: { type: "string", required: true },
+      ruleId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      await calRequest(
+        ctx, "DELETE",
+        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl/${encodeURIComponent(p.ruleId as string)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  // ─── Settings ────────────────────────────────────────────────────
+
+  rl.registerAction("settings.list", {
+    description: "List the user's calendar settings (timezone, week start, working location, etc.).",
+    inputSchema: { returnAll: { type: "boolean", required: false, default: true } },
+    async execute(_input, ctx) {
+      return paginateAll(ctx, "/users/me/settings", "items", { maxResults: 100 });
+    },
+  });
+
+  rl.registerAction("settings.get", {
+    description: "Get a single setting by key (e.g. 'timezone', 'weekStart', 'locale').",
+    inputSchema: { setting: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return calRequest(ctx, "GET", `/users/me/settings/${encodeURIComponent(p.setting as string)}`);
+    },
+  });
 }
