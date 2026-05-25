@@ -20,6 +20,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     tenantId: { type: "string", required: false, env: "MS_GRAPH_TENANT_ID", description: "Entra tenant id (app-only) or omit for OAuth /common" },
     clientId: { type: "string", required: false, env: "MS_GRAPH_CLIENT_ID", description: "App (client) id" },
     clientSecret: { type: "string", required: false, env: "MS_GRAPH_CLIENT_SECRET", description: "Client secret VALUE" },
+    refreshToken: { type: "string", required: false, env: "MICROSOFTCALENDAR_REFRESH_TOKEN", description: "OAuth2 refresh token (set by the login flow)" },
     userUpn: { type: "string", required: false, env: "MS_GRAPH_USER_UPN", description: "App-only only: target user UPN" },
   });
 
