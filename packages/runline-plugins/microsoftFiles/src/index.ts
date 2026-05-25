@@ -122,7 +122,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
     description:
       "Upload a file (base64) to a path in the drive, e.g. a dedicated output folder. Returns the created item. For files up to ~4MB.",
     inputSchema: {
-      path: { type: "string", required: true, description: "Drive-relative path incl. filename, e.g. 'Vex Output/report.docx'" },
+      path: { type: "string", required: true, description: "Drive-relative path incl. filename, e.g. 'Agent Output/report.docx'" },
       base64: { type: "string", required: true, description: "File content, base64-encoded" },
     },
     async execute(input: any, ctx: Ctx) {

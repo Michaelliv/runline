@@ -2,7 +2,7 @@
  * Microsoft Outlook mail plugin for runline (Microsoft Graph).
  *
  * Auth: Microsoft identity platform OAuth2 (delegated, acts as the signed-in
- * user → /me) seeded by Vex's OAuth wizard; or app-only client credentials
+ * user → /me) seeded by the OAuth flow; or app-only client credentials
  * (set tenantId/clientId/clientSecret + userUpn) for an unattended service
  * mailbox. Shared "microsoft" OAuth client family (authUrl on
  * login.microsoftonline.com), so one Entra app is reused across the Microsoft

@@ -8,7 +8,8 @@ const REFRESH_SKEW_MS = 60_000;
  * Two modes, auto-detected from the connection config:
  *
  *  - Delegated (OAuth2): the connection has clientId/clientSecret/refreshToken
- *    (seeded by Vex's OAuth wizard). Acts as the signed-in user; use /me paths.
+ *    (seeded by the OAuth flow, e.g. `runline auth`). Acts as the signed-in
+ *    user; use /me paths.
  *  - App-only (client credentials): the connection has tenantId/clientId/
  *    clientSecret but no refreshToken. Acts as the application; target a mailbox/
  *    drive with userUpn → /users/{upn} paths.
@@ -131,7 +132,7 @@ export async function graphRequest(
   return text ? JSON.parse(text) : { success: true };
 }
 
-/** Setup help shown by Vex's OAuth wizard for all Microsoft plugins. */
+/** Setup help shown by the OAuth wizard for all Microsoft plugins. */
 export function microsoftSetupHelp(apiName: string): string[] {
   return [
     `You need a Microsoft Entra (Azure AD) app registration. One-time, ~5 minutes.`,
