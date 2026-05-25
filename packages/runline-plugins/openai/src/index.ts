@@ -48,6 +48,13 @@ export default function openai(rl: RunlinePluginAPI) {
       description: "OpenAI API key",
       env: "OPENAI_API_KEY",
     },
+    defaultModel: {
+      type: "string",
+      required: false,
+      description:
+        "Default image model when a call omits `model` (e.g. gpt-image-2). Falls back to gpt-image-1.",
+      env: "OPENAI_IMAGE_MODEL",
+    },
   });
 
   rl.registerAction("image.create", {
@@ -63,7 +70,7 @@ export default function openai(rl: RunlinePluginAPI) {
         type: "string",
         required: false,
         description:
-          "gpt-image-1 (default) | gpt-image-1-mini | dall-e-3 | dall-e-2",
+          "gpt-image-2 | gpt-image-1 | gpt-image-1-mini | dall-e-3 | dall-e-2. Omit to use the connection default.",
       },
       size: {
         type: "string",
@@ -94,7 +101,10 @@ export default function openai(rl: RunlinePluginAPI) {
       }
 
       const apiKey = ctx.connection.config.apiKey as string;
-      const model = p.model ?? "gpt-image-1";
+      const model =
+        p.model ??
+        (ctx.connection.config.defaultModel as string | undefined) ??
+        "gpt-image-1";
 
       const body: Record<string, unknown> = {
         model,
