@@ -61,7 +61,6 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
     authUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
     tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
     scopes: [...SCOPES, "offline_access"],
-    authParams: { prompt: "consent" },
     setupHelp: microsoftSetupHelp("Files.ReadWrite.All, Sites.ReadWrite.All"),
   });
 
