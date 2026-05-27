@@ -69,6 +69,45 @@ describe("gmail plugin MIME encoding", () => {
     assert.ok(raw.length > 0);
   });
 
+  it("normalizes base64url attachment content into MIME-safe base64", () => {
+    const bytes = Buffer.from([251, 255, 254, 250, 239, 190]);
+    const raw = encodeEmail({
+      to: "recipient@example.com",
+      subject: "gmail attachment",
+      text: "see attached",
+      attachments: [
+        {
+          name: "gmail.bin",
+          mimeType: "application/octet-stream",
+          contentBase64: bytes.toString("base64url"),
+        },
+      ],
+    });
+
+    const message = Buffer.from(raw, "base64url").toString("utf8");
+    assert.match(message, /Content-Transfer-Encoding: base64/);
+    assert.match(message, /\+\/\/\+\+u\+\+/);
+    assert.doesNotMatch(message, /-__\-/);
+  });
+
+  it("throws a clear error for invalid attachment base64 characters", () => {
+    assert.throws(
+      () =>
+        encodeEmail({
+          to: "recipient@example.com",
+          subject: "bad attachment",
+          attachments: [
+            {
+              name: "bad.txt",
+              mimeType: "text/plain",
+              contentBase64: "not base64!",
+            },
+          ],
+        }),
+      /gmail: attachment 0 contentBase64 contains invalid base64 characters/,
+    );
+  });
+
   it("throws a clear error for invalid attachment content", () => {
     assert.throws(
       () =>

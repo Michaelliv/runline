@@ -178,6 +178,24 @@ function foldedBase64ByteLength(length: number): number {
   return length === 0 ? 0 : length + Math.floor((length - 1) / 76) * CRLF.length;
 }
 
+function normalizeMimeBase64(value: string, index: number): string {
+  const compact = value.replace(/\s+/g, "");
+  if (!/^[A-Za-z0-9+/=_-]*$/.test(compact)) {
+    throw new Error(
+      `gmail: attachment ${index} contentBase64 contains invalid base64 characters`,
+    );
+  }
+
+  const standard = compact.replace(/-/g, "+").replace(/_/g, "/");
+  const remainder = standard.length % 4;
+  if (remainder === 1) {
+    throw new Error(
+      `gmail: attachment ${index} contentBase64 has invalid base64 length`,
+    );
+  }
+  return remainder === 0 ? standard : `${standard}${"=".repeat(4 - remainder)}`;
+}
+
 function foldBase64(encoded: string): string {
   let folded = "";
   for (let i = 0; i < encoded.length; i += 76) {
@@ -235,7 +253,7 @@ function normalizeAttachment(
   return {
     name: input.name ?? input.filename ?? `attachment-${index + 1}`,
     mimeType: input.mimeType ?? "application/octet-stream",
-    contentBase64,
+    contentBase64: normalizeMimeBase64(contentBase64, index),
   };
 }
 
