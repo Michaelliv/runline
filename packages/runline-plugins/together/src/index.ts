@@ -14,6 +14,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
+import { SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
 
 const ENDPOINT = "https://api.together.xyz/v1/images/generations";
@@ -24,6 +25,7 @@ interface CreateInput {
   size?: string;
   steps?: number;
   n?: number;
+  saveDir?: string;
 }
 
 interface TogetherImage {
@@ -45,12 +47,17 @@ export default function together(rl: RunlinePluginAPI) {
 
   rl.registerAction("image.create", {
     description:
-      "Generate an image with Together AI (Flux, Ideogram, Qwen-Image, …). Returns base64-encoded PNGs.",
+      "Generate an image with Together AI (Flux, Ideogram, Qwen-Image, …). Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
     inputSchema: {
       prompt: {
         type: "string",
         required: true,
         description: "Detailed description of the image",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -110,11 +117,11 @@ export default function together(rl: RunlinePluginAPI) {
       }
 
       const data = (await res.json()) as { data?: TogetherImage[] };
-      const images = (data.data ?? []).map((d) => ({
-        base64: d.b64_json,
-        mimeType: "image/png",
-      }));
-      return { provider: "together", model, images };
+      const stamp = Date.now();
+      const images = (data.data ?? []).map((d, i) =>
+        writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "together", index: i, saveDir: p.saveDir, stamp }),
+      );
+      return { provider: "together", model, images, note: SEND_FILE_NOTE };
     },
   });
 }

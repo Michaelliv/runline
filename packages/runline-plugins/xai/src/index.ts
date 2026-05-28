@@ -10,6 +10,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
+import { SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
 
 const ENDPOINT = "https://api.x.ai/v1/images/generations";
 const MODEL = "grok-imagine-image";
@@ -18,6 +19,7 @@ interface CreateInput {
   prompt: string;
   aspectRatio?: string;
   n?: number;
+  saveDir?: string;
 }
 
 interface XaiImage {
@@ -40,12 +42,17 @@ export default function xai(rl: RunlinePluginAPI) {
 
   rl.registerAction("image.create", {
     description:
-      "Generate an image with xAI Grok Imagine (Aurora). Returns base64-encoded JPEGs and any revised prompt the model produced.",
+      "Generate an image with xAI Grok Imagine (Aurora). Writes the JPEG(s) to disk and returns their file `path`s (plus any revised prompt) — not base64. Deliver each with send_file using its `path`.",
     inputSchema: {
       prompt: {
         type: "string",
         required: true,
         description: "Detailed description of the image",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       aspectRatio: {
         type: "string",
@@ -87,12 +94,12 @@ export default function xai(rl: RunlinePluginAPI) {
       }
 
       const data = (await res.json()) as { data?: XaiImage[] };
-      const images = (data.data ?? []).map((d) => ({
-        base64: d.b64_json,
-        mimeType: "image/jpeg",
+      const stamp = Date.now();
+      const images = (data.data ?? []).map((d, i) => ({
+        ...writeImageFile({ base64: d.b64_json, mimeType: "image/jpeg", provider: "xai", index: i, saveDir: p.saveDir, stamp }),
         ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
       }));
-      return { provider: "xai", model: MODEL, images };
+      return { provider: "xai", model: MODEL, images, note: SEND_FILE_NOTE };
     },
   });
 }

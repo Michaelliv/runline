@@ -15,6 +15,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
+import { SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
 
 const ENDPOINT = "https://external.api.recraft.ai/v1/images/generations";
 
@@ -25,6 +26,7 @@ interface CreateInput {
   styleId?: string;
   size?: string;
   n?: number;
+  saveDir?: string;
 }
 
 interface RecraftImage {
@@ -46,12 +48,17 @@ export default function recraft(rl: RunlinePluginAPI) {
 
   rl.registerAction("image.create", {
     description:
-      "Generate an image with Recraft. Best for design, vector graphics, and brand-consistent work. Returns base64-encoded PNGs.",
+      "Generate an image with Recraft. Best for design, vector graphics, and brand-consistent work. Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
     inputSchema: {
       prompt: {
         type: "string",
         required: true,
         description: "Detailed description of the image",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -113,11 +120,11 @@ export default function recraft(rl: RunlinePluginAPI) {
       }
 
       const data = (await res.json()) as { data?: RecraftImage[] };
-      const images = (data.data ?? []).map((d) => ({
-        base64: d.b64_json,
-        mimeType: "image/png",
-      }));
-      return { provider: "recraft", model, images };
+      const stamp = Date.now();
+      const images = (data.data ?? []).map((d, i) =>
+        writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "recraft", index: i, saveDir: p.saveDir, stamp }),
+      );
+      return { provider: "recraft", model, images, note: SEND_FILE_NOTE };
     },
   });
 }

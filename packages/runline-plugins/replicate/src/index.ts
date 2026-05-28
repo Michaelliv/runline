@@ -21,6 +21,7 @@
 
 import { Buffer } from "node:buffer";
 import type { RunlinePluginAPI } from "runline";
+import { type SavedImage, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
 
 const POLL_INTERVAL_MS = 2_000;
@@ -32,6 +33,7 @@ interface CreateInput {
   size?: string;
   n?: number;
   timeoutMs?: number;
+  saveDir?: string;
 }
 
 interface Prediction {
@@ -66,12 +68,17 @@ export default function replicate(rl: RunlinePluginAPI) {
 
   rl.registerAction("image.create", {
     description:
-      "Generate an image via Replicate. Default model is black-forest-labs/flux-dev. Returns base64 bytes from the model's output URLs.",
+      "Generate an image via Replicate. Default model is black-forest-labs/flux-dev. Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
     inputSchema: {
       prompt: {
         type: "string",
         required: true,
         description: "Detailed description of the image",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -175,8 +182,9 @@ export default function replicate(rl: RunlinePluginAPI) {
           ? [prediction.output]
           : [];
 
-      const images: Array<{ base64: string; mimeType: string }> = [];
+      const images: SavedImage[] = [];
       const failures: Array<{ url: string; reason: string }> = [];
+      const stamp = Date.now();
       for (const url of outputs) {
         if (typeof url !== "string") {
           failures.push({ url: String(url), reason: "non-string output" });
@@ -194,7 +202,16 @@ export default function replicate(rl: RunlinePluginAPI) {
         const contentType = (imgRes.headers.get("content-type") ?? "image/webp")
           .split(";")[0]
           .trim();
-        images.push({ base64: buf.toString("base64"), mimeType: contentType });
+        images.push(
+          writeImageFile({
+            base64: buf.toString("base64"),
+            mimeType: contentType,
+            provider: "replicate",
+            index: images.length,
+            saveDir: p.saveDir,
+            stamp,
+          }),
+        );
       }
 
       if (images.length === 0 && outputs.length > 0) {
@@ -207,9 +224,10 @@ export default function replicate(rl: RunlinePluginAPI) {
       const result: {
         provider: "replicate";
         model: string;
-        images: Array<{ base64: string; mimeType: string }>;
+        images: SavedImage[];
+        note: string;
         failures?: Array<{ url: string; reason: string }>;
-      } = { provider: "replicate", model, images };
+      } = { provider: "replicate", model, images, note: SEND_FILE_NOTE };
       if (failures.length > 0) result.failures = failures;
       return result;
     },
