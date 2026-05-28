@@ -32,15 +32,15 @@ function driveBase(ctx: Ctx): string {
 
 async function binaryFetch(ctx: Ctx, method: string, path: string, body?: Uint8Array) {
   const token = await microsoftAccessToken(ctx, NAME, SCOPES);
-  const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+  const init: RequestInit = {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
       ...(body ? { "Content-Type": "application/octet-stream" } : {}),
     },
-    body: body as BodyInit | undefined,
-  });
-  return res;
+  };
+  if (body) init.body = body;
+  return fetch(`https://graph.microsoft.com/v1.0${path}`, init);
 }
 
 export default function microsoftFiles(rl: RunlinePluginAPI): void {
@@ -72,7 +72,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
       top: { type: "number", required: false, default: 25 },
     },
     async execute(input: any, ctx: Ctx) {
-      const q = encodeURIComponent(input.query);
+      const q = encodeURIComponent(String(input.query).replace(/'/g, "''"));
       const qs = new URLSearchParams({
         $top: String(input.top ?? 25),
         $select: "id,name,size,lastModifiedDateTime,webUrl,folder,file",
