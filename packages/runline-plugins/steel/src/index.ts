@@ -157,10 +157,10 @@ class CdpConnection {
       this.ws = ws;
       const onError = () => reject(new Error("Steel CDP websocket connection failed"));
       ws.addEventListener("open", () => {
-        ws.removeEventListener("error", onError as EventListener);
+        ws.removeEventListener("error", onError);
         resolve();
       });
-      ws.addEventListener("error", onError as EventListener);
+      ws.addEventListener("error", onError);
       ws.addEventListener("close", () => {
         for (const [, p] of this.pending) p.reject(new Error("Steel CDP connection closed"));
         this.pending.clear();
