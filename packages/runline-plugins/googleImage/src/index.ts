@@ -6,16 +6,21 @@
  * API key. Kept under the `googleImage` namespace so it doesn't
  * collide with `googleDrive`, `googleDocs`, etc.
  *
- *   await googleImage.image.create({ prompt: "a watercolor fox" })
- *   await googleImage.image.create({
- *     prompt: "edit: make the sky stormier",
- *     model: "gemini-3-pro-image-preview",
- *   })
+ *   const { images } = await googleImage.image.create({ prompt: "a watercolor fox" })
+ *   // images[0].path -> "/tmp/googleImage-….png"
+ *
+ * Generated images are written to disk and the action returns their file
+ * `path`s — never raw base64, which bloats the agent context and is
+ * stripped before delivery. Hand each `path` to the host's file-sending
+ * tool (e.g. send_file) to deliver the image.
  *
  * Nano Banana supports conversational editing — chain prompts in
  * follow-up calls and it'll keep iterating on the last image.
  */
 
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -23,6 +28,7 @@ const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 interface CreateInput {
   prompt: string;
   model?: string;
+  saveDir?: string;
 }
 
 interface GeminiPart {
@@ -49,7 +55,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
 
   rl.registerAction("image.create", {
     description:
-      "Generate an image with Google's Gemini image models (Nano Banana / Imagen). Returns base64 bytes per candidate.",
+      "Generate an image with Google's Gemini image models (Nano Banana / Imagen). Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each image to the user with send_file using its `path`.",
     inputSchema: {
       prompt: {
         type: "string",
@@ -61,6 +67,11 @@ export default function googleImage(rl: RunlinePluginAPI) {
         required: false,
         description:
           "gemini-2.5-flash-image (Nano Banana, default) | gemini-3-pro-image-preview | gemini-3.1-flash-image-preview",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
     },
     async execute(input, ctx) {
@@ -87,18 +98,27 @@ export default function googleImage(rl: RunlinePluginAPI) {
       }
 
       const data = (await res.json()) as GeminiResponse;
-      const images: Array<{ base64: string; mimeType: string }> = [];
+      const dir = (typeof p.saveDir === "string" && p.saveDir.trim()) || tmpdir();
+      const stamp = Date.now();
+      const images: Array<{ path: string; mimeType: string; byteLength: number }> = [];
       for (const candidate of data.candidates ?? []) {
         for (const part of candidate.content?.parts ?? []) {
           if (part.inlineData?.data) {
-            images.push({
-              base64: part.inlineData.data,
-              mimeType: part.inlineData.mimeType ?? "image/png",
-            });
+            const mimeType = part.inlineData.mimeType ?? "image/png";
+            const ext = mimeType.includes("jpeg") ? "jpg" : mimeType.split("/")[1] || "png";
+            const bytes = Buffer.from(part.inlineData.data, "base64");
+            const path = join(dir, `googleImage-${stamp}-${images.length}.${ext}`);
+            writeFileSync(path, bytes);
+            images.push({ path, mimeType, byteLength: bytes.length });
           }
         }
       }
-      return { provider: "googleImage", model, images };
+      return {
+        provider: "googleImage",
+        model,
+        images,
+        note: "Image(s) written to disk. Deliver each to the user with send_file using its `path`.",
+      };
     },
   });
 }
