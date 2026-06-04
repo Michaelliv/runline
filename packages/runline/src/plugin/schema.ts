@@ -6,6 +6,16 @@ import type {
   TypedInputSchema,
 } from "./types.js";
 
+interface SchemaMetadata {
+  type?: string;
+  properties?: Record<string, SchemaMetadata>;
+  required?: string[];
+  anyOf?: SchemaMetadata[];
+  enum?: unknown[];
+  const?: unknown;
+  description?: string;
+}
+
 export interface ValidationResult {
   ok: boolean;
   missing: string[];
@@ -18,7 +28,7 @@ export function isTypedInputSchema(
   schema: InputSchema | undefined,
 ): schema is TypedInputSchema {
   if (!schema || typeof schema !== "object") return false;
-  const candidate = schema as TypedInputSchema;
+  const candidate = schema as SchemaMetadata;
   return typeof candidate.type === "string" || Array.isArray(candidate.anyOf);
 }
 
@@ -34,8 +44,9 @@ export function helpInputs(
 ): Record<string, HelpInput> {
   if (!schema) return {};
   if (!isTypedInputSchema(schema)) {
+    const legacy = schema as LegacyInputSchema;
     return Object.fromEntries(
-      Object.entries(schema).map(([key, field]) => [
+      Object.entries(legacy).map(([key, field]) => [
         key,
         {
           type: field.type,
@@ -46,10 +57,11 @@ export function helpInputs(
     );
   }
 
-  if (schema.type !== "object") return {};
-  const required = new Set(schema.required ?? []);
+  const metadata = schema as SchemaMetadata;
+  if (metadata.type !== "object") return {};
+  const required = new Set(metadata.required ?? []);
   return Object.fromEntries(
-    Object.entries(schema.properties ?? {}).map(([key, field]) => [
+    Object.entries(metadata.properties ?? {}).map(([key, field]) => [
       key,
       {
         type: baseType(field),
@@ -158,14 +170,14 @@ function validationResult(input: {
   };
 }
 
-function displayType(schema: TypedInputSchema): string {
+function displayType(schema: SchemaMetadata): string {
   if (schema.anyOf?.length) return schema.anyOf.map(displayType).join(" | ");
   if (schema.enum?.length) return schema.enum.map(String).join(" | ");
   if (schema.const !== undefined) return JSON.stringify(schema.const);
   return schema.type ?? "unknown";
 }
 
-function baseType(schema: TypedInputSchema): string {
+function baseType(schema: SchemaMetadata): string {
   if (schema.anyOf?.length) {
     const types = [...new Set(schema.anyOf.map(baseType))];
     return types.length === 1 ? types[0] : types.join(" | ");
@@ -175,7 +187,7 @@ function baseType(schema: TypedInputSchema): string {
   return "unknown";
 }
 
-function enumValues(schema: TypedInputSchema): unknown[] | undefined {
+function enumValues(schema: SchemaMetadata): unknown[] | undefined {
   if (schema.enum?.length) return schema.enum;
   if (
     schema.anyOf?.length &&
