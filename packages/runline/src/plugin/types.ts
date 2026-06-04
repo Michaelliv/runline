@@ -1,3 +1,5 @@
+import type { TSchema } from "typebox";
+
 export interface InputField {
   type: "string" | "number" | "boolean" | "object" | "array";
   description?: string;
@@ -5,7 +7,18 @@ export interface InputField {
   default?: unknown;
 }
 
-export type InputSchema = Record<string, InputField>;
+export type LegacyInputSchema = Record<string, InputField>;
+export type TypedInputSchema = TSchema;
+export type InputSchema = LegacyInputSchema | TypedInputSchema;
+
+export interface HelpInput {
+  type: string;
+  displayType?: string;
+  required: boolean;
+  description?: string;
+  enum?: unknown[];
+  const?: unknown;
+}
 
 export interface ActionDef {
   name: string;
