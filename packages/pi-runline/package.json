@@ -1,6 +1,6 @@
 {
   "name": "pi-runline",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Code mode for pi",
   "type": "commonjs",
   "keywords": [
