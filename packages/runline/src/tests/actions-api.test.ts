@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import {
+  Literal,
+  Optional,
+  Boolean as TBoolean,
+  Object as TObject,
+  Union,
+} from "typebox";
 import { DEFAULT_CONFIG } from "../config/types.js";
 import { ExecutionEngine } from "../core/engine.js";
 import { createPluginAPI } from "../plugin/api.js";
@@ -32,6 +39,17 @@ function makeGithub() {
     description: "List repos for a user",
     inputSchema: { username: { type: "string", required: true } },
     execute: async () => [],
+  });
+  api.registerAction("settings.update", {
+    description: "Update typed settings",
+    inputSchema: TObject(
+      {
+        mode: Union([Literal("safe"), Literal("loud")]),
+        enabled: Optional(TBoolean()),
+      },
+      { additionalProperties: false },
+    ),
+    execute: async (input) => input,
   });
   return resolve();
 }
@@ -81,6 +99,7 @@ describe("actions.list", () => {
       [
         "github.issue.create",
         "github.issue.list",
+        "github.settings.update",
         "github.user.listRepos",
         "pipedrive.deal.list",
         "plain.ping",
@@ -93,6 +112,7 @@ describe("actions.list", () => {
     assert.deepEqual([...result].sort(), [
       "github.issue.create",
       "github.issue.list",
+      "github.settings.update",
       "github.user.listRepos",
     ]);
   });
@@ -185,6 +205,17 @@ describe("actions.describe", () => {
     assert.deepEqual(result.inputs, {});
   });
 
+  it("summarizes TypeBox input schemas", async () => {
+    const result = await run<{
+      signature: string;
+      inputs: Record<string, { type: string; required: boolean }>;
+    }>('return actions.describe("github.settings.update")');
+    assert.match(result.signature, /mode: "safe" \| "loud"/);
+    assert.match(result.signature, /enabled\?: boolean/);
+    assert.equal(result.inputs.mode.required, true);
+    assert.equal(result.inputs.enabled.required, false);
+  });
+
   it("throws with did-you-mean suggestions on unknown path", async () => {
     const code = `try { actions.describe("github.issue.craete"); return null; } catch (e) { return e.message; }`;
     const msg = await run<string>(code);
@@ -238,6 +269,22 @@ describe("actions.check", () => {
     assert.equal(result.ok, true);
   });
 
+  it("checks literal union values for TypeBox input schemas", async () => {
+    const valid = await run<{ ok: boolean }>(
+      `return actions.check("github.settings.update", { mode: "safe", enabled: true })`,
+    );
+    assert.equal(valid.ok, true);
+
+    const invalid = await run<{
+      ok: boolean;
+      typeErrors: Array<{ field: string; expected: string; actual: string }>;
+    }>(`return actions.check("github.settings.update", { mode: "danger" })`);
+    assert.equal(invalid.ok, false);
+    assert.deepEqual(invalid.typeErrors, [
+      { field: "mode", expected: "safe | loud", actual: "danger" },
+    ]);
+  });
+
   it("returns suggestions for unknown action", async () => {
     const result = await run<{
       ok: boolean;
@@ -275,6 +322,6 @@ describe("actions proxy fallback", () => {
     const result = await run<unknown>(
       `const list = actions.list("github"); const r = await github.issue.list({ owner: "a", repo: "b" }); return { count: list.length, r };`,
     );
-    assert.deepEqual(result, { count: 3, r: [] });
+    assert.deepEqual(result, { count: 4, r: [] });
   });
 });

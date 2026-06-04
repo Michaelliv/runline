@@ -11,7 +11,7 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.7.4",
+      "version": "0.8.0",
       "dependencies": {
         "runline": "^0.2.2",
       },
@@ -23,7 +23,7 @@
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.7.4",
+      "version": "0.8.0",
       "bin": {
         "runline": "./dist/main.js",
       },
@@ -34,6 +34,7 @@
         "proper-lockfile": "^4.1.2",
         "quickjs-emscripten": "^0.32.0",
         "rrule": "^2.8.1",
+        "typebox": "^1.1.35",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.4.12",
@@ -573,6 +574,8 @@
     "ts-algebra": ["ts-algebra@2.0.0", "", {}, "sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "typebox": ["typebox@1.1.39", "", {}, "sha512-vj0afVtOfLQvv0GR0VxVagYxsXN64btL7Z9XoaG0ZggH3mruMMkOO6hXdgMsjCY3shZgEvooAWVeznQVs5c43w=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

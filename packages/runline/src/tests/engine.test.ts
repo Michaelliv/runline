@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import {
+  Literal,
+  Array as TArray,
+  Boolean as TBoolean,
+  Number as TNumber,
+  Object as TObject,
+  String as TString,
+  Union,
+} from "typebox";
 import { DEFAULT_CONFIG } from "../config/types.js";
 import { ExecutionEngine } from "../core/engine.js";
 import { createPluginAPI } from "../plugin/api.js";
@@ -24,6 +33,39 @@ function makeTestPlugin() {
 
   api.registerAction("echo", {
     description: "Echo input back",
+    execute(input) {
+      return input;
+    },
+  });
+
+  api.registerAction("typed", {
+    description: "Action with a TypeBox input schema",
+    inputSchema: TObject(
+      {
+        mode: Union([Literal("safe"), Literal("loud")]),
+        enabled: TBoolean(),
+        label: TString({ minLength: 2, maxLength: 5 }),
+        amount: TNumber({ minimum: 1, maximum: 10 }),
+        tags: TArray(TString()),
+        nested: TObject(
+          {
+            count: TNumber(),
+          },
+          { additionalProperties: false },
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    execute(input) {
+      return input;
+    },
+  });
+
+  api.registerAction("legacyTypeField", {
+    description: "Legacy schema with a field named type",
+    inputSchema: {
+      type: { type: "string", required: true },
+    },
     execute(input) {
       return input;
     },
@@ -126,6 +168,55 @@ describe("ExecutionEngine", () => {
     );
     assert.equal(result.error, undefined);
     assert.deepEqual(result.result, { waited: 10 });
+  });
+
+  it("validates TypeBox input schemas before executing", async () => {
+    const engine = createEngine();
+    const result = await engine.execute(
+      `return await math.typed({ mode: "safe", enabled: true, label: "abc", amount: 5, tags: ["ok"], nested: { count: 2 } })`,
+    );
+    assert.equal(result.error, undefined);
+    assert.deepEqual(result.result, {
+      mode: "safe",
+      enabled: true,
+      label: "abc",
+      amount: 5,
+      tags: ["ok"],
+      nested: { count: 2 },
+    });
+  });
+
+  it("rejects invalid TypeBox inputs before executing", async () => {
+    const engine = createEngine();
+    const result = await engine.execute(
+      `return await math.typed({ mode: "danger", enabled: "yes", label: "abcdef", amount: 11, extra: true, nested: { nope: 1 } })`,
+    );
+    assert.ok(result.error);
+    assert.match(result.error, /Invalid input for math\.typed/);
+    assert.match(result.error, /Validation errors:/);
+    assert.match(result.error, /must not have additional properties/);
+    assert.match(result.error, /\/mode must match a schema in anyOf/);
+    assert.match(result.error, /\/enabled must be boolean/);
+    assert.match(result.error, /\/label must not have more than 5 characters/);
+    assert.match(result.error, /\/amount must be <= 10/);
+  });
+
+  it("does not confuse a legacy field named type for a TypeBox schema", async () => {
+    const engine = createEngine();
+    const result = await engine.execute(
+      `return await math.legacyTypeField({ type: 123, extra: true })`,
+    );
+    assert.equal(result.error, undefined);
+    assert.deepEqual(result.result, { type: 123, extra: true });
+  });
+
+  it("keeps legacy input schemas metadata-only at execution time", async () => {
+    const engine = createEngine();
+    const result = await engine.execute(
+      `return await math.add({ a: "loose", b: 2, extra: true })`,
+    );
+    assert.equal(result.error, undefined);
+    assert.deepEqual(result.result, { sum: "loose2" });
   });
 
   it("executes plain JS with variables", async () => {

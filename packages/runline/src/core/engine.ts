@@ -10,9 +10,16 @@ import {
 import { applyEnvOverrides, updateConnectionConfig } from "../config/loader.js";
 import type { RunlineConfig } from "../config/types.js";
 import type { PluginRegistry } from "../plugin/registry.js";
+import {
+  formatValidationError,
+  helpInputs,
+  isTypedInputSchema,
+  validateTypedInput,
+} from "../plugin/schema.js";
 import type {
   ActionContext,
   ConnectionConfig,
+  HelpInput,
   PluginDef,
 } from "../plugin/types.js";
 
@@ -205,6 +212,13 @@ export class ExecutionEngine {
       },
     };
 
+    if (isTypedInputSchema(action.inputSchema)) {
+      const validation = validateTypedInput(action.inputSchema, args);
+      if (!validation.ok) {
+        throw new Error(formatValidationError(path, validation));
+      }
+    }
+
     return action.execute(args, ctx);
   }
 
@@ -315,12 +329,6 @@ const __minisearchSource = readFileSync(
   "utf8",
 );
 
-interface HelpInput {
-  type: string;
-  required: boolean;
-  description?: string;
-}
-
 interface HelpEntry {
   action: string;
   description?: string;
@@ -333,16 +341,7 @@ function buildHelpData(plugins: PluginDef[]): Record<string, HelpEntry[]> {
     data[p.name] = p.actions.map((a) => ({
       action: a.name,
       description: a.description,
-      inputs: Object.fromEntries(
-        Object.entries(a.inputSchema ?? {}).map(([k, v]) => [
-          k,
-          {
-            type: v.type,
-            required: !!v.required,
-            description: v.description,
-          },
-        ]),
-      ),
+      inputs: helpInputs(a.inputSchema),
     }));
   }
   return data;
@@ -404,7 +403,7 @@ const __index = (() => {
 
 const __formatSignature = (plugin, entry) => {
   const fields = Object.entries(entry.inputs || {})
-    .map(([k, v]) => k + (v.required ? '' : '?') + ': ' + v.type)
+    .map(([k, v]) => k + (v.required ? '' : '?') + ': ' + (v.displayType || v.type))
     .join(', ');
   return plugin + '.' + entry.action + (fields ? '({ ' + fields + ' })' : '()');
 };
@@ -483,10 +482,15 @@ const __actionsApi = {
     for (const k of Object.keys(provided)) {
       if (!(k in inputs)) unknown.push(k);
       else {
-        const expected = inputs[k].type;
-        const actual = Array.isArray(provided[k]) ? 'array' : typeof provided[k];
-        if (expected !== actual && !(provided[k] === null || provided[k] === undefined)) {
-          typeErrors.push({ field: k, expected, actual });
+        const spec = inputs[k];
+        const expected = spec.type;
+        const actual = Array.isArray(provided[k]) ? 'array' : provided[k] === null ? 'null' : typeof provided[k];
+        if (provided[k] !== null && provided[k] !== undefined && expected !== actual) {
+          typeErrors.push({ field: k, expected: spec.displayType || expected, actual });
+        } else if (spec.enum && !spec.enum.includes(provided[k])) {
+          typeErrors.push({ field: k, expected: spec.enum.map(String).join(' | '), actual: __fmt(provided[k]) });
+        } else if ('const' in spec && provided[k] !== spec.const) {
+          typeErrors.push({ field: k, expected: __fmt(spec.const), actual: __fmt(provided[k]) });
         }
       }
     }
