@@ -1,17 +1,10 @@
 import type {
   ActionDef,
+  ConnectionSchema,
   InputSchema,
   OAuthConfig,
   PluginDef,
 } from "./types.js";
-
-export interface SchemaField {
-  type: "string" | "number" | "boolean";
-  required?: boolean;
-  description?: string;
-  default?: unknown;
-  env?: string;
-}
 
 export interface ActionDefinition {
   description?: string;
@@ -21,7 +14,7 @@ export interface ActionDefinition {
 
 export interface RunlinePluginAPI {
   registerAction(name: string, def: ActionDefinition): void;
-  setConnectionSchema(schema: Record<string, SchemaField>): void;
+  setConnectionSchema(schema: ConnectionSchema): void;
   setName(name: string): void;
   setVersion(version: string): void;
   /**
@@ -66,11 +59,8 @@ export function createPluginAPI(pluginId: string): {
     registerAction(actionName: string, def: ActionDefinition) {
       actions.push({ name: actionName, ...def });
     },
-    setConnectionSchema(schema: Record<string, SchemaField>) {
-      connectionConfigSchema = {};
-      for (const [key, field] of Object.entries(schema)) {
-        connectionConfigSchema[key] = { ...field };
-      }
+    setConnectionSchema(schema: ConnectionSchema) {
+      connectionConfigSchema = { ...schema };
     },
     setOAuth(cfg: OAuthConfig) {
       oauth = { ...cfg };

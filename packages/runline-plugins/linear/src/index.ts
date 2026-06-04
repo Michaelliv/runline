@@ -1,4 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { registerAttachmentActions } from "./attachments.js";
 import { registerCommentActions } from "./comments.js";
 import { registerCycleActions } from "./cycles.js";
@@ -16,14 +17,12 @@ import { registerWebhookActions } from "./webhooks.js";
 export default function linear(rl: RunlinePluginAPI) {
   rl.setName("linear");
   rl.setVersion("0.4.0");
-  rl.setConnectionSchema({
-    apiKey: {
-      type: "string",
-      required: true,
+  rl.setConnectionSchema(t.Object({
+    apiKey: t.String({
       description: "Linear API key (https://linear.app/settings/account/security)",
       env: "LINEAR_API_KEY",
-    },
-  });
+    }),
+  }));
 
   registerIssueActions(rl);
   registerCommentActions(rl);

@@ -1,4 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { COMMENT_FIELDS, bindListAction, gql, key } from "./shared.js";
 
 export function registerCommentActions(rl: RunlinePluginAPI) {
@@ -6,13 +7,13 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
 
   rl.registerAction("issue.addComment", {
     description: "Add a comment to an issue. Pass parentId to nest as a reply.",
-    inputSchema: {
-      issueId: { type: "string", required: true, description: "The issue to associate the comment with. UUID or issue identifier (e.g., 'LIN-123')" },
-      body: { type: "string", required: true, description: "The comment content in markdown format" },
-      parentId: { type: "string", required: false, description: "The parent comment under which to nest this comment" },
-      doNotSubscribeToIssue: { type: "boolean", required: false, description: "Prevent auto-subscription to the issue the comment is created on" },
-      quotedText: { type: "string", required: false, description: "The text that this comment references (inline comments)" },
-    },
+    inputSchema: t.Object({
+      issueId: t.String({ description: "The issue to associate the comment with. UUID or issue identifier (e.g., 'LIN-123')" }),
+      body: t.String({ description: "The comment content in markdown format" }),
+      parentId: t.Optional(t.String({ description: "The parent comment under which to nest this comment" })),
+      doNotSubscribeToIssue: t.Optional(t.Boolean({ description: "Prevent auto-subscription to the issue the comment is created on" })),
+      quotedText: t.Optional(t.String({ description: "The text that this comment references (inline comments)" })),
+    }),
     async execute(input, ctx) {
       const fields = input as Record<string, unknown>;
       const data = await gql(
@@ -27,7 +28,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
   listAction("comment.list", "List comments across the workspace.", "comments", "CommentFilter", COMMENT_FIELDS);
   rl.registerAction("comment.get", {
     description: "Get a comment by ID.",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),
@@ -39,11 +40,11 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("comment.update", {
     description: "Update a comment.",
-    inputSchema: {
-      id: { type: "string", required: true, description: "The identifier of the comment to update" },
-      body: { type: "string", required: false, description: "The comment content in markdown format" },
-      quotedText: { type: "string", required: false, description: "The text that this comment references (inline comments)" },
-    },
+    inputSchema: t.Object({
+      id: t.String({ description: "The identifier of the comment to update" }),
+      body: t.Optional(t.String({ description: "The comment content in markdown format" })),
+      quotedText: t.Optional(t.String({ description: "The text that this comment references (inline comments)" })),
+    }),
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
@@ -56,7 +57,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("comment.delete", {
     description: "Delete a comment.",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),

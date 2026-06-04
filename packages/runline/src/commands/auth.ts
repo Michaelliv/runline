@@ -5,6 +5,7 @@ import { addConnection } from "../config/loader.js";
 import { OAUTH_CALLBACK_PORT, runOAuth } from "../core/oauth.js";
 import { loadAllPlugins } from "../plugin/loader.js";
 import { registry } from "../plugin/registry.js";
+import { connectionFields } from "../plugin/schema.js";
 import { printError, printJson, printSuccess } from "../utils/output.js";
 
 export async function auth(
@@ -31,8 +32,9 @@ export async function auth(
   // Client credentials: CLI flag > env > interactive prompt.
   // Env var names follow the plugin's own convention when declared
   // on its connection schema; fall back to generic names otherwise.
-  const envIdVar = def.connectionConfigSchema?.clientId?.env;
-  const envSecretVar = def.connectionConfigSchema?.clientSecret?.env;
+  const connectionSchema = connectionFields(def.connectionConfigSchema);
+  const envIdVar = connectionSchema.clientId?.env;
+  const envSecretVar = connectionSchema.clientSecret?.env;
 
   const resolvedClientId =
     options.clientId ?? (envIdVar ? process.env[envIdVar] : undefined);

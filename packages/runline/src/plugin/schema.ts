@@ -1,7 +1,9 @@
 import { Check, Errors } from "typebox/value";
 import type {
+  ConnectionSchema,
   HelpInput,
   InputSchema,
+  LegacyConnectionSchema,
   LegacyInputSchema,
   TypedInputSchema,
 } from "./types.js";
@@ -14,6 +16,8 @@ interface SchemaMetadata {
   enum?: unknown[];
   const?: unknown;
   description?: string;
+  default?: unknown;
+  env?: string;
 }
 
 export interface ValidationResult {
@@ -37,6 +41,29 @@ export function legacyFields(
 ): LegacyInputSchema {
   if (!schema || isTypedInputSchema(schema)) return {};
   return schema;
+}
+
+export function connectionFields(
+  schema: ConnectionSchema | undefined,
+): LegacyConnectionSchema {
+  if (!schema) return {};
+  if (!isTypedInputSchema(schema)) return schema;
+
+  const metadata = schema as SchemaMetadata;
+  if (metadata.type !== "object") return {};
+  const required = new Set(metadata.required ?? []);
+  return Object.fromEntries(
+    Object.entries(metadata.properties ?? {}).map(([key, field]) => [
+      key,
+      {
+        type: baseType(field),
+        required: required.has(key),
+        description: field.description,
+        default: field.default,
+        env: field.env,
+      },
+    ]),
+  );
 }
 
 export function helpInputs(

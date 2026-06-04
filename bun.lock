@@ -48,6 +48,9 @@
     "packages/runline-plugins": {
       "name": "runline-plugins",
       "version": "0.1.0",
+      "dependencies": {
+        "typebox": "^1.1.35",
+      },
       "devDependencies": {
         "typescript": "^5.8.0",
       },

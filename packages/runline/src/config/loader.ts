@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import lockfile from "proper-lockfile";
-import type { ConnectionConfig } from "../plugin/types.js";
+import { connectionFields } from "../plugin/schema.js";
+import type { ConnectionConfig, ConnectionSchema } from "../plugin/types.js";
 import { DEFAULT_CONFIG, type RunlineConfig } from "./types.js";
 
 const CONFIG_DIR_NAME = ".runline";
@@ -126,11 +127,11 @@ export function getConnection(
 
 export function applyEnvOverrides(
   conn: ConnectionConfig,
-  schema?: Record<string, { env?: string }>,
+  schema?: ConnectionSchema,
 ): ConnectionConfig {
   if (!schema) return conn;
   const config = { ...conn.config };
-  for (const [key, field] of Object.entries(schema)) {
+  for (const [key, field] of Object.entries(connectionFields(schema))) {
     if (field.env && !config[key]) {
       const envVal = process.env[field.env];
       if (envVal) config[key] = envVal;

@@ -1,4 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 
 const GQL_URL = "https://api.linear.app/graphql";
 
@@ -117,12 +118,12 @@ export function buildConnArgs(opts: ListOpts, filterTypeName: string | null): {
 }
 
 export const LIST_INPUT_SCHEMA = {
-  limit: { type: "number", required: false, description: "Max results (default 50, max 250)" },
-  filter: { type: "object", required: false, description: "Linear filter object (see schema for the resource)" },
-  includeArchived: { type: "boolean", required: false, description: "Include archived items" },
-  orderBy: { type: "string", required: false, description: "createdAt | updatedAt" },
-  after: { type: "string", required: false, description: "Cursor for forward pagination" },
-  before: { type: "string", required: false, description: "Cursor for backward pagination" },
+  limit: t.Optional(t.Number({ description: "Max results (default 50, max 250)" })),
+  filter: t.Optional(t.Object({}, { description: "Linear filter object (see schema for the resource)" })),
+  includeArchived: t.Optional(t.Boolean({ description: "Include archived items" })),
+  orderBy: t.Optional(t.String({ description: "createdAt | updatedAt" })),
+  after: t.Optional(t.String({ description: "Cursor for forward pagination" })),
+  before: t.Optional(t.String({ description: "Cursor for backward pagination" })),
 } as const;
 
 export type ListActionArgs = [
@@ -158,7 +159,7 @@ export function registerListAction(
 ) {
   rl.registerAction(name, {
     description,
-    inputSchema: { ...LIST_INPUT_SCHEMA },
+    inputSchema: t.Object(LIST_INPUT_SCHEMA),
     async execute(input, ctx) {
       const opts = (input ?? {}) as ListOpts;
       const { argsDecl, argsCall, vars } = buildConnArgs(opts, filterTypeName);
@@ -182,7 +183,7 @@ export function registerGetAction(
 ) {
   rl.registerAction(name, {
     description,
-    inputSchema: { id: { type: "string", required: true, description: "Identifier or slug" } },
+    inputSchema: t.Object({ id: t.String({ description: "Identifier or slug" }) }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),

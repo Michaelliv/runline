@@ -30,7 +30,6 @@ export type {
   ActionDefinition,
   PluginFunction,
   RunlinePluginAPI,
-  SchemaField,
 } from "./plugin/api.js";
 export {
   createPluginAPI,
@@ -55,8 +54,11 @@ export type {
   ActionContext,
   ActionDef,
   ConnectionConfig,
+  ConnectionSchema,
+  ConnectionSchemaField,
   InputField,
   InputSchema,
+  LegacyConnectionSchema,
   OAuthConfig,
   PluginDef,
 } from "./plugin/types.js";

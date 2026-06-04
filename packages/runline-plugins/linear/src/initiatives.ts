@@ -1,4 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { INITIATIVE_FIELDS, bindGetAction, bindListAction, gql, key } from "./shared.js";
 
 export function registerInitiativeActions(rl: RunlinePluginAPI) {
@@ -9,19 +10,19 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   getAction("initiative.get", "Get an initiative by ID or slug.", "initiative", INITIATIVE_FIELDS);
   rl.registerAction("initiative.create", {
     description: "Create an initiative. Status: Planned | Active | Completed.",
-    inputSchema: {
-      name: { type: "string", required: true, description: "The name of the initiative" },
-      description: { type: "string", required: false, description: "The description of the initiative" },
-      content: { type: "string", required: false, description: "The initiative's content in markdown format" },
-      icon: { type: "string", required: false, description: "The initiative's icon" },
-      color: { type: "string", required: false, description: "The initiative's color (hex)" },
-      ownerId: { type: "string", required: false, description: "The owner of the initiative" },
-      status: { type: "string", required: false, description: "The initiative's status (InitiativeStatus: Planned | Active | Completed)" },
-      targetDate: { type: "string", required: false, description: "The estimated completion date of the initiative (TimelessDate, YYYY-MM-DD)" },
-      targetDateResolution: { type: "string", required: false, description: "The resolution of the initiative's estimated completion date (DateResolutionType)" },
-      sortOrder: { type: "number", required: false, description: "The sort order of the initiative within the workspace (Float)" },
-      id: { type: "string", required: false, description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" },
-    },
+    inputSchema: t.Object({
+      name: t.String({ description: "The name of the initiative" }),
+      description: t.Optional(t.String({ description: "The description of the initiative" })),
+      content: t.Optional(t.String({ description: "The initiative's content in markdown format" })),
+      icon: t.Optional(t.String({ description: "The initiative's icon" })),
+      color: t.Optional(t.String({ description: "The initiative's color (hex)" })),
+      ownerId: t.Optional(t.String({ description: "The owner of the initiative" })),
+      status: t.Optional(t.String({ description: "The initiative's status (InitiativeStatus: Planned | Active | Completed)" })),
+      targetDate: t.Optional(t.String({ description: "The estimated completion date of the initiative (TimelessDate, YYYY-MM-DD)" })),
+      targetDateResolution: t.Optional(t.String({ description: "The resolution of the initiative's estimated completion date (DateResolutionType)" })),
+      sortOrder: t.Optional(t.Number({ description: "The sort order of the initiative within the workspace (Float)" })),
+      id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
+    }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),
@@ -33,20 +34,20 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("initiative.update", {
     description: "Update an initiative.",
-    inputSchema: {
-      id: { type: "string", required: true, description: "The identifier of the initiative to update" },
-      name: { type: "string", required: false, description: "The name of the initiative" },
-      description: { type: "string", required: false, description: "The description of the initiative" },
-      content: { type: "string", required: false, description: "The initiative's content in markdown format" },
-      icon: { type: "string", required: false, description: "The initiative's icon" },
-      color: { type: "string", required: false, description: "The initiative's color (hex)" },
-      ownerId: { type: "string", required: false, description: "The owner of the initiative" },
-      status: { type: "string", required: false, description: "The initiative's status (InitiativeStatus: Planned | Active | Completed)" },
-      targetDate: { type: "string", required: false, description: "The estimated completion date (TimelessDate, YYYY-MM-DD). Set to null to clear" },
-      targetDateResolution: { type: "string", required: false, description: "The resolution of the initiative's estimated completion date (DateResolutionType)" },
-      sortOrder: { type: "number", required: false, description: "The sort order of the initiative within the workspace (Float)" },
-      trashed: { type: "boolean", required: false, description: "Whether the initiative has been trashed. Set to true to trash, or null to restore" },
-    },
+    inputSchema: t.Object({
+      id: t.String({ description: "The identifier of the initiative to update" }),
+      name: t.Optional(t.String({ description: "The name of the initiative" })),
+      description: t.Optional(t.String({ description: "The description of the initiative" })),
+      content: t.Optional(t.String({ description: "The initiative's content in markdown format" })),
+      icon: t.Optional(t.String({ description: "The initiative's icon" })),
+      color: t.Optional(t.String({ description: "The initiative's color (hex)" })),
+      ownerId: t.Optional(t.String({ description: "The owner of the initiative" })),
+      status: t.Optional(t.String({ description: "The initiative's status (InitiativeStatus: Planned | Active | Completed)" })),
+      targetDate: t.Optional(t.String({ description: "The estimated completion date (TimelessDate, YYYY-MM-DD). Set to null to clear" })),
+      targetDateResolution: t.Optional(t.String({ description: "The resolution of the initiative's estimated completion date (DateResolutionType)" })),
+      sortOrder: t.Optional(t.Number({ description: "The sort order of the initiative within the workspace (Float)" })),
+      trashed: t.Optional(t.Boolean({ description: "Whether the initiative has been trashed. Set to true to trash, or null to restore" })),
+    }),
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
@@ -59,7 +60,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("initiative.delete", {
     description: "Trash an initiative.",
-    inputSchema: { id: { type: "string", required: true, description: "The identifier of the initiative to delete" } },
+    inputSchema: t.Object({ id: t.String({ description: "The identifier of the initiative to delete" }) }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),
@@ -71,12 +72,12 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("initiative.addProject", {
     description: "Associate a project with an initiative. A project can only appear once in an initiative hierarchy.",
-    inputSchema: {
-      initiativeId: { type: "string", required: true, description: "The identifier of the initiative" },
-      projectId: { type: "string", required: true, description: "The identifier of the project" },
-      sortOrder: { type: "number", required: false, description: "The sort order for the project within the initiative (Float)" },
-      id: { type: "string", required: false, description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" },
-    },
+    inputSchema: t.Object({
+      initiativeId: t.String({ description: "The identifier of the initiative" }),
+      projectId: t.String({ description: "The identifier of the project" }),
+      sortOrder: t.Optional(t.Number({ description: "The sort order for the project within the initiative (Float)" })),
+      id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
+    }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),
@@ -88,7 +89,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("initiative.removeProject", {
     description: "Remove a project from an initiative. Pass the link id returned by initiative.addProject.",
-    inputSchema: { id: { type: "string", required: true, description: "The identifier of the initiativeToProject to delete" } },
+    inputSchema: t.Object({ id: t.String({ description: "The identifier of the initiativeToProject to delete" }) }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),

@@ -300,28 +300,29 @@ runline exec 'return await github.repo.list({ owner: "torvalds" })' --json
 
 ## Writing a Plugin
 
-Plugins export a function that receives a `RunlinePluginAPI` and registers actions.
+Plugins export a function that receives a `RunlinePluginAPI` and registers actions. Use TypeBox schemas by default for both connection config and action input schemas; Runline uses them for action discovery, `actions.check(...)`, and runtime validation before `execute` runs.
 
 ```typescript
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 
 export default function orders(rl: RunlinePluginAPI) {
   rl.setName("orders");
   rl.setVersion("1.0.0");
 
   // Connection config — env vars override config.json values
-  rl.setConnectionSchema({
-    apiKey: { type: "string", required: true, env: "ORDERS_API_KEY" },
-    baseUrl: { type: "string", required: true, env: "ORDERS_BASE_URL" },
-  });
+  rl.setConnectionSchema(t.Object({
+    apiKey: t.String({ env: "ORDERS_API_KEY" }),
+    baseUrl: t.String({ env: "ORDERS_BASE_URL" }),
+  }));
 
   rl.registerAction("list", {
     description: "List orders for an organization",
-    inputSchema: {
-      orgId: { type: "string", required: true },
-      status: { type: "string", required: false, description: "open, closed, or all" },
-      limit: { type: "number", required: false },
-    },
+    inputSchema: t.Object({
+      orgId: t.String(),
+      status: t.Optional(t.String({ description: "open, closed, or all" })),
+      limit: t.Optional(t.Number()),
+    }),
     async execute(input, ctx) {
       const { orgId, status, limit } = input as Record<string, unknown>;
       const url = new URL(`${ctx.connection.config.baseUrl}/orgs/${orgId}/orders`);
@@ -338,11 +339,11 @@ export default function orders(rl: RunlinePluginAPI) {
 
   rl.registerAction("create", {
     description: "Create a new order",
-    inputSchema: {
-      orgId: { type: "string", required: true },
-      customer: { type: "string", required: true },
-      total: { type: "number", required: true },
-    },
+    inputSchema: t.Object({
+      orgId: t.String(),
+      customer: t.String(),
+      total: t.Number(),
+    }),
     async execute(input, ctx) {
       const res = await fetch(`${ctx.connection.config.baseUrl}/orders`, {
         method: "POST",

@@ -1,10 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { ORG_FIELDS, gql, key } from "./shared.js";
 
 export function registerOrganizationActions(rl: RunlinePluginAPI) {
   rl.registerAction("org.get", {
     description: "Get the authenticated workspace.",
-    inputSchema: {},
+    inputSchema: t.Object({}),
     async execute(_input, ctx) {
       const data = await gql(key(ctx), `query { organization { ${ORG_FIELDS} } }`);
       return data.organization;

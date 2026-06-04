@@ -1,4 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import {
   CUSTOM_VIEW_FIELDS,
   FEED_ITEM_FIELDS,
@@ -28,13 +29,13 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   ) {
     rl.registerAction(name, {
       description,
-      inputSchema: {
-        viewId: { type: "string", required: true, description: "The custom view ID or slug" },
+      inputSchema: t.Object({
+        viewId: t.String({ description: "The custom view ID or slug" }),
         ...LIST_INPUT_SCHEMA,
         ...(includeSubTeamsDescription
-          ? { includeSubTeams: { type: "boolean", required: false, description: includeSubTeamsDescription } }
+          ? { includeSubTeams: t.Optional(t.Boolean({ description: includeSubTeamsDescription })) }
           : {}),
-      },
+      }),
       async execute(input, ctx) {
         const opts = (input ?? {}) as ListOpts & { viewId: string; includeSubTeams?: boolean };
         const { argsDecl, argsCall, vars } = buildConnArgs(opts, filterTypeName);
@@ -63,22 +64,22 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   getAction("view.get", "Get a custom view by ID or slug.", "customView", CUSTOM_VIEW_FIELDS);
   rl.registerAction("view.create", {
     description: "Create a custom view. Set filterData for issue views; projectFilterData, initiativeFilterData, or feedItemFilterData for other view types.",
-    inputSchema: {
-      name: { type: "string", required: true, description: "The name of the custom view" },
-      description: { type: "string", required: false, description: "The description of the custom view" },
-      icon: { type: "string", required: false, description: "The icon of the custom view" },
-      color: { type: "string", required: false, description: "The color of the custom view icon (hex)" },
-      shared: { type: "boolean", required: false, description: "Whether the custom view is shared with everyone in the workspace" },
-      filterData: { type: "object", required: false, description: "IssueFilter for issue views" },
-      projectFilterData: { type: "object", required: false, description: "ProjectFilter for project views" },
-      initiativeFilterData: { type: "object", required: false, description: "InitiativeFilter for initiative views" },
-      feedItemFilterData: { type: "object", required: false, description: "FeedItemFilter for update/feed item views" },
-      teamId: { type: "string", required: false, description: "The team associated with the custom view" },
-      projectId: { type: "string", required: false, description: "The project associated with the custom view" },
-      initiativeId: { type: "string", required: false, description: "The initiative associated with the custom view" },
-      ownerId: { type: "string", required: false, description: "The owner of the custom view" },
-      id: { type: "string", required: false, description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" },
-    },
+    inputSchema: t.Object({
+      name: t.String({ description: "The name of the custom view" }),
+      description: t.Optional(t.String({ description: "The description of the custom view" })),
+      icon: t.Optional(t.String({ description: "The icon of the custom view" })),
+      color: t.Optional(t.String({ description: "The color of the custom view icon (hex)" })),
+      shared: t.Optional(t.Boolean({ description: "Whether the custom view is shared with everyone in the workspace" })),
+      filterData: t.Optional(t.Object({}, { description: "IssueFilter for issue views" })),
+      projectFilterData: t.Optional(t.Object({}, { description: "ProjectFilter for project views" })),
+      initiativeFilterData: t.Optional(t.Object({}, { description: "InitiativeFilter for initiative views" })),
+      feedItemFilterData: t.Optional(t.Object({}, { description: "FeedItemFilter for update/feed item views" })),
+      teamId: t.Optional(t.String({ description: "The team associated with the custom view" })),
+      projectId: t.Optional(t.String({ description: "The project associated with the custom view" })),
+      initiativeId: t.Optional(t.String({ description: "The initiative associated with the custom view" })),
+      ownerId: t.Optional(t.String({ description: "The owner of the custom view" })),
+      id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
+    }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),
@@ -90,22 +91,22 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("view.update", {
     description: "Update a custom view. All fields optional; only provided fields are updated.",
-    inputSchema: {
-      id: { type: "string", required: true, description: "The identifier of the custom view to update" },
-      name: { type: "string", required: false, description: "The name of the custom view" },
-      description: { type: "string", required: false, description: "The description of the custom view" },
-      icon: { type: "string", required: false, description: "The icon of the custom view" },
-      color: { type: "string", required: false, description: "The color of the custom view icon (hex)" },
-      shared: { type: "boolean", required: false, description: "Whether the custom view is shared with everyone in the workspace" },
-      filterData: { type: "object", required: false, description: "IssueFilter for issue views" },
-      projectFilterData: { type: "object", required: false, description: "ProjectFilter for project views" },
-      initiativeFilterData: { type: "object", required: false, description: "InitiativeFilter for initiative views" },
-      feedItemFilterData: { type: "object", required: false, description: "FeedItemFilter for update/feed item views" },
-      teamId: { type: "string", required: false, description: "The team associated with the custom view" },
-      projectId: { type: "string", required: false, description: "The project associated with the custom view" },
-      initiativeId: { type: "string", required: false, description: "The initiative associated with the custom view" },
-      ownerId: { type: "string", required: false, description: "The owner of the custom view" },
-    },
+    inputSchema: t.Object({
+      id: t.String({ description: "The identifier of the custom view to update" }),
+      name: t.Optional(t.String({ description: "The name of the custom view" })),
+      description: t.Optional(t.String({ description: "The description of the custom view" })),
+      icon: t.Optional(t.String({ description: "The icon of the custom view" })),
+      color: t.Optional(t.String({ description: "The color of the custom view icon (hex)" })),
+      shared: t.Optional(t.Boolean({ description: "Whether the custom view is shared with everyone in the workspace" })),
+      filterData: t.Optional(t.Object({}, { description: "IssueFilter for issue views" })),
+      projectFilterData: t.Optional(t.Object({}, { description: "ProjectFilter for project views" })),
+      initiativeFilterData: t.Optional(t.Object({}, { description: "InitiativeFilter for initiative views" })),
+      feedItemFilterData: t.Optional(t.Object({}, { description: "FeedItemFilter for update/feed item views" })),
+      teamId: t.Optional(t.String({ description: "The team associated with the custom view" })),
+      projectId: t.Optional(t.String({ description: "The project associated with the custom view" })),
+      initiativeId: t.Optional(t.String({ description: "The initiative associated with the custom view" })),
+      ownerId: t.Optional(t.String({ description: "The owner of the custom view" })),
+    }),
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
@@ -118,7 +119,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("view.delete", {
     description: "Delete a custom view.",
-    inputSchema: { id: { type: "string", required: true, description: "The identifier of the custom view to delete" } },
+    inputSchema: t.Object({ id: t.String({ description: "The identifier of the custom view to delete" }) }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),

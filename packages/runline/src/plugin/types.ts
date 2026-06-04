@@ -11,6 +11,17 @@ export type LegacyInputSchema = Record<string, InputField>;
 export type TypedInputSchema = TSchema;
 export type InputSchema = LegacyInputSchema | TypedInputSchema;
 
+export interface ConnectionSchemaField {
+  type: string;
+  required?: boolean;
+  description?: string;
+  default?: unknown;
+  env?: string;
+}
+
+export type LegacyConnectionSchema = Record<string, ConnectionSchemaField>;
+export type ConnectionSchema = LegacyConnectionSchema | TSchema;
+
 export interface HelpInput {
   type: string;
   displayType?: string;
@@ -92,16 +103,7 @@ export interface PluginDef {
   name: string;
   version: string;
   actions: ActionDef[];
-  connectionConfigSchema?: Record<
-    string,
-    {
-      type: string;
-      required?: boolean;
-      description?: string;
-      default?: unknown;
-      env?: string;
-    }
-  >;
+  connectionConfigSchema?: ConnectionSchema;
   /** OAuth2 config for `runline auth <plugin>`. */
   oauth?: OAuthConfig;
   /** @internal */
