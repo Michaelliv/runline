@@ -127,6 +127,14 @@ const LIST_INPUT_SCHEMA = {
   before: { type: "string", required: false, description: "Cursor for backward pagination" },
 } as const;
 
+const COMMENT_CREATE_INPUT_SCHEMA = {
+  issueId: { type: "string", required: true, description: "The issue to associate the comment with. UUID or issue identifier (e.g., 'LIN-123')" },
+  body: { type: "string", required: true, description: "The comment content in markdown format" },
+  parentId: { type: "string", required: false, description: "The parent comment under which to nest this comment" },
+  doNotSubscribeToIssue: { type: "boolean", required: false, description: "Prevent auto-subscription to the issue the comment is created on" },
+  quotedText: { type: "string", required: false, description: "The text that this comment references (inline comments)" },
+} as const;
+
 // ---------- plugin ----------
 
 export default function linear(rl: RunlinePluginAPI) {
@@ -184,6 +192,22 @@ export default function linear(rl: RunlinePluginAPI) {
           { id: (input as { id: string }).id },
         );
         return data[rootField];
+      },
+    });
+  }
+
+  function commentCreateAction(name: string, description: string) {
+    rl.registerAction(name, {
+      description,
+      inputSchema: COMMENT_CREATE_INPUT_SCHEMA,
+      async execute(input, ctx) {
+        const fields = input as Record<string, unknown>;
+        const data = await gql(
+          key(ctx),
+          `mutation($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { ${COMMENT_FIELDS} } } }`,
+          { input: fields },
+        );
+        return (data.commentCreate as Record<string, unknown>)?.comment;
       },
     });
   }
@@ -546,25 +570,8 @@ export default function linear(rl: RunlinePluginAPI) {
   // Comments
   // =========================================================
 
-  rl.registerAction("issue.addComment", {
-    description: "Add a comment to an issue. Pass parentId to nest as a reply.",
-    inputSchema: {
-      issueId: { type: "string", required: true, description: "The issue to associate the comment with. UUID or issue identifier (e.g., 'LIN-123')" },
-      body: { type: "string", required: true, description: "The comment content in markdown format" },
-      parentId: { type: "string", required: false, description: "The parent comment under which to nest this comment" },
-      doNotSubscribeToIssue: { type: "boolean", required: false, description: "Prevent auto-subscription to the issue the comment is created on" },
-      quotedText: { type: "string", required: false, description: "The text that this comment references (inline comments)" },
-    },
-    async execute(input, ctx) {
-      const fields = input as Record<string, unknown>;
-      const data = await gql(
-        key(ctx),
-        `mutation($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { ${COMMENT_FIELDS} } } }`,
-        { input: fields },
-      );
-      return (data.commentCreate as Record<string, unknown>)?.comment;
-    },
-  });
+  commentCreateAction("issue.addComment", "Add a comment to an issue. Pass parentId to nest as a reply.");
+  commentCreateAction("comment.create", "Create a comment on an issue. Pass parentId to nest as a reply.");
 
   listAction("comment.list", "List comments across the workspace.", "comments", "CommentFilter", COMMENT_FIELDS);
   rl.registerAction("comment.get", {
