@@ -78,6 +78,11 @@ async function accessToken(ctx: Ctx): Promise<string> {
 
 const API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 
+function sendFailureRetryHint(method: string, path: string): string {
+  if (method !== "POST" || !path.endsWith("/send")) return "";
+  return " Before retrying, check whether the email was already sent using gmail.message.list({ q: 'in:sent to:<recipient> subject:\"<subject>\"', maxResults: 10 }) and inspect likely matches with gmail.message.get({ id, format: 'metadata' }).";
+}
+
 async function gmailRequest(
   ctx: Ctx,
   method: string,
@@ -109,11 +114,21 @@ async function gmailRequest(
       "application/json";
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(url.toString(), init);
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), init);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `gmail: ${method} ${path} failed: ${msg}.${sendFailureRetryHint(method, path)}`,
+    );
+  }
   if (res.status === 204) return { success: true };
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`gmail: ${method} ${path} → ${res.status} ${text}`);
+    throw new Error(
+      `gmail: ${method} ${path} → ${res.status} ${text}${sendFailureRetryHint(method, path)}`,
+    );
   }
   return text ? JSON.parse(text) : { success: true };
 }

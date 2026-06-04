@@ -1,6 +1,58 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { encodeEmail } from "../../../runline-plugins/gmail/src/index.js";
+import gmail, {
+  encodeEmail,
+} from "../../../runline-plugins/gmail/src/index.js";
+import { Runline } from "../sdk.js";
+
+describe("gmail plugin send errors", () => {
+  it("nudges agents to check sent mail with Gmail actions before retrying", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 429,
+            message:
+              "Too many requests: User-rate limit exceeded (Mail sending)",
+            errors: [{ reason: "userRateLimitExceeded" }],
+          },
+        }),
+        { status: 429, headers: { "Content-Type": "application/json" } },
+      )) as typeof fetch;
+
+    try {
+      const rl = Runline.create({
+        plugins: [gmail],
+        connections: [
+          {
+            name: "test",
+            plugin: "gmail",
+            config: {
+              accessToken: "token",
+              accessTokenExpiresAt: Date.now() + 60 * 60 * 1000,
+            },
+          },
+        ],
+      });
+      const result = await rl.execute(`
+        return await gmail.message.send({
+          to: "recipient@example.com",
+          subject: "test",
+          text: "hello",
+        });
+      `);
+
+      assert.equal(result.result, null);
+      assert.match(result.error ?? "", /gmail\.message\.list/);
+      assert.match(result.error ?? "", /in:sent/);
+      assert.match(result.error ?? "", /gmail\.message\.get/);
+      assert.match(result.error ?? "", /before retrying/i);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
 
 describe("gmail plugin MIME encoding", () => {
   it("does not line-wrap large attachment base64 with String.prototype.match", () => {
@@ -87,7 +139,7 @@ describe("gmail plugin MIME encoding", () => {
     const message = Buffer.from(raw, "base64url").toString("utf8");
     assert.match(message, /Content-Transfer-Encoding: base64/);
     assert.match(message, /\+\/\/\+\+u\+\+/);
-    assert.doesNotMatch(message, /-__\-/);
+    assert.doesNotMatch(message, /-__-/);
   });
 
   it("throws a clear error for invalid attachment base64 characters", () => {
