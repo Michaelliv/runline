@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { USER_FIELDS, bindGetAction, bindListAction, gql, key } from "./shared.js";
+import { USER_FIELDS, bindGetAction, bindListAction, gql, key, requireUnscoped } from "./shared.js";
 
 export function registerUserActions(rl: RunlinePluginAPI) {
   const listAction = bindListAction(rl);
@@ -31,6 +31,7 @@ export function registerUserActions(rl: RunlinePluginAPI) {
       statusUntilAt: t.Optional(t.String({ description: "When the user status should be cleared (DateTime)" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "user.update");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),

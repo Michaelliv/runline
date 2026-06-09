@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { STATE_FIELDS, bindGetAction, bindListAction, gql, key } from "./shared.js";
+import { STATE_FIELDS, bindGetAction, bindListAction, gql, key, requireUnscoped } from "./shared.js";
 
 export function registerStateActions(rl: RunlinePluginAPI) {
   const listAction = bindListAction(rl);
@@ -20,6 +20,7 @@ export function registerStateActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "state.create");
       const data = await gql(
         key(ctx),
         `mutation($input: WorkflowStateCreateInput!) { workflowStateCreate(input: $input) { success workflowState { ${STATE_FIELDS} } } }`,
@@ -38,6 +39,7 @@ export function registerStateActions(rl: RunlinePluginAPI) {
       position: t.Optional(t.Number({ description: "The position of the state (Float)" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "state.update");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),

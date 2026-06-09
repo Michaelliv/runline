@@ -29,6 +29,93 @@ export function key(ctx: Ctx) {
   return ctx.connection.config.apiKey as string;
 }
 
+export function scopeLabelIds(ctx: Ctx): string[] {
+  const raw = ctx.connection.config.scopeLabelIds;
+  if (Array.isArray(raw)) return raw.map(String).map((s) => s.trim()).filter(Boolean);
+  if (typeof raw !== "string") return [];
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+export function isScoped(ctx: Ctx): boolean {
+  return scopeLabelIds(ctx).length > 0;
+}
+
+export function mergeIssueScopeFilter(ctx: Ctx, filter?: Record<string, unknown>): Record<string, unknown> | undefined {
+  const ids = scopeLabelIds(ctx);
+  if (ids.length === 0) return filter;
+  const scopeFilter = { labels: { id: { in: ids } } };
+  if (!filter || Object.keys(filter).length === 0) return scopeFilter;
+  return { and: [filter, scopeFilter] };
+}
+
+export function issueHasScope(ctx: Ctx, issue: unknown): boolean {
+  const ids = new Set(scopeLabelIds(ctx));
+  if (ids.size === 0) return true;
+  const labels = ((issue as Record<string, unknown> | null)?.labels as Record<string, unknown> | undefined)?.nodes;
+  return Array.isArray(labels) && labels.some((label) => ids.has(String((label as Record<string, unknown>).id)));
+}
+
+export async function getIssueForScope(ctx: Ctx, issueId: string): Promise<Record<string, unknown> | null> {
+  const data = await gql(
+    key(ctx),
+    `query($id: String!) { issue(id: $id) { id identifier labels { nodes { id name } } } }`,
+    { id: issueId },
+  );
+  return (data.issue as Record<string, unknown> | null) ?? null;
+}
+
+export async function assertIssueInScope(ctx: Ctx, issueId: string): Promise<Record<string, unknown> | null> {
+  if (!isScoped(ctx)) return null;
+  const issue = await getIssueForScope(ctx, issueId);
+  if (!issue || !issueHasScope(ctx, issue)) throw new Error("Linear issue is not available to this scoped connection");
+  return issue;
+}
+
+export async function assertCommentInScope(ctx: Ctx, commentId: string): Promise<void> {
+  if (!isScoped(ctx)) return;
+  const data = await gql(
+    key(ctx),
+    `query($id: String!) { comment(id: $id) { id issue { id identifier labels { nodes { id name } } } } }`,
+    { id: commentId },
+  );
+  const issue = (data.comment as Record<string, unknown> | null)?.issue;
+  if (!issue || !issueHasScope(ctx, issue)) throw new Error("Linear comment is not available to this scoped connection");
+}
+
+export async function assertAttachmentInScope(ctx: Ctx, attachmentId: string): Promise<void> {
+  if (!isScoped(ctx)) return;
+  const data = await gql(
+    key(ctx),
+    `query($id: String!) { attachment(id: $id) { id issue { id identifier labels { nodes { id name } } } } }`,
+    { id: attachmentId },
+  );
+  const issue = (data.attachment as Record<string, unknown> | null)?.issue;
+  if (!issue || !issueHasScope(ctx, issue)) throw new Error("Linear attachment is not available to this scoped connection");
+}
+
+export function forbidScopeLabelRemoval(ctx: Ctx, labelIds: unknown): void {
+  const scoped = new Set(scopeLabelIds(ctx));
+  if (scoped.size === 0) return;
+  const ids = Array.isArray(labelIds) ? labelIds.map(String) : [String(labelIds)];
+  if (ids.some((id) => scoped.has(id))) {
+    throw new Error("Cannot remove a required Linear scope label");
+  }
+}
+
+export function ensureScopeLabelsOnCreateOrReplace(ctx: Ctx, labelIds: unknown): unknown {
+  const scoped = scopeLabelIds(ctx);
+  if (scoped.length === 0) return labelIds;
+  const ids = new Set(Array.isArray(labelIds) ? labelIds.map(String) : []);
+  for (const id of scoped) ids.add(id);
+  return [...ids];
+}
+
+export function requireUnscoped(ctx: Ctx, action: string): void {
+  if (isScoped(ctx)) {
+    throw new Error(`${action} is not available to scoped Linear connections`);
+  }
+}
+
 export const ISSUE_FIELDS = `id identifier title description url priority estimate dueDate
   state { id name type } assignee { id name email } creator { id name }
   team { id key name } project { id name } cycle { id number name }
@@ -149,6 +236,30 @@ export function bindGetAction(rl: RunlinePluginAPI) {
   return (...args: GetActionArgs) => registerGetAction(rl, ...args);
 }
 
+const SCOPED_BLOCKED_ROOT_FIELDS = new Set([
+  "attachments",
+  "comments",
+  "customView",
+  "customViews",
+  "cycle",
+  "cycles",
+  "initiative",
+  "initiatives",
+  "project",
+  "projects",
+  "projectMilestone",
+  "projectMilestones",
+  "projectUpdates",
+  "user",
+  "users",
+  "webhook",
+  "webhooks",
+]);
+
+function requireRootFieldAvailable(ctx: Ctx, action: string, rootField: string): void {
+  if (SCOPED_BLOCKED_ROOT_FIELDS.has(rootField)) requireUnscoped(ctx, action);
+}
+
 export function registerListAction(
   rl: RunlinePluginAPI,
   name: string,
@@ -161,6 +272,7 @@ export function registerListAction(
     description,
     inputSchema: t.Object(LIST_INPUT_SCHEMA),
     async execute(input, ctx) {
+      requireRootFieldAvailable(ctx, name, rootField);
       const opts = (input ?? {}) as ListOpts;
       const { argsDecl, argsCall, vars } = buildConnArgs(opts, filterTypeName);
       const data = await gql(
@@ -185,6 +297,7 @@ export function registerGetAction(
     description,
     inputSchema: t.Object({ id: t.String({ description: "Identifier or slug" }) }),
     async execute(input, ctx) {
+      requireRootFieldAvailable(ctx, name, rootField);
       const data = await gql(
         key(ctx),
         `query($id: String!) { ${rootField}(id: $id) { ${selection} } }`,

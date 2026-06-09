@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { LABEL_FIELDS, bindGetAction, bindListAction, gql, key } from "./shared.js";
+import { LABEL_FIELDS, bindGetAction, bindListAction, gql, key, requireUnscoped } from "./shared.js";
 
 export function registerLabelActions(rl: RunlinePluginAPI) {
   const listAction = bindListAction(rl);
@@ -22,6 +22,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
       replaceTeamLabels: t.Optional(t.Boolean({ description: "Replace all team-specific labels with the same name with this newly created workspace label (default false)" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "label.create");
       const { replaceTeamLabels, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -44,6 +45,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
       replaceTeamLabels: t.Optional(t.Boolean({ description: "Replace all team-specific labels with the same name with this updated workspace label (default false)" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "label.update");
       const { id, replaceTeamLabels, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -57,6 +59,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     description: "Delete a label.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the label to delete" }) }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "label.delete");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { issueLabelDelete(id: $id) { success } }`,
@@ -69,6 +72,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     description: "Retire a label. Retired labels remain visible but cannot be applied to new issues.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the label to retire" }) }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "label.retire");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { issueLabelRetire(id: $id) { success issueLabel { ${LABEL_FIELDS} } } }`,
@@ -81,6 +85,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     description: "Restore a previously retired label.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the label to restore" }) }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "label.restore");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { issueLabelRestore(id: $id) { success issueLabel { ${LABEL_FIELDS} } } }`,

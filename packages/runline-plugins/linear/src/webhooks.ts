@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { WEBHOOK_FIELDS, bindGetAction, bindListAction, gql, key } from "./shared.js";
+import { WEBHOOK_FIELDS, bindGetAction, bindListAction, gql, key, requireUnscoped } from "./shared.js";
 
 export function registerWebhookActions(rl: RunlinePluginAPI) {
   const listAction = bindListAction(rl);
@@ -21,6 +21,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "webhooks.*");
       const data = await gql(
         key(ctx),
         `mutation($input: WebhookCreateInput!) { webhookCreate(input: $input) { success webhook { ${WEBHOOK_FIELDS} } } }`,
@@ -40,6 +41,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
       secret: t.Optional(t.String({ description: "A secret token used to sign the webhook payload" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "webhooks.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -53,6 +55,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
     description: "Delete a webhook.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the webhook to delete" }) }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "webhooks.*");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { webhookDelete(id: $id) { success } }`,
@@ -65,6 +68,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
     description: "Rotate a webhook's signing secret. Returns the new secret.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the webhook to rotate the secret for" }) }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "webhooks.*");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { webhookRotateSecret(id: $id) { success secret } }`,

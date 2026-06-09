@@ -12,6 +12,8 @@ import {
   buildConnArgs,
   gql,
   key,
+  mergeIssueScopeFilter,
+  requireUnscoped,
   type ListOpts,
 } from "./shared.js";
 
@@ -38,7 +40,11 @@ export function registerViewActions(rl: RunlinePluginAPI) {
       }),
       async execute(input, ctx) {
         const opts = (input ?? {}) as ListOpts & { viewId: string; includeSubTeams?: boolean };
-        const { argsDecl, argsCall, vars } = buildConnArgs(opts, filterTypeName);
+        const scopedOpts = connectionField === "issues"
+          ? { ...opts, filter: mergeIssueScopeFilter(ctx, opts.filter) }
+          : opts;
+        if (connectionField !== "issues") requireUnscoped(ctx, name);
+        const { argsDecl, argsCall, vars } = buildConnArgs(scopedOpts, filterTypeName);
         const declParts = ["$id: String!", argsDecl.slice(1, -1)];
         const callParts = [argsCall.slice(1, -1)];
         const includeSubTeamsSet = includeSubTeamsDescription !== undefined && opts.includeSubTeams !== undefined;
@@ -81,6 +87,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "view.create");
       const data = await gql(
         key(ctx),
         `mutation($input: CustomViewCreateInput!) { customViewCreate(input: $input) { success customView { ${CUSTOM_VIEW_FIELDS} } } }`,
@@ -108,6 +115,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
       ownerId: t.Optional(t.String({ description: "The owner of the custom view" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "view.update");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -121,6 +129,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
     description: "Delete a custom view.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the custom view to delete" }) }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "view.delete");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { customViewDelete(id: $id) { success } }`,

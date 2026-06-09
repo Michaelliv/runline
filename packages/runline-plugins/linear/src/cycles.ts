@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { CYCLE_FIELDS, bindGetAction, bindListAction, gql, key } from "./shared.js";
+import { CYCLE_FIELDS, bindGetAction, bindListAction, gql, key, requireUnscoped } from "./shared.js";
 
 export function registerCycleActions(rl: RunlinePluginAPI) {
   const listAction = bindListAction(rl);
@@ -20,6 +20,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "cycles.*");
       const data = await gql(
         key(ctx),
         `mutation($input: CycleCreateInput!) { cycleCreate(input: $input) { success cycle { ${CYCLE_FIELDS} } } }`,
@@ -39,6 +40,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
       completedAt: t.Optional(t.String({ description: "The completion time of the cycle (DateTime). If null, the cycle hasn't been completed" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "cycles.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),

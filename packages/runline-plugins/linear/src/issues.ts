@@ -5,9 +5,14 @@ import {
   ISSUE_FIELDS,
   ISSUE_LITE,
   LIST_INPUT_SCHEMA,
+  assertIssueInScope,
   buildConnArgs,
+  ensureScopeLabelsOnCreateOrReplace,
+  forbidScopeLabelRemoval,
   gql,
+  issueHasScope,
   key,
+  mergeIssueScopeFilter,
   type ListOpts,
 } from "./shared.js";
 
@@ -37,7 +42,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one"})),
     }),
     async execute(input, ctx) {
-      const fields = input as Record<string, unknown>;
+      const fields = { ...(input as Record<string, unknown>) };
+      fields.labelIds = ensureScopeLabelsOnCreateOrReplace(ctx, fields.labelIds);
       const data = await gql(
         key(ctx),
         `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { ${ISSUE_FIELDS} } } }`,
@@ -56,7 +62,9 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         `query($id: String!) { issue(id: $id) { ${ISSUE_FIELDS} } }`,
         { id: (input as { issueId: string }).issueId },
       );
-      return data.issue;
+      const issue = data.issue;
+      if (!issueHasScope(ctx, issue)) throw new Error("Linear issue is not available to this scoped connection");
+      return issue;
     },
   });
 
@@ -73,7 +81,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const merged: Record<string, unknown> = { ...(opts.filter ?? {}) };
       if (opts.teamId) merged.team = { id: { eq: opts.teamId } };
       if (opts.assigneeId) merged.assignee = { id: { eq: opts.assigneeId } };
-      const filter = Object.keys(merged).length > 0 ? merged : undefined;
+      const filter = mergeIssueScopeFilter(ctx, Object.keys(merged).length > 0 ? merged : undefined);
       const { argsDecl, argsCall, vars } = buildConnArgs({ ...opts, filter }, "IssueFilter");
       const data = await gql(
         key(ctx),
@@ -115,6 +123,9 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, ...fields } = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(issueId));
+      if (fields.removedLabelIds) forbidScopeLabelRemoval(ctx, fields.removedLabelIds);
+      if (fields.labelIds) fields.labelIds = ensureScopeLabelsOnCreateOrReplace(ctx, fields.labelIds);
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { ${ISSUE_FIELDS} } } }`,
@@ -132,6 +143,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, permanentlyDelete } = input as { issueId: string; permanentlyDelete?: boolean };
+      await assertIssueInScope(ctx, issueId);
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $perm: Boolean) { issueDelete(id: $id, permanentlyDelete: $perm) { success } }`,
@@ -149,6 +161,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, trash } = input as { issueId: string; trash?: boolean };
+      await assertIssueInScope(ctx, issueId);
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $trash: Boolean) { issueArchive(id: $id, trash: $trash) { success } }`,
@@ -162,10 +175,12 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     description: "Unarchive an issue.",
     inputSchema: t.Object({ issueId: t.String() }),
     async execute(input, ctx) {
+      const issueId = (input as { issueId: string }).issueId;
+      await assertIssueInScope(ctx, issueId);
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { issueUnarchive(id: $id) { success } }`,
-        { id: (input as { issueId: string }).issueId },
+        { id: issueId },
       );
       return data.issueUnarchive;
     },
@@ -198,7 +213,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         {
           term: opts.term,
           first: opts.limit ?? 50,
-          filter: opts.filter ?? null,
+          filter: mergeIssueScopeFilter(ctx, opts.filter as Record<string, unknown> | undefined) ?? null,
           includeComments: opts.includeComments ?? null,
           includeArchived: opts.includeArchived ?? null,
           teamId: opts.teamId ?? null,
@@ -219,6 +234,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, labelId } = input as { issueId: string; labelId: string };
+      await assertIssueInScope(ctx, issueId);
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $labelId: String!) { issueAddLabel(id: $id, labelId: $labelId) { success } }`,
@@ -236,6 +252,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, labelId } = input as { issueId: string; labelId: string };
+      await assertIssueInScope(ctx, issueId);
+      forbidScopeLabelRemoval(ctx, labelId);
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $labelId: String!) { issueRemoveLabel(id: $id, labelId: $labelId) { success } }`,
@@ -254,6 +272,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, userId, userEmail } = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(issueId));
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $userId: String, $userEmail: String) {
@@ -274,6 +293,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, userId, userEmail } = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(issueId));
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $userId: String, $userEmail: String) {
@@ -293,10 +313,13 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       type: t.String({ description: "IssueRelationType: blocks | duplicate | related | similar"}),
     }),
     async execute(input, ctx) {
+      const fields = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(fields.issueId));
+      await assertIssueInScope(ctx, String(fields.relatedIssueId));
       const data = await gql(
         key(ctx),
         `mutation($input: IssueRelationCreateInput!) { issueRelationCreate(input: $input) { success issueRelation { id type } } }`,
-        { input: input as Record<string, unknown> },
+        { input: fields },
       );
       return data.issueRelationCreate;
     },
@@ -310,6 +333,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, limit } = input as { issueId: string; limit?: number };
+      await assertIssueInScope(ctx, issueId);
       const data = await gql(
         key(ctx),
         `query($id: String!, $first: Int) {

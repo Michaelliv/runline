@@ -7,6 +7,7 @@ import {
   bindListAction,
   gql,
   key,
+  requireUnscoped,
 } from "./shared.js";
 
 export function registerTeamActions(rl: RunlinePluginAPI) {
@@ -37,6 +38,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
       copySettingsFromTeamId: t.Optional(t.String({ description: "The team id to copy settings from, if any" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "team.create");
       const { copySettingsFromTeamId, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -66,6 +68,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
       triageEnabled: t.Optional(t.Boolean({ description: "Whether triage mode is enabled for the team" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "team.update");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -82,6 +85,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
       limit: t.Optional(t.Number({ description: "Max members to return (default 50)" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "team.members");
       const { teamId, limit } = input as { teamId: string; limit?: number };
       const data = await gql(
         key(ctx),

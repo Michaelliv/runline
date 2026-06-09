@@ -1,13 +1,36 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { ATTACHMENT_FIELDS, bindGetAction, bindListAction, gql, key } from "./shared.js";
+import { ATTACHMENT_FIELDS, assertAttachmentInScope, assertIssueInScope, gql, key, requireUnscoped } from "./shared.js";
 
 export function registerAttachmentActions(rl: RunlinePluginAPI) {
-  const listAction = bindListAction(rl);
-  const getAction = bindGetAction(rl);
-
-  listAction("attachment.list", "List issue attachments.", "attachments", "AttachmentFilter", ATTACHMENT_FIELDS);
-  getAction("attachment.get", "Get an attachment by ID.", "attachment", ATTACHMENT_FIELDS);
+  rl.registerAction("attachment.list", {
+    description: "List issue attachments. Disabled for scoped Linear connections.",
+    inputSchema: t.Object({ limit: t.Optional(t.Number()) }),
+    async execute(input, ctx) {
+      requireUnscoped(ctx, "attachment.list");
+      const limit = (input as { limit?: number } | null)?.limit ?? 50;
+      const data = await gql(
+        key(ctx),
+        `query($first: Int) { attachments(first: $first) { nodes { ${ATTACHMENT_FIELDS} } pageInfo { hasNextPage endCursor } } }`,
+        { first: limit },
+      );
+      return data.attachments;
+    },
+  });
+  rl.registerAction("attachment.get", {
+    description: "Get an attachment by ID.",
+    inputSchema: t.Object({ id: t.String() }),
+    async execute(input, ctx) {
+      const id = (input as { id: string }).id;
+      await assertAttachmentInScope(ctx, id);
+      const data = await gql(
+        key(ctx),
+        `query($id: String!) { attachment(id: $id) { ${ATTACHMENT_FIELDS} } }`,
+        { id },
+      );
+      return data.attachment;
+    },
+  });
   rl.registerAction("attachment.create", {
     description: "Create an attachment on an issue.",
     inputSchema: t.Object({
@@ -22,10 +45,12 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
     }),
     async execute(input, ctx) {
+      const fields = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(fields.issueId));
       const data = await gql(
         key(ctx),
         `mutation($input: AttachmentCreateInput!) { attachmentCreate(input: $input) { success attachment { ${ATTACHMENT_FIELDS} } } }`,
-        { input: input as Record<string, unknown> },
+        { input: fields },
       );
       return (data.attachmentCreate as Record<string, unknown>)?.attachment;
     },
@@ -41,6 +66,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
+      await assertAttachmentInScope(ctx, String(id));
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $input: AttachmentUpdateInput!) { attachmentUpdate(id: $id, input: $input) { success attachment { ${ATTACHMENT_FIELDS} } } }`,
@@ -59,6 +85,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { issueId, url, title, id } = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(issueId));
       const data = await gql(
         key(ctx),
         `mutation($issueId: String!, $url: String!, $title: String, $id: String) {
@@ -73,10 +100,12 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
     description: "Delete an attachment.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the attachment to delete" }) }),
     async execute(input, ctx) {
+      const id = (input as { id: string }).id;
+      await assertAttachmentInScope(ctx, id);
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { attachmentDelete(id: $id) { success } }`,
-        { id: (input as { id: string }).id },
+        { id },
       );
       return data.attachmentDelete;
     },

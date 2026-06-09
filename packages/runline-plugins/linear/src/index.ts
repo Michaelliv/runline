@@ -22,6 +22,10 @@ export default function linear(rl: RunlinePluginAPI) {
       description: "Linear API key (https://linear.app/settings/account/security)",
       env: "LINEAR_API_KEY",
     }),
+    scopeLabelIds: t.Optional(t.String({
+      description: "Comma-separated Linear issue label IDs. When set, issue/comment/attachment access is restricted to issues with one of these labels.",
+      env: "LINEAR_SCOPE_LABEL_IDS",
+    })),
   }));
 
   registerIssueActions(rl);

@@ -8,6 +8,7 @@ import {
   bindListAction,
   gql,
   key,
+  requireUnscoped,
 } from "./shared.js";
 
 export function registerProjectActions(rl: RunlinePluginAPI) {
@@ -42,6 +43,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       slackChannelName: t.Optional(t.String({ description: "The full name for the Slack channel to create (including prefix). Creates and connects a Slack channel if provided"})),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const { slackChannelName, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -76,6 +78,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       trashed: t.Optional(t.Boolean({ description: "Whether the project has been trashed. Set to true to trash, or null to restore"})),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -89,6 +92,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     description: "Trash (soft-delete) a project. Restorable via project.unarchive.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the project to delete"}), }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { projectDelete(id: $id) { success } }`,
@@ -101,6 +105,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     description: "Restore a previously trashed or archived project.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the project to restore (UUID or slug)"}), }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { projectUnarchive(id: $id) { success } }`,
@@ -118,6 +123,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       teamId: t.Optional(t.String({ description: "UUID of a team to boost in search results"})),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const opts = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -153,6 +159,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one"})),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const data = await gql(
         key(ctx),
         `mutation($input: ProjectMilestoneCreateInput!) { projectMilestoneCreate(input: $input) { success projectMilestone { ${MILESTONE_FIELDS} } } }`,
@@ -172,6 +179,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       sortOrder: t.Optional(t.Number({ description: "The sort order for the project milestone within a project (Float)"})),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -185,6 +193,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     description: "Delete a project milestone.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the project milestone to delete"}), }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { projectMilestoneDelete(id: $id) { success } }`,
@@ -207,6 +216,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one"})),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const data = await gql(
         key(ctx),
         `mutation($input: ProjectUpdateCreateInput!) { projectUpdateCreate(input: $input) { success projectUpdate { ${PROJECT_UPDATE_FIELDS} } } }`,
@@ -224,6 +234,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       isDiffHidden: t.Optional(t.Boolean({ description: "Whether the diff between the current update and the previous one should be hidden"})),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -237,6 +248,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     description: "Archive a project status update.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the project update to archive"}), }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "projects.*");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { projectUpdateArchive(id: $id) { success } }`,

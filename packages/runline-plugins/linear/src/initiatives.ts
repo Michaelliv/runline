@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { INITIATIVE_FIELDS, bindGetAction, bindListAction, gql, key } from "./shared.js";
+import { INITIATIVE_FIELDS, bindGetAction, bindListAction, gql, key, requireUnscoped } from "./shared.js";
 
 export function registerInitiativeActions(rl: RunlinePluginAPI) {
   const listAction = bindListAction(rl);
@@ -24,6 +24,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
         key(ctx),
         `mutation($input: InitiativeCreateInput!) { initiativeCreate(input: $input) { success initiative { ${INITIATIVE_FIELDS} } } }`,
@@ -49,6 +50,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
       trashed: t.Optional(t.Boolean({ description: "Whether the initiative has been trashed. Set to true to trash, or null to restore" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "initiatives.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
         key(ctx),
@@ -62,6 +64,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     description: "Trash an initiative.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the initiative to delete" }) }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { initiativeDelete(id: $id) { success } }`,
@@ -79,6 +82,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
     }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
         key(ctx),
         `mutation($input: InitiativeToProjectCreateInput!) { initiativeToProjectCreate(input: $input) { success initiativeToProject { id } } }`,
@@ -91,6 +95,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     description: "Remove a project from an initiative. Pass the link id returned by initiative.addProject.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the initiativeToProject to delete" }) }),
     async execute(input, ctx) {
+      requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
         key(ctx),
         `mutation($id: String!) { initiativeToProjectDelete(id: $id) { success } }`,
