@@ -12,6 +12,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { discoverPlugins } from "../dist/plugin/loader.js";
+import { connectionFields } from "../dist/plugin/schema.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ICONS_DIR = join(__dirname, "..", "..", "runline-plugins", "icons");
@@ -39,8 +40,9 @@ for (const p of plugins) {
   const resources = [...new Set(p.actions.map((a) => a.name.split(".")[0]))];
   const resourceList = resources.join(", ");
 
-  const authFields = p.connectionConfigSchema
-    ? Object.entries(p.connectionConfigSchema)
+  const fields = connectionFields(p.connectionConfigSchema);
+  const authFields = Object.keys(fields).length
+    ? Object.entries(fields)
         .filter(([, field]) => field.required !== false)
         .map(([key, field]) => (field.env ? `\`${field.env}\`` : `\`${key}\``))
         .join(", ")
