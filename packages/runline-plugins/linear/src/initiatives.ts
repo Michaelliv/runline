@@ -74,7 +74,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("initiative.addProject", {
-    description: "Associate a project with an initiative. A project can only appear once in an initiative hierarchy.",
+    description: "Associate a project with an initiative. Use this action for project-to-initiative linking; project.update does not accept initiativeId. Verify with initiative.get or the returned initiative.projects list.",
     inputSchema: t.Object({
       initiativeId: t.String({ description: "The identifier of the initiative" }),
       projectId: t.String({ description: "The identifier of the project" }),
@@ -85,14 +85,14 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
         key(ctx),
-        `mutation($input: InitiativeToProjectCreateInput!) { initiativeToProjectCreate(input: $input) { success initiativeToProject { id } } }`,
+        `mutation($input: InitiativeToProjectCreateInput!) { initiativeToProjectCreate(input: $input) { success initiativeToProject { id initiative { id name projects { nodes { id name } } } project { id name } } } }`,
         { input: input as Record<string, unknown> },
       );
       return data.initiativeToProjectCreate;
     },
   });
   rl.registerAction("initiative.removeProject", {
-    description: "Remove a project from an initiative. Pass the link id returned by initiative.addProject.",
+    description: "Remove a project from an initiative. Pass the link id returned by initiative.addProject, then verify with initiative.get.",
     inputSchema: t.Object({ id: t.String({ description: "The identifier of the initiativeToProject to delete" }) }),
     async execute(input, ctx) {
       requireUnscoped(ctx, "initiatives.*");

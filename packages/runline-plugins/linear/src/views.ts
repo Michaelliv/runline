@@ -17,6 +17,8 @@ import {
   type ListOpts,
 } from "./shared.js";
 
+const ISSUE_FILTER_DESCRIPTION = "IssueFilter payload. Examples: label { labels: { id: { in: ['label-id'] } } }; project { project: { id: { eq: 'project-id' } } }; assignee { assignee: { id: { eq: 'user-id' } } }; state { state: { id: { eq: 'state-id' } } }; priority { priority: { eq: 1 } }; due window { dueDate: { gte: '2026-06-09', lte: '2026-06-16' } }; combine with and/or arrays.";
+
 export function registerViewActions(rl: RunlinePluginAPI) {
   const listAction = bindListAction(rl);
   const getAction = bindGetAction(rl);
@@ -69,21 +71,21 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   listAction("view.list", "List custom views accessible to the user, including personal and shared workspace views. Linear excludes views scoped to a specific project or initiative from this root query.", "customViews", "CustomViewFilter", CUSTOM_VIEW_FIELDS);
   getAction("view.get", "Get a custom view by ID or slug.", "customView", CUSTOM_VIEW_FIELDS);
   rl.registerAction("view.create", {
-    description: "Create a custom view. Set filterData for issue views; projectFilterData, initiativeFilterData, or feedItemFilterData for other view types.",
+    description: "Create a custom view. Set filterData for issue views; projectFilterData, initiativeFilterData, or feedItemFilterData for other view types. Read matches back with view.issues/projects/initiatives/updates.",
     inputSchema: t.Object({
       name: t.String({ description: "The name of the custom view" }),
       description: t.Optional(t.String({ description: "The description of the custom view" })),
       icon: t.Optional(t.String({ description: "The icon of the custom view" })),
       color: t.Optional(t.String({ description: "The color of the custom view icon (hex)" })),
-      shared: t.Optional(t.Boolean({ description: "Whether the custom view is shared with everyone in the workspace" })),
-      filterData: t.Optional(t.Object({}, { description: "IssueFilter for issue views" })),
+      shared: t.Optional(t.Boolean({ description: "false creates a personal view; true shares the view with the workspace or scoped container" })),
+      filterData: t.Optional(t.Object({}, { description: ISSUE_FILTER_DESCRIPTION })),
       projectFilterData: t.Optional(t.Object({}, { description: "ProjectFilter for project views" })),
       initiativeFilterData: t.Optional(t.Object({}, { description: "InitiativeFilter for initiative views" })),
       feedItemFilterData: t.Optional(t.Object({}, { description: "FeedItemFilter for update/feed item views" })),
-      teamId: t.Optional(t.String({ description: "The team associated with the custom view" })),
-      projectId: t.Optional(t.String({ description: "The project associated with the custom view" })),
-      initiativeId: t.Optional(t.String({ description: "The initiative associated with the custom view" })),
-      ownerId: t.Optional(t.String({ description: "The owner of the custom view" })),
+      teamId: t.Optional(t.String({ description: "Scope the view to a team" })),
+      projectId: t.Optional(t.String({ description: "Scope the view to a project-specific view" })),
+      initiativeId: t.Optional(t.String({ description: "Scope the view to an initiative-specific view" })),
+      ownerId: t.Optional(t.String({ description: "Set the user that owns the view" })),
       id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one" })),
     }),
     async execute(input, ctx) {
@@ -104,15 +106,15 @@ export function registerViewActions(rl: RunlinePluginAPI) {
       description: t.Optional(t.String({ description: "The description of the custom view" })),
       icon: t.Optional(t.String({ description: "The icon of the custom view" })),
       color: t.Optional(t.String({ description: "The color of the custom view icon (hex)" })),
-      shared: t.Optional(t.Boolean({ description: "Whether the custom view is shared with everyone in the workspace" })),
-      filterData: t.Optional(t.Object({}, { description: "IssueFilter for issue views" })),
+      shared: t.Optional(t.Boolean({ description: "false creates a personal view; true shares the view with the workspace or scoped container" })),
+      filterData: t.Optional(t.Object({}, { description: ISSUE_FILTER_DESCRIPTION })),
       projectFilterData: t.Optional(t.Object({}, { description: "ProjectFilter for project views" })),
       initiativeFilterData: t.Optional(t.Object({}, { description: "InitiativeFilter for initiative views" })),
       feedItemFilterData: t.Optional(t.Object({}, { description: "FeedItemFilter for update/feed item views" })),
-      teamId: t.Optional(t.String({ description: "The team associated with the custom view" })),
-      projectId: t.Optional(t.String({ description: "The project associated with the custom view" })),
-      initiativeId: t.Optional(t.String({ description: "The initiative associated with the custom view" })),
-      ownerId: t.Optional(t.String({ description: "The owner of the custom view" })),
+      teamId: t.Optional(t.String({ description: "Scope the view to a team" })),
+      projectId: t.Optional(t.String({ description: "Scope the view to a project-specific view" })),
+      initiativeId: t.Optional(t.String({ description: "Scope the view to an initiative-specific view" })),
+      ownerId: t.Optional(t.String({ description: "Set the user that owns the view" })),
     }),
     async execute(input, ctx) {
       requireUnscoped(ctx, "view.update");

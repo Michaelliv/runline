@@ -257,6 +257,128 @@ describe("linear plugin comment actions", () => {
   });
 });
 
+describe("linear plugin initiative actions", () => {
+  it("initiative.addProject returns relationship data for verification", async () => {
+    const action = getAction(makeLinear(), "initiative.addProject");
+
+    mockLinear((body) => {
+      assert.match(body.query, /initiativeToProjectCreate\(input: \$input\)/);
+      assert.match(
+        body.query,
+        /initiative \{ id name projects \{ nodes \{ id name \} \} \}/,
+      );
+      assert.match(body.query, /project \{ id name \}/);
+      assert.deepEqual(body.variables, {
+        input: { initiativeId: "init-1", projectId: "project-1" },
+      });
+      return {
+        initiativeToProjectCreate: {
+          success: true,
+          initiativeToProject: {
+            id: "link-1",
+            initiative: {
+              id: "init-1",
+              name: "Initiative",
+              projects: { nodes: [{ id: "project-1", name: "Project" }] },
+            },
+            project: { id: "project-1", name: "Project" },
+          },
+        },
+      };
+    });
+
+    assert.deepEqual(
+      await action.execute(
+        { initiativeId: "init-1", projectId: "project-1" },
+        ctx(),
+      ),
+      {
+        success: true,
+        initiativeToProject: {
+          id: "link-1",
+          initiative: {
+            id: "init-1",
+            name: "Initiative",
+            projects: { nodes: [{ id: "project-1", name: "Project" }] },
+          },
+          project: { id: "project-1", name: "Project" },
+        },
+      },
+    );
+  });
+
+  it("initiative.removeProject uses the link id returned by initiative.addProject", async () => {
+    const action = getAction(makeLinear(), "initiative.removeProject");
+
+    mockLinear((body) => {
+      assert.match(body.query, /initiativeToProjectDelete\(id: \$id\)/);
+      assert.deepEqual(body.variables, { id: "link-1" });
+      return { initiativeToProjectDelete: { success: true } };
+    });
+
+    assert.deepEqual(await action.execute({ id: "link-1" }, ctx()), {
+      success: true,
+    });
+  });
+});
+
+describe("linear plugin custom view actions", () => {
+  it("view.create accepts common issue filter shapes documented in descriptions", async () => {
+    const action = getAction(makeLinear(), "view.create");
+    const filters = {
+      byLabel: { labels: { id: { in: ["label-id"] } } },
+      byProject: { project: { id: { eq: "project-id" } } },
+      byAssignee: { assignee: { id: { eq: "user-id" } } },
+      byState: { state: { id: { eq: "state-id" } } },
+      byPriority: { priority: { eq: 1 } },
+      dueThisWeek: { dueDate: { gte: "2026-06-09", lte: "2026-06-16" } },
+      agenda: {
+        and: [
+          { assignee: { id: { eq: "user-id" } } },
+          { state: { type: { nin: ["completed", "canceled"] } } },
+          {
+            or: [{ priority: { lte: 2 } }, { dueDate: { lte: "2026-06-16" } }],
+          },
+        ],
+      },
+    };
+    const entries = Object.entries(filters);
+
+    mockLinearSequence(
+      entries.map(([name, filterData], index) => (body) => {
+        assert.match(body.query, /customViewCreate\(input: \$input\)/);
+        assert.deepEqual(body.variables?.input, {
+          name,
+          shared: false,
+          teamId: "team-1",
+          filterData,
+        });
+        return {
+          customViewCreate: {
+            success: true,
+            customView: { id: `view-${index}` },
+          },
+        };
+      }),
+    );
+
+    for (const [index, [name, filterData]] of entries.entries()) {
+      assert.deepEqual(
+        await action.execute(
+          {
+            name,
+            shared: false,
+            teamId: "team-1",
+            filterData,
+          },
+          ctx(),
+        ),
+        { id: `view-${index}` },
+      );
+    }
+  });
+});
+
 describe("linear plugin scoped issue access", () => {
   const scopedCtx = () => ctx({ scopeLabelIds: "label-allowed" });
 
