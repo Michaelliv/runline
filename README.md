@@ -222,7 +222,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/splunk.svg" width="16" height="16" style="vertical-align: middle"> **splunk** | 16 | search, alert, report, user | `SPLUNK_BASE_URL`, `SPLUNK_AUTH_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/spotify.svg" width="16" height="16" style="vertical-align: middle"> **spotify** | 30 | player, album, artist, playlist, track, library, myData | `SPOTIFY_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/stackby.png" width="16" height="16" style="vertical-align: middle"> **stackby** | 4 | row | `STACKBY_API_KEY` |
-| **steel** | 3 | browser | `STEEL_API_KEY` |
+| **steel** | 44 | session, scrape, browser, screenshot, pdf, file, sessionFile, credential, profile, extension, captcha | `STEEL_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/storyblok.svg" width="16" height="16" style="vertical-align: middle"> **storyblok** | 7 | content, management |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/strapi.svg" width="16" height="16" style="vertical-align: middle"> **strapi** | 5 | entry | `STRAPI_URL` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/strava.svg" width="16" height="16" style="vertical-align: middle"> **strava** | 9 | activity | `STRAVA_ACCESS_TOKEN` |
