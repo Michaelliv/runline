@@ -89,6 +89,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/deepl.svg" width="16" height="16" style="vertical-align: middle"> **deepl** | 2 | language | `DEEPL_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/demio.svg" width="16" height="16" style="vertical-align: middle"> **demio** | 4 | event, report | `DEMIO_API_KEY`, `DEMIO_API_SECRET` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/dhl.svg" width="16" height="16" style="vertical-align: middle"> **dhl** | 1 | shipment | `DHL_API_KEY` |
+| **dineplan** | 18 | auth, restaurant, availability, user, search, reservation, listing |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/discord.svg" width="16" height="16" style="vertical-align: middle"> **discord** | 13 | channel, member, message | `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/discourse.svg" width="16" height="16" style="vertical-align: middle"> **discourse** | 16 | category, group, post, user, userGroup | `DISCOURSE_HOST`, `DISCOURSE_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/disqus.svg" width="16" height="16" style="vertical-align: middle"> **disqus** | 4 | forum | `DISQUS_API_KEY` |
@@ -106,14 +107,15 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/freshworksCrm.svg" width="16" height="16" style="vertical-align: middle"> **freshworksCrm** | 35 | account, appointment, contact, deal, note, salesActivity, task, search | `FRESHWORKS_CRM_DOMAIN`, `FRESHWORKS_CRM_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/getresponse.png" width="16" height="16" style="vertical-align: middle"> **getresponse** | 5 | contact | `GETRESPONSE_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/ghost.svg" width="16" height="16" style="vertical-align: middle"> **ghost** | 5 | post | `GHOST_URL`, `GHOST_ADMIN_API_KEY` |
-| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/github.svg" width="16" height="16" style="vertical-align: middle"> **github** | 34 | file, issue, release, repository, review, user, organization, workflow | `GITHUB_TOKEN` |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/github.svg" width="16" height="16" style="vertical-align: middle"> **github** | 37 | file, issue, release, commit, branch, repository, review, user, organization, workflow | `GITHUB_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/gitlab.svg" width="16" height="16" style="vertical-align: middle"> **gitlab** | 17 | issue, release, repository, user, file | `GITLAB_TOKEN` |
 | **gmail** | 32 | message, thread, draft, label, profile, alias |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/gong.svg" width="16" height="16" style="vertical-align: middle"> **gong** | 4 | call, user | `GONG_ACCESS_KEY`, `GONG_ACCESS_KEY_SECRET` |
-| **googleCalendar** | 11 | calendar, event |  |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/googleAppsScript.svg" width="16" height="16" style="vertical-align: middle"> **googleAppsScript** | 10 | script, project, file, version, deployment, function, process |  |
+| **googleCalendar** | 22 | calendar, event, freeBusy, calendarList, acl, settings |  |
 | **googleContacts** | 10 | contact, group |  |
-| **googleDocs** | 21 | document |  |
-| **googleDrive** | 20 | file, folder, fileFolder, drive |  |
+| **googleDocs** | 30 | document |  |
+| **googleDrive** | 47 | file, folder, fileFolder, drive, comment, reply, revision, changes, permission, accessProposal, about |  |
 | **googleImage** | 1 | image | `GOOGLE_API_KEY` |
 | **googleSheets** | 13 | spreadsheet, sheet |  |
 | **googleSlides** | 7 | presentation, page |  |
@@ -123,7 +125,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/grafana.svg" width="16" height="16" style="vertical-align: middle"> **grafana** | 17 | dashboard, team, teamMember, user | `GRAFANA_URL`, `GRAFANA_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/graphql.svg" width="16" height="16" style="vertical-align: middle"> **graphql** | 2 | query, introspect | `GRAPHQL_ENDPOINT` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/grist.svg" width="16" height="16" style="vertical-align: middle"> **grist** | 4 | record | `GRIST_API_KEY` |
-| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/hackernews.svg" width="16" height="16" style="vertical-align: middle"> **hackernews** | 6 | article, user, all |  |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/hackernews.svg" width="16" height="16" style="vertical-align: middle"> **hackernews** | 6 | article, user, all | — |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/halopsa.svg" width="16" height="16" style="vertical-align: middle"> **halopsa** | 20 | client, site, ticket, user | `HALOPSA_API_URL`, `HALOPSA_CLIENT_ID`, `HALOPSA_CLIENT_SECRET` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/harvest.png" width="16" height="16" style="vertical-align: middle"> **harvest** | 49 | client, project, task, contact, invoice, expense, estimate, user, timeEntry, company | `HARVEST_TOKEN`, `HARVEST_ACCOUNT_ID` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/helpscout.svg" width="16" height="16" style="vertical-align: middle"> **helpscout** | 13 | conversation, customer, mailbox, thread | `HELPSCOUT_ACCESS_TOKEN` |
@@ -157,6 +159,9 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/medium.svg" width="16" height="16" style="vertical-align: middle"> **medium** | 3 | post, publication, me | `MEDIUM_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/messagebird.svg" width="16" height="16" style="vertical-align: middle"> **messagebird** | 2 | sms, balance | `MESSAGEBIRD_ACCESS_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/metabase.svg" width="16" height="16" style="vertical-align: middle"> **metabase** | 10 | question, alert, database, metric | `METABASE_URL`, `METABASE_SESSION_TOKEN` |
+| **microsoftCalendar** | 2 | calendar, event |  |
+| **microsoftFiles** | 5 | files, folder |  |
+| **microsoftMail** | 4 | mail |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/misp.svg" width="16" height="16" style="vertical-align: middle"> **misp** | 44 | attribute, event, eventTag, feed, galaxy, noticelist, object, organisation, tag, user, warninglist | `MISP_URL`, `MISP_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/mocean.svg" width="16" height="16" style="vertical-align: middle"> **mocean** | 2 | sms, voice | `MOCEAN_API_KEY`, `MOCEAN_API_SECRET` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/monday.svg" width="16" height="16" style="vertical-align: middle"> **monday** | 18 | board, boardColumn, boardGroup, boardItem | `MONDAY_API_TOKEN` |
@@ -175,18 +180,19 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/oneSimpleApi.svg" width="16" height="16" style="vertical-align: middle"> **oneSimpleApi** | 10 | website, socialProfile, information, utility | `ONE_SIMPLE_API_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/onfleet.svg" width="16" height="16" style="vertical-align: middle"> **onfleet** | 34 | organization, task, worker, admin, hub, team, recipient, container, destination | `ONFLEET_API_KEY` |
 | **openai** | 1 | image | `OPENAI_API_KEY` |
-| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/openThesaurus.png" width="16" height="16" style="vertical-align: middle"> **openThesaurus** | 1 | synonyms |  |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/openThesaurus.png" width="16" height="16" style="vertical-align: middle"> **openThesaurus** | 1 | synonyms | — |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/openweathermap.svg" width="16" height="16" style="vertical-align: middle"> **openweathermap** | 2 | weather | `OPENWEATHERMAP_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/oura.svg" width="16" height="16" style="vertical-align: middle"> **oura** | 4 | profile, summary | `OURA_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/paddle.svg" width="16" height="16" style="vertical-align: middle"> **paddle** | 9 | coupon, payment, plan, product, user | `PADDLE_VENDOR_ID`, `PADDLE_VENDOR_AUTH_CODE` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/pagerduty.svg" width="16" height="16" style="vertical-align: middle"> **pagerduty** | 9 | incident, incidentNote, logEntry, user | `PAGERDUTY_API_TOKEN` |
+| **parallel** | 1 | search | `PARALLEL_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/paypal.svg" width="16" height="16" style="vertical-align: middle"> **paypal** | 4 | payout, payoutItem | `PAYPAL_CLIENT_ID`, `PAYPAL_SECRET` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/peekalink.png" width="16" height="16" style="vertical-align: middle"> **peekalink** | 2 | link | `PEEKALINK_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/phantombuster.png" width="16" height="16" style="vertical-align: middle"> **phantombuster** | 5 | agent | `PHANTOMBUSTER_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/philipsHue.svg" width="16" height="16" style="vertical-align: middle"> **philipsHue** | 4 | light | `PHILIPS_HUE_ACCESS_TOKEN`, `PHILIPS_HUE_USERNAME` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/pipedrive.svg" width="16" height="16" style="vertical-align: middle"> **pipedrive** | 47 | activity, deal, dealProduct, file, lead, note, organization, person, product | `PIPEDRIVE_API_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/plivo.svg" width="16" height="16" style="vertical-align: middle"> **plivo** | 3 | sms, mms, call | `PLIVO_AUTH_ID`, `PLIVO_AUTH_TOKEN` |
-| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/postbin.svg" width="16" height="16" style="vertical-align: middle"> **postbin** | 6 | bin, request |  |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/postbin.svg" width="16" height="16" style="vertical-align: middle"> **postbin** | 6 | bin, request | — |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/posthog.svg" width="16" height="16" style="vertical-align: middle"> **posthog** | 5 | alias, event, identity, track | `POSTHOG_URL`, `POSTHOG_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/profitwell.svg" width="16" height="16" style="vertical-align: middle"> **profitwell** | 2 | company, metric | `PROFITWELL_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/pushbullet.svg" width="16" height="16" style="vertical-align: middle"> **pushbullet** | 4 | push | `PUSHBULLET_ACCESS_TOKEN` |
@@ -194,7 +200,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/pushover.svg" width="16" height="16" style="vertical-align: middle"> **pushover** | 1 | message | `PUSHOVER_API_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/quickbase.png" width="16" height="16" style="vertical-align: middle"> **quickbase** | 8 | field, file, record, report | `QUICKBASE_HOSTNAME`, `QUICKBASE_USER_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/quickbooks.svg" width="16" height="16" style="vertical-align: middle"> **quickbooks** | 45 | bill, customer, employee, estimate, invoice, item, payment, purchase, vendor | `QUICKBOOKS_ACCESS_TOKEN`, `QUICKBOOKS_COMPANY_ID` |
-| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/quickchart.svg" width="16" height="16" style="vertical-align: middle"> **quickchart** | 1 | chart |  |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/quickchart.svg" width="16" height="16" style="vertical-align: middle"> **quickchart** | 1 | chart | — |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/raindrop.svg" width="16" height="16" style="vertical-align: middle"> **raindrop** | 13 | bookmark, collection, tag, user | `RAINDROP_ACCESS_TOKEN` |
 | **recraft** | 1 | image | `RECRAFT_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/reddit.svg" width="16" height="16" style="vertical-align: middle"> **reddit** | 10 | post, comment, subreddit, user |  |
@@ -216,6 +222,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/splunk.svg" width="16" height="16" style="vertical-align: middle"> **splunk** | 16 | search, alert, report, user | `SPLUNK_BASE_URL`, `SPLUNK_AUTH_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/spotify.svg" width="16" height="16" style="vertical-align: middle"> **spotify** | 30 | player, album, artist, playlist, track, library, myData | `SPOTIFY_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/stackby.png" width="16" height="16" style="vertical-align: middle"> **stackby** | 4 | row | `STACKBY_API_KEY` |
+| **steel** | 3 | browser | `STEEL_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/storyblok.svg" width="16" height="16" style="vertical-align: middle"> **storyblok** | 7 | content, management |  |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/strapi.svg" width="16" height="16" style="vertical-align: middle"> **strapi** | 5 | entry | `STRAPI_URL` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/strava.svg" width="16" height="16" style="vertical-align: middle"> **strava** | 9 | activity | `STRAVA_ACCESS_TOKEN` |
@@ -239,6 +246,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/uproc.png" width="16" height="16" style="vertical-align: middle"> **uproc** | 1 | process | `UPROC_EMAIL`, `UPROC_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/uptimerobot.svg" width="16" height="16" style="vertical-align: middle"> **uptimerobot** | 22 | account, monitor, alertContact, maintenanceWindow, publicStatusPage | `UPTIMEROBOT_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/urlscanio.svg" width="16" height="16" style="vertical-align: middle"> **urlscanio** | 3 | scan | `URLSCANIO_API_KEY` |
+| **vercel** | 14 | whoami, project, deployment, env | `VERCEL_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/vero.svg" width="16" height="16" style="vertical-align: middle"> **vero** | 8 | user, event | `VERO_AUTH_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/vonage.svg" width="16" height="16" style="vertical-align: middle"> **vonage** | 1 | sms | `VONAGE_API_KEY`, `VONAGE_API_SECRET` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/wekan.svg" width="16" height="16" style="vertical-align: middle"> **wekan** | 24 | board, list, card, cardComment, checklist, checklistItem | `WEKAN_URL`, `WEKAN_TOKEN` |
