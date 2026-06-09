@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
 import { findConfigDir } from "../config/loader.js";
@@ -100,6 +100,22 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
         join(fullPath, "src", "index.ts"),
         join(fullPath, "src", "index.js"),
       ];
+      const pkgJson = join(fullPath, "package.json");
+      let packagePluginPaths: string[] = [];
+
+      if (existsSync(pkgJson)) {
+        try {
+          const pkg = JSON.parse(readFileSync(pkgJson, "utf-8"));
+          if (pkg.main) candidates.unshift(join(fullPath, pkg.main));
+          packagePluginPaths = pkg.runline?.plugins ?? [];
+        } catch (err) {
+          console.error(
+            `[runline] Failed to parse ${pkgJson}:`,
+            (err as Error).message,
+          );
+        }
+      }
+
       const found = candidates.find((c) => existsSync(c));
       if (found) {
         try {
@@ -110,26 +126,18 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
             (err as Error).message,
           );
         }
+      } else if (packagePluginPaths.length === 0) {
+        console.error(
+          `[runline] Failed to load plugin from ${fullPath}: No entry point found`,
+        );
       }
 
-      const pkgJson = join(fullPath, "package.json");
-      if (existsSync(pkgJson)) {
+      for (const p of packagePluginPaths) {
         try {
-          const pkg = JSON.parse(readFileSync(pkgJson, "utf-8"));
-          const pluginPaths: string[] = pkg.runline?.plugins ?? [];
-          for (const p of pluginPaths) {
-            try {
-              plugins.push(await loadPluginFromPath(join(fullPath, p)));
-            } catch (err) {
-              console.error(
-                `[runline] Failed to load plugin from ${join(fullPath, p)}:`,
-                (err as Error).message,
-              );
-            }
-          }
+          plugins.push(await loadPluginFromPath(join(fullPath, p)));
         } catch (err) {
           console.error(
-            `[runline] Failed to parse ${pkgJson}:`,
+            `[runline] Failed to load plugin from ${join(fullPath, p)}:`,
             (err as Error).message,
           );
         }
@@ -149,15 +157,25 @@ export async function loadPluginsFromConfig(
 
   try {
     const data = JSON.parse(readFileSync(pluginsFile, "utf-8"));
-    const entries: Array<{ path: string }> = data.plugins ?? data;
+    const entries = data.plugins ?? data;
+    if (!Array.isArray(entries)) {
+      throw new Error("Expected an array or { plugins: [...] }");
+    }
 
     for (const entry of entries) {
-      const p = typeof entry === "string" ? entry : entry.path;
+      const p = typeof entry === "string" ? entry : entry?.path;
+      if (typeof p !== "string" || p.length === 0) {
+        console.error(
+          `[runline] Invalid plugin entry in ${pluginsFile}: expected string path or { path }`,
+        );
+        continue;
+      }
+      const pluginPath = isAbsolute(p) ? p : join(configDir, p);
       try {
-        plugins.push(await loadPluginFromPath(p));
+        plugins.push(await loadPluginFromPath(pluginPath));
       } catch (err) {
         console.error(
-          `[runline] Failed to load plugin from ${p}:`,
+          `[runline] Failed to load plugin from ${pluginPath}:`,
           (err as Error).message,
         );
       }
@@ -209,25 +227,29 @@ export async function discoverPlugins(
   const loaded = new Set<string>();
   const result: PluginDef[] = [];
 
-  function addIfNew(plugin: PluginDef) {
-    if (!loaded.has(plugin.name)) {
-      result.push(plugin);
-      loaded.add(plugin.name);
+  function addIfNew(plugin: PluginDef, source: string) {
+    if (loaded.has(plugin.name)) {
+      console.error(
+        `[runline] Skipping duplicate plugin "${plugin.name}" from ${source}: a plugin with that name is already loaded`,
+      );
+      return;
     }
+    result.push(plugin);
+    loaded.add(plugin.name);
   }
 
   if (configDir) {
     const projectPluginsDir = join(configDir, "plugins");
     const projectPlugins = await loadFromDirectory(projectPluginsDir);
-    for (const p of projectPlugins) addIfNew(p);
+    for (const p of projectPlugins) addIfNew(p, projectPluginsDir);
 
     const configPlugins = await loadPluginsFromConfig(configDir);
-    for (const p of configPlugins) addIfNew(p);
+    for (const p of configPlugins) addIfNew(p, join(configDir, "plugins.json"));
   }
 
   const globalDir = join(homedir(), ".runline", "plugins");
   const globalPlugins = await loadFromDirectory(globalDir);
-  for (const p of globalPlugins) addIfNew(p);
+  for (const p of globalPlugins) addIfNew(p, globalDir);
 
   const builtinDir = options.builtinDir ?? defaultBuiltinDir();
   const builtinPlugins = await loadFromDirectory(builtinDir);
@@ -235,7 +257,7 @@ export async function discoverPlugins(
     if (options.builtinAllowlist && !options.builtinAllowlist.has(p.name)) {
       continue;
     }
-    addIfNew(p);
+    addIfNew(p, builtinDir);
   }
 
   return result;

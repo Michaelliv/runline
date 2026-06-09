@@ -360,7 +360,51 @@ export default function orders(rl: RunlinePluginAPI) {
 }
 ```
 
-Key points: plugin `execute` handlers run **outside** the QuickJS runtime with full Node.js access (fetch, fs, etc). Agent code calls them through configured plugin globals; add a `node` connection to expose host APIs through the built-in `node` plugin. `ctx.connection.config` holds the resolved config with env var overrides applied.
+Custom plugins are discovered from the nearest project `.runline/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then the bundled built-ins named by configured connections. Project-local plugins win over same-named global or built-in plugins; duplicates discovered later are skipped and reported on stderr.
+
+Supported local layouts:
+
+```text
+.runline/plugins/orders.ts
+.runline/plugins/orders.js
+.runline/plugins/orders/index.ts
+.runline/plugins/orders/index.js
+.runline/plugins/orders/src/index.ts
+.runline/plugins/orders/src/index.js
+.runline/plugins/orders/package.json   # { "main": "dist/index.js" }
+```
+
+A package directory can also expose multiple plugins:
+
+```json
+{
+  "runline": { "plugins": ["./orders.js", "./billing.js"] }
+}
+```
+
+`plugins.json` can also point at explicit plugin paths:
+
+```json
+{
+  "plugins": [{ "path": "./tools/orders.ts" }]
+}
+```
+
+A plugin may export the default registration function shown above, or a plain plugin definition object with `{ name, version, actions }`. ESM, TypeScript, and CommonJS object exports are supported. The function form is preferred because it validates plugin names, keeps action registration consistent, and gives authors the public `RunlinePluginAPI` surface.
+
+Plugin `execute` handlers run **outside** the QuickJS runtime with full Node.js access (`fetch`, `fs`, npm dependencies available to the host process, etc). Agent code calls them through configured plugin globals. `ctx.connection.config` contains the resolved connection config with env var overrides applied, and `ctx.updateConnection(patch)` can persist refreshed credentials. Add a `node` connection only when you explicitly want to expose host APIs through the built-in `node` plugin.
+
+Agents can inspect custom plugins from inside `runline exec` before calling them:
+
+```bash
+runline exec 'return actions.list("orders")'
+runline exec 'return actions.find("list orders")'
+runline exec 'return actions.describe("orders.list")'
+runline exec 'return actions.check("orders.list", { orgId: "acme" })'
+runline exec 'return await orders.list({ orgId: "acme", status: "open" })'
+```
+
+For debugging, run `runline actions --json` to see loaded actions and schemas. Loader failures include the plugin path and reason on stderr. A broken plugin does not stop discovery of healthy plugins in the same directory; common failures include invalid exports, invalid plugin names, malformed `package.json`/`plugins.json`, missing entrypoints, and duplicate plugin names.
 
 See [`packages/runline-plugins/`](packages/runline-plugins) for 202 real-world examples.
 
