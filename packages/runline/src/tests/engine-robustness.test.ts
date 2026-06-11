@@ -128,7 +128,9 @@ describe("engine robustness", () => {
   });
 
   it("survives an action resolving after timeout killed the worker", () => {
-    const { exitCode, aborted, report } = runScenario("timeout-inflight-action");
+    const { exitCode, aborted, report } = runScenario(
+      "timeout-inflight-action",
+    );
     assert.equal(aborted, false, "process abort");
     assert.equal(exitCode, 0);
     assert.ok(report);
