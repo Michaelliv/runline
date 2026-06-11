@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import linear from "../../../runline-plugins/linear/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
+import { isTypedInputSchema, validateTypedInput } from "../plugin/schema.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
 
 const originalFetch = globalThis.fetch;
@@ -891,5 +892,85 @@ describe("linear plugin scoped issue access", () => {
       nodes: [],
       pageInfo: { hasNextPage: false },
     });
+  });
+});
+
+// The bug: comment.list accepted only { limit }, and its schema was not
+// strict — so comment.list({ issueId }) passed validation, had issueId
+// silently dropped, and returned workspace-wide comments that look like an
+// answer but aren't. comment.list must honor issueId and reject unknown
+// inputs.
+describe("linear comment.list issue scoping", () => {
+  const issueComments = {
+    nodes: [{ id: "c1", body: "on the issue" }],
+    pageInfo: { hasNextPage: false, endCursor: null },
+  };
+
+  it("scopes to the given issue instead of listing workspace-wide", async () => {
+    const action = getAction(makeLinear(), "comment.list");
+
+    mockLinear((body) => {
+      // must query the issue's comments, not the workspace comments root
+      assert.match(body.query, /issue\(id: \$id\)/);
+      assert.equal(body.variables?.id, "SHFT-394");
+      return { issue: { comments: issueComments } };
+    });
+
+    const result = await action.execute({ issueId: "SHFT-394" }, ctx());
+    assert.deepEqual(result, issueComments);
+  });
+
+  it("still lists workspace-wide when no issueId is given", async () => {
+    const action = getAction(makeLinear(), "comment.list");
+    const workspace = {
+      nodes: [{ id: "c9", body: "elsewhere" }],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    };
+
+    mockLinear((body) => {
+      assert.match(body.query, /comments\(/);
+      assert.equal(body.variables?.first, 10);
+      return { comments: workspace };
+    });
+
+    const result = await action.execute({ limit: 10 }, ctx());
+    assert.deepEqual(result, workspace);
+  });
+
+  it("rejects unknown input keys instead of silently dropping them", () => {
+    const action = getAction(makeLinear(), "comment.list");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    const validation = validateTypedInput(action.inputSchema, {
+      issueID: "SHFT-394", // typo'd key must fail loudly, not return garbage
+    });
+    assert.equal(validation.ok, false);
+  });
+
+  it("allows scoped connections to list comments for an in-scope issue", async () => {
+    const action = getAction(makeLinear(), "comment.list");
+
+    mockLinearSequence([
+      (body) => {
+        // scope check resolves the issue's labels first
+        assert.match(body.query, /labels/);
+        return {
+          issue: {
+            id: "uuid-1",
+            identifier: "SHFT-394",
+            labels: { nodes: [{ id: "label-allowed", name: "agent" }] },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /issue\(id: \$id\)/);
+        return { issue: { comments: issueComments } };
+      },
+    ]);
+
+    const result = await action.execute(
+      { issueId: "SHFT-394" },
+      ctx({ scopeLabelIds: "label-allowed" }),
+    );
+    assert.deepEqual(result, issueComments);
   });
 });

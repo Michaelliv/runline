@@ -25,11 +25,26 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.list", {
-    description: "List comments across the workspace. Disabled for scoped Linear connections; use issue.listComments instead.",
-    inputSchema: t.Object({ limit: t.Optional(t.Number()) }),
+    description: "List comments. Pass issueId (UUID or identifier like 'LIN-123') to list one issue's comments; without it, lists workspace-wide (unscoped connections only).",
+    inputSchema: t.Object(
+      {
+        issueId: t.Optional(t.String({ description: "Only list comments on this issue. UUID or issue identifier (e.g., 'LIN-123')" })),
+        limit: t.Optional(t.Number({ description: "Max results (default 50)" })),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input, ctx) {
+      const { issueId, limit = 50 } = (input ?? {}) as { issueId?: string; limit?: number };
+      if (issueId) {
+        await assertIssueInScope(ctx, issueId);
+        const data = await gql(
+          key(ctx),
+          `query($id: String!, $first: Int) { issue(id: $id) { comments(first: $first) { nodes { ${COMMENT_FIELDS} } pageInfo { hasNextPage endCursor } } } }`,
+          { id: issueId, first: limit },
+        );
+        return ((data.issue as Record<string, unknown> | null)?.comments as Record<string, unknown>) ?? null;
+      }
       requireUnscoped(ctx, "comment.list");
-      const limit = (input as { limit?: number } | null)?.limit ?? 50;
       const data = await gql(
         key(ctx),
         `query($first: Int) { comments(first: $first) { nodes { ${COMMENT_FIELDS} } pageInfo { hasNextPage endCursor } } }`,
