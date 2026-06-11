@@ -1,12 +1,5 @@
 import { readFileSync } from "node:fs";
-import {
-  getQuickJS,
-  type QuickJSContext,
-  type QuickJSDeferredPromise,
-  type QuickJSHandle,
-  type QuickJSRuntime,
-  shouldInterruptAfterDeadline,
-} from "quickjs-emscripten";
+import { Worker } from "node:worker_threads";
 import { applyEnvOverrides, updateConnectionConfig } from "../config/loader.js";
 import type { RunlineConfig } from "../config/types.js";
 import type { PluginRegistry } from "../plugin/registry.js";
@@ -34,6 +27,48 @@ export interface EngineOptions {
   memoryLimitBytes?: number;
 }
 
+// Messages worker → host
+type WorkerMessage =
+  | { t: "log"; level: string; line: string }
+  | { t: "invoke"; id: number; path: string; args: unknown }
+  | { t: "done"; ok: boolean; result?: unknown; error?: string };
+
+// Messages host → worker (action invocation replies)
+type InvokeReply =
+  | { t: "result"; id: number; ok: true; value: unknown }
+  | { t: "result"; id: number; ok: false; error: string };
+
+/**
+ * Whether to arm the host-side RSS watchdog for a worker run.
+ *
+ * node enforces resourceLimits.maxOldGenerationSizeMb natively, and the
+ * watchdog measures *whole-process* RSS — arming it there would risk false
+ * kills from unrelated host allocations (e.g. a concurrent execute). bun
+ * ignores resourceLimits, so the watchdog is the only memory backstop.
+ */
+export function shouldArmRssWatchdog(
+  versions: Partial<Record<string, string>> = process.versions,
+): boolean {
+  return Boolean(versions.bun);
+}
+
+// Extra slack on top of the configured memory limit for the RSS watchdog,
+// since whole-process RSS includes the host's own working set.
+const RSS_WATCHDOG_SLACK_BYTES = 128 * 1024 * 1024;
+
+/**
+ * Executes agent code in a node:worker_threads worker.
+ *
+ * The worker is an ergonomic coding surface, not a security sandbox: agent
+ * code gets the full host JS runtime (Buffer, crypto, etc.) plus injected
+ * action proxies. Isolation properties we do enforce, fail-soft:
+ *
+ * - timeout: worker.terminate() — interrupts even `while(true){}`
+ * - memory: resourceLimits.maxOldGenerationSizeMb (node) + an RSS-delta
+ *   watchdog fallback; both surface as a clean "Memory limit exceeded" error
+ * - crash containment: a dead worker never takes the host process down, and
+ *   each execute() gets a fresh worker, so the engine stays usable
+ */
 export class ExecutionEngine {
   private registry: PluginRegistry;
   private config: RunlineConfig;
@@ -47,146 +82,137 @@ export class ExecutionEngine {
     const timeoutMs = options?.timeoutMs ?? this.config.timeoutMs;
     const memoryLimitBytes =
       options?.memoryLimitBytes ?? this.config.memoryLimitBytes;
-    const deadlineMs = Date.now() + timeoutMs;
     const logs: string[] = [];
-    const pendingDeferreds = new Set<QuickJSDeferredPromise>();
 
-    const QuickJS = await getQuickJS();
-    const runtime = QuickJS.newRuntime();
+    const plugins = this.registry.listPlugins();
+    const source = buildWorkerSource(
+      code,
+      plugins.map((p) => p.name),
+      buildHelpData(plugins),
+    );
 
-    try {
-      runtime.setMemoryLimit(memoryLimitBytes);
-      runtime.setInterruptHandler(shouldInterruptAfterDeadline(deadlineMs));
-
-      const context = runtime.newContext();
+    return new Promise<ExecuteResult>((resolve) => {
+      const memoryLimitMb = Math.max(
+        8,
+        Math.floor(memoryLimitBytes / (1024 * 1024)),
+      );
+      let worker: Worker;
       try {
-        // Inject log bridge
-        const logBridge = context.newFunction(
-          "__runline_log",
-          (levelHandle, lineHandle) => {
-            const level = context.getString(levelHandle);
-            const line = context.getString(lineHandle);
-            logs.push(`[${level}] ${line}`);
-            return context.undefined;
-          },
-        );
-        context.setProp(context.global, "__runline_log", logBridge);
-        logBridge.dispose();
-
-        // Inject action bridge
-        const actionBridge = context.newFunction(
-          "__runline_invoke",
-          (pathHandle, argsHandle) => {
-            const path = context.getString(pathHandle);
-            const args =
-              argsHandle === undefined ||
-              context.typeof(argsHandle) === "undefined"
-                ? undefined
-                : context.dump(argsHandle);
-
-            const deferred = context.newPromise();
-            pendingDeferreds.add(deferred);
-            deferred.settled.finally(() => pendingDeferreds.delete(deferred));
-
-            this.invokeAction(path, args).then(
-              (value) => {
-                if (!deferred.alive) return;
-                if (value === undefined) {
-                  deferred.resolve();
-                  return;
-                }
-                const serialized = JSON.stringify(value);
-                const handle = context.newString(serialized);
-                deferred.resolve(handle);
-                handle.dispose();
-              },
-              (err) => {
-                if (!deferred.alive) return;
-                const msg = err instanceof Error ? err.message : String(err);
-                const handle = context.newError(msg);
-                deferred.reject(handle);
-                handle.dispose();
-              },
-            );
-
-            return deferred.handle;
-          },
-        );
-        context.setProp(context.global, "__runline_invoke", actionBridge);
-        actionBridge.dispose();
-
-        const plugins = this.registry.listPlugins();
-        const pluginNames = plugins.map((p) => p.name);
-        const helpData = buildHelpData(plugins);
-        const source = buildExecutionSource(code, pluginNames, helpData);
-
-        const evaluated = context.evalCode(source, "runline-sandbox.js");
-        if (evaluated.error) {
-          const error = context.dump(evaluated.error);
-          evaluated.error.dispose();
-          return { result: null, error: formatError(error), logs };
-        }
-
-        // Set up promise tracking
-        context.setProp(context.global, "__runline_result", evaluated.value);
-        evaluated.value.dispose();
-
-        const stateResult = context.evalCode(
-          `(function(p){ var s = { v: void 0, e: void 0, settled: false };
-           var fmtErr = function(e){ if (e && typeof e === 'object') { var m = typeof e.message === 'string' ? e.message : ''; var st = typeof e.stack === 'string' ? e.stack : ''; if (m && st) return st.indexOf(m) === -1 ? m + '\\n' + st : st; if (m) return m; if (st) return st; } return String(e); };
-           p.then(function(v){ s.v = v; s.settled = true; }, function(e){ s.e = fmtErr(e); s.settled = true; }); return s; })(__runline_result)`,
-        );
-
-        if (stateResult.error) {
-          const error = context.dump(stateResult.error);
-          stateResult.error.dispose();
-          return { result: null, error: formatError(error), logs };
-        }
-
-        const stateHandle = stateResult.value;
-        try {
-          await this.drainAsync(
-            context,
-            runtime,
-            pendingDeferreds,
-            deadlineMs,
-            timeoutMs,
-          );
-
-          const settled = readProp(context, stateHandle, "settled") === true;
-          if (!settled) {
-            return {
-              result: null,
-              error: `Execution timed out after ${timeoutMs}ms`,
-              logs,
-            };
-          }
-
-          const error = readProp(context, stateHandle, "e");
-          if (error !== undefined) {
-            return { result: null, error: formatError(error), logs };
-          }
-
-          return { result: readProp(context, stateHandle, "v"), logs };
-        } finally {
-          stateHandle.dispose();
-        }
-      } finally {
-        for (const d of pendingDeferreds) {
-          if (d.alive) d.dispose();
-        }
-        pendingDeferreds.clear();
-        context.dispose();
+        worker = new Worker(source, {
+          eval: true,
+          resourceLimits: { maxOldGenerationSizeMb: memoryLimitMb },
+        });
+      } catch (err) {
+        resolve({ result: null, error: formatError(err), logs });
+        return;
       }
-    } catch (err) {
-      return {
-        result: null,
-        error: formatError(err),
-        logs,
+
+      let settled = false;
+      const finish = (r: ExecuteResult) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutTimer);
+        clearInterval(rssTimer);
+        void worker.terminate();
+        resolve(r);
       };
-    } finally {
-      runtime.dispose();
-    }
+
+      const timeoutTimer = setTimeout(() => {
+        finish({
+          result: null,
+          error: `Execution timed out after ${timeoutMs}ms`,
+          logs,
+        });
+      }, timeoutMs);
+
+      let rssTimer: ReturnType<typeof setInterval> | undefined;
+      if (shouldArmRssWatchdog()) {
+        const baselineRss = process.memoryUsage().rss;
+        rssTimer = setInterval(() => {
+          const delta = process.memoryUsage().rss - baselineRss;
+          if (delta > memoryLimitBytes + RSS_WATCHDOG_SLACK_BYTES) {
+            finish({
+              result: null,
+              error: `Memory limit exceeded (${memoryLimitMb}MB)`,
+              logs,
+            });
+          }
+        }, 100);
+        rssTimer.unref?.();
+      }
+
+      // A reply can race the worker's death; losing it is fine — the run is
+      // over either way — but it must never surface as an unhandled
+      // rejection in the host.
+      const reply = (message: InvokeReply) => {
+        if (settled) return;
+        try {
+          worker.postMessage(message);
+        } catch {
+          // worker already gone
+        }
+      };
+
+      worker.on("message", (msg: WorkerMessage) => {
+        if (settled) return;
+        if (msg.t === "log") {
+          logs.push(`[${msg.level}] ${msg.line}`);
+        } else if (msg.t === "invoke") {
+          this.invokeAction(msg.path, msg.args).then(
+            (value) => {
+              let serialized: unknown;
+              try {
+                serialized = toPlainJson(value);
+              } catch (err) {
+                reply({
+                  t: "result",
+                  id: msg.id,
+                  ok: false,
+                  error: `Action result not JSON-serializable: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                });
+                return;
+              }
+              reply({ t: "result", id: msg.id, ok: true, value: serialized });
+            },
+            (err) => {
+              reply({
+                t: "result",
+                id: msg.id,
+                ok: false,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            },
+          );
+        } else if (msg.t === "done") {
+          finish(
+            msg.ok
+              ? { result: msg.result, logs }
+              : { result: null, error: msg.error ?? "Unknown error", logs },
+          );
+        }
+      });
+
+      worker.on("error", (err: NodeJS.ErrnoException) => {
+        finish({
+          result: null,
+          error:
+            err.code === "ERR_WORKER_OUT_OF_MEMORY"
+              ? `Memory limit exceeded (${memoryLimitMb}MB)`
+              : formatError(err),
+          logs,
+        });
+      });
+
+      worker.on("exit", (exitCode) => {
+        finish({
+          result: null,
+          error: `Worker exited unexpectedly (code ${exitCode})`,
+          logs,
+        });
+      });
+    });
   }
 
   private async invokeAction(path: string, args: unknown): Promise<unknown> {
@@ -231,77 +257,18 @@ export class ExecutionEngine {
     };
     return applyEnvOverrides(base, plugin.connectionConfigSchema);
   }
-
-  private async drainAsync(
-    context: QuickJSContext,
-    runtime: QuickJSRuntime,
-    pendingDeferreds: ReadonlySet<QuickJSDeferredPromise>,
-    deadlineMs: number,
-    timeoutMs: number,
-  ): Promise<void> {
-    this.drainJobs(context, runtime, deadlineMs, timeoutMs);
-
-    while (pendingDeferreds.size > 0) {
-      const remainingMs = deadlineMs - Date.now();
-      if (remainingMs <= 0) {
-        throw new Error(`Execution timed out after ${timeoutMs}ms`);
-      }
-
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        await Promise.race([
-          Promise.race([...pendingDeferreds].map((d) => d.settled)),
-          new Promise<never>((_, reject) => {
-            timer = setTimeout(
-              () =>
-                reject(new Error(`Execution timed out after ${timeoutMs}ms`)),
-              remainingMs,
-            );
-          }),
-        ]);
-      } finally {
-        if (timer) clearTimeout(timer);
-      }
-
-      this.drainJobs(context, runtime, deadlineMs, timeoutMs);
-    }
-
-    this.drainJobs(context, runtime, deadlineMs, timeoutMs);
-  }
-
-  private drainJobs(
-    context: QuickJSContext,
-    runtime: QuickJSRuntime,
-    deadlineMs: number,
-    timeoutMs: number,
-  ): void {
-    while (runtime.hasPendingJob()) {
-      if (Date.now() >= deadlineMs) {
-        throw new Error(`Execution timed out after ${timeoutMs}ms`);
-      }
-      const pending = runtime.executePendingJobs();
-      if (pending.error) {
-        const error = context.dump(pending.error);
-        pending.error.dispose();
-        throw error instanceof Error ? error : new Error(String(error));
-      }
-    }
-  }
 }
 
 // ── Helpers ──────────────────────────────────────────────
 
-function readProp(
-  context: QuickJSContext,
-  handle: QuickJSHandle,
-  key: string,
-): unknown {
-  const prop = context.getProp(handle, key);
-  try {
-    return context.dump(prop);
-  } finally {
-    prop.dispose();
-  }
+/**
+ * JSON round-trip to (a) guarantee structured-clone compatibility and
+ * (b) preserve the previous engine's value semantics, where every action
+ * result crossed a JSON boundary (Dates → ISO strings, no Maps, etc.).
+ */
+function toPlainJson(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  return JSON.parse(JSON.stringify(value));
 }
 
 function formatError(cause: unknown): string {
@@ -318,13 +285,13 @@ function formatError(cause: unknown): string {
 }
 
 // MiniSearch UMD bundle, vendored at the package root and inlined into the
-// sandbox source. UMD attaches `MiniSearch` to globalThis in a non-CJS /
-// non-AMD env (QuickJS), so pasting the file is enough.
+// worker source. Inside the worker it is evaluated in a local scope with a
+// fresh `module`/`exports` pair so the UMD takes its CommonJS branch.
 //
 // `../../vendor/...` resolves identically from src/core/engine.ts (dev) and
 // dist/core/engine.js (published) because tsc preserves the `core/` subdir.
 // See vendor/README.md for the upgrade procedure.
-const __minisearchSource = readFileSync(
+const minisearchSource = readFileSync(
   new URL("../../vendor/minisearch.umd.js", import.meta.url),
   "utf8",
 );
@@ -347,7 +314,7 @@ function buildHelpData(plugins: PluginDef[]): Record<string, HelpEntry[]> {
   return data;
 }
 
-function buildExecutionSource(
+function buildWorkerSource(
   code: string,
   pluginNames: string[] = [],
   helpData: Record<string, HelpEntry[]> = {},
@@ -362,18 +329,68 @@ function buildExecutionSource(
     : code;
 
   const wrapped = `"use strict";
-const __invoke = __runline_invoke;
-const __log = __runline_log;
-try { delete globalThis.__runline_invoke; } catch {}
-try { delete globalThis.__runline_log; } catch {}
+const { parentPort: __port } = require("node:worker_threads");
+
+// process.exit would be runtime-divergent here: node kills the worker
+// synchronously, bun lets the completion message race the exit and can
+// report a silent undefined success. Make it a regular, catchable error.
+process.exit = (code) => {
+  throw new Error('process.exit(' + (code ?? 0) + ') is not available in the runline sandbox; return a value instead');
+};
+
+// ── host bridge ──
+let __seq = 0;
+const __pending = new Map();
+__port.on("message", (m) => {
+  if (!m || m.t !== "result") return;
+  const p = __pending.get(m.id);
+  if (!p) return;
+  __pending.delete(m.id);
+  if (m.ok) p.resolve(m.value);
+  else p.reject(new Error(m.error));
+});
+const __invoke = (path, args) => new Promise((resolve, reject) => {
+  const id = ++__seq;
+  __pending.set(id, { resolve, reject });
+  try {
+    __port.postMessage({ t: "invoke", id, path, args });
+  } catch (e) {
+    __pending.delete(id);
+    reject(e);
+  }
+});
+const __log = (level, line) => {
+  try { __port.postMessage({ t: "log", level, line }); } catch {}
+};
 
 const __fmt = (v) => {
   if (typeof v === 'string') return v;
   try { return JSON.stringify(v); } catch { return String(v); }
 };
 
-// Inlined MiniSearch UMD — attaches MiniSearch to globalThis inside the sandbox.
-${__minisearchSource}
+const __fmtErr = (e) => {
+  if (e && typeof e === 'object') {
+    const m = typeof e.message === 'string' ? e.message : '';
+    const st = typeof e.stack === 'string' ? e.stack : '';
+    if (m && st) return st.indexOf(m) === -1 ? m + '\\n' + st : st;
+    if (m) return m;
+    if (st) return st;
+  }
+  return String(e);
+};
+
+// JSON round-trip mirrors the host's toPlainJson: keeps results
+// structured-clone-safe and preserves JSON value semantics.
+const __toJson = (v) => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+
+// Inlined MiniSearch UMD, evaluated with a local module/exports so the UMD
+// takes its CommonJS branch regardless of the worker's module scope.
+const MiniSearch = (function () {
+  const module = { exports: {} };
+  const exports = module.exports;
+  ${minisearchSource}
+  return module.exports;
+})();
 
 const __help = ${JSON.stringify(helpData)};
 
@@ -385,8 +402,7 @@ const __makeProxy = (path = []) => new Proxy(() => undefined, {
   apply(_t, _this, args) {
     const p = path.join('.');
     if (!p) throw new Error('Action path missing');
-    return Promise.resolve(__invoke(p, args[0]))
-      .then((raw) => raw === undefined ? undefined : JSON.parse(raw));
+    return __invoke(p, args[0]);
   },
 });
 
@@ -408,7 +424,7 @@ const __formatSignature = (plugin, entry) => {
   return plugin + '.' + entry.action + (fields ? '({ ' + fields + ' })' : '()');
 };
 
-// Build a MiniSearch index over every action path. Indexed at sandbox
+// Build a MiniSearch index over every action path. Indexed at worker
 // startup, queried by actions.find().
 const __search = (() => {
   const docs = [];
@@ -528,7 +544,19 @@ const fetch = () => { throw new Error('fetch is disabled in runline sandbox'); }
 
 (async () => {
 ${body}
-})()`;
+})().then(
+  (v) => {
+    try {
+      __port.postMessage({ t: "done", ok: true, result: __toJson(v) });
+    } catch (e) {
+      __port.postMessage({ t: "done", ok: false, error: __fmtErr(e) });
+    }
+  },
+  (e) => {
+    __port.postMessage({ t: "done", ok: false, error: __fmtErr(e) });
+  },
+);
+`;
 
   return wrapped;
 }
