@@ -62,7 +62,7 @@ export type {
   OAuthConfig,
   PluginDef,
 } from "./plugin/types.js";
-export type { RunlineOptions } from "./sdk.js";
+export type { RunlineExecuteOptions, RunlineOptions } from "./sdk.js";
 export { Runline } from "./sdk.js";
 export type { ExecOptions, ExecResult, OutputParser } from "./utils/cli.js";
 export { commandExists, syncExec } from "./utils/cli.js";

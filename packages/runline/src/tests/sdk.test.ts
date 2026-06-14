@@ -45,6 +45,13 @@ describe("Runline SDK", () => {
     assert.equal(result.result, 42);
   });
 
+  it("supports per-execution timeout overrides", async () => {
+    const rl = Runline.create({ timeoutMs: 5_000 });
+    const result = await rl.execute("while (true) {}", { timeoutMs: 25 });
+    assert.equal(result.result, null);
+    assert.match(result.error ?? "", /Execution timed out after 25ms/);
+  });
+
   it("supports multiple plugins", async () => {
     const rl = Runline.create({ plugins: [mathPlugin, echoPlugin] });
     const result = await rl.execute(`

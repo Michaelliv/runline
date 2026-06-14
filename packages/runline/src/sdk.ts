@@ -20,6 +20,11 @@ export interface RunlineOptions {
   memoryLimitBytes?: number;
 }
 
+export interface RunlineExecuteOptions {
+  timeoutMs?: number;
+  memoryLimitBytes?: number;
+}
+
 export class Runline {
   private _registry: PluginRegistry;
   private _config: RunlineConfig;
@@ -45,9 +50,12 @@ export class Runline {
   }
 
   /** Execute JavaScript code in the QuickJS runtime. */
-  async execute(code: string): Promise<ExecuteResult> {
+  async execute(
+    code: string,
+    options?: RunlineExecuteOptions,
+  ): Promise<ExecuteResult> {
     const engine = new ExecutionEngine(this._registry, this._config);
-    return engine.execute(code);
+    return engine.execute(code, options);
   }
 
   /** Register an additional plugin after creation. */
