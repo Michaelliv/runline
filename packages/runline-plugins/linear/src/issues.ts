@@ -55,7 +55,12 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
 
   rl.registerAction("issue.get", {
     description: "Get an issue by ID or identifier (e.g. 'THE-154')",
-    inputSchema: t.Object({ issueId: t.String() }),
+    inputSchema: t.Object({
+      issueId: t.String({
+        description:
+          "Required parameter name. Pass either the Linear issue UUID or issue identifier, e.g. 'THE-154'.",
+      }),
+    }),
     async execute(input, ctx) {
       const data = await gql(
         key(ctx),

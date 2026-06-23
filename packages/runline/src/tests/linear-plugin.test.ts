@@ -175,6 +175,14 @@ describe("linear plugin action surface", () => {
     assert.deepEqual(actions, [...LINEAR_ACTIONS]);
   });
 
+  it("describes issue.get issueId as the required parameter for UUIDs or identifiers", () => {
+    const action = getAction(makeLinear(), "issue.get");
+    assert.equal(
+      action.inputSchema?.properties?.issueId?.description,
+      "Required parameter name. Pass either the Linear issue UUID or issue identifier, e.g. 'THE-154'.",
+    );
+  });
+
   it("does not expose duplicate comment creation aliases", () => {
     const plugin = makeLinear();
     assert.ok(plugin.actions.some((a) => a.name === "issue.addComment"));
