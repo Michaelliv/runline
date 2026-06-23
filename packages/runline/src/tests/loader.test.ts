@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { loadPluginFromPath } from "../plugin/loader.js";
+import { discoverPlugins, loadPluginFromPath } from "../plugin/loader.js";
 
 describe("loadPluginFromPath", () => {
   let tempDir: string;
@@ -145,5 +145,39 @@ export default function subpaths(api: RunlinePluginAPI) {
     const plugin = await loadPluginFromPath(pluginFile);
     assert.equal(plugin.name, "subpaths");
     assert.equal(plugin.actions[0].name, "ping");
+  });
+
+  it("ignores private helper directories during discovery", async () => {
+    const builtinDir = join(tempDir, "builtins");
+    const pluginDir = join(builtinDir, "alpha");
+    const helperDir = join(builtinDir, "_shared");
+    mkdirSync(pluginDir, { recursive: true });
+    mkdirSync(helperDir, { recursive: true });
+    writeFileSync(
+      join(pluginDir, "index.js"),
+      `export default function alpha(api) {
+        api.setName("alpha");
+        api.registerAction("ping", { execute: () => "pong" });
+      }`,
+    );
+    writeFileSync(join(helperDir, "util.js"), "export const value = 1;");
+
+    const errors: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      const plugins = await discoverPlugins(null, { builtinDir });
+      assert.deepEqual(
+        plugins.map((p) => p.name),
+        ["alpha"],
+      );
+    } finally {
+      console.error = originalError;
+    }
+
+    assert.equal(
+      errors.some((args) => String(args[0]).includes("_shared")),
+      false,
+    );
   });
 });

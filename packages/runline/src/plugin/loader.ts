@@ -69,6 +69,10 @@ export async function loadPluginFromPath(path: string): Promise<PluginDef> {
   );
 }
 
+function isPrivatePluginDirectory(entry: string): boolean {
+  return entry.startsWith("_") || entry.startsWith(".");
+}
+
 async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
   const plugins: PluginDef[] = [];
   if (!existsSync(dir)) return plugins;
@@ -94,6 +98,8 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
         );
       }
     } else if (stat.isDirectory()) {
+      if (isPrivatePluginDirectory(entry)) continue;
+
       const candidates = [
         join(fullPath, "index.ts"),
         join(fullPath, "index.js"),
