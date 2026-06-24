@@ -1,10 +1,36 @@
 import type { RunlinePluginAPI } from "runline";
 import {
   buildLocation,
+  compact,
   extractDocumentId,
   hexToRgbF,
+  location,
   runBatchUpdate,
 } from "./shared.js";
+
+function tableStartLocation(
+  p: Record<string, unknown>
+): Record<string, unknown> {
+  return location(
+    p.tableStartIndex as number,
+    p.segmentId as string | undefined,
+    p.tabId as string | undefined
+  );
+}
+
+function tableCellLocation(
+  p: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    rowIndex: p.rowIndex,
+    columnIndex: p.columnIndex,
+    tableStartLocation: tableStartLocation(p),
+  };
+}
+
+function point(value: unknown): Record<string, unknown> {
+  return { magnitude: value, unit: "PT" };
+}
 
 export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertTable", {
@@ -16,6 +42,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       locationKind: { type: "string", required: false },
       index: { type: "number", required: false },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -26,7 +53,12 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         insertTable: {
           rows: p.rows,
           columns: p.columns,
-          ...buildLocation(kind, p.segmentId as string, p.index as number),
+          ...buildLocation(
+            kind,
+            p.segmentId as string,
+            p.index as number,
+            p.tabId as string | undefined
+          ),
         },
       });
     },
@@ -50,20 +82,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         description: "default: false (insert above)",
       },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
       return runBatchUpdate(ctx, documentId, {
         insertTableRow: {
           insertBelow: p.insertBelow === true,
-          tableCellLocation: {
-            rowIndex: p.rowIndex,
-            columnIndex: p.columnIndex,
-            tableStartLocation: { segmentId: seg, index: p.tableStartIndex },
-          },
+          tableCellLocation: tableCellLocation(p),
         },
       });
     },
@@ -77,19 +104,14 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       rowIndex: { type: "number", required: true },
       columnIndex: { type: "number", required: true },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
       return runBatchUpdate(ctx, documentId, {
         deleteTableRow: {
-          tableCellLocation: {
-            rowIndex: p.rowIndex,
-            columnIndex: p.columnIndex,
-            tableStartLocation: { segmentId: seg, index: p.tableStartIndex },
-          },
+          tableCellLocation: tableCellLocation(p),
         },
       });
     },
@@ -108,20 +130,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         description: "default: false (insert left)",
       },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
       return runBatchUpdate(ctx, documentId, {
         insertTableColumn: {
           insertRight: p.insertRight === true,
-          tableCellLocation: {
-            rowIndex: p.rowIndex,
-            columnIndex: p.columnIndex,
-            tableStartLocation: { segmentId: seg, index: p.tableStartIndex },
-          },
+          tableCellLocation: tableCellLocation(p),
         },
       });
     },
@@ -135,19 +152,14 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       rowIndex: { type: "number", required: true },
       columnIndex: { type: "number", required: true },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
       return runBatchUpdate(ctx, documentId, {
         deleteTableColumn: {
-          tableCellLocation: {
-            rowIndex: p.rowIndex,
-            columnIndex: p.columnIndex,
-            tableStartLocation: { segmentId: seg, index: p.tableStartIndex },
-          },
+          tableCellLocation: tableCellLocation(p),
         },
       });
     },
@@ -177,6 +189,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         required: false,
         description: "TOP | MIDDLE | BOTTOM",
       },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -220,7 +234,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
           updateTableCellStyle: {
             tableRange: {
               tableCellLocation: {
-                tableStartLocation: { index: p.tableStartIndex },
+                tableStartLocation: tableStartLocation(p),
                 rowIndex: p.rowIndex,
                 columnIndex: p.columnIndex,
               },
@@ -244,6 +258,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       columnIndex: { type: "number", required: true },
       rowSpan: { type: "number", required: true },
       columnSpan: { type: "number", required: true },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -253,7 +269,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
           mergeTableCells: {
             tableRange: {
               tableCellLocation: {
-                tableStartLocation: { index: p.tableStartIndex },
+                tableStartLocation: tableStartLocation(p),
                 rowIndex: p.rowIndex,
                 columnIndex: p.columnIndex,
               },
@@ -275,6 +291,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       columnIndex: { type: "number", required: true },
       rowSpan: { type: "number", required: true },
       columnSpan: { type: "number", required: true },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -284,7 +302,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
           unmergeTableCells: {
             tableRange: {
               tableCellLocation: {
-                tableStartLocation: { index: p.tableStartIndex },
+                tableStartLocation: tableStartLocation(p),
                 rowIndex: p.rowIndex,
                 columnIndex: p.columnIndex,
               },
@@ -294,6 +312,127 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
           },
         },
       ]);
+    },
+  });
+
+  rl.registerAction("document.updateTableColumnProperties", {
+    description:
+      "Update table column properties such as width for selected columns or all columns.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      tableStartIndex: { type: "number", required: true },
+      columnIndices: {
+        type: "array",
+        required: false,
+        description: "Zero-based column indices. Omit to update all columns.",
+      },
+      widthPt: {
+        type: "number",
+        required: false,
+        description: "Column width in points.",
+      },
+      fields: {
+        type: "string",
+        required: false,
+        description:
+          "Field mask. Defaults to fields implied by supplied properties.",
+      },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const props: Record<string, unknown> = {};
+      const fields: string[] = [];
+      if (p.widthPt !== undefined) {
+        props.width = point(p.widthPt);
+        fields.push("width");
+      }
+      const mask = (p.fields as string | undefined) ?? fields.join(",");
+      if (!mask)
+        throw new Error(
+          "googleDocs.document.updateTableColumnProperties: fields or widthPt required"
+        );
+      return runBatchUpdate(ctx, documentId, {
+        updateTableColumnProperties: compact({
+          tableStartLocation: tableStartLocation(p),
+          columnIndices: p.columnIndices,
+          tableColumnProperties: props,
+          fields: mask,
+        }),
+      });
+    },
+  });
+
+  rl.registerAction("document.updateTableRowStyle", {
+    description:
+      "Update table row style such as minimum row height for selected rows or all rows.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      tableStartIndex: { type: "number", required: true },
+      rowIndices: {
+        type: "array",
+        required: false,
+        description: "Zero-based row indices. Omit to update all rows.",
+      },
+      minRowHeightPt: { type: "number", required: false },
+      fields: {
+        type: "string",
+        required: false,
+        description:
+          "Field mask. Defaults to fields implied by supplied properties.",
+      },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const style: Record<string, unknown> = {};
+      const fields: string[] = [];
+      if (p.minRowHeightPt !== undefined) {
+        style.minRowHeight = point(p.minRowHeightPt);
+        fields.push("minRowHeight");
+      }
+      const mask = (p.fields as string | undefined) ?? fields.join(",");
+      if (!mask)
+        throw new Error(
+          "googleDocs.document.updateTableRowStyle: fields or minRowHeightPt required"
+        );
+      return runBatchUpdate(ctx, documentId, {
+        updateTableRowStyle: compact({
+          tableStartLocation: tableStartLocation(p),
+          rowIndices: p.rowIndices,
+          tableRowStyle: style,
+          fields: mask,
+        }),
+      });
+    },
+  });
+
+  rl.registerAction("document.pinTableHeaderRows", {
+    description: "Pin or unpin header rows in a table.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      tableStartIndex: { type: "number", required: true },
+      pinnedHeaderRowsCount: {
+        type: "number",
+        required: true,
+        description: "Use 0 to unpin all header rows.",
+      },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      return runBatchUpdate(ctx, documentId, {
+        pinTableHeaderRows: {
+          tableStartLocation: tableStartLocation(p),
+          pinnedHeaderRowsCount: p.pinnedHeaderRowsCount,
+        },
+      });
     },
   });
 }

@@ -1,10 +1,20 @@
 import type { RunlinePluginAPI } from "runline";
 import {
   buildLocation,
+  compact,
   extractDocumentId,
   hexToRgbF,
   runBatchUpdate,
 } from "./shared.js";
+
+function range(p: Record<string, unknown>): Record<string, unknown> {
+  return compact({
+    segmentId: p.segmentId && p.segmentId !== "body" ? p.segmentId : "",
+    startIndex: p.startIndex,
+    endIndex: p.endIndex,
+    tabId: p.tabId,
+  });
+}
 
 export function registerTextActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertText", {
@@ -29,6 +39,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         required: false,
         description: 'Segment ID, or "body" / empty for the main body',
       },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -38,7 +49,8 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       const locObj = buildLocation(
         kind,
         p.segmentId as string,
-        p.index as number
+        p.index as number,
+        p.tabId as string | undefined
       );
       return runBatchUpdate(ctx, documentId, {
         insertText: { text: p.text, ...locObj },
@@ -54,6 +66,12 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       findText: { type: "string", required: true },
       replaceText: { type: "string", required: true },
       matchCase: { type: "boolean", required: false },
+      searchByRegex: { type: "boolean", required: false },
+      tabIds: {
+        type: "array",
+        required: false,
+        description: "Optional tab IDs for tabsCriteria.",
+      },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -61,7 +79,14 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       return runBatchUpdate(ctx, documentId, {
         replaceAllText: {
           replaceText: p.replaceText,
-          containsText: { text: p.findText, matchCase: p.matchCase === true },
+          containsText: {
+            text: p.findText,
+            matchCase: p.matchCase === true,
+            searchByRegex: p.searchByRegex === true,
+          },
+          ...(Array.isArray(p.tabIds)
+            ? { tabsCriteria: { tabIds: p.tabIds } }
+            : {}),
         },
       });
     },
@@ -74,20 +99,13 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       startIndex: { type: "number", required: true },
       endIndex: { type: "number", required: true },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
       return runBatchUpdate(ctx, documentId, {
-        deleteContentRange: {
-          range: {
-            segmentId: seg,
-            startIndex: p.startIndex,
-            endIndex: p.endIndex,
-          },
-        },
+        deleteContentRange: { range: range(p) },
       });
     },
   });
@@ -101,20 +119,15 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       startIndex: { type: "number", required: true },
       endIndex: { type: "number", required: true },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
       return runBatchUpdate(ctx, documentId, {
         createParagraphBullets: {
           bulletPreset: p.bulletPreset,
-          range: {
-            segmentId: seg,
-            startIndex: p.startIndex,
-            endIndex: p.endIndex,
-          },
+          range: range(p),
         },
       });
     },
@@ -127,19 +140,131 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       startIndex: { type: "number", required: true },
       endIndex: { type: "number", required: true },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
       return runBatchUpdate(ctx, documentId, {
-        deleteParagraphBullets: {
-          range: {
-            segmentId: seg,
-            startIndex: p.startIndex,
-            endIndex: p.endIndex,
-          },
+        deleteParagraphBullets: { range: range(p) },
+      });
+    },
+  });
+
+  rl.registerAction("document.insertPerson", {
+    description:
+      "Insert a smart chip person mention at a location or at the end of a segment.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      personProperties: {
+        type: "object",
+        required: true,
+        description: "Docs API PersonProperties object.",
+      },
+      locationKind: {
+        type: "string",
+        required: false,
+        description:
+          "location (default; requires index) | endOfSegmentLocation",
+      },
+      index: { type: "number", required: false },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const kind =
+        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      return runBatchUpdate(ctx, documentId, {
+        insertPerson: {
+          personProperties: p.personProperties,
+          ...buildLocation(
+            kind,
+            p.segmentId as string,
+            p.index as number,
+            p.tabId as string | undefined
+          ),
+        },
+      });
+    },
+  });
+
+  rl.registerAction("document.insertRichLink", {
+    description:
+      "Insert a rich link smart chip at a location or at the end of a segment.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      richLinkProperties: {
+        type: "object",
+        required: true,
+        description: "Docs API RichLinkProperties object.",
+      },
+      locationKind: {
+        type: "string",
+        required: false,
+        description:
+          "location (default; requires index) | endOfSegmentLocation",
+      },
+      index: { type: "number", required: false },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const kind =
+        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      return runBatchUpdate(ctx, documentId, {
+        insertRichLink: {
+          richLinkProperties: p.richLinkProperties,
+          ...buildLocation(
+            kind,
+            p.segmentId as string,
+            p.index as number,
+            p.tabId as string | undefined
+          ),
+        },
+      });
+    },
+  });
+
+  rl.registerAction("document.insertDate", {
+    description:
+      "Insert a date smart chip at a location or at the end of a segment.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      dateElementProperties: {
+        type: "object",
+        required: false,
+        description: "Optional Docs API DateElementProperties object.",
+      },
+      locationKind: {
+        type: "string",
+        required: false,
+        description:
+          "location (default; requires index) | endOfSegmentLocation",
+      },
+      index: { type: "number", required: false },
+      segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      const kind =
+        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      return runBatchUpdate(ctx, documentId, {
+        insertDate: {
+          ...(p.dateElementProperties
+            ? { dateElementProperties: p.dateElementProperties }
+            : {}),
+          ...buildLocation(
+            kind,
+            p.segmentId as string,
+            p.index as number,
+            p.tabId as string | undefined
+          ),
         },
       });
     },
@@ -178,6 +303,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         required: false,
         description: "Header/footer/footnote id; omit for the body.",
       },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -230,11 +356,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       return runBatchUpdate(ctx, documentId, [
         {
           updateTextStyle: {
-            range: {
-              startIndex: p.startIndex,
-              endIndex: p.endIndex,
-              segmentId: p.segmentId,
-            },
+            range: range(p),
             textStyle: ts,
             fields: fields.join(","),
           },

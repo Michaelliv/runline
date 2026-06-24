@@ -1,5 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
-import { extractDocumentId, runBatchUpdate } from "./shared.js";
+import { compact, extractDocumentId, runBatchUpdate } from "./shared.js";
 
 export function registerFormattingActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.updateParagraphStyle", {
@@ -35,6 +35,7 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
         description: "Percentage; 100 = single, 150 = 1.5x.",
       },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -86,16 +87,48 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
       return runBatchUpdate(ctx, documentId, [
         {
           updateParagraphStyle: {
-            range: {
+            range: compact({
               startIndex: p.startIndex,
               endIndex: p.endIndex,
               segmentId: p.segmentId,
-            },
+              tabId: p.tabId,
+            }),
             paragraphStyle: ps,
             fields: fields.join(","),
           },
         },
       ]);
+    },
+  });
+
+  rl.registerAction("document.updateNamedStyle", {
+    description:
+      "Update a named style such as NORMAL_TEXT, TITLE, or HEADING_1 using a Docs API NamedStyle object.",
+    inputSchema: {
+      document: { type: "string", required: true },
+      namedStyle: {
+        type: "object",
+        required: true,
+        description: "Docs API NamedStyle object. Must include namedStyleType.",
+      },
+      fields: {
+        type: "string",
+        required: true,
+        description:
+          "Field mask such as textStyle.bold or paragraphStyle.alignment.",
+      },
+      tabId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const documentId = extractDocumentId(p.document as string);
+      return runBatchUpdate(ctx, documentId, {
+        updateNamedStyle: compact({
+          namedStyle: p.namedStyle,
+          fields: p.fields,
+          tabId: p.tabId,
+        }),
+      });
     },
   });
 }

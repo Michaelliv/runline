@@ -1,5 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
-import { extractDocumentId, location, runBatchUpdate } from "./shared.js";
+import { buildLocation, extractDocumentId, runBatchUpdate } from "./shared.js";
 
 export function registerImagesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertInlineImage", {
@@ -7,20 +7,31 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
       "Insert an inline image at the given location. `uri` must point to a publicly fetchable image.",
     inputSchema: {
       document: { type: "string", required: true },
-      index: { type: "number", required: true },
+      locationKind: {
+        type: "string",
+        required: false,
+        description:
+          "location (default; requires index) | endOfSegmentLocation",
+      },
+      index: { type: "number", required: false },
       uri: { type: "string", required: true },
       widthPt: { type: "number", required: false },
       heightPt: { type: "number", required: false },
       segmentId: { type: "string", required: false },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
       const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
+      const kind =
+        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
       const req: Record<string, unknown> = {
-        location: location(
+        ...buildLocation(
+          kind,
+          p.segmentId as string,
           p.index as number,
-          p.segmentId as string | undefined
+          p.tabId as string | undefined
         ),
         uri: p.uri,
       };
@@ -47,6 +58,7 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
         required: false,
         description: "CENTER_CROP (default) | (others as Docs API adds them)",
       },
+      tabId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -58,6 +70,7 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
             uri: p.uri,
             imageReplaceMethod:
               (p.imageReplaceMethod as string | undefined) ?? "CENTER_CROP",
+            ...(p.tabId ? { tabId: p.tabId } : {}),
           },
         },
       ]);

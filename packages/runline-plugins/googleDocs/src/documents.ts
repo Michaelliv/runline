@@ -31,6 +31,18 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
     },
   });
 
+  rl.registerAction("document.createBlank", {
+    description:
+      "Create a blank Google Doc through the native Docs API. Use document.create when you need Drive folder placement.",
+    inputSchema: {
+      title: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      return docsRequest(ctx, "POST", "/documents", { title: p.title });
+    },
+  });
+
   rl.registerAction("document.get", {
     description:
       "Get a document. Accepts a bare ID or a docs.google.com URL. `simple=true` collapses the body to plain text.",
@@ -47,12 +59,20 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
         description:
           "DEFAULT_FOR_CURRENT_ACCESS | SUGGESTIONS_INLINE | PREVIEW_SUGGESTIONS_ACCEPTED | PREVIEW_WITHOUT_SUGGESTIONS",
       },
+      includeTabsContent: {
+        type: "boolean",
+        required: false,
+        description:
+          "Return content for all tabs in document.tabs instead of only first-tab legacy fields.",
+      },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
       const qs: Record<string, unknown> = {};
       if (p.suggestionsViewMode) qs.suggestionsViewMode = p.suggestionsViewMode;
+      if (p.includeTabsContent !== undefined)
+        qs.includeTabsContent = p.includeTabsContent;
       const res = (await docsRequest(
         ctx,
         "GET",

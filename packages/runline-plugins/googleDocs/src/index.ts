@@ -15,6 +15,7 @@ import { registerImagesActions } from "./images.js";
 import { registerStructureActions } from "./structure.js";
 import { SCOPES } from "./shared.js";
 import { registerTablesActions } from "./tables.js";
+import { registerTabActions } from "./tabs.js";
 import { registerTextActions } from "./text.js";
 
 export default function googleDocs(rl: RunlinePluginAPI) {
@@ -93,6 +94,7 @@ export default function googleDocs(rl: RunlinePluginAPI) {
   registerDocumentsActions(rl);
   registerTextActions(rl);
   registerTablesActions(rl);
+  registerTabActions(rl);
   registerStructureActions(rl);
   registerFormattingActions(rl);
   registerImagesActions(rl);

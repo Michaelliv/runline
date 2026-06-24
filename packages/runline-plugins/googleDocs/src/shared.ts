@@ -73,26 +73,35 @@ export function extractDocumentId(input: string): string {
 export function buildLocation(
   kind: "location" | "endOfSegmentLocation",
   segmentId?: string,
-  index?: number
+  index?: number,
+  tabId?: string
 ): Record<string, unknown> {
   const seg = segmentId && segmentId !== "body" ? segmentId : "";
   if (kind === "endOfSegmentLocation") {
-    return { endOfSegmentLocation: { segmentId: seg } };
+    return { endOfSegmentLocation: compact({ segmentId: seg, tabId }) };
   }
   if (index === undefined || index === null) {
     throw new Error(
       "googleDocs: `index` is required when location kind is 'location'"
     );
   }
-  return { location: { segmentId: seg, index } };
+  return { location: location(index, segmentId, tabId) };
 }
 
 export function location(
   index: number,
-  segmentId?: string
+  segmentId?: string,
+  tabId?: string
 ): Record<string, unknown> {
   const seg = segmentId && segmentId !== "body" ? segmentId : "";
-  return { segmentId: seg, index };
+  return compact({ segmentId: seg, index, tabId });
+}
+
+export function compact<T extends Record<string, unknown>>(obj: T): T {
+  for (const key of Object.keys(obj)) {
+    if (obj[key] === undefined || obj[key] === null) delete obj[key];
+  }
+  return obj;
 }
 
 export async function runBatchUpdate(

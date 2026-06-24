@@ -59,6 +59,7 @@ describe("googleDocs plugin", () => {
     const names = plugin.actions.map((a) => a.name);
     assert.deepEqual(names, [
       "document.create",
+      "document.createBlank",
       "document.get",
       "document.batchUpdate",
       "document.insertText",
@@ -66,6 +67,9 @@ describe("googleDocs plugin", () => {
       "document.deleteContentRange",
       "document.createParagraphBullets",
       "document.deleteParagraphBullets",
+      "document.insertPerson",
+      "document.insertRichLink",
+      "document.insertDate",
       "document.updateTextStyle",
       "document.insertTable",
       "document.insertTableRow",
@@ -75,6 +79,12 @@ describe("googleDocs plugin", () => {
       "document.updateTableCellStyle",
       "document.mergeTableCells",
       "document.unmergeTableCells",
+      "document.updateTableColumnProperties",
+      "document.updateTableRowStyle",
+      "document.pinTableHeaderRows",
+      "document.addDocumentTab",
+      "document.deleteTab",
+      "document.updateDocumentTabProperties",
       "document.insertPageBreak",
       "document.createNamedRange",
       "document.deleteNamedRange",
@@ -83,9 +93,13 @@ describe("googleDocs plugin", () => {
       "document.createFooter",
       "document.deleteFooter",
       "document.deletePositionedObject",
+      "document.createFootnote",
+      "document.replaceNamedRangeContent",
+      "document.updateSectionStyle",
       "document.insertSectionBreak",
       "document.updateDocumentStyle",
       "document.updateParagraphStyle",
+      "document.updateNamedStyle",
       "document.insertInlineImage",
       "document.replaceImage",
     ]);
@@ -143,6 +157,20 @@ describe("googleDocs plugin", () => {
     });
   });
 
+  it("supports native Docs create and tab-aware get", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_new", title: "Doc" });
+
+    const result = await getAction(plugin, "document.createBlank").execute(
+      { title: "Doc" },
+      ctx(),
+    );
+
+    assert.deepEqual(result, { documentId: "doc_new", title: "Doc" });
+    assert.deepEqual(calls[0].body, { title: "Doc" });
+    assert.equal(calls[0].url, "https://docs.googleapis.com/v1/documents");
+  });
+
   it("gets a document by URL and flattens simple body text", async () => {
     const plugin = makeGoogleDocs();
     const calls = await captureFetch({
@@ -158,6 +186,7 @@ describe("googleDocs plugin", () => {
       {
         document: "https://docs.google.com/document/d/doc_123/edit",
         simple: true,
+        includeTabsContent: true,
       },
       ctx(),
     );
@@ -165,7 +194,7 @@ describe("googleDocs plugin", () => {
     assert.deepEqual(result, { documentId: "doc_123", content: "Hello world" });
     assert.equal(
       calls[0].url,
-      "https://docs.googleapis.com/v1/documents/doc_123",
+      "https://docs.googleapis.com/v1/documents/doc_123?includeTabsContent=true",
     );
   });
 
@@ -200,6 +229,7 @@ describe("googleDocs plugin", () => {
         index: 2,
         uri: "https://example.com/a.png",
         widthPt: 100,
+        tabId: "tab_1",
       },
       ctx(),
     );
@@ -208,13 +238,57 @@ describe("googleDocs plugin", () => {
       requests: [
         {
           insertInlineImage: {
-            location: { segmentId: "", index: 2 },
+            location: { segmentId: "", index: 2, tabId: "tab_1" },
             uri: "https://example.com/a.png",
             objectSize: { width: { magnitude: 100, unit: "PT" } },
           },
         },
       ],
     });
+  });
+
+  it("supports tab-scoped image replacement and positioned object deletion", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });
+
+    await getAction(plugin, "document.replaceImage").execute(
+      {
+        document: "doc_1",
+        imageObjectId: "img_1",
+        uri: "https://example.com/b.png",
+        tabId: "tab_1",
+      },
+      ctx(),
+    );
+    await getAction(plugin, "document.deletePositionedObject").execute(
+      { document: "doc_1", objectId: "obj_1", tabId: "tab_1" },
+      ctx(),
+    );
+
+    assert.deepEqual(
+      calls.map((call) => call.body),
+      [
+        {
+          requests: [
+            {
+              replaceImage: {
+                imageObjectId: "img_1",
+                uri: "https://example.com/b.png",
+                imageReplaceMethod: "CENTER_CROP",
+                tabId: "tab_1",
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              deletePositionedObject: { objectId: "obj_1", tabId: "tab_1" },
+            },
+          ],
+        },
+      ],
+    );
   });
 
   it("uses correct section break Location shape", async () => {
@@ -236,5 +310,341 @@ describe("googleDocs plugin", () => {
         },
       ],
     });
+  });
+
+  it("supports table property and header row requests with tab-aware locations", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });
+
+    await getAction(plugin, "document.updateTableColumnProperties").execute(
+      {
+        document: "doc_1",
+        tableStartIndex: 10,
+        columnIndices: [0, 2],
+        widthPt: 72,
+        tabId: "tab_1",
+      },
+      ctx(),
+    );
+    await getAction(plugin, "document.pinTableHeaderRows").execute(
+      {
+        document: "doc_1",
+        tableStartIndex: 10,
+        pinnedHeaderRowsCount: 1,
+        tabId: "tab_1",
+      },
+      ctx(),
+    );
+
+    assert.deepEqual(
+      calls.map((call) => call.body),
+      [
+        {
+          requests: [
+            {
+              updateTableColumnProperties: {
+                tableStartLocation: {
+                  segmentId: "",
+                  index: 10,
+                  tabId: "tab_1",
+                },
+                columnIndices: [0, 2],
+                tableColumnProperties: {
+                  width: { magnitude: 72, unit: "PT" },
+                },
+                fields: "width",
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              pinTableHeaderRows: {
+                tableStartLocation: {
+                  segmentId: "",
+                  index: 10,
+                  tabId: "tab_1",
+                },
+                pinnedHeaderRowsCount: 1,
+              },
+            },
+          ],
+        },
+      ],
+    );
+  });
+
+  it("supports table row style requests", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });
+
+    await getAction(plugin, "document.updateTableRowStyle").execute(
+      {
+        document: "doc_1",
+        tableStartIndex: 10,
+        rowIndices: [1],
+        minRowHeightPt: 24,
+      },
+      ctx(),
+    );
+
+    assert.deepEqual(calls[0].body, {
+      requests: [
+        {
+          updateTableRowStyle: {
+            tableStartLocation: { segmentId: "", index: 10 },
+            rowIndices: [1],
+            tableRowStyle: {
+              minRowHeight: { magnitude: 24, unit: "PT" },
+            },
+            fields: "minRowHeight",
+          },
+        },
+      ],
+    });
+  });
+
+  it("supports regex/tab-scoped replacement and smart-chip insert requests", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });
+
+    await getAction(plugin, "document.replaceAllText").execute(
+      {
+        document: "doc_1",
+        findText: "Client (.*)",
+        replaceText: "Client Acme",
+        searchByRegex: true,
+        tabIds: ["tab_1"],
+      },
+      ctx(),
+    );
+    await getAction(plugin, "document.insertPerson").execute(
+      {
+        document: "doc_1",
+        index: 5,
+        personProperties: { email: "a@example.com" },
+        tabId: "tab_1",
+      },
+      ctx(),
+    );
+    await getAction(plugin, "document.insertRichLink").execute(
+      {
+        document: "doc_1",
+        index: 6,
+        richLinkProperties: { uri: "https://example.com" },
+      },
+      ctx(),
+    );
+    await getAction(plugin, "document.insertDate").execute(
+      { document: "doc_1", index: 7, dateElementProperties: { text: "Today" } },
+      ctx(),
+    );
+
+    assert.deepEqual(
+      calls.map((call) => call.body),
+      [
+        {
+          requests: [
+            {
+              replaceAllText: {
+                replaceText: "Client Acme",
+                containsText: {
+                  text: "Client (.*)",
+                  matchCase: false,
+                  searchByRegex: true,
+                },
+                tabsCriteria: { tabIds: ["tab_1"] },
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              insertPerson: {
+                personProperties: { email: "a@example.com" },
+                location: { segmentId: "", index: 5, tabId: "tab_1" },
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              insertRichLink: {
+                richLinkProperties: { uri: "https://example.com" },
+                location: { segmentId: "", index: 6 },
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              insertDate: {
+                dateElementProperties: { text: "Today" },
+                location: { segmentId: "", index: 7 },
+              },
+            },
+          ],
+        },
+      ],
+    );
+  });
+
+  it("supports document tab lifecycle requests", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });
+
+    await getAction(plugin, "document.addDocumentTab").execute(
+      { document: "doc_1", title: "Notes", index: 1, parentTabId: "root" },
+      ctx(),
+    );
+    await getAction(plugin, "document.updateDocumentTabProperties").execute(
+      { document: "doc_1", tabId: "tab_1", title: "Renamed" },
+      ctx(),
+    );
+    await getAction(plugin, "document.deleteTab").execute(
+      { document: "doc_1", tabId: "tab_2" },
+      ctx(),
+    );
+
+    assert.deepEqual(
+      calls.map((call) => call.body),
+      [
+        {
+          requests: [
+            {
+              addDocumentTab: {
+                tabProperties: {
+                  title: "Notes",
+                  index: 1,
+                  parentTabId: "root",
+                },
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              updateDocumentTabProperties: {
+                tabProperties: { tabId: "tab_1", title: "Renamed" },
+                fields: "title",
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              deleteTab: { tabId: "tab_2" },
+            },
+          ],
+        },
+      ],
+    );
+  });
+
+  it("supports named style update requests", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });
+
+    await getAction(plugin, "document.updateNamedStyle").execute(
+      {
+        document: "doc_1",
+        namedStyle: { namedStyleType: "HEADING_1", textStyle: { bold: true } },
+        fields: "textStyle.bold",
+        tabId: "tab_1",
+      },
+      ctx(),
+    );
+
+    assert.deepEqual(calls[0].body, {
+      requests: [
+        {
+          updateNamedStyle: {
+            namedStyle: {
+              namedStyleType: "HEADING_1",
+              textStyle: { bold: true },
+            },
+            fields: "textStyle.bold",
+            tabId: "tab_1",
+          },
+        },
+      ],
+    });
+  });
+
+  it("supports footnote, named range replacement, and section style requests", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });
+
+    await getAction(plugin, "document.createFootnote").execute(
+      { document: "doc_1", index: 4, tabId: "tab_1" },
+      ctx(),
+    );
+    await getAction(plugin, "document.replaceNamedRangeContent").execute(
+      {
+        document: "doc_1",
+        namedRangeName: "client_name",
+        text: "Acme",
+        tabIds: ["tab_1"],
+      },
+      ctx(),
+    );
+    await getAction(plugin, "document.updateSectionStyle").execute(
+      {
+        document: "doc_1",
+        startIndex: 1,
+        endIndex: 20,
+        marginLeftPt: 36,
+        tabId: "tab_1",
+      },
+      ctx(),
+    );
+
+    assert.deepEqual(
+      calls.map((call) => call.body),
+      [
+        {
+          requests: [
+            {
+              createFootnote: {
+                location: { segmentId: "", index: 4, tabId: "tab_1" },
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              replaceNamedRangeContent: {
+                text: "Acme",
+                namedRangeName: "client_name",
+                tabsCriteria: { tabIds: ["tab_1"] },
+              },
+            },
+          ],
+        },
+        {
+          requests: [
+            {
+              updateSectionStyle: {
+                range: {
+                  segmentId: "",
+                  startIndex: 1,
+                  endIndex: 20,
+                  tabId: "tab_1",
+                },
+                sectionStyle: { marginLeft: { magnitude: 36, unit: "PT" } },
+                fields: "marginLeft",
+              },
+            },
+          ],
+        },
+      ],
+    );
   });
 });
