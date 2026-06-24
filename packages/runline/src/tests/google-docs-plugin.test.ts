@@ -351,8 +351,9 @@ describe("googleDocs plugin", () => {
                 columnIndices: [0, 2],
                 tableColumnProperties: {
                   width: { magnitude: 72, unit: "PT" },
+                  widthType: "FIXED_WIDTH",
                 },
-                fields: "width",
+                fields: "width,widthType",
               },
             },
           ],

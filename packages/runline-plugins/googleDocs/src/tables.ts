@@ -331,6 +331,12 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         required: false,
         description: "Column width in points.",
       },
+      widthType: {
+        type: "string",
+        required: false,
+        description:
+          "WIDTH_TYPE_UNSPECIFIED | EVENLY_DISTRIBUTED | FIXED_WIDTH. Defaults to FIXED_WIDTH when widthPt is provided.",
+      },
       fields: {
         type: "string",
         required: false,
@@ -347,7 +353,11 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       const fields: string[] = [];
       if (p.widthPt !== undefined) {
         props.width = point(p.widthPt);
-        fields.push("width");
+        props.widthType = (p.widthType as string | undefined) ?? "FIXED_WIDTH";
+        fields.push("width", "widthType");
+      } else if (p.widthType) {
+        props.widthType = p.widthType;
+        fields.push("widthType");
       }
       const mask = (p.fields as string | undefined) ?? fields.join(",");
       if (!mask)
