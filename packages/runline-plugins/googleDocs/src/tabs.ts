@@ -71,7 +71,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       const mask = (p.fields as string | undefined) ?? fields.join(",");
       if (!mask) {
         throw new Error(
-          "googleDocs.document.updateDocumentTabProperties: fields or tab property required"
+          "googleDocs.document.updateDocumentTabProperties: fields or tab property required",
         );
       }
       return runBatchUpdate(ctx, documentId, {

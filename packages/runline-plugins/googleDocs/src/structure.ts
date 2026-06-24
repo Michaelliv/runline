@@ -40,7 +40,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
           kind,
           p.segmentId as string,
           p.index as number,
-          p.tabId as string | undefined
+          p.tabId as string | undefined,
         ),
       });
     },
@@ -60,8 +60,6 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
       return runBatchUpdate(ctx, documentId, {
         createNamedRange: {
           name: p.name,
@@ -121,7 +119,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       if (kind === "location") {
         if (p.index === undefined) {
           throw new Error(
-            "googleDocs: `index` is required when locationKind=location"
+            "googleDocs: `index` is required when locationKind=location",
           );
         }
         sectionBreakLocation.index = p.index;
@@ -170,7 +168,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       if (kind === "location") {
         if (p.index === undefined) {
           throw new Error(
-            "googleDocs: `index` is required when locationKind=location"
+            "googleDocs: `index` is required when locationKind=location",
           );
         }
         sectionBreakLocation.index = p.index;
@@ -241,7 +239,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
           kind,
           p.segmentId as string,
           p.index as number,
-          p.tabId as string | undefined
+          p.tabId as string | undefined,
         ),
       });
     },
@@ -342,7 +340,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       const mask = (p.fields as string | undefined) ?? fields.join(",");
       if (!mask)
         throw new Error(
-          "googleDocs.document.updateSectionStyle: fields or section style property required"
+          "googleDocs.document.updateSectionStyle: fields or section style property required",
         );
       return runBatchUpdate(ctx, documentId, {
         updateSectionStyle: {
@@ -376,7 +374,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
             location: location(
               p.index as number,
               p.segmentId as string | undefined,
-              p.tabId as string | undefined
+              p.tabId as string | undefined,
             ),
             sectionType: (p.sectionType as string | undefined) ?? "CONTINUOUS",
           },
@@ -425,11 +423,11 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         ds.pageSize = {};
         if (p.pageSizeWidthPt !== undefined)
           (ds.pageSize as Record<string, unknown>).width = pt(
-            p.pageSizeWidthPt
+            p.pageSizeWidthPt,
           );
         if (p.pageSizeHeightPt !== undefined)
           (ds.pageSize as Record<string, unknown>).height = pt(
-            p.pageSizeHeightPt
+            p.pageSizeHeightPt,
           );
         fields.push("pageSize");
       }
@@ -439,7 +437,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       }
       if (fields.length === 0) {
         throw new Error(
-          "googleDocs.document.updateDocumentStyle: pass at least one property"
+          "googleDocs.document.updateDocumentStyle: pass at least one property",
         );
       }
       return runBatchUpdate(ctx, documentId, [

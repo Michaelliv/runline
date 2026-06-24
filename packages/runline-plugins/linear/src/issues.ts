@@ -1,49 +1,130 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
-  COMMENT_FIELDS,
-  ISSUE_FIELDS,
-  ISSUE_LITE,
-  LIST_INPUT_SCHEMA,
   assertIssueInScope,
   buildConnArgs,
+  COMMENT_FIELDS,
   ensureScopeLabelsOnCreateOrReplace,
   forbidScopeLabelRemoval,
   gql,
+  ISSUE_FIELDS,
+  ISSUE_LITE,
   issueHasScope,
   key,
-  mergeIssueScopeFilter,
+  LIST_INPUT_SCHEMA,
   type ListOpts,
+  mergeIssueScopeFilter,
 } from "./shared.js";
 
 export function registerIssueActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.create", {
-    description: "Create an issue. teamId is required; title is required unless a template is applied.",
+    description:
+      "Create an issue. teamId is required; title is required unless a template is applied.",
     inputSchema: t.Object({
-      teamId: t.String({ description: "The identifier of the team associated with the issue"}),
-      title: t.String({ description: "The title of the issue"}),
-      description: t.Optional(t.String({ description: "The issue description in markdown format"})),
-      assigneeId: t.Optional(t.String({ description: "The identifier of the user to assign the issue to"})),
-      priority: t.Optional(t.Number({ description: "Priority. 0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low"})),
-      stateId: t.Optional(t.String({ description: "The team workflow state of the issue"})),
-      labelIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of the issue labels associated with this ticket"})),
-      parentId: t.Optional(t.String({ description: "The identifier of the parent issue. UUID or issue identifier (e.g., 'LIN-123')"})),
-      projectId: t.Optional(t.String({ description: "The project associated with the issue"})),
-      projectMilestoneId: t.Optional(t.String({ description: "The project milestone associated with the issue"})),
-      cycleId: t.Optional(t.String({ description: "The cycle associated with the issue"})),
-      estimate: t.Optional(t.Number({ description: "The estimated complexity of the issue (Int)"})),
-      dueDate: t.Optional(t.String({ description: "The date at which the issue is due (TimelessDate, YYYY-MM-DD)"})),
-      subscriberIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of the users subscribing to this ticket"})),
-      templateId: t.Optional(t.String({ description: "The identifier of a template the issue should be created from"})),
-      useDefaultTemplate: t.Optional(t.Boolean({ description: "Apply the team's default template based on the user's membership"})),
-      sortOrder: t.Optional(t.Number({ description: "The position of the issue related to other issues (Float)"})),
-      subIssueSortOrder: t.Optional(t.Number({ description: "The position of the issue in its parent's sub-issue list (Float)"})),
-      releaseIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of the releases to associate with this issue"})),
-      id: t.Optional(t.String({ description: "The identifier in UUID v4 format. If none is provided, the backend will generate one"})),
+      teamId: t.String({
+        description: "The identifier of the team associated with the issue",
+      }),
+      title: t.String({ description: "The title of the issue" }),
+      description: t.Optional(
+        t.String({ description: "The issue description in markdown format" }),
+      ),
+      assigneeId: t.Optional(
+        t.String({
+          description: "The identifier of the user to assign the issue to",
+        }),
+      ),
+      priority: t.Optional(
+        t.Number({
+          description:
+            "Priority. 0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low",
+        }),
+      ),
+      stateId: t.Optional(
+        t.String({ description: "The team workflow state of the issue" }),
+      ),
+      labelIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of the issue labels associated with this ticket",
+        }),
+      ),
+      parentId: t.Optional(
+        t.String({
+          description:
+            "The identifier of the parent issue. UUID or issue identifier (e.g., 'LIN-123')",
+        }),
+      ),
+      projectId: t.Optional(
+        t.String({ description: "The project associated with the issue" }),
+      ),
+      projectMilestoneId: t.Optional(
+        t.String({
+          description: "The project milestone associated with the issue",
+        }),
+      ),
+      cycleId: t.Optional(
+        t.String({ description: "The cycle associated with the issue" }),
+      ),
+      estimate: t.Optional(
+        t.Number({
+          description: "The estimated complexity of the issue (Int)",
+        }),
+      ),
+      dueDate: t.Optional(
+        t.String({
+          description:
+            "The date at which the issue is due (TimelessDate, YYYY-MM-DD)",
+        }),
+      ),
+      subscriberIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of the users subscribing to this ticket",
+        }),
+      ),
+      templateId: t.Optional(
+        t.String({
+          description:
+            "The identifier of a template the issue should be created from",
+        }),
+      ),
+      useDefaultTemplate: t.Optional(
+        t.Boolean({
+          description:
+            "Apply the team's default template based on the user's membership",
+        }),
+      ),
+      sortOrder: t.Optional(
+        t.Number({
+          description:
+            "The position of the issue related to other issues (Float)",
+        }),
+      ),
+      subIssueSortOrder: t.Optional(
+        t.Number({
+          description:
+            "The position of the issue in its parent's sub-issue list (Float)",
+        }),
+      ),
+      releaseIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of the releases to associate with this issue",
+        }),
+      ),
+      id: t.Optional(
+        t.String({
+          description:
+            "The identifier in UUID v4 format. If none is provided, the backend will generate one",
+        }),
+      ),
     }),
     async execute(input, ctx) {
       const fields = { ...(input as Record<string, unknown>) };
-      fields.labelIds = ensureScopeLabelsOnCreateOrReplace(ctx, fields.labelIds);
+      fields.labelIds = ensureScopeLabelsOnCreateOrReplace(
+        ctx,
+        fields.labelIds,
+      );
       const data = await gql(
         key(ctx),
         `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { ${ISSUE_FIELDS} } } }`,
@@ -68,26 +149,43 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         { id: (input as { issueId: string }).issueId },
       );
       const issue = data.issue;
-      if (!issueHasScope(ctx, issue)) throw new Error("Linear issue is not available to this scoped connection");
+      if (!issueHasScope(ctx, issue))
+        throw new Error(
+          "Linear issue is not available to this scoped connection",
+        );
       return issue;
     },
   });
 
   rl.registerAction("issue.list", {
-    description: "List issues. Pass `filter` for state/label/project/etc. Default hides archived.",
+    description:
+      "List issues. Pass `filter` for state/label/project/etc. Default hides archived.",
     inputSchema: t.Object({
       ...LIST_INPUT_SCHEMA,
-      teamId: t.Optional(t.String({ description: "Convenience: filter by team"})),
-      assigneeId: t.Optional(t.String({ description: "Convenience: filter by assignee"})),
+      teamId: t.Optional(
+        t.String({ description: "Convenience: filter by team" }),
+      ),
+      assigneeId: t.Optional(
+        t.String({ description: "Convenience: filter by assignee" }),
+      ),
     }),
     async execute(input, ctx) {
-      const opts = (input ?? {}) as ListOpts & { teamId?: string; assigneeId?: string };
+      const opts = (input ?? {}) as ListOpts & {
+        teamId?: string;
+        assigneeId?: string;
+      };
       // Merge convenience filters into `filter`
       const merged: Record<string, unknown> = { ...(opts.filter ?? {}) };
       if (opts.teamId) merged.team = { id: { eq: opts.teamId } };
       if (opts.assigneeId) merged.assignee = { id: { eq: opts.assigneeId } };
-      const filter = mergeIssueScopeFilter(ctx, Object.keys(merged).length > 0 ? merged : undefined);
-      const { argsDecl, argsCall, vars } = buildConnArgs({ ...opts, filter }, "IssueFilter");
+      const filter = mergeIssueScopeFilter(
+        ctx,
+        Object.keys(merged).length > 0 ? merged : undefined,
+      );
+      const { argsDecl, argsCall, vars } = buildConnArgs(
+        { ...opts, filter },
+        "IssueFilter",
+      );
       const data = await gql(
         key(ctx),
         `query${argsDecl} { issues${argsCall} { nodes { ${ISSUE_LITE} } pageInfo { hasNextPage endCursor } } }`,
@@ -99,38 +197,137 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.update", {
-    description: "Update an issue. All fields optional; only provided fields are updated.",
+    description:
+      "Update an issue. All fields optional; only provided fields are updated.",
     inputSchema: t.Object({
-      issueId: t.String({ description: "The identifier of the issue to update"}),
-      title: t.Optional(t.String({ description: "The issue title"})),
-      description: t.Optional(t.String({ description: "The issue description in markdown format"})),
-      assigneeId: t.Optional(t.String({ description: "The identifier of the user to assign the issue to"})),
-      stateId: t.Optional(t.String({ description: "The team workflow state of the issue"})),
-      priority: t.Optional(t.Number({ description: "Priority. 0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low"})),
-      labelIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of the issue labels associated with this ticket (replaces all)"})),
-      addedLabelIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of issue labels to be added to this issue"})),
-      removedLabelIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of issue labels to be removed from this issue"})),
-      projectId: t.Optional(t.String({ description: "The project associated with the issue"})),
-      projectMilestoneId: t.Optional(t.String({ description: "The project milestone associated with the issue"})),
-      cycleId: t.Optional(t.String({ description: "The cycle associated with the issue"})),
-      parentId: t.Optional(t.String({ description: "The identifier of the parent issue. UUID or issue identifier (e.g., 'LIN-123')"})),
-      teamId: t.Optional(t.String({ description: "The identifier of the team associated with the issue (move issue to a different team)"})),
-      estimate: t.Optional(t.Number({ description: "The estimated complexity of the issue (Int)"})),
-      dueDate: t.Optional(t.String({ description: "The date at which the issue is due (TimelessDate, YYYY-MM-DD)"})),
-      subscriberIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of the users subscribing to this ticket"})),
-      sortOrder: t.Optional(t.Number({ description: "The position of the issue related to other issues (Float)"})),
-      subIssueSortOrder: t.Optional(t.Number({ description: "The position of the issue in its parent's sub-issue list (Float)"})),
-      snoozedUntilAt: t.Optional(t.String({ description: "The time until which the issue will be snoozed in Triage view (DateTime)"})),
-      releaseIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of the releases associated with this issue (replaces all)"})),
-      addedReleaseIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of releases to be added to this issue"})),
-      removedReleaseIds: t.Optional(t.Array(t.Unknown(), { description: "The identifiers of releases to be removed from this issue"})),
-      trashed: t.Optional(t.Boolean({ description: "Whether the issue has been trashed"})),
+      issueId: t.String({
+        description: "The identifier of the issue to update",
+      }),
+      title: t.Optional(t.String({ description: "The issue title" })),
+      description: t.Optional(
+        t.String({ description: "The issue description in markdown format" }),
+      ),
+      assigneeId: t.Optional(
+        t.String({
+          description: "The identifier of the user to assign the issue to",
+        }),
+      ),
+      stateId: t.Optional(
+        t.String({ description: "The team workflow state of the issue" }),
+      ),
+      priority: t.Optional(
+        t.Number({
+          description:
+            "Priority. 0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low",
+        }),
+      ),
+      labelIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of the issue labels associated with this ticket (replaces all)",
+        }),
+      ),
+      addedLabelIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of issue labels to be added to this issue",
+        }),
+      ),
+      removedLabelIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of issue labels to be removed from this issue",
+        }),
+      ),
+      projectId: t.Optional(
+        t.String({ description: "The project associated with the issue" }),
+      ),
+      projectMilestoneId: t.Optional(
+        t.String({
+          description: "The project milestone associated with the issue",
+        }),
+      ),
+      cycleId: t.Optional(
+        t.String({ description: "The cycle associated with the issue" }),
+      ),
+      parentId: t.Optional(
+        t.String({
+          description:
+            "The identifier of the parent issue. UUID or issue identifier (e.g., 'LIN-123')",
+        }),
+      ),
+      teamId: t.Optional(
+        t.String({
+          description:
+            "The identifier of the team associated with the issue (move issue to a different team)",
+        }),
+      ),
+      estimate: t.Optional(
+        t.Number({
+          description: "The estimated complexity of the issue (Int)",
+        }),
+      ),
+      dueDate: t.Optional(
+        t.String({
+          description:
+            "The date at which the issue is due (TimelessDate, YYYY-MM-DD)",
+        }),
+      ),
+      subscriberIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of the users subscribing to this ticket",
+        }),
+      ),
+      sortOrder: t.Optional(
+        t.Number({
+          description:
+            "The position of the issue related to other issues (Float)",
+        }),
+      ),
+      subIssueSortOrder: t.Optional(
+        t.Number({
+          description:
+            "The position of the issue in its parent's sub-issue list (Float)",
+        }),
+      ),
+      snoozedUntilAt: t.Optional(
+        t.String({
+          description:
+            "The time until which the issue will be snoozed in Triage view (DateTime)",
+        }),
+      ),
+      releaseIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of the releases associated with this issue (replaces all)",
+        }),
+      ),
+      addedReleaseIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description: "The identifiers of releases to be added to this issue",
+        }),
+      ),
+      removedReleaseIds: t.Optional(
+        t.Array(t.Unknown(), {
+          description:
+            "The identifiers of releases to be removed from this issue",
+        }),
+      ),
+      trashed: t.Optional(
+        t.Boolean({ description: "Whether the issue has been trashed" }),
+      ),
     }),
     async execute(input, ctx) {
       const { issueId, ...fields } = input as Record<string, unknown>;
       await assertIssueInScope(ctx, String(issueId));
-      if (fields.removedLabelIds) forbidScopeLabelRemoval(ctx, fields.removedLabelIds);
-      if (fields.labelIds) fields.labelIds = ensureScopeLabelsOnCreateOrReplace(ctx, fields.labelIds);
+      if (fields.removedLabelIds)
+        forbidScopeLabelRemoval(ctx, fields.removedLabelIds);
+      if (fields.labelIds)
+        fields.labelIds = ensureScopeLabelsOnCreateOrReplace(
+          ctx,
+          fields.labelIds,
+        );
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { ${ISSUE_FIELDS} } } }`,
@@ -141,13 +338,17 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.delete", {
-    description: "Trash (soft-delete) an issue. Pass permanentlyDelete=true to bypass 30d grace period (admin only).",
+    description:
+      "Trash (soft-delete) an issue. Pass permanentlyDelete=true to bypass 30d grace period (admin only).",
     inputSchema: t.Object({
       issueId: t.String(),
       permanentlyDelete: t.Optional(t.Boolean()),
     }),
     async execute(input, ctx) {
-      const { issueId, permanentlyDelete } = input as { issueId: string; permanentlyDelete?: boolean };
+      const { issueId, permanentlyDelete } = input as {
+        issueId: string;
+        permanentlyDelete?: boolean;
+      };
       await assertIssueInScope(ctx, issueId);
       const data = await gql(
         key(ctx),
@@ -192,17 +393,38 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.search", {
-    description: "Search issues by text query using full-text and vector search. Rate-limited to 30 req/min.",
+    description:
+      "Search issues by text query using full-text and vector search. Rate-limited to 30 req/min.",
     inputSchema: t.Object({
-      term: t.String({ description: "Search string to look for"}),
-      limit: t.Optional(t.Number({ description: "Max results (forward pagination, default 50)"})),
-      filter: t.Optional(t.Object({}, { description: "Optional IssueFilter"})),
-      includeComments: t.Optional(t.Boolean({ description: "Should associated comments be searched (default false)"})),
-      includeArchived: t.Optional(t.Boolean({ description: "Should archived resources be included (default false)"})),
-      teamId: t.Optional(t.String({ description: "UUID of a team to boost in search results"})),
-      orderBy: t.Optional(t.String({ description: "PaginationOrderBy: createdAt | updatedAt"})),
-      after: t.Optional(t.String({ description: "Cursor for forward pagination"})),
-      before: t.Optional(t.String({ description: "Cursor for backward pagination"})),
+      term: t.String({ description: "Search string to look for" }),
+      limit: t.Optional(
+        t.Number({
+          description: "Max results (forward pagination, default 50)",
+        }),
+      ),
+      filter: t.Optional(t.Object({}, { description: "Optional IssueFilter" })),
+      includeComments: t.Optional(
+        t.Boolean({
+          description: "Should associated comments be searched (default false)",
+        }),
+      ),
+      includeArchived: t.Optional(
+        t.Boolean({
+          description: "Should archived resources be included (default false)",
+        }),
+      ),
+      teamId: t.Optional(
+        t.String({ description: "UUID of a team to boost in search results" }),
+      ),
+      orderBy: t.Optional(
+        t.String({ description: "PaginationOrderBy: createdAt | updatedAt" }),
+      ),
+      after: t.Optional(
+        t.String({ description: "Cursor for forward pagination" }),
+      ),
+      before: t.Optional(
+        t.String({ description: "Cursor for backward pagination" }),
+      ),
     }),
     async execute(input, ctx) {
       const opts = input as Record<string, unknown>;
@@ -218,7 +440,11 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         {
           term: opts.term,
           first: opts.limit ?? 50,
-          filter: mergeIssueScopeFilter(ctx, opts.filter as Record<string, unknown> | undefined) ?? null,
+          filter:
+            mergeIssueScopeFilter(
+              ctx,
+              opts.filter as Record<string, unknown> | undefined,
+            ) ?? null,
           includeComments: opts.includeComments ?? null,
           includeArchived: opts.includeArchived ?? null,
           teamId: opts.teamId ?? null,
@@ -238,7 +464,10 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       labelId: t.String(),
     }),
     async execute(input, ctx) {
-      const { issueId, labelId } = input as { issueId: string; labelId: string };
+      const { issueId, labelId } = input as {
+        issueId: string;
+        labelId: string;
+      };
       await assertIssueInScope(ctx, issueId);
       const data = await gql(
         key(ctx),
@@ -256,7 +485,10 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       labelId: t.String(),
     }),
     async execute(input, ctx) {
-      const { issueId, labelId } = input as { issueId: string; labelId: string };
+      const { issueId, labelId } = input as {
+        issueId: string;
+        labelId: string;
+      };
       await assertIssueInScope(ctx, issueId);
       forbidScopeLabelRemoval(ctx, labelId);
       const data = await gql(
@@ -269,7 +501,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.subscribe", {
-    description: "Subscribe a user to issue notifications (defaults to current user).",
+    description:
+      "Subscribe a user to issue notifications (defaults to current user).",
     inputSchema: t.Object({
       issueId: t.String(),
       userId: t.Optional(t.String()),
@@ -290,7 +523,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.unsubscribe", {
-    description: "Unsubscribe a user from issue notifications (defaults to current user).",
+    description:
+      "Unsubscribe a user from issue notifications (defaults to current user).",
     inputSchema: t.Object({
       issueId: t.String(),
       userId: t.Optional(t.String()),
@@ -313,9 +547,18 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.addLink", {
     description: "Create a relation between two issues.",
     inputSchema: t.Object({
-      issueId: t.String({ description: "The identifier of the issue that is related to another issue. UUID or issue identifier (e.g., 'LIN-123')"}),
-      relatedIssueId: t.String({ description: "The identifier of the related issue. UUID or issue identifier (e.g., 'LIN-123')"}),
-      type: t.String({ description: "IssueRelationType: blocks | duplicate | related | similar"}),
+      issueId: t.String({
+        description:
+          "The identifier of the issue that is related to another issue. UUID or issue identifier (e.g., 'LIN-123')",
+      }),
+      relatedIssueId: t.String({
+        description:
+          "The identifier of the related issue. UUID or issue identifier (e.g., 'LIN-123')",
+      }),
+      type: t.String({
+        description:
+          "IssueRelationType: blocks | duplicate | related | similar",
+      }),
     }),
     async execute(input, ctx) {
       const fields = input as Record<string, unknown>;
@@ -346,7 +589,12 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         }`,
         { id: issueId, first: limit ?? 50 },
       );
-      return ((data.issue as Record<string, unknown>)?.comments as Record<string, unknown>)?.nodes;
+      return (
+        (data.issue as Record<string, unknown>)?.comments as Record<
+          string,
+          unknown
+        >
+      )?.nodes;
     },
   });
 }

@@ -1,13 +1,31 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { USER_FIELDS, bindGetAction, bindListAction, gql, key, requireUnscoped } from "./shared.js";
+import {
+  bindGetAction,
+  bindListAction,
+  gql,
+  key,
+  requireUnscoped,
+  USER_FIELDS,
+} from "./shared.js";
 
 export function registerUserActions(rl: RunlinePluginAPI) {
   const listAction = bindListAction(rl);
   const getAction = bindGetAction(rl);
 
-  listAction("user.list", "List users in the workspace.", "users", "UserFilter", USER_FIELDS);
-  getAction("user.get", "Get a user by ID. Use 'me' to reference the authenticated user.", "user", USER_FIELDS);
+  listAction(
+    "user.list",
+    "List users in the workspace.",
+    "users",
+    "UserFilter",
+    USER_FIELDS,
+  );
+  getAction(
+    "user.get",
+    "Get a user by ID. Use 'me' to reference the authenticated user.",
+    "user",
+    USER_FIELDS,
+  );
   rl.registerAction("user.me", {
     description: "Get the authenticated user.",
     inputSchema: t.Object({}),
@@ -19,16 +37,35 @@ export function registerUserActions(rl: RunlinePluginAPI) {
   rl.registerAction("user.update", {
     description: "Update a user. Use id='me' to update the authenticated user.",
     inputSchema: t.Object({
-      id: t.String({ description: "The identifier of the user to update. Use 'me' to reference the currently authenticated user" }),
+      id: t.String({
+        description:
+          "The identifier of the user to update. Use 'me' to reference the currently authenticated user",
+      }),
       name: t.Optional(t.String({ description: "The name of the user" })),
-      displayName: t.Optional(t.String({ description: "The display name of the user" })),
-      description: t.Optional(t.String({ description: "The user description or short bio" })),
-      avatarUrl: t.Optional(t.String({ description: "The avatar image URL of the user" })),
-      timezone: t.Optional(t.String({ description: "The local timezone of the user" })),
+      displayName: t.Optional(
+        t.String({ description: "The display name of the user" }),
+      ),
+      description: t.Optional(
+        t.String({ description: "The user description or short bio" }),
+      ),
+      avatarUrl: t.Optional(
+        t.String({ description: "The avatar image URL of the user" }),
+      ),
+      timezone: t.Optional(
+        t.String({ description: "The local timezone of the user" }),
+      ),
       title: t.Optional(t.String({ description: "The user's job title" })),
-      statusEmoji: t.Optional(t.String({ description: "The emoji part of the user status" })),
-      statusLabel: t.Optional(t.String({ description: "The label part of the user status" })),
-      statusUntilAt: t.Optional(t.String({ description: "When the user status should be cleared (DateTime)" })),
+      statusEmoji: t.Optional(
+        t.String({ description: "The emoji part of the user status" }),
+      ),
+      statusLabel: t.Optional(
+        t.String({ description: "The label part of the user status" }),
+      ),
+      statusUntilAt: t.Optional(
+        t.String({
+          description: "When the user status should be cleared (DateTime)",
+        }),
+      ),
     }),
     async execute(input, ctx) {
       requireUnscoped(ctx, "user.update");

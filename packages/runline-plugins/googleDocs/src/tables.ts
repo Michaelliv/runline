@@ -9,17 +9,17 @@ import {
 } from "./shared.js";
 
 function tableStartLocation(
-  p: Record<string, unknown>
+  p: Record<string, unknown>,
 ): Record<string, unknown> {
   return location(
     p.tableStartIndex as number,
     p.segmentId as string | undefined,
-    p.tabId as string | undefined
+    p.tabId as string | undefined,
   );
 }
 
 function tableCellLocation(
-  p: Record<string, unknown>
+  p: Record<string, unknown>,
 ): Record<string, unknown> {
   return {
     rowIndex: p.rowIndex,
@@ -57,7 +57,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
             kind,
             p.segmentId as string,
             p.index as number,
-            p.tabId as string | undefined
+            p.tabId as string | undefined,
           ),
         },
       });
@@ -226,7 +226,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       }
       if (fields.length === 0) {
         throw new Error(
-          "googleDocs.document.updateTableCellStyle: at least one style property required"
+          "googleDocs.document.updateTableCellStyle: at least one style property required",
         );
       }
       return runBatchUpdate(ctx, documentId, [
@@ -352,7 +352,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       const mask = (p.fields as string | undefined) ?? fields.join(",");
       if (!mask)
         throw new Error(
-          "googleDocs.document.updateTableColumnProperties: fields or widthPt required"
+          "googleDocs.document.updateTableColumnProperties: fields or widthPt required",
         );
       return runBatchUpdate(ctx, documentId, {
         updateTableColumnProperties: compact({
@@ -398,7 +398,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       const mask = (p.fields as string | undefined) ?? fields.join(",");
       if (!mask)
         throw new Error(
-          "googleDocs.document.updateTableRowStyle: fields or minRowHeightPt required"
+          "googleDocs.document.updateTableRowStyle: fields or minRowHeightPt required",
         );
       return runBatchUpdate(ctx, documentId, {
         updateTableRowStyle: compact({

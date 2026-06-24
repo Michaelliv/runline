@@ -31,7 +31,7 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
           kind,
           p.segmentId as string,
           p.index as number,
-          p.tabId as string | undefined
+          p.tabId as string | undefined,
         ),
         uri: p.uri,
       };

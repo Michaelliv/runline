@@ -50,7 +50,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         kind,
         p.segmentId as string,
         p.index as number,
-        p.tabId as string | undefined
+        p.tabId as string | undefined,
       );
       return runBatchUpdate(ctx, documentId, {
         insertText: { text: p.text, ...locObj },
@@ -183,7 +183,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
             kind,
             p.segmentId as string,
             p.index as number,
-            p.tabId as string | undefined
+            p.tabId as string | undefined,
           ),
         },
       });
@@ -222,7 +222,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
             kind,
             p.segmentId as string,
             p.index as number,
-            p.tabId as string | undefined
+            p.tabId as string | undefined,
           ),
         },
       });
@@ -263,7 +263,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
             kind,
             p.segmentId as string,
             p.index as number,
-            p.tabId as string | undefined
+            p.tabId as string | undefined,
           ),
         },
       });
@@ -350,7 +350,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       }
       if (fields.length === 0) {
         throw new Error(
-          "googleDocs.document.updateTextStyle: at least one styling property required"
+          "googleDocs.document.updateTextStyle: at least one styling property required",
         );
       }
       return runBatchUpdate(ctx, documentId, [

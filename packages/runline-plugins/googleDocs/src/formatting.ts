@@ -81,7 +81,7 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
       }
       if (fields.length === 0) {
         throw new Error(
-          "googleDocs.document.updateParagraphStyle: at least one property required"
+          "googleDocs.document.updateParagraphStyle: at least one property required",
         );
       }
       return runBatchUpdate(ctx, documentId, [

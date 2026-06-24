@@ -78,7 +78,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
         "GET",
         `/documents/${documentId}`,
         undefined,
-        qs
+        qs,
       )) as { body?: unknown };
       if (!p.simple) return res;
       return { documentId, content: flattenBodyText(res.body) };
@@ -108,7 +108,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
         ctx,
         "POST",
         `/documents/${documentId}:batchUpdate`,
-        body
+        body,
       );
     },
   });

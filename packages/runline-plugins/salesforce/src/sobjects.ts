@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { records, type QueryResult } from "./queryResult.js";
+import { type QueryResult, records } from "./queryResult.js";
 import { api, type Ctx } from "./shared.js";
 
 export const SOBJECTS = [
@@ -38,11 +38,12 @@ const QueryInput = (sObject: string) =>
     limit: t.Optional(t.Number({ description: "Max records" })),
   });
 
-function buildQuery(
-  sObject: string,
-  input: unknown,
-): string {
-  const p = (input ?? {}) as { fields?: string; where?: string; limit?: number };
+function buildQuery(sObject: string, input: unknown): string {
+  const p = (input ?? {}) as {
+    fields?: string;
+    where?: string;
+    limit?: number;
+  };
   const fields = p.fields || DEFAULT_FIELDS[sObject] || "Id";
   let q = `SELECT ${fields} FROM ${sObject}`;
   if (p.where) q += ` WHERE ${p.where}`;

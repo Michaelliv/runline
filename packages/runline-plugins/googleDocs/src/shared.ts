@@ -33,7 +33,7 @@ export async function docsRequest(
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
-  baseOverride?: string
+  baseOverride?: string,
 ): Promise<unknown> {
   const token = await accessToken(ctx);
   const url = new URL(`${baseOverride ?? DOCS_BASE}${path}`);
@@ -74,7 +74,7 @@ export function buildLocation(
   kind: "location" | "endOfSegmentLocation",
   segmentId?: string,
   index?: number,
-  tabId?: string
+  tabId?: string,
 ): Record<string, unknown> {
   const seg = segmentId && segmentId !== "body" ? segmentId : "";
   if (kind === "endOfSegmentLocation") {
@@ -82,7 +82,7 @@ export function buildLocation(
   }
   if (index === undefined || index === null) {
     throw new Error(
-      "googleDocs: `index` is required when location kind is 'location'"
+      "googleDocs: `index` is required when location kind is 'location'",
     );
   }
   return { location: location(index, segmentId, tabId) };
@@ -91,7 +91,7 @@ export function buildLocation(
 export function location(
   index: number,
   segmentId?: string,
-  tabId?: string
+  tabId?: string,
 ): Record<string, unknown> {
   const seg = segmentId && segmentId !== "body" ? segmentId : "";
   return compact({ segmentId: seg, index, tabId });
@@ -108,7 +108,7 @@ export async function runBatchUpdate(
   ctx: Ctx,
   documentId: string,
   requestOrRequests: Record<string, unknown> | Array<Record<string, unknown>>,
-  writeControl?: Record<string, unknown>
+  writeControl?: Record<string, unknown>,
 ): Promise<unknown> {
   const requests = Array.isArray(requestOrRequests)
     ? requestOrRequests
@@ -119,7 +119,7 @@ export async function runBatchUpdate(
     ctx,
     "POST",
     `/documents/${documentId}:batchUpdate`,
-    body
+    body,
   )) as { replies?: Array<Record<string, unknown>>; documentId?: string };
   if (requests.length !== 1) return { documentId, replies: res.replies ?? [] };
   const reply = res.replies?.[0] ?? {};

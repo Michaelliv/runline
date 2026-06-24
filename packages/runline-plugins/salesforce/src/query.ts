@@ -1,7 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { records, type QueryResult } from "./queryResult.js";
-import { api, rest, type Ctx } from "./shared.js";
+import { type QueryResult, records } from "./queryResult.js";
+import { api, type Ctx, rest } from "./shared.js";
 
 const QueryInput = t.Object({
   query: t.String({ description: "Full SOQL query" }),
@@ -19,20 +19,30 @@ async function queryPage(
 
 export function registerQueryActions(rl: RunlinePluginAPI) {
   rl.registerAction("soql.query", {
-    description: "Execute a raw SOQL query and return the first page of records",
+    description:
+      "Execute a raw SOQL query and return the first page of records",
     inputSchema: QueryInput,
     async execute(input, ctx) {
       return records(
-        await queryPage(ctx as Ctx, "/query", (input as { query: string }).query),
+        await queryPage(
+          ctx as Ctx,
+          "/query",
+          (input as { query: string }).query,
+        ),
       );
     },
   });
 
   rl.registerAction("soql.queryPage", {
-    description: "Execute a raw SOQL query and return Salesforce pagination metadata",
+    description:
+      "Execute a raw SOQL query and return Salesforce pagination metadata",
     inputSchema: QueryInput,
     async execute(input, ctx) {
-      return queryPage(ctx as Ctx, "/query", (input as { query: string }).query);
+      return queryPage(
+        ctx as Ctx,
+        "/query",
+        (input as { query: string }).query,
+      );
     },
   });
 
@@ -56,7 +66,11 @@ export function registerQueryActions(rl: RunlinePluginAPI) {
       "Execute a raw SOQL query including deleted and archived records and return Salesforce pagination metadata",
     inputSchema: QueryInput,
     async execute(input, ctx) {
-      return queryPage(ctx as Ctx, "/queryAll", (input as { query: string }).query);
+      return queryPage(
+        ctx as Ctx,
+        "/queryAll",
+        (input as { query: string }).query,
+      );
     },
   });
 

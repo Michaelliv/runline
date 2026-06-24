@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { api, getSession, identity, type Ctx } from "./shared.js";
+import { api, type Ctx, getSession, identity } from "./shared.js";
 
 export function registerMetadataActions(rl: RunlinePluginAPI) {
   rl.registerAction("connection.test", {
@@ -36,7 +36,8 @@ export function registerMetadataActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("auth.identity", {
-    description: "Return the Salesforce OAuth identity for the current connection",
+    description:
+      "Return the Salesforce OAuth identity for the current connection",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
       return identity(ctx as Ctx);

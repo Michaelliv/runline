@@ -62,7 +62,9 @@ export async function getSession(ctx: Ctx): Promise<SalesforceSession> {
   const c = config(ctx);
   if (c.accessToken) {
     return {
-      instanceUrl: validateInstanceUrl(requireString(c.instanceUrl, "instanceUrl")),
+      instanceUrl: validateInstanceUrl(
+        requireString(c.instanceUrl, "instanceUrl"),
+      ),
       accessToken: requireString(c.accessToken, "accessToken"),
       tokenType: "Bearer",
     };

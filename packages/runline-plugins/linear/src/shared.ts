@@ -31,16 +31,26 @@ export function key(ctx: Ctx) {
 
 export function scopeLabelIds(ctx: Ctx): string[] {
   const raw = ctx.connection.config.scopeLabelIds;
-  if (Array.isArray(raw)) return raw.map(String).map((s) => s.trim()).filter(Boolean);
+  if (Array.isArray(raw))
+    return raw
+      .map(String)
+      .map((s) => s.trim())
+      .filter(Boolean);
   if (typeof raw !== "string") return [];
-  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export function isScoped(ctx: Ctx): boolean {
   return scopeLabelIds(ctx).length > 0;
 }
 
-export function mergeIssueScopeFilter(ctx: Ctx, filter?: Record<string, unknown>): Record<string, unknown> | undefined {
+export function mergeIssueScopeFilter(
+  ctx: Ctx,
+  filter?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   const ids = scopeLabelIds(ctx);
   if (ids.length === 0) return filter;
   const scopeFilter = { labels: { id: { in: ids } } };
@@ -51,11 +61,23 @@ export function mergeIssueScopeFilter(ctx: Ctx, filter?: Record<string, unknown>
 export function issueHasScope(ctx: Ctx, issue: unknown): boolean {
   const ids = new Set(scopeLabelIds(ctx));
   if (ids.size === 0) return true;
-  const labels = ((issue as Record<string, unknown> | null)?.labels as Record<string, unknown> | undefined)?.nodes;
-  return Array.isArray(labels) && labels.some((label) => ids.has(String((label as Record<string, unknown>).id)));
+  const labels = (
+    (issue as Record<string, unknown> | null)?.labels as
+      | Record<string, unknown>
+      | undefined
+  )?.nodes;
+  return (
+    Array.isArray(labels) &&
+    labels.some((label) =>
+      ids.has(String((label as Record<string, unknown>).id)),
+    )
+  );
 }
 
-export async function getIssueForScope(ctx: Ctx, issueId: string): Promise<Record<string, unknown> | null> {
+export async function getIssueForScope(
+  ctx: Ctx,
+  issueId: string,
+): Promise<Record<string, unknown> | null> {
   const data = await gql(
     key(ctx),
     `query($id: String!) { issue(id: $id) { id identifier labels { nodes { id name } } } }`,
@@ -64,14 +86,21 @@ export async function getIssueForScope(ctx: Ctx, issueId: string): Promise<Recor
   return (data.issue as Record<string, unknown> | null) ?? null;
 }
 
-export async function assertIssueInScope(ctx: Ctx, issueId: string): Promise<Record<string, unknown> | null> {
+export async function assertIssueInScope(
+  ctx: Ctx,
+  issueId: string,
+): Promise<Record<string, unknown> | null> {
   if (!isScoped(ctx)) return null;
   const issue = await getIssueForScope(ctx, issueId);
-  if (!issue || !issueHasScope(ctx, issue)) throw new Error("Linear issue is not available to this scoped connection");
+  if (!issue || !issueHasScope(ctx, issue))
+    throw new Error("Linear issue is not available to this scoped connection");
   return issue;
 }
 
-export async function assertCommentInScope(ctx: Ctx, commentId: string): Promise<void> {
+export async function assertCommentInScope(
+  ctx: Ctx,
+  commentId: string,
+): Promise<void> {
   if (!isScoped(ctx)) return;
   const data = await gql(
     key(ctx),
@@ -79,10 +108,16 @@ export async function assertCommentInScope(ctx: Ctx, commentId: string): Promise
     { id: commentId },
   );
   const issue = (data.comment as Record<string, unknown> | null)?.issue;
-  if (!issue || !issueHasScope(ctx, issue)) throw new Error("Linear comment is not available to this scoped connection");
+  if (!issue || !issueHasScope(ctx, issue))
+    throw new Error(
+      "Linear comment is not available to this scoped connection",
+    );
 }
 
-export async function assertAttachmentInScope(ctx: Ctx, attachmentId: string): Promise<void> {
+export async function assertAttachmentInScope(
+  ctx: Ctx,
+  attachmentId: string,
+): Promise<void> {
   if (!isScoped(ctx)) return;
   const data = await gql(
     key(ctx),
@@ -90,19 +125,27 @@ export async function assertAttachmentInScope(ctx: Ctx, attachmentId: string): P
     { id: attachmentId },
   );
   const issue = (data.attachment as Record<string, unknown> | null)?.issue;
-  if (!issue || !issueHasScope(ctx, issue)) throw new Error("Linear attachment is not available to this scoped connection");
+  if (!issue || !issueHasScope(ctx, issue))
+    throw new Error(
+      "Linear attachment is not available to this scoped connection",
+    );
 }
 
 export function forbidScopeLabelRemoval(ctx: Ctx, labelIds: unknown): void {
   const scoped = new Set(scopeLabelIds(ctx));
   if (scoped.size === 0) return;
-  const ids = Array.isArray(labelIds) ? labelIds.map(String) : [String(labelIds)];
+  const ids = Array.isArray(labelIds)
+    ? labelIds.map(String)
+    : [String(labelIds)];
   if (ids.some((id) => scoped.has(id))) {
     throw new Error("Cannot remove a required Linear scope label");
   }
 }
 
-export function ensureScopeLabelsOnCreateOrReplace(ctx: Ctx, labelIds: unknown): unknown {
+export function ensureScopeLabelsOnCreateOrReplace(
+  ctx: Ctx,
+  labelIds: unknown,
+): unknown {
   const scoped = scopeLabelIds(ctx);
   if (scoped.length === 0) return labelIds;
   const ids = new Set(Array.isArray(labelIds) ? labelIds.map(String) : []);
@@ -163,7 +206,10 @@ export type ListOpts = {
   before?: string;
 };
 
-export function buildConnArgs(opts: ListOpts, filterTypeName: string | null): {
+export function buildConnArgs(
+  opts: ListOpts,
+  filterTypeName: string | null,
+): {
   argsDecl: string;
   argsCall: string;
   vars: Record<string, unknown>;
@@ -205,12 +251,23 @@ export function buildConnArgs(opts: ListOpts, filterTypeName: string | null): {
 }
 
 export const LIST_INPUT_SCHEMA = {
-  limit: t.Optional(t.Number({ description: "Max results (default 50, max 250)" })),
-  filter: t.Optional(t.Object({}, { description: "Linear filter object (see schema for the resource)" })),
-  includeArchived: t.Optional(t.Boolean({ description: "Include archived items" })),
+  limit: t.Optional(
+    t.Number({ description: "Max results (default 50, max 250)" }),
+  ),
+  filter: t.Optional(
+    t.Object(
+      {},
+      { description: "Linear filter object (see schema for the resource)" },
+    ),
+  ),
+  includeArchived: t.Optional(
+    t.Boolean({ description: "Include archived items" }),
+  ),
   orderBy: t.Optional(t.String({ description: "createdAt | updatedAt" })),
   after: t.Optional(t.String({ description: "Cursor for forward pagination" })),
-  before: t.Optional(t.String({ description: "Cursor for backward pagination" })),
+  before: t.Optional(
+    t.String({ description: "Cursor for backward pagination" }),
+  ),
 } as const;
 
 export type ListActionArgs = [
@@ -256,7 +313,11 @@ const SCOPED_BLOCKED_ROOT_FIELDS = new Set([
   "webhooks",
 ]);
 
-function requireRootFieldAvailable(ctx: Ctx, action: string, rootField: string): void {
+function requireRootFieldAvailable(
+  ctx: Ctx,
+  action: string,
+  rootField: string,
+): void {
   if (SCOPED_BLOCKED_ROOT_FIELDS.has(rootField)) requireUnscoped(ctx, action);
 }
 
@@ -295,7 +356,9 @@ export function registerGetAction(
 ) {
   rl.registerAction(name, {
     description,
-    inputSchema: t.Object({ id: t.String({ description: "Identifier or slug" }) }),
+    inputSchema: t.Object({
+      id: t.String({ description: "Identifier or slug" }),
+    }),
     async execute(input, ctx) {
       requireRootFieldAvailable(ctx, name, rootField);
       const data = await gql(
