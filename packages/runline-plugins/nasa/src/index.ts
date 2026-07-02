@@ -44,6 +44,7 @@ export default function nasa(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("apod.get", {
+    access: "read",
     description:
       "Get the Astronomy Picture of the Day (returns metadata; image URL in 'hdurl' field)",
     inputSchema: {
@@ -62,6 +63,7 @@ export default function nasa(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("asteroidNeoFeed.get", {
+    access: "read",
     description:
       "Get a list of asteroids based on closest approach date to Earth",
     inputSchema: {
@@ -92,6 +94,7 @@ export default function nasa(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("asteroidNeoLookup.get", {
+    access: "read",
     description: "Look up an asteroid by its NASA SPK-ID",
     inputSchema: {
       asteroidId: { type: "string", required: true },
@@ -116,6 +119,7 @@ export default function nasa(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("asteroidNeoBrowse.list", {
+    access: "read",
     description: "Browse the overall asteroid dataset",
     inputSchema: {
       limit: {
@@ -188,6 +192,7 @@ export default function nasa(rl: RunlinePluginAPI) {
 
   for (const ep of donkiEndpoints) {
     rl.registerAction(`donki.${ep.name}`, {
+      access: "read",
       description: ep.description,
       inputSchema: {
         startDate: {
@@ -212,6 +217,7 @@ export default function nasa(rl: RunlinePluginAPI) {
   }
 
   rl.registerAction("donki.interplanetaryShock", {
+    access: "read",
     description: "DONKI Interplanetary Shock data",
     inputSchema: {
       startDate: { type: "string", required: false },
@@ -242,6 +248,7 @@ export default function nasa(rl: RunlinePluginAPI) {
   // ── Earth ───────────────────────────────────────────
 
   rl.registerAction("earthAssets.get", {
+    access: "read",
     description: "Get Earth asset metadata for a location",
     inputSchema: {
       lat: { type: "number", required: true, description: "Latitude" },

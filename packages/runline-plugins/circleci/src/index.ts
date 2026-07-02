@@ -84,6 +84,7 @@ export default function circleci(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("pipeline.get", {
+    access: "read",
     description: "Get a specific pipeline by number",
     inputSchema: {
       vcs: {
@@ -117,6 +118,7 @@ export default function circleci(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("pipeline.list", {
+    access: "read",
     description: "List pipelines for a project",
     inputSchema: {
       vcs: {
@@ -166,6 +168,7 @@ export default function circleci(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("pipeline.trigger", {
+    access: "write",
     description: "Trigger a new pipeline",
     inputSchema: {
       vcs: {

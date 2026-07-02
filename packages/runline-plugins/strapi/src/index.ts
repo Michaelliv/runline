@@ -108,6 +108,7 @@ export default function strapi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("entry.create", {
+    access: "write",
     description: "Create an entry in a content type",
     inputSchema: {
       contentType: {
@@ -129,6 +130,7 @@ export default function strapi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("entry.get", {
+    access: "read",
     description: "Get an entry by ID",
     inputSchema: {
       contentType: { type: "string", required: true },
@@ -147,6 +149,7 @@ export default function strapi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("entry.list", {
+    access: "read",
     description: "List entries of a content type",
     inputSchema: {
       contentType: { type: "string", required: true },
@@ -194,6 +197,7 @@ export default function strapi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("entry.update", {
+    access: "write",
     description: "Update an entry by ID",
     inputSchema: {
       contentType: { type: "string", required: true },
@@ -218,6 +222,7 @@ export default function strapi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("entry.delete", {
+    access: "write",
     description: "Delete an entry by ID",
     inputSchema: {
       contentType: { type: "string", required: true },

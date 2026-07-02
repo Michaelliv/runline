@@ -91,6 +91,7 @@ export default function box(rl: RunlinePluginAPI) {
   // ── File ────────────────────────────────────────────
 
   rl.registerAction("file.copy", {
+    access: "write",
     description: "Copy a file to a folder",
     inputSchema: {
       fileId: { type: "string", required: true, description: "File ID" },
@@ -136,6 +137,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file",
     inputSchema: {
       fileId: { type: "string", required: true, description: "File ID" },
@@ -148,6 +150,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get file metadata",
     inputSchema: {
       fileId: { type: "string", required: true, description: "File ID" },
@@ -172,6 +175,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.search", {
+    access: "read",
     description: "Search for files",
     inputSchema: {
       query: { type: "string", required: true, description: "Search query" },
@@ -223,6 +227,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.share", {
+    access: "write",
     description: "Share a file (create a collaboration)",
     inputSchema: {
       fileId: { type: "string", required: true, description: "File ID" },
@@ -294,6 +299,7 @@ export default function box(rl: RunlinePluginAPI) {
   // ── Folder ──────────────────────────────────────────
 
   rl.registerAction("folder.create", {
+    access: "write",
     description: "Create a folder",
     inputSchema: {
       name: { type: "string", required: true, description: "Folder name" },
@@ -321,6 +327,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.delete", {
+    access: "write",
     description: "Delete a folder",
     inputSchema: {
       folderId: { type: "string", required: true, description: "Folder ID" },
@@ -349,6 +356,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.get", {
+    access: "read",
     description: "Get folder metadata",
     inputSchema: {
       folderId: { type: "string", required: true, description: "Folder ID" },
@@ -360,6 +368,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.search", {
+    access: "read",
     description: "Search for folders",
     inputSchema: {
       query: { type: "string", required: true, description: "Search query" },
@@ -398,6 +407,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.share", {
+    access: "write",
     description: "Share a folder (create a collaboration)",
     inputSchema: {
       folderId: { type: "string", required: true, description: "Folder ID" },
@@ -467,6 +477,7 @@ export default function box(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.update", {
+    access: "write",
     description: "Update a folder (move, rename, tag)",
     inputSchema: {
       folderId: { type: "string", required: true, description: "Folder ID" },

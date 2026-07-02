@@ -99,6 +99,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   // ── Form ────────────────────────────────────────────
 
   rl.registerAction("form.get", {
+    access: "read",
     description: "Get a form (asset) by ID",
     inputSchema: {
       formId: { type: "string", required: true, description: "Form/asset UID" },
@@ -115,6 +116,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("form.list", {
+    access: "read",
     description: "List all forms/assets",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -156,6 +158,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("form.redeploy", {
+    access: "write",
     description: "Redeploy a form",
     inputSchema: { formId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -172,6 +175,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   // ── Submission ──────────────────────────────────────
 
   rl.registerAction("submission.get", {
+    access: "read",
     description: "Get a submission by ID",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -199,6 +203,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("submission.list", {
+    access: "read",
     description: "List submissions for a form",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -240,6 +245,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("submission.delete", {
+    access: "write",
     description: "Delete a submission",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -259,6 +265,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("submission.getValidation", {
+    access: "read",
     description: "Get the validation status of a submission",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -277,6 +284,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("submission.setValidation", {
+    access: "write",
     description: "Set the validation status of a submission",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -307,6 +315,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   // ── Hook ────────────────────────────────────────────
 
   rl.registerAction("hook.get", {
+    access: "read",
     description: "Get a hook by ID",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -325,6 +334,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("hook.list", {
+    access: "read",
     description: "List hooks for a form",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -347,6 +357,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("hook.retryAll", {
+    access: "write",
     description: "Retry all failed attempts for a hook",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -365,6 +376,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("hook.getLogs", {
+    access: "read",
     description: "Get logs for a hook",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -407,6 +419,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("hook.retryOne", {
+    access: "write",
     description: "Retry a single failed hook log entry",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -428,6 +441,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   // ── File ────────────────────────────────────────────
 
   rl.registerAction("file.list", {
+    access: "read",
     description: "List media files for a form",
     inputSchema: { formId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -442,6 +456,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get a file's metadata",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -460,6 +475,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file",
     inputSchema: {
       formId: { type: "string", required: true },
@@ -478,6 +494,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.createFromUrl", {
+    access: "write",
     description: "Create a file from a URL (redirect-based media)",
     inputSchema: {
       formId: { type: "string", required: true },

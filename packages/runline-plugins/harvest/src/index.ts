@@ -74,6 +74,7 @@ function registerCrud(
   listKey: string,
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: {
       properties: {
@@ -92,6 +93,7 @@ function registerCrud(
     },
   });
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },
@@ -101,6 +103,7 @@ function registerCrud(
     },
   });
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${resource}s`,
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -115,6 +118,7 @@ function registerCrud(
     },
   });
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },
@@ -133,6 +137,7 @@ function registerCrud(
     },
   });
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },
@@ -175,6 +180,7 @@ export default function harvest(rl: RunlinePluginAPI) {
   // User (CRUD + me)
   registerCrud(rl, "user", "users", "users");
   rl.registerAction("user.me", {
+    access: "read",
     description: "Get the currently authenticated user",
     async execute(_input, ctx) {
       return hv(ctx, "GET", "users/me");
@@ -183,6 +189,7 @@ export default function harvest(rl: RunlinePluginAPI) {
 
   // Time entry (special operations)
   rl.registerAction("timeEntry.create", {
+    access: "write",
     description: "Create a time entry",
     inputSchema: {
       projectId: { type: "number", required: true, description: "Project ID" },
@@ -240,6 +247,7 @@ export default function harvest(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.get", {
+    access: "read",
     description: "Get a time entry",
     inputSchema: {
       id: { type: "number", required: true, description: "Time entry ID" },
@@ -250,6 +258,7 @@ export default function harvest(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.list", {
+    access: "read",
     description: "List time entries",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -293,6 +302,7 @@ export default function harvest(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.update", {
+    access: "write",
     description: "Update a time entry",
     inputSchema: {
       id: { type: "number", required: true, description: "Time entry ID" },
@@ -312,6 +322,7 @@ export default function harvest(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.delete", {
+    access: "write",
     description: "Delete a time entry",
     inputSchema: {
       id: { type: "number", required: true, description: "Time entry ID" },
@@ -323,6 +334,7 @@ export default function harvest(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.restart", {
+    access: "write",
     description: "Restart a stopped time entry",
     inputSchema: {
       id: { type: "number", required: true, description: "Time entry ID" },
@@ -337,6 +349,7 @@ export default function harvest(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.stop", {
+    access: "write",
     description: "Stop a running time entry",
     inputSchema: {
       id: { type: "number", required: true, description: "Time entry ID" },
@@ -352,6 +365,7 @@ export default function harvest(rl: RunlinePluginAPI) {
 
   // Company (read-only)
   rl.registerAction("company.get", {
+    access: "read",
     description: "Get company info",
     async execute(_input, ctx) {
       return hv(ctx, "GET", "company");

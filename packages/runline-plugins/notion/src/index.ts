@@ -48,6 +48,7 @@ export default function notion(rl: RunlinePluginAPI) {
   // ── Block ───────────────────────────────────────────
 
   rl.registerAction("block.append", {
+    access: "write",
     description: "Append children blocks to a block/page",
     inputSchema: {
       blockId: { type: "string", required: true },
@@ -66,6 +67,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("block.getChildren", {
+    access: "read",
     description: "Get child blocks of a block/page",
     inputSchema: {
       blockId: { type: "string", required: true },
@@ -87,6 +89,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("block.delete", {
+    access: "write",
     description: "Delete (archive) a block",
     inputSchema: { blockId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -101,6 +104,7 @@ export default function notion(rl: RunlinePluginAPI) {
   // ── Database ────────────────────────────────────────
 
   rl.registerAction("database.get", {
+    access: "read",
     description: "Get a database",
     inputSchema: { databaseId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -113,6 +117,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("database.list", {
+    access: "read",
     description: "List all databases (via search)",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -130,6 +135,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("database.query", {
+    access: "read",
     description: "Query a database (list pages with filters)",
     inputSchema: {
       databaseId: { type: "string", required: true },
@@ -164,6 +170,7 @@ export default function notion(rl: RunlinePluginAPI) {
   // ── Page ────────────────────────────────────────────
 
   rl.registerAction("page.create", {
+    access: "write",
     description: "Create a page (in a database or under a page)",
     inputSchema: {
       parent: {
@@ -189,6 +196,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.get", {
+    access: "read",
     description: "Get a page",
     inputSchema: { pageId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -201,6 +209,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.update", {
+    access: "write",
     description: "Update page properties",
     inputSchema: {
       pageId: { type: "string", required: true },
@@ -215,6 +224,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.archive", {
+    access: "write",
     description: "Archive a page",
     inputSchema: { pageId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -228,6 +238,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.search", {
+    access: "read",
     description: "Search pages",
     inputSchema: {
       query: { type: "string", required: false },
@@ -249,6 +260,7 @@ export default function notion(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user",
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -261,6 +273,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List all users",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -279,6 +292,7 @@ export default function notion(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.me", {
+    access: "read",
     description: "Get the bot user",
     inputSchema: {},
     async execute(_input, ctx) {

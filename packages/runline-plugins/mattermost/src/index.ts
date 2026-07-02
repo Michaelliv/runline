@@ -84,6 +84,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   // ── Channel ─────────────────────────────────────────
 
   rl.registerAction("channel.create", {
+    access: "write",
     description: "Create a channel",
     inputSchema: {
       teamId: { type: "string", required: true },
@@ -119,6 +120,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.delete", {
+    access: "write",
     description: "Delete (archive) a channel",
     inputSchema: { channelId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -133,6 +135,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.addUser", {
+    access: "write",
     description: "Add a user to a channel",
     inputSchema: {
       channelId: { type: "string", required: true },
@@ -152,6 +155,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.members", {
+    access: "read",
     description: "List members of a channel",
     inputSchema: {
       channelId: { type: "string", required: true },
@@ -196,6 +200,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.restore", {
+    access: "write",
     description: "Restore (unarchive) a channel",
     inputSchema: { channelId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -210,6 +215,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.search", {
+    access: "read",
     description: "Search channels in a team",
     inputSchema: {
       teamId: { type: "string", required: true },
@@ -232,6 +238,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.statistics", {
+    access: "read",
     description: "Get channel statistics",
     inputSchema: { channelId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -248,6 +255,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   // ── Message ─────────────────────────────────────────
 
   rl.registerAction("message.post", {
+    access: "write",
     description: "Post a message to a channel",
     inputSchema: {
       channelId: { type: "string", required: true },
@@ -277,6 +285,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.delete", {
+    access: "write",
     description: "Delete a message (post)",
     inputSchema: { postId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -291,6 +300,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.postEphemeral", {
+    access: "write",
     description: "Post an ephemeral message (visible only to one user)",
     inputSchema: {
       channelId: { type: "string", required: true },
@@ -314,6 +324,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   // ── Reaction ────────────────────────────────────────
 
   rl.registerAction("reaction.create", {
+    access: "write",
     description: "Add a reaction to a post",
     inputSchema: {
       userId: { type: "string", required: true },
@@ -337,6 +348,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("reaction.delete", {
+    access: "write",
     description: "Remove a reaction from a post",
     inputSchema: {
       userId: { type: "string", required: true },
@@ -357,6 +369,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("reaction.list", {
+    access: "read",
     description: "List reactions on a post",
     inputSchema: {
       postId: { type: "string", required: true },
@@ -380,6 +393,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a user",
     inputSchema: {
       username: { type: "string", required: true },
@@ -435,6 +449,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.deactivate", {
+    access: "write",
     description: "Deactivate (delete) a user",
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -449,6 +464,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -488,6 +504,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.getByEmail", {
+    access: "read",
     description: "Get a user by email",
     inputSchema: { email: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -502,6 +519,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.getByIds", {
+    access: "read",
     description: "Get users by IDs",
     inputSchema: {
       userIds: {
@@ -525,6 +543,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.invite", {
+    access: "write",
     description: "Invite users to a team by email",
     inputSchema: {
       teamId: { type: "string", required: true },

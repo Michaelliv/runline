@@ -19,6 +19,7 @@ export default function pushcut(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("notification.send", {
+    access: "write",
     description: "Send a Pushcut notification",
     inputSchema: {
       notificationName: {

@@ -27,6 +27,7 @@ export function registerStateActions(rl: RunlinePluginAPI) {
     STATE_FIELDS,
   );
   rl.registerAction("state.create", {
+    access: "write",
     description: "Create a workflow state in a team.",
     inputSchema: t.Object({
       teamId: t.String({ description: "The team associated with the state" }),
@@ -63,6 +64,7 @@ export function registerStateActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("state.update", {
+    access: "write",
     description:
       "Update a workflow state. Type cannot be changed after creation.",
     inputSchema: t.Object({

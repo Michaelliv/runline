@@ -13,6 +13,7 @@ function profileForm(input: Record<string, unknown>): FormData {
 
 export function registerProfileActions(rl: RunlinePluginAPI) {
   rl.registerAction("profile.list", {
+    access: "read",
     description: "List Steel browser profiles.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
@@ -21,6 +22,7 @@ export function registerProfileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("profile.get", {
+    access: "read",
     description: "Get a Steel profile by ID.",
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
@@ -29,6 +31,7 @@ export function registerProfileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("profile.create", {
+    access: "write",
     description: "Create an empty persisted Steel profile by opening and releasing a short-lived session with persistProfile=true. For userDataDir archive imports, use the Steel API directly.",
     inputSchema: t.Object({
       timeout: t.Optional(t.Number({ description: "Temporary session timeout in milliseconds" })),
@@ -49,6 +52,7 @@ export function registerProfileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("profile.update", {
+    access: "write",
     description: "Update profile metadata/settings used by later sessions.",
     inputSchema: t.Object({ id: t.String(), userAgent: t.Optional(t.String()), proxy: t.Optional(t.Any()), metadata: t.Optional(t.Any()) }),
     async execute(input, ctx) {

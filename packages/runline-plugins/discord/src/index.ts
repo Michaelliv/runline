@@ -66,6 +66,7 @@ export default function discord(rl: RunlinePluginAPI) {
   // ── Channel ─────────────────────────────────────────
 
   rl.registerAction("channel.create", {
+    access: "write",
     description: "Create a channel in the guild",
     inputSchema: {
       name: { type: "string", required: true, description: "Channel name" },
@@ -133,6 +134,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.get", {
+    access: "read",
     description: "Get a channel by ID",
     inputSchema: {
       channelId: { type: "string", required: true, description: "Channel ID" },
@@ -148,6 +150,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.list", {
+    access: "read",
     description: "List all channels in the guild",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -176,6 +179,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.update", {
+    access: "write",
     description: "Update a channel",
     inputSchema: {
       channelId: { type: "string", required: true, description: "Channel ID" },
@@ -236,6 +240,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.delete", {
+    access: "write",
     description: "Delete a channel",
     inputSchema: {
       channelId: { type: "string", required: true, description: "Channel ID" },
@@ -253,6 +258,7 @@ export default function discord(rl: RunlinePluginAPI) {
   // ── Member ──────────────────────────────────────────
 
   rl.registerAction("member.list", {
+    access: "read",
     description: "List members in the guild",
     inputSchema: {
       limit: {
@@ -283,6 +289,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.addRole", {
+    access: "write",
     description: "Add a role to a guild member",
     inputSchema: {
       userId: { type: "string", required: true, description: "User ID" },
@@ -301,6 +308,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.removeRole", {
+    access: "write",
     description: "Remove a role from a guild member",
     inputSchema: {
       userId: { type: "string", required: true, description: "User ID" },
@@ -321,6 +329,7 @@ export default function discord(rl: RunlinePluginAPI) {
   // ── Message ─────────────────────────────────────────
 
   rl.registerAction("message.send", {
+    access: "write",
     description: "Send a message to a channel",
     inputSchema: {
       channelId: { type: "string", required: true, description: "Channel ID" },
@@ -361,6 +370,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.get", {
+    access: "read",
     description: "Get a message by ID",
     inputSchema: {
       channelId: { type: "string", required: true, description: "Channel ID" },
@@ -381,6 +391,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.list", {
+    access: "read",
     description: "List messages in a channel",
     inputSchema: {
       channelId: { type: "string", required: true, description: "Channel ID" },
@@ -425,6 +436,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.delete", {
+    access: "write",
     description: "Delete a message",
     inputSchema: {
       channelId: { type: "string", required: true, description: "Channel ID" },
@@ -446,6 +458,7 @@ export default function discord(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.react", {
+    access: "write",
     description: "Add a reaction to a message",
     inputSchema: {
       channelId: { type: "string", required: true, description: "Channel ID" },

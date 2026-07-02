@@ -4,6 +4,7 @@ import { LIST_INPUT_SCHEMA, SESSION_OPTIONS_SCHEMA, api, apiKey, compactRecord }
 
 export function registerSessionActions(rl: RunlinePluginAPI) {
   rl.registerAction("session.create", {
+    access: "write",
     description: "Create a Steel browser session. Returns session id, websocketUrl/CDP URL, debug/viewer URLs, and profile metadata when present.",
     inputSchema: t.Object(SESSION_OPTIONS_SCHEMA),
     async execute(input, ctx) {
@@ -12,6 +13,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.list", {
+    access: "read",
     description: "List Steel sessions.",
     inputSchema: t.Object(LIST_INPUT_SCHEMA),
     async execute(input, ctx) {
@@ -20,6 +22,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.get", {
+    access: "read",
     description: "Get a Steel session by ID.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
@@ -28,6 +31,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.release", {
+    access: "write",
     description: "Release a Steel session when work is done.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
@@ -36,6 +40,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.releaseAll", {
+    access: "write",
     description: "Release all live Steel sessions for the organization by listing sessions and releasing each live session individually.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
@@ -57,6 +62,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.context", {
+    access: "read",
     description: "Capture cookies/localStorage context from a live session. Treat output as sensitive auth material.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
@@ -65,6 +71,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.traces", {
+    access: "read",
     description: "Fetch the Agent Traces timeline for a Steel session. Supports optional ISO startTime/endTime filters.",
     inputSchema: t.Object({
       id: t.String({ description: "Session ID" }),
@@ -78,6 +85,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.computer", {
+    access: "write",
     description: "Execute a Steel computer-use action against a live session. Useful for model-native computer-use loops; pass actions such as take_screenshot, click_mouse, type_text, press_key, scroll, or drag_mouse.",
     inputSchema: t.Object({
       id: t.String({ description: "Session ID" }),
@@ -99,6 +107,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.events", {
+    access: "read",
     description: "Fetch legacy recorded session events for replay tooling.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
@@ -107,6 +116,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.hls", {
+    access: "read",
     description: "Fetch the HLS playlist for a recorded headful Steel session.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
@@ -115,6 +125,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.cdpUrl", {
+    access: "read",
     description: "Build a Playwright/Puppeteer CDP URL for a Steel session using the configured API key.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }), websocketUrl: t.Optional(t.String({ description: "Optional websocketUrl returned by session.create. If omitted, uses wss://connect.steel.dev with sessionId." })) }),
     async execute(input, ctx) {

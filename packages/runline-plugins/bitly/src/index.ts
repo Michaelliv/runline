@@ -52,6 +52,7 @@ export default function bitly(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("link.create", {
+    access: "write",
     description: "Create a shortened link (bitlink)",
     inputSchema: {
       longUrl: {
@@ -96,6 +97,7 @@ export default function bitly(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("link.get", {
+    access: "read",
     description: "Get a bitlink by ID",
     inputSchema: {
       bitlink: {
@@ -111,6 +113,7 @@ export default function bitly(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("link.update", {
+    access: "write",
     description: "Update a bitlink",
     inputSchema: {
       bitlink: {

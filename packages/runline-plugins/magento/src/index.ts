@@ -103,6 +103,7 @@ export default function magento(rl: RunlinePluginAPI) {
   // ── Customer ────────────────────────────────────────
 
   rl.registerAction("customer.create", {
+    access: "write",
     description: "Create a customer",
     inputSchema: {
       email: { type: "string", required: true },
@@ -156,6 +157,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.get", {
+    access: "read",
     description: "Get a customer by ID",
     inputSchema: { customerId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -170,6 +172,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.list", {
+    access: "read",
     description: "Search/list customers using Magento search_criteria",
     inputSchema: {
       searchCriteria: {
@@ -217,6 +220,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.update", {
+    access: "write",
     description: "Update a customer",
     inputSchema: {
       customerId: { type: "number", required: true },
@@ -271,6 +275,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.delete", {
+    access: "write",
     description: "Delete a customer",
     inputSchema: { customerId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -288,6 +293,7 @@ export default function magento(rl: RunlinePluginAPI) {
   // ── Invoice ─────────────────────────────────────────
 
   rl.registerAction("invoice.create", {
+    access: "write",
     description: "Create an invoice for an order",
     inputSchema: { orderId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -305,6 +311,7 @@ export default function magento(rl: RunlinePluginAPI) {
   // ── Order ───────────────────────────────────────────
 
   rl.registerAction("order.get", {
+    access: "read",
     description: "Get an order by ID",
     inputSchema: { orderId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -319,6 +326,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.list", {
+    access: "read",
     description: "Search/list orders",
     inputSchema: {
       searchCriteria: {
@@ -361,6 +369,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.cancel", {
+    access: "write",
     description: "Cancel an order",
     inputSchema: { orderId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -376,6 +385,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.ship", {
+    access: "write",
     description: "Ship an order",
     inputSchema: { orderId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -393,6 +403,7 @@ export default function magento(rl: RunlinePluginAPI) {
   // ── Product ─────────────────────────────────────────
 
   rl.registerAction("product.create", {
+    access: "write",
     description: "Create a product",
     inputSchema: {
       sku: { type: "string", required: true },
@@ -436,6 +447,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.get", {
+    access: "read",
     description: "Get a product by SKU",
     inputSchema: { sku: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -450,6 +462,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.list", {
+    access: "read",
     description: "Search/list products",
     inputSchema: {
       searchCriteria: { type: "object", required: false },
@@ -488,6 +501,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.update", {
+    access: "write",
     description: "Update a product by SKU",
     inputSchema: {
       sku: { type: "string", required: true },
@@ -519,6 +533,7 @@ export default function magento(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.delete", {
+    access: "write",
     description: "Delete a product by SKU",
     inputSchema: { sku: { type: "string", required: true } },
     async execute(input, ctx) {

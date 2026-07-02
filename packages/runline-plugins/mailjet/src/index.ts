@@ -41,6 +41,7 @@ export default function mailjet(rl: RunlinePluginAPI) {
     (ctx.connection.config.sandboxMode as boolean) ?? false;
 
   rl.registerAction("email.send", {
+    access: "write",
     description: "Send an email via Mailjet Send API v3.1",
     inputSchema: {
       fromEmail: { type: "string", required: true },
@@ -151,6 +152,7 @@ export default function mailjet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("email.sendTemplate", {
+    access: "write",
     description: "Send an email using a Mailjet template",
     inputSchema: {
       fromEmail: { type: "string", required: true },
@@ -231,6 +233,7 @@ export default function mailjet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sms.send", {
+    access: "write",
     description: "Send an SMS via Mailjet SMS API",
     inputSchema: {
       from: {

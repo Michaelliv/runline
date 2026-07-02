@@ -65,6 +65,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Attribute ───────────────────────────────────────
 
   rl.registerAction("attribute.create", {
+    access: "write",
     description: "Add an attribute to an event",
     inputSchema: {
       eventId: { type: "string", required: true },
@@ -99,6 +100,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attribute.get", {
+    access: "read",
     description: "Get an attribute by ID",
     inputSchema: { attributeId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -112,6 +114,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attribute.list", {
+    access: "read",
     description: "List all attributes",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -126,6 +129,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attribute.search", {
+    access: "read",
     description: "Search attributes via restSearch",
     inputSchema: {
       value: { type: "string", required: false },
@@ -150,6 +154,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attribute.update", {
+    access: "write",
     description: "Update an attribute",
     inputSchema: {
       attributeId: { type: "string", required: true },
@@ -168,6 +173,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attribute.delete", {
+    access: "write",
     description: "Delete an attribute",
     inputSchema: { attributeId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -182,6 +188,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Event ───────────────────────────────────────────
 
   rl.registerAction("event.create", {
+    access: "write",
     description: "Create an event",
     inputSchema: {
       orgId: { type: "string", required: true, description: "Organisation ID" },
@@ -212,6 +219,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.get", {
+    access: "read",
     description: "Get an event by ID",
     inputSchema: { eventId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -227,6 +235,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.list", {
+    access: "read",
     description: "List all events",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -241,6 +250,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.search", {
+    access: "read",
     description: "Search events via restSearch",
     inputSchema: {
       value: { type: "string", required: false },
@@ -268,6 +278,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.update", {
+    access: "write",
     description: "Update an event",
     inputSchema: {
       eventId: { type: "string", required: true },
@@ -288,6 +299,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.publish", {
+    access: "write",
     description: "Publish an event",
     inputSchema: { eventId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -300,6 +312,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.unpublish", {
+    access: "write",
     description: "Unpublish an event",
     inputSchema: { eventId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -312,6 +325,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.delete", {
+    access: "write",
     description: "Delete an event",
     inputSchema: { eventId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -326,6 +340,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Event Tag ───────────────────────────────────────
 
   rl.registerAction("eventTag.add", {
+    access: "write",
     description: "Add a tag to an event",
     inputSchema: {
       eventId: { type: "string", required: true },
@@ -338,6 +353,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("eventTag.remove", {
+    access: "write",
     description: "Remove a tag from an event",
     inputSchema: {
       eventId: { type: "string", required: true },
@@ -352,6 +368,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Feed ────────────────────────────────────────────
 
   rl.registerAction("feed.create", {
+    access: "write",
     description: "Create a feed",
     inputSchema: {
       name: { type: "string", required: true },
@@ -379,6 +396,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("feed.get", {
+    access: "read",
     description: "Get a feed by ID",
     inputSchema: { feedId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -392,6 +410,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("feed.list", {
+    access: "read",
     description: "List all feeds",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -409,6 +428,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("feed.update", {
+    access: "write",
     description: "Update a feed",
     inputSchema: {
       feedId: { type: "string", required: true },
@@ -427,6 +447,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("feed.enable", {
+    access: "write",
     description: "Enable a feed",
     inputSchema: { feedId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -439,6 +460,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("feed.disable", {
+    access: "write",
     description: "Disable a feed",
     inputSchema: { feedId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -453,6 +475,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Galaxy ──────────────────────────────────────────
 
   rl.registerAction("galaxy.get", {
+    access: "read",
     description: "Get a galaxy by ID",
     inputSchema: { galaxyId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -466,6 +489,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("galaxy.list", {
+    access: "read",
     description: "List all galaxies",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -483,6 +507,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("galaxy.delete", {
+    access: "write",
     description: "Delete a galaxy",
     inputSchema: { galaxyId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -497,6 +522,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Noticelist ──────────────────────────────────────
 
   rl.registerAction("noticelist.get", {
+    access: "read",
     description: "Get a noticelist by ID",
     inputSchema: { noticelistId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -510,6 +536,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("noticelist.list", {
+    access: "read",
     description: "List all noticelists",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -529,6 +556,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Object ──────────────────────────────────────────
 
   rl.registerAction("object.search", {
+    access: "read",
     description: "Search objects via restSearch",
     inputSchema: {
       value: { type: "string", required: false },
@@ -554,6 +582,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Organisation ────────────────────────────────────
 
   rl.registerAction("organisation.create", {
+    access: "write",
     description: "Create an organisation",
     inputSchema: {
       name: { type: "string", required: true },
@@ -579,6 +608,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organisation.get", {
+    access: "read",
     description: "Get an organisation by ID",
     inputSchema: { organisationId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -592,6 +622,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organisation.list", {
+    access: "read",
     description: "List all organisations",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -609,6 +640,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organisation.update", {
+    access: "write",
     description: "Update an organisation",
     inputSchema: {
       organisationId: { type: "string", required: true },
@@ -627,6 +659,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organisation.delete", {
+    access: "write",
     description: "Delete an organisation",
     inputSchema: { organisationId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -641,6 +674,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Tag ─────────────────────────────────────────────
 
   rl.registerAction("tag.create", {
+    access: "write",
     description: "Create a tag",
     inputSchema: {
       name: { type: "string", required: true },
@@ -666,6 +700,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.list", {
+    access: "read",
     description: "List all tags",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -681,6 +716,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.update", {
+    access: "write",
     description: "Update a tag",
     inputSchema: {
       tagId: { type: "string", required: true },
@@ -706,6 +742,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.delete", {
+    access: "write",
     description: "Delete a tag",
     inputSchema: { tagId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -720,6 +757,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a user",
     inputSchema: {
       email: { type: "string", required: true },
@@ -746,6 +784,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by ID",
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -759,6 +798,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List all users",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -776,6 +816,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.update", {
+    access: "write",
     description: "Update a user",
     inputSchema: {
       userId: { type: "string", required: true },
@@ -794,6 +835,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.delete", {
+    access: "write",
     description: "Delete a user",
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -808,6 +850,7 @@ export default function misp(rl: RunlinePluginAPI) {
   // ── Warninglist ─────────────────────────────────────
 
   rl.registerAction("warninglist.get", {
+    access: "read",
     description: "Get a warninglist by ID",
     inputSchema: { warninglistId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -821,6 +864,7 @@ export default function misp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("warninglist.list", {
+    access: "read",
     description: "List all warninglists",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {

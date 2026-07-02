@@ -127,6 +127,7 @@ export default function odoo(rl: RunlinePluginAPI) {
   }
 
   rl.registerAction("record.create", {
+    access: "write",
     description:
       "Create a record in any Odoo model (contact, opportunity, note, or custom model name)",
     inputSchema: {
@@ -159,6 +160,7 @@ export default function odoo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.get", {
+    access: "read",
     description: "Read a record by ID",
     inputSchema: {
       model: {
@@ -191,6 +193,7 @@ export default function odoo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.list", {
+    access: "read",
     description: "Search and read records from any Odoo model",
     inputSchema: {
       model: {
@@ -242,6 +245,7 @@ export default function odoo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.update", {
+    access: "write",
     description: "Update a record by ID",
     inputSchema: {
       model: {
@@ -274,6 +278,7 @@ export default function odoo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.delete", {
+    access: "write",
     description: "Delete a record by ID",
     inputSchema: {
       model: {
@@ -300,6 +305,7 @@ export default function odoo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("model.getFields", {
+    access: "read",
     description: "Get field definitions for an Odoo model",
     inputSchema: {
       model: {

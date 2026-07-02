@@ -96,6 +96,7 @@ export default function adalo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.create", {
+    access: "write",
     description: "Create a row in a collection",
     inputSchema: {
       collectionId: {
@@ -126,6 +127,7 @@ export default function adalo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.get", {
+    access: "read",
     description: "Get a row from a collection",
     inputSchema: {
       collectionId: {
@@ -151,6 +153,7 @@ export default function adalo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.list", {
+    access: "read",
     description: "List rows from a collection",
     inputSchema: {
       collectionId: {
@@ -175,6 +178,7 @@ export default function adalo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.update", {
+    access: "write",
     description: "Update a row in a collection",
     inputSchema: {
       collectionId: {
@@ -207,6 +211,7 @@ export default function adalo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.delete", {
+    access: "write",
     description: "Delete a row from a collection",
     inputSchema: {
       collectionId: {

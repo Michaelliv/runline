@@ -2,7 +2,7 @@
 
 Code mode for [pi](https://github.com/mariozechner/pi).
 
-An extension that plugs [runline](https://www.npmjs.com/package/runline) into coding agents. The agent gets one native tool, in-sandbox action discovery, a fuzzy picker for choosing which of the 202 built-in plugins to expose, and a guided credential prompt for the ones it hasn't seen before.
+An extension that plugs [runline](https://www.npmjs.com/package/runline) into coding agents. The agent gets one native tool, in-sandbox action discovery, a fuzzy picker for choosing which of the 211 built-in plugins to expose, and a guided credential prompt for the ones it hasn't seen before.
 
 ## Install
 
@@ -23,7 +23,7 @@ actions.list()                  // every "plugin.action" path
 actions.list("github")          // filter to one plugin
 actions.find("create issue")    // ranked fuzzy search (MiniSearch)
 actions.describe("github.issue.create")
-// → { path, plugin, action, description, signature, inputs }
+// → { path, plugin, action, access, description, signature, inputs }
 actions.check("github.issue.create", { owner: "a" })
 // → { ok, missing, unknown, typeErrors, signature }   (does NOT call the action)
 ```
@@ -38,11 +38,11 @@ return await github.issue.create({ owner: "acme", repo: "api", title: "Bug" });
 
 ## `/runline-plugins` — the picker
 
-Typing `/runline-plugins` in a pi session opens a fuzzy multi-select over all 202 built-in plugins.
+Typing `/runline-plugins` in a pi session opens a fuzzy multi-select over all 211 built-in plugins.
 
 ```
 ╭─────────────────────────────────────────────╮
-│ runline plugins · 5/202 enabled             │
+│ runline plugins · 5/211 enabled             │
 │ type to filter · space toggle · ^A toggle   │
 │                                             │
 │ filter ❯ gith                               │

@@ -65,6 +65,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("files.search", {
+    access: "read",
     description:
       "Search the drive for files/folders by text. Returns [{id,name,size,lastModifiedDateTime,webUrl,folder?}].",
     inputSchema: {
@@ -83,6 +84,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("files.list", {
+    access: "read",
     description: "List children of a folder (default the drive root, or pass folderId).",
     inputSchema: {
       folderId: { type: "string", required: false, description: "Folder item id; omit for root" },
@@ -100,6 +102,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("files.get", {
+    access: "read",
     description:
       "Download a file by id. Returns {id,name,size,contentType,base64}. base64 is the file bytes.",
     inputSchema: { id: { type: "string", required: true } },
@@ -119,6 +122,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("files.upload", {
+    access: "write",
     description:
       "Upload a file (base64) to a path in the drive, e.g. a dedicated output folder. Returns the created item. For files up to ~4MB.",
     inputSchema: {
@@ -135,6 +139,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("folder.create", {
+    access: "write",
     description: "Create a folder (e.g. a dedicated agent output folder) under the drive root or a parent.",
     inputSchema: {
       name: { type: "string", required: true },

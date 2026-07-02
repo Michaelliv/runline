@@ -51,6 +51,7 @@ export default function mocean(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sms.send", {
+    access: "write",
     description: "Send an SMS message",
     inputSchema: {
       from: { type: "string", required: true, description: "Sender number" },
@@ -85,6 +86,7 @@ export default function mocean(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("voice.send", {
+    access: "write",
     description: "Make a voice call with text-to-speech",
     inputSchema: {
       from: { type: "string", required: true, description: "Caller number" },

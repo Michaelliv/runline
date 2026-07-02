@@ -46,6 +46,7 @@ export default function together(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("image.create", {
+    access: "write",
     description:
       "Generate an image with Together AI (Flux, Ideogram, Qwen-Image, …). Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
     inputSchema: {

@@ -78,6 +78,7 @@ export default function storyblok(rl: RunlinePluginAPI) {
   // ── Content API ─────────────────────────────────────
 
   rl.registerAction("content.story.get", {
+    access: "read",
     description: "Get a published story by slug or ID (Content API)",
     inputSchema: {
       identifier: {
@@ -99,6 +100,7 @@ export default function storyblok(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("content.story.list", {
+    access: "read",
     description: "List published stories (Content API)",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -128,6 +130,7 @@ export default function storyblok(rl: RunlinePluginAPI) {
   // ── Management API ──────────────────────────────────
 
   rl.registerAction("management.story.get", {
+    access: "read",
     description: "Get a story by ID (Management API)",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -148,6 +151,7 @@ export default function storyblok(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("management.story.list", {
+    access: "read",
     description: "List stories in a space (Management API)",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -172,6 +176,7 @@ export default function storyblok(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("management.story.delete", {
+    access: "write",
     description: "Delete a story (Management API)",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -192,6 +197,7 @@ export default function storyblok(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("management.story.publish", {
+    access: "write",
     description: "Publish a story (Management API)",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -219,6 +225,7 @@ export default function storyblok(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("management.story.unpublish", {
+    access: "write",
     description: "Unpublish a story (Management API)",
     inputSchema: {
       spaceId: { type: "string", required: true },

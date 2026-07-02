@@ -27,6 +27,7 @@ export function registerUserActions(rl: RunlinePluginAPI) {
     USER_FIELDS,
   );
   rl.registerAction("user.me", {
+    access: "read",
     description: "Get the authenticated user.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
@@ -35,6 +36,7 @@ export function registerUserActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("user.update", {
+    access: "write",
     description: "Update a user. Use id='me' to update the authenticated user.",
     inputSchema: t.Object({
       id: t.String({

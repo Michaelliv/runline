@@ -90,6 +90,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   // ── List ────────────────────────────────────────────
 
   rl.registerAction("list.get", {
+    access: "read",
     description: "Get a specific list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -101,6 +102,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.list", {
+    access: "read",
     description: "List all lists",
     inputSchema: {
       limit: {
@@ -124,6 +126,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   // ── List Entry ──────────────────────────────────────
 
   rl.registerAction("listEntry.create", {
+    access: "write",
     description: "Create a new list entry",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -143,6 +146,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("listEntry.get", {
+    access: "read",
     description: "Get a specific list entry",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -166,6 +170,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("listEntry.list", {
+    access: "read",
     description: "List all entries in a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -187,6 +192,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("listEntry.delete", {
+    access: "write",
     description: "Delete a list entry",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -212,6 +218,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   // ── Person ──────────────────────────────────────────
 
   rl.registerAction("person.create", {
+    access: "write",
     description: "Create a new person",
     inputSchema: {
       firstName: { type: "string", required: true, description: "First name" },
@@ -243,6 +250,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("person.get", {
+    access: "read",
     description: "Get a specific person",
     inputSchema: {
       personId: { type: "string", required: true, description: "Person ID" },
@@ -254,6 +262,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("person.list", {
+    access: "read",
     description: "Search/list persons",
     inputSchema: {
       term: { type: "string", required: false, description: "Search term" },
@@ -273,6 +282,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("person.update", {
+    access: "write",
     description: "Update a person",
     inputSchema: {
       personId: { type: "string", required: true, description: "Person ID" },
@@ -301,6 +311,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("person.delete", {
+    access: "write",
     description: "Delete a person",
     inputSchema: {
       personId: { type: "string", required: true, description: "Person ID" },
@@ -314,6 +325,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   // ── Organization ────────────────────────────────────
 
   rl.registerAction("organization.create", {
+    access: "write",
     description: "Create a new organization",
     inputSchema: {
       name: {
@@ -341,6 +353,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.get", {
+    access: "read",
     description: "Get a specific organization",
     inputSchema: {
       organizationId: {
@@ -356,6 +369,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.list", {
+    access: "read",
     description: "Search/list organizations",
     inputSchema: {
       term: { type: "string", required: false, description: "Search term" },
@@ -375,6 +389,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.update", {
+    access: "write",
     description: "Update an organization",
     inputSchema: {
       organizationId: {
@@ -417,6 +432,7 @@ export default function affinity(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.delete", {
+    access: "write",
     description: "Delete an organization",
     inputSchema: {
       organizationId: {

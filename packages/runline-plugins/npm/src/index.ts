@@ -55,6 +55,7 @@ export default function npm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("package.getMetadata", {
+    access: "read",
     description: "Get metadata for a package at a specific version",
     inputSchema: {
       packageName: {
@@ -80,6 +81,7 @@ export default function npm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("package.getVersions", {
+    access: "read",
     description: "Get all versions for a package with publish dates",
     inputSchema: {
       packageName: {
@@ -109,6 +111,7 @@ export default function npm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("package.search", {
+    access: "read",
     description: "Search for packages on the npm registry",
     inputSchema: {
       query: { type: "string", required: true, description: "Search query" },
@@ -147,6 +150,7 @@ export default function npm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("distTag.list", {
+    access: "read",
     description: "Get all dist-tags for a package",
     inputSchema: {
       packageName: {
@@ -166,6 +170,7 @@ export default function npm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("distTag.update", {
+    access: "write",
     description: "Update a dist-tag for a package (requires auth)",
     inputSchema: {
       packageName: {

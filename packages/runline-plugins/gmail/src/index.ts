@@ -794,6 +794,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   // ── Message ───────────────────────────────────────────
 
   rl.registerAction("message.send", {
+    access: "write",
     description: "Send an email",
     inputSchema: {
       to: {
@@ -839,6 +840,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.reply", {
+    access: "write",
     description:
       "Reply to a message, preserving threadId and In-Reply-To/References headers",
     inputSchema: {
@@ -858,6 +860,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.get", {
+    access: "read",
     description: "Get a message by ID",
     inputSchema: {
       id: { type: "string", required: true },
@@ -892,6 +895,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.list", {
+    access: "read",
     description:
       "List messages. Supports Gmail search syntax via `q`, plus friendly filters: sender, readStatus ('read'|'unread'), receivedAfter/Before (ISO string, ms, or seconds).",
     inputSchema: {
@@ -930,6 +934,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.delete", {
+    access: "write",
     description: "Permanently delete a message",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -939,6 +944,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.trash", {
+    access: "write",
     description: "Move a message to trash (recoverable)",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -948,6 +954,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.untrash", {
+    access: "write",
     description: "Remove a message from trash",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -957,6 +964,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.markAsRead", {
+    access: "write",
     description: "Remove the UNREAD label",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -968,6 +976,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.markAsUnread", {
+    access: "write",
     description: "Add the UNREAD label",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -979,6 +988,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.addLabels", {
+    access: "write",
     description: "Add labels to a message",
     inputSchema: {
       id: { type: "string", required: true },
@@ -993,6 +1003,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.removeLabels", {
+    access: "write",
     description: "Remove labels from a message",
     inputSchema: {
       id: { type: "string", required: true },
@@ -1007,6 +1018,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.getAttachment", {
+    access: "read",
     description:
       "Download an attachment by ID (returns {size, data} where data is base64url)",
     inputSchema: {
@@ -1029,6 +1041,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   // ── Thread ────────────────────────────────────────────
 
   rl.registerAction("thread.get", {
+    access: "read",
     description: "Get a thread by ID",
     inputSchema: {
       id: { type: "string", required: true },
@@ -1063,6 +1076,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.list", {
+    access: "read",
     description:
       "List threads. Same filter sugar as `message.list` (sender, readStatus, receivedAfter/Before).",
     inputSchema: {
@@ -1087,6 +1101,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.delete", {
+    access: "write",
     description: "Permanently delete a thread",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1096,6 +1111,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.trash", {
+    access: "write",
     description: "Move a thread to trash",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1105,6 +1121,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.untrash", {
+    access: "write",
     description: "Remove a thread from trash",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1114,6 +1131,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.addLabels", {
+    access: "write",
     description: "Add labels to all messages in a thread",
     inputSchema: {
       id: { type: "string", required: true },
@@ -1128,6 +1146,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.removeLabels", {
+    access: "write",
     description: "Remove labels from all messages in a thread",
     inputSchema: {
       id: { type: "string", required: true },
@@ -1142,6 +1161,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.reply", {
+    access: "write",
     description:
       "Reply to the last message in a thread (convenience wrapper over message.reply)",
     inputSchema: {
@@ -1174,6 +1194,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   // ── Draft ─────────────────────────────────────────────
 
   rl.registerAction("draft.create", {
+    access: "write",
     description: "Create a draft",
     inputSchema: {
       to: { type: "string", required: false },
@@ -1235,6 +1256,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("draft.get", {
+    access: "read",
     description: "Get a draft by ID",
     inputSchema: {
       id: { type: "string", required: true },
@@ -1248,6 +1270,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("draft.list", {
+    access: "read",
     description: "List drafts",
     inputSchema: {
       q: { type: "string", required: false },
@@ -1269,6 +1292,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("draft.delete", {
+    access: "write",
     description: "Delete a draft",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1278,6 +1302,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("draft.send", {
+    access: "write",
     description: "Send an existing draft",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1289,6 +1314,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   // ── Label ─────────────────────────────────────────────
 
   rl.registerAction("label.create", {
+    access: "write",
     description: "Create a label",
     inputSchema: {
       name: { type: "string", required: true },
@@ -1317,6 +1343,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.get", {
+    access: "read",
     description: "Get a label by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1326,6 +1353,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.list", {
+    access: "read",
     description: "List all labels",
     async execute(_input, ctx) {
       const res = (await gmailRequest(ctx, "GET", "/labels")) as {
@@ -1336,6 +1364,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.delete", {
+    access: "write",
     description: "Delete a label",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1345,6 +1374,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.update", {
+    access: "write",
     description: "Update a label",
     inputSchema: {
       id: { type: "string", required: true },
@@ -1369,6 +1399,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   // ── Profile / aliases ─────────────────────────────────
 
   rl.registerAction("profile.get", {
+    access: "read",
     description: "Get the authenticated user's profile",
     async execute(_input, ctx) {
       return gmailRequest(ctx, "GET", "/profile");
@@ -1376,6 +1407,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alias.list", {
+    access: "read",
     description: "List configured send-as aliases",
     async execute(_input, ctx) {
       const res = (await gmailRequest(ctx, "GET", "/settings/sendAs")) as {

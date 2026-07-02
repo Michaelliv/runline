@@ -9,6 +9,7 @@ const CREDENTIAL_KEY_SCHEMA = {
 
 export function registerCredentialActions(rl: RunlinePluginAPI) {
   rl.registerAction("credential.list", {
+    access: "read",
     description: "List Steel credentials. Filter by origin and/or namespace.",
     inputSchema: t.Object({ namespace: t.Optional(t.String()), origin: t.Optional(t.String()) }),
     async execute(input, ctx) {
@@ -17,6 +18,7 @@ export function registerCredentialActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("credential.create", {
+    access: "write",
     description: "Create a Steel credential for an origin/namespace. Value may include username, password, and totpSecret.",
     inputSchema: t.Object({ ...CREDENTIAL_KEY_SCHEMA, value: t.Any({ description: "Credential payload" }) }),
     async execute(input, ctx) {
@@ -25,6 +27,7 @@ export function registerCredentialActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("credential.get", {
+    access: "read",
     description: "Retrieve credential metadata by origin and optional namespace.",
     inputSchema: t.Object(CREDENTIAL_KEY_SCHEMA),
     async execute(input, ctx) {
@@ -35,6 +38,7 @@ export function registerCredentialActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("credential.delete", {
+    access: "write",
     description: "Delete a Steel credential by origin and optional namespace.",
     inputSchema: t.Object(CREDENTIAL_KEY_SCHEMA),
     async execute(input, ctx) {

@@ -60,6 +60,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.upsert", {
+    access: "write",
     description: "Create or update a contact (upsert by email/phone)",
     inputSchema: {
       email: { type: "string", required: false },
@@ -104,6 +105,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -118,6 +120,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -153,6 +156,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       id: { type: "string", required: true },
@@ -186,6 +190,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -202,6 +207,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   // ── Opportunity ─────────────────────────────────────
 
   rl.registerAction("opportunity.create", {
+    access: "write",
     description: "Create an opportunity",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -238,6 +244,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("opportunity.get", {
+    access: "read",
     description: "Get an opportunity",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -251,6 +258,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("opportunity.list", {
+    access: "read",
     description: "List opportunities",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -286,6 +294,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("opportunity.update", {
+    access: "write",
     description: "Update an opportunity",
     inputSchema: {
       id: { type: "string", required: true },
@@ -308,6 +317,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("opportunity.delete", {
+    access: "write",
     description: "Delete an opportunity",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -324,6 +334,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   // ── Task (scoped to contact) ────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a task for a contact",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -341,6 +352,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a task",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -354,6 +366,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.list", {
+    access: "read",
     description: "List tasks for a contact",
     inputSchema: { contactId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -368,6 +381,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description: "Update a task",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -386,6 +400,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.delete", {
+    access: "write",
     description: "Delete a task",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -402,6 +417,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   // ── Calendar ────────────────────────────────────────
 
   rl.registerAction("calendar.bookAppointment", {
+    access: "write",
     description: "Book a calendar appointment",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -435,6 +451,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("calendar.getFreeSlots", {
+    access: "read",
     description: "Get free slots for a calendar",
     inputSchema: {
       calendarId: { type: "string", required: true },

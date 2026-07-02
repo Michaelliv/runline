@@ -70,6 +70,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Databricks SQL ──────────────────────────────────
 
   rl.registerAction("sql.executeQuery", {
+    access: "write",
     description: "Execute a SQL query on a warehouse and return results",
     inputSchema: {
       warehouseId: {
@@ -171,6 +172,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Files ───────────────────────────────────────────
 
   rl.registerAction("files.createDirectory", {
+    access: "write",
     description: "Create a directory in a Unity Catalog volume",
     inputSchema: {
       volumePath: {
@@ -195,6 +197,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("files.deleteDirectory", {
+    access: "write",
     description: "Delete a directory in a volume",
     inputSchema: {
       volumePath: {
@@ -219,6 +222,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("files.deleteFile", {
+    access: "write",
     description: "Delete a file in a volume",
     inputSchema: {
       volumePath: {
@@ -243,6 +247,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("files.getFileInfo", {
+    access: "read",
     description: "Get file metadata (content-length, type, last-modified)",
     inputSchema: {
       volumePath: {
@@ -272,6 +277,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("files.listDirectory", {
+    access: "read",
     description: "List files in a volume directory",
     inputSchema: {
       volumePath: {
@@ -305,6 +311,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Genie ───────────────────────────────────────────
 
   rl.registerAction("genie.startConversation", {
+    access: "write",
     description: "Start a new Genie conversation",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -324,6 +331,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("genie.createMessage", {
+    access: "write",
     description: "Send a message in an existing Genie conversation",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -344,6 +352,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("genie.getMessage", {
+    access: "read",
     description: "Get a specific message from a conversation",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -363,6 +372,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("genie.getQueryResults", {
+    access: "read",
     description: "Get query results from a message attachment",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -383,6 +393,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("genie.executeMessageQuery", {
+    access: "write",
     description: "Execute a query from a message attachment",
     inputSchema: {
       spaceId: { type: "string", required: true },
@@ -403,6 +414,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("genie.getSpace", {
+    access: "read",
     description: "Get a Genie space",
     inputSchema: { spaceId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -419,6 +431,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Model Serving ───────────────────────────────────
 
   rl.registerAction("modelServing.queryEndpoint", {
+    access: "write",
     description: "Query a model serving endpoint",
     inputSchema: {
       endpointName: { type: "string", required: true },
@@ -446,6 +459,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Unity Catalog: Catalogs ─────────────────────────
 
   rl.registerAction("catalog.create", {
+    access: "write",
     description: "Create a Unity Catalog catalog",
     inputSchema: {
       name: { type: "string", required: true },
@@ -461,6 +475,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("catalog.get", {
+    access: "read",
     description: "Get a catalog",
     inputSchema: { name: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -475,6 +490,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("catalog.list", {
+    access: "read",
     description: "List all catalogs",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -484,6 +500,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("catalog.update", {
+    access: "write",
     description: "Update a catalog's comment",
     inputSchema: {
       name: { type: "string", required: true },
@@ -503,6 +520,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("catalog.delete", {
+    access: "write",
     description: "Delete a catalog",
     inputSchema: { name: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -520,6 +538,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Unity Catalog: Tables ───────────────────────────
 
   rl.registerAction("table.create", {
+    access: "write",
     description: "Create an external Delta table",
     inputSchema: {
       catalogName: { type: "string", required: true },
@@ -551,6 +570,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("table.get", {
+    access: "read",
     description: "Get table info",
     inputSchema: {
       fullName: {
@@ -571,6 +591,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("table.list", {
+    access: "read",
     description: "List tables",
     inputSchema: {
       catalogName: { type: "string", required: false },
@@ -594,6 +615,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("table.delete", {
+    access: "write",
     description: "Delete a table",
     inputSchema: {
       fullName: {
@@ -617,6 +639,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Unity Catalog: Volumes ──────────────────────────
 
   rl.registerAction("volume.create", {
+    access: "write",
     description: "Create a Unity Catalog volume",
     inputSchema: {
       catalogName: { type: "string", required: true },
@@ -652,6 +675,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("volume.get", {
+    access: "read",
     description: "Get a volume",
     inputSchema: {
       catalogName: { type: "string", required: true },
@@ -671,6 +695,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("volume.list", {
+    access: "read",
     description: "List volumes",
     inputSchema: {
       catalogName: { type: "string", required: false },
@@ -694,6 +719,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("volume.delete", {
+    access: "write",
     description: "Delete a volume",
     inputSchema: {
       catalogName: { type: "string", required: true },
@@ -716,6 +742,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Unity Catalog: Functions ────────────────────────
 
   rl.registerAction("function.create", {
+    access: "write",
     description: "Create a Unity Catalog function",
     inputSchema: {
       catalogName: { type: "string", required: true },
@@ -778,6 +805,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("function.get", {
+    access: "read",
     description: "Get a function",
     inputSchema: {
       fullName: {
@@ -798,6 +826,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("function.list", {
+    access: "read",
     description: "List functions",
     inputSchema: {
       catalogName: { type: "string", required: false },
@@ -821,6 +850,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("function.delete", {
+    access: "write",
     description: "Delete a function",
     inputSchema: {
       fullName: {
@@ -844,6 +874,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   // ── Vector Search ───────────────────────────────────
 
   rl.registerAction("vectorSearch.createIndex", {
+    access: "write",
     description: "Create a vector search index",
     inputSchema: {
       indexName: { type: "string", required: true },
@@ -883,6 +914,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("vectorSearch.getIndex", {
+    access: "read",
     description: "Get a vector search index",
     inputSchema: { indexName: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -897,6 +929,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("vectorSearch.listIndexes", {
+    access: "read",
     description: "List vector search indexes for an endpoint",
     inputSchema: { endpointName: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -916,6 +949,7 @@ export default function databricks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("vectorSearch.queryIndex", {
+    access: "read",
     description: "Query a vector search index",
     inputSchema: {
       indexName: { type: "string", required: true },

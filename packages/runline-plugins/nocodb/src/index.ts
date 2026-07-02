@@ -84,6 +84,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.create", {
+    access: "write",
     description: "Create one or more rows in a NocoDB table (v2 API)",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -106,6 +107,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.get", {
+    access: "read",
     description: "Get a single row by ID",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -122,6 +124,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.list", {
+    access: "read",
     description: "List rows from a NocoDB table",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -183,6 +186,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.update", {
+    access: "write",
     description:
       "Update one or more rows (include primary key in each row object)",
     inputSchema: {
@@ -205,6 +209,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.delete", {
+    access: "write",
     description: "Delete one or more rows by ID",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },

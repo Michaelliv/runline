@@ -32,6 +32,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("calendar.list", {
+    access: "read",
     description:
       "List calendar events in a date range. Returns [{id,subject,start,end,location,organizer,attendees}].",
     inputSchema: {
@@ -53,6 +54,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("event.get", {
+    access: "read",
     description: "Get one calendar event by id (full details incl. body).",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input: any, ctx: Ctx) {

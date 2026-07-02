@@ -82,6 +82,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   // ── Coupon ──────────────────────────────────────────
 
   rl.registerAction("coupon.create", {
+    access: "write",
     description: "Create a coupon",
     inputSchema: {
       couponType: {
@@ -145,6 +146,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coupon.list", {
+    access: "read",
     description: "List coupons for a product",
     inputSchema: {
       productId: { type: "string", required: true, description: "Product ID" },
@@ -163,6 +165,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coupon.update", {
+    access: "write",
     description: "Update a coupon by code or group",
     inputSchema: {
       couponCode: {
@@ -204,6 +207,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   // ── Payment ─────────────────────────────────────────
 
   rl.registerAction("payment.list", {
+    access: "read",
     description: "List subscription payments",
     inputSchema: {
       subscriptionId: { type: "number", required: false },
@@ -234,6 +238,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("payment.reschedule", {
+    access: "write",
     description: "Reschedule a payment",
     inputSchema: {
       paymentId: { type: "number", required: true },
@@ -255,6 +260,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   // ── Plan ────────────────────────────────────────────
 
   rl.registerAction("plan.get", {
+    access: "read",
     description: "Get a subscription plan by ID",
     inputSchema: { planId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -266,6 +272,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("plan.list", {
+    access: "read",
     description: "List all subscription plans",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -282,6 +289,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   // ── Product ─────────────────────────────────────────
 
   rl.registerAction("product.list", {
+    access: "read",
     description: "List all products",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -299,6 +307,7 @@ export default function paddle(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List subscription users",
     inputSchema: {
       state: {

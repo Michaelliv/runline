@@ -19,6 +19,7 @@ export default function vonage(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sms.send", {
+    access: "write",
     description: "Send an SMS",
     inputSchema: {
       from: {

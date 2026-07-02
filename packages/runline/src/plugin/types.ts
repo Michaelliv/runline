@@ -31,8 +31,11 @@ export interface HelpInput {
   const?: unknown;
 }
 
+export type ActionAccess = "read" | "write";
+
 export interface ActionDef {
   name: string;
+  access?: ActionAccess;
   description?: string;
   inputSchema?: InputSchema;
   execute: (input: unknown, ctx: ActionContext) => unknown | Promise<unknown>;

@@ -65,6 +65,7 @@ export default function demio(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.get", {
+    access: "read",
     description: "Get an event (optionally a specific session/date)",
     inputSchema: {
       eventId: { type: "string", required: true, description: "Event ID" },
@@ -90,6 +91,7 @@ export default function demio(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.list", {
+    access: "read",
     description: "List events",
     inputSchema: {
       type: {
@@ -118,6 +120,7 @@ export default function demio(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.register", {
+    access: "write",
     description: "Register a person for an event",
     inputSchema: {
       eventId: { type: "string", required: true, description: "Event ID" },
@@ -156,6 +159,7 @@ export default function demio(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("report.getParticipants", {
+    access: "read",
     description: "Get participants report for a session",
     inputSchema: {
       dateId: {

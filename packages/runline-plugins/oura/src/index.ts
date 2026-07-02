@@ -41,6 +41,7 @@ export default function oura(rl: RunlinePluginAPI) {
     ctx.connection.config.accessToken as string;
 
   rl.registerAction("profile.get", {
+    access: "read",
     description: "Get the user's personal information",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -68,6 +69,7 @@ export default function oura(rl: RunlinePluginAPI) {
 
   for (const ep of summaryEndpoints) {
     rl.registerAction(ep.name, {
+      access: "read",
       description: ep.description,
       inputSchema: {
         startDate: {

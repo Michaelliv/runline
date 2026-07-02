@@ -25,6 +25,7 @@ export default function graphql(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("query", {
+    access: "write",
     description: "Execute a GraphQL query",
     inputSchema: {
       query: {
@@ -83,6 +84,7 @@ export default function graphql(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("introspect", {
+    access: "read",
     description: "Run an introspection query to get the schema",
     async execute(_input, ctx) {
       const cfg = ctx.connection.config;

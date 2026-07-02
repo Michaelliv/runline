@@ -14,6 +14,7 @@ export default function docker(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("containers.list", {
+    access: "read",
     description: "List Docker containers",
     inputSchema: {
       all: {
@@ -39,6 +40,7 @@ export default function docker(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("containers.start", {
+    access: "write",
     description: "Start a Docker container",
     inputSchema: {
       id: {
@@ -55,6 +57,7 @@ export default function docker(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("containers.stop", {
+    access: "write",
     description: "Stop a Docker container",
     inputSchema: {
       id: {
@@ -71,6 +74,7 @@ export default function docker(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("images.list", {
+    access: "read",
     description: "List Docker images",
     execute() {
       const { rows } = syncExec(
@@ -88,6 +92,7 @@ export default function docker(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("images.pull", {
+    access: "write",
     description: "Pull a Docker image",
     inputSchema: {
       image: {

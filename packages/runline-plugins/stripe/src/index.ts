@@ -64,6 +64,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   // ── Balance ─────────────────────────────────────────
 
   rl.registerAction("balance.get", {
+    access: "read",
     description: "Get current balance",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -74,6 +75,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   // ── Customer ────────────────────────────────────────
 
   rl.registerAction("customer.create", {
+    access: "write",
     description: "Create a customer",
     inputSchema: {
       name: { type: "string", required: true },
@@ -92,6 +94,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.get", {
+    access: "read",
     description: "Get a customer by ID",
     inputSchema: { customerId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -104,6 +107,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.list", {
+    access: "read",
     description: "List customers",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -126,6 +130,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.update", {
+    access: "write",
     description: "Update a customer",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -141,6 +146,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.delete", {
+    access: "write",
     description: "Delete a customer",
     inputSchema: { customerId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -155,6 +161,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   // ── Charge ──────────────────────────────────────────
 
   rl.registerAction("charge.create", {
+    access: "write",
     description: "Create a charge",
     inputSchema: {
       amount: {
@@ -182,6 +189,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("charge.get", {
+    access: "read",
     description: "Get a charge by ID",
     inputSchema: { chargeId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -194,6 +202,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("charge.list", {
+    access: "read",
     description: "List charges",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -212,6 +221,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("charge.update", {
+    access: "write",
     description: "Update a charge",
     inputSchema: {
       chargeId: { type: "string", required: true },
@@ -226,6 +236,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   // ── Coupon ──────────────────────────────────────────
 
   rl.registerAction("coupon.create", {
+    access: "write",
     description: "Create a coupon",
     inputSchema: {
       duration: {
@@ -252,6 +263,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coupon.list", {
+    access: "read",
     description: "List coupons",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -272,6 +284,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   // ── Customer Card ───────────────────────────────────
 
   rl.registerAction("customerCard.add", {
+    access: "write",
     description: "Add a card to a customer",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -293,6 +306,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customerCard.get", {
+    access: "read",
     description: "Get a customer's card/source",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -309,6 +323,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customerCard.remove", {
+    access: "write",
     description: "Remove a card from a customer",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -327,6 +342,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   // ── Source ──────────────────────────────────────────
 
   rl.registerAction("source.create", {
+    access: "write",
     description: "Create a source and attach to customer",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -349,6 +365,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("source.get", {
+    access: "read",
     description: "Get a source by ID",
     inputSchema: { sourceId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -361,6 +378,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("source.delete", {
+    access: "write",
     description: "Detach a source from a customer",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -379,6 +397,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   // ── Token ───────────────────────────────────────────
 
   rl.registerAction("token.createCard", {
+    access: "write",
     description: "Create a card token",
     inputSchema: {
       number: { type: "string", required: true },
@@ -402,6 +421,7 @@ export default function stripe(rl: RunlinePluginAPI) {
   // ── Meter Event ─────────────────────────────────────
 
   rl.registerAction("meterEvent.create", {
+    access: "write",
     description: "Create a billing meter event",
     inputSchema: {
       eventName: { type: "string", required: true },

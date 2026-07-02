@@ -57,6 +57,7 @@ export default function supabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.create", {
+    access: "write",
     description: "Insert rows into a table",
     inputSchema: {
       table: { type: "string", required: true },
@@ -89,6 +90,7 @@ export default function supabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.get", {
+    access: "read",
     description: "Get rows by filter (PostgREST query params)",
     inputSchema: {
       table: { type: "string", required: true },
@@ -117,6 +119,7 @@ export default function supabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.list", {
+    access: "read",
     description: "List rows from a table",
     inputSchema: {
       table: { type: "string", required: true },
@@ -143,6 +146,7 @@ export default function supabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.update", {
+    access: "write",
     description: "Update rows matching a filter",
     inputSchema: {
       table: { type: "string", required: true },
@@ -172,6 +176,7 @@ export default function supabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.delete", {
+    access: "write",
     description: "Delete rows matching a filter",
     inputSchema: {
       table: { type: "string", required: true },

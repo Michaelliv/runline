@@ -51,6 +51,7 @@ export {
 } from "./plugin/loader.js";
 export { PluginRegistry, registry } from "./plugin/registry.js";
 export type {
+  ActionAccess,
   ActionContext,
   ActionDef,
   ConnectionConfig,

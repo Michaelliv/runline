@@ -82,6 +82,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   // ── Category ────────────────────────────────────────
 
   rl.registerAction("category.create", {
+    access: "write",
     description: "Create a category",
     inputSchema: {
       name: { type: "string", required: true, description: "Category name" },
@@ -108,6 +109,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("category.list", {
+    access: "read",
     description: "List all categories",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -126,6 +128,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("category.update", {
+    access: "write",
     description: "Update a category",
     inputSchema: {
       categoryId: {
@@ -162,6 +165,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   // ── Group ───────────────────────────────────────────
 
   rl.registerAction("group.create", {
+    access: "write",
     description: "Create a group",
     inputSchema: {
       name: { type: "string", required: true, description: "Group name" },
@@ -176,6 +180,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.get", {
+    access: "read",
     description: "Get a group by name",
     inputSchema: {
       name: { type: "string", required: true, description: "Group name" },
@@ -191,6 +196,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.list", {
+    access: "read",
     description: "List all groups",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -208,6 +214,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.update", {
+    access: "write",
     description: "Update a group",
     inputSchema: {
       groupId: { type: "string", required: true, description: "Group ID" },
@@ -222,6 +229,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   // ── Post ────────────────────────────────────────────
 
   rl.registerAction("post.create", {
+    access: "write",
     description: "Create a post (new topic or reply)",
     inputSchema: {
       title: {
@@ -263,6 +271,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.get", {
+    access: "read",
     description: "Get a post by ID",
     inputSchema: {
       postId: { type: "string", required: true, description: "Post ID" },
@@ -273,6 +282,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.list", {
+    access: "read",
     description: "List latest posts",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -290,6 +300,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.update", {
+    access: "write",
     description: "Update a post",
     inputSchema: {
       postId: { type: "string", required: true, description: "Post ID" },
@@ -321,6 +332,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a user",
     inputSchema: {
       name: { type: "string", required: true, description: "Full name" },
@@ -345,6 +357,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by username or external ID",
     inputSchema: {
       username: { type: "string", required: false, description: "Username" },
@@ -364,6 +377,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users (admin)",
     inputSchema: {
       flag: {
@@ -407,6 +421,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   // ── User Group ──────────────────────────────────────
 
   rl.registerAction("userGroup.add", {
+    access: "write",
     description: "Add users to a group",
     inputSchema: {
       groupId: { type: "string", required: true, description: "Group ID" },
@@ -426,6 +441,7 @@ export default function discourse(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("userGroup.remove", {
+    access: "write",
     description: "Remove users from a group",
     inputSchema: {
       groupId: { type: "string", required: true, description: "Group ID" },

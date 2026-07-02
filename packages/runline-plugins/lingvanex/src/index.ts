@@ -13,6 +13,7 @@ export default function lingvanex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("translate", {
+    access: "write",
     description: "Translate text",
     inputSchema: {
       text: {

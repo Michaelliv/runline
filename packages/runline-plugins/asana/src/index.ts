@@ -102,6 +102,7 @@ export default function asana(rl: RunlinePluginAPI) {
   // ── Task ────────────────────────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a new task",
     inputSchema: {
       name: { type: "string", required: true, description: "Task name" },
@@ -154,6 +155,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a task by ID",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -165,6 +167,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.list", {
+    access: "read",
     description:
       "List tasks (requires project, section, or workspace+assignee filter)",
     inputSchema: {
@@ -204,6 +207,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description: "Update a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -234,6 +238,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.delete", {
+    access: "write",
     description: "Delete a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -246,6 +251,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.move", {
+    access: "write",
     description: "Move a task to a section",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -271,6 +277,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.search", {
+    access: "read",
     description: "Search for tasks in a workspace",
     inputSchema: {
       workspace: {
@@ -307,6 +314,7 @@ export default function asana(rl: RunlinePluginAPI) {
   // ── Subtask ─────────────────────────────────────────
 
   rl.registerAction("subtask.create", {
+    access: "write",
     description: "Create a subtask on a task",
     inputSchema: {
       taskId: {
@@ -346,6 +354,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subtask.list", {
+    access: "read",
     description: "List subtasks of a task",
     inputSchema: {
       taskId: {
@@ -374,6 +383,7 @@ export default function asana(rl: RunlinePluginAPI) {
   // ── Task Comment ────────────────────────────────────
 
   rl.registerAction("taskComment.add", {
+    access: "write",
     description: "Add a comment to a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -408,6 +418,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskComment.remove", {
+    access: "write",
     description: "Remove a comment (story) from a task",
     inputSchema: {
       commentId: {
@@ -426,6 +437,7 @@ export default function asana(rl: RunlinePluginAPI) {
   // ── Task Tag ────────────────────────────────────────
 
   rl.registerAction("taskTag.add", {
+    access: "write",
     description: "Add a tag to a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -441,6 +453,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskTag.remove", {
+    access: "write",
     description: "Remove a tag from a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -458,6 +471,7 @@ export default function asana(rl: RunlinePluginAPI) {
   // ── Task Project ────────────────────────────────────
 
   rl.registerAction("taskProject.add", {
+    access: "write",
     description: "Add a task to a project",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -483,6 +497,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskProject.remove", {
+    access: "write",
     description: "Remove a task from a project",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task GID" },
@@ -506,6 +521,7 @@ export default function asana(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by ID (or 'me' for current user)",
     inputSchema: {
       userId: {
@@ -521,6 +537,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users in a workspace",
     inputSchema: {
       workspace: {
@@ -538,6 +555,7 @@ export default function asana(rl: RunlinePluginAPI) {
   // ── Project ─────────────────────────────────────────
 
   rl.registerAction("project.create", {
+    access: "write",
     description: "Create a new project",
     inputSchema: {
       name: { type: "string", required: true, description: "Project name" },
@@ -573,6 +591,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.get", {
+    access: "read",
     description: "Get a project by ID",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project GID" },
@@ -584,6 +603,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.list", {
+    access: "read",
     description: "List projects in a workspace",
     inputSchema: {
       workspace: {
@@ -629,6 +649,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.update", {
+    access: "write",
     description: "Update a project",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project GID" },
@@ -655,6 +676,7 @@ export default function asana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.delete", {
+    access: "write",
     description: "Delete a project",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project GID" },

@@ -81,6 +81,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   // ── Customer ────────────────────────────────────────
 
   rl.registerAction("customer.create", {
+    access: "write",
     description: "Create a customer",
     inputSchema: {
       email: { type: "string", required: true },
@@ -119,6 +120,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.get", {
+    access: "read",
     description: "Get a customer",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -134,6 +136,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.list", {
+    access: "read",
     description: "List customers",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -163,6 +166,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.update", {
+    access: "write",
     description: "Update a customer",
     inputSchema: {
       id: { type: "string", required: true },
@@ -195,6 +199,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.delete", {
+    access: "write",
     description: "Delete a customer",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -212,6 +217,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a contact",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -235,6 +241,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -249,6 +256,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -266,6 +274,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       id: { type: "string", required: true },
@@ -289,6 +298,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -306,6 +316,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   // ── Ticket ──────────────────────────────────────────
 
   rl.registerAction("ticket.create", {
+    access: "write",
     description: "Create a ticket",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -335,6 +346,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.get", {
+    access: "read",
     description: "Get a ticket",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -350,6 +362,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.list", {
+    access: "read",
     description: "List tickets",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -377,6 +390,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.update", {
+    access: "write",
     description: "Update a ticket",
     inputSchema: {
       id: { type: "string", required: true },
@@ -411,6 +425,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.delete", {
+    access: "write",
     description: "Delete a ticket",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -428,6 +443,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   // ── RMM Alerts ──────────────────────────────────────
 
   rl.registerAction("rmmAlert.create", {
+    access: "write",
     description: "Create an RMM alert",
     inputSchema: {
       customerId: { type: "string", required: true },
@@ -447,6 +463,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("rmmAlert.get", {
+    access: "read",
     description: "Get an RMM alert",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -462,6 +479,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("rmmAlert.list", {
+    access: "read",
     description: "List RMM alerts",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -492,6 +510,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("rmmAlert.delete", {
+    access: "write",
     description: "Delete an RMM alert",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -507,6 +526,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("rmmAlert.mute", {
+    access: "write",
     description: "Mute an RMM alert",
     inputSchema: {
       id: { type: "string", required: true },

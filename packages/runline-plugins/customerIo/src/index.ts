@@ -108,6 +108,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   // ── Campaign ────────────────────────────────────────
 
   rl.registerAction("campaign.get", {
+    access: "read",
     description: "Get a campaign by ID",
     inputSchema: {
       campaignId: {
@@ -128,6 +129,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.list", {
+    access: "read",
     description: "List all campaigns",
     async execute(_input, ctx) {
       const data = (await app(ctx, "GET", "/campaigns")) as Record<
@@ -139,6 +141,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.getMetrics", {
+    access: "read",
     description: "Get campaign metrics",
     inputSchema: {
       campaignId: {
@@ -183,6 +186,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   // ── Customer ────────────────────────────────────────
 
   rl.registerAction("customer.upsert", {
+    access: "write",
     description: "Create or update a customer",
     inputSchema: {
       id: {
@@ -220,6 +224,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.delete", {
+    access: "write",
     description: "Delete a customer",
     inputSchema: {
       id: { type: "string", required: true, description: "Customer ID" },
@@ -234,6 +239,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   // ── Event ───────────────────────────────────────────
 
   rl.registerAction("event.track", {
+    access: "write",
     description: "Track an event for a customer",
     inputSchema: {
       customerId: {
@@ -269,6 +275,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.trackAnonymous", {
+    access: "write",
     description: "Track an anonymous event (not tied to a customer)",
     inputSchema: {
       eventName: { type: "string", required: true, description: "Event name" },
@@ -290,6 +297,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   // ── Segment ─────────────────────────────────────────
 
   rl.registerAction("segment.addCustomers", {
+    access: "write",
     description: "Add customers to a manual segment",
     inputSchema: {
       segmentId: { type: "number", required: true, description: "Segment ID" },
@@ -312,6 +320,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("segment.removeCustomers", {
+    access: "write",
     description: "Remove customers from a manual segment",
     inputSchema: {
       segmentId: { type: "number", required: true, description: "Segment ID" },

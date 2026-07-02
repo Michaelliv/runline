@@ -47,6 +47,7 @@ export default function recraft(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("image.create", {
+    access: "write",
     description:
       "Generate an image with Recraft. Best for design, vector graphics, and brand-consistent work. Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
     inputSchema: {

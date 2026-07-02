@@ -85,6 +85,7 @@ export default function github(rl: RunlinePluginAPI) {
   // ── File ────────────────────────────────────────────
 
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get a file's content from a repository",
     inputSchema: {
       owner: {
@@ -115,6 +116,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.createOrUpdate", {
+    access: "write",
     description: "Create or update a file in a repository",
     inputSchema: {
       owner: {
@@ -155,6 +157,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file from a repository",
     inputSchema: {
       owner: {
@@ -193,6 +196,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.list", {
+    access: "read",
     description: "List contents of a directory",
     inputSchema: {
       owner: {
@@ -234,6 +238,7 @@ export default function github(rl: RunlinePluginAPI) {
   // ── Issue ───────────────────────────────────────────
 
   rl.registerAction("issue.create", {
+    access: "write",
     description: "Create an issue",
     inputSchema: {
       owner: {
@@ -280,6 +285,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.get", {
+    access: "read",
     description: "Get an issue",
     inputSchema: {
       owner: {
@@ -301,6 +307,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.update", {
+    access: "write",
     description: "Update an issue",
     inputSchema: {
       owner: {
@@ -335,6 +342,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.createComment", {
+    access: "write",
     description: "Create a comment on an issue",
     inputSchema: {
       owner: {
@@ -371,6 +379,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.lock", {
+    access: "write",
     description: "Lock an issue",
     inputSchema: {
       owner: {
@@ -410,6 +419,7 @@ export default function github(rl: RunlinePluginAPI) {
   // ── Release ─────────────────────────────────────────
 
   rl.registerAction("release.create", {
+    access: "write",
     description: "Create a release",
     inputSchema: {
       owner: {
@@ -463,6 +473,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.get", {
+    access: "read",
     description: "Get a release",
     inputSchema: {
       owner: {
@@ -480,6 +491,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.list", {
+    access: "read",
     description: "List releases",
     inputSchema: {
       owner: {
@@ -508,6 +520,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.update", {
+    access: "write",
     description: "Update a release",
     inputSchema: {
       owner: {
@@ -558,6 +571,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.delete", {
+    access: "write",
     description: "Delete a release",
     inputSchema: {
       owner: {
@@ -578,6 +592,7 @@ export default function github(rl: RunlinePluginAPI) {
   // ── Repository ──────────────────────────────────────
 
   rl.registerAction("commit.list", {
+    access: "read",
     description:
       "List repository commits, including latest commits on a branch or path",
     inputSchema: {
@@ -635,6 +650,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("commit.get", {
+    access: "read",
     description: "Get a repository commit by SHA, branch, or tag ref",
     inputSchema: {
       owner: {
@@ -660,6 +676,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("branch.get", {
+    access: "read",
     description: "Get a repository branch, including its latest commit",
     inputSchema: {
       owner: {
@@ -681,6 +698,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("repository.get", {
+    access: "read",
     description: "Get repository details",
     inputSchema: {
       owner: {
@@ -697,6 +715,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("repository.getLicense", {
+    access: "read",
     description: "Get a repository's license",
     inputSchema: {
       owner: {
@@ -713,6 +732,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("repository.listIssues", {
+    access: "read",
     description: "List issues for a repository",
     inputSchema: {
       owner: {
@@ -763,6 +783,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("repository.listPullRequests", {
+    access: "read",
     description: "List pull requests",
     inputSchema: {
       owner: {
@@ -807,6 +828,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("repository.listPopularPaths", {
+    access: "read",
     description: "List popular content paths (traffic)",
     inputSchema: {
       owner: {
@@ -823,6 +845,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("repository.listReferrers", {
+    access: "read",
     description: "List top referral sources (traffic)",
     inputSchema: {
       owner: {
@@ -845,6 +868,7 @@ export default function github(rl: RunlinePluginAPI) {
   // ── Review ──────────────────────────────────────────
 
   rl.registerAction("review.get", {
+    access: "read",
     description: "Get a pull request review",
     inputSchema: {
       owner: {
@@ -874,6 +898,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("review.list", {
+    access: "read",
     description: "List reviews on a pull request",
     inputSchema: {
       owner: {
@@ -899,6 +924,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("review.create", {
+    access: "write",
     description: "Create a review on a pull request",
     inputSchema: {
       owner: {
@@ -939,6 +965,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("review.update", {
+    access: "write",
     description: "Update a review",
     inputSchema: {
       owner: {
@@ -979,6 +1006,7 @@ export default function github(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.listRepos", {
+    access: "read",
     description: "List repositories for a user",
     inputSchema: {
       username: {
@@ -1019,6 +1047,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.listIssues", {
+    access: "read",
     description: "List issues assigned to the authenticated user",
     inputSchema: {
       state: {
@@ -1048,6 +1077,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.invite", {
+    access: "write",
     description: "Invite a user to a repository",
     inputSchema: {
       owner: {
@@ -1086,6 +1116,7 @@ export default function github(rl: RunlinePluginAPI) {
   // ── Organization ────────────────────────────────────
 
   rl.registerAction("organization.listRepos", {
+    access: "read",
     description: "List repositories for an organization",
     inputSchema: {
       org: { type: "string", required: true, description: "Organization name" },
@@ -1123,6 +1154,7 @@ export default function github(rl: RunlinePluginAPI) {
   // ── Workflow ────────────────────────────────────────
 
   rl.registerAction("workflow.list", {
+    access: "read",
     description: "List workflows in a repository",
     inputSchema: {
       owner: {
@@ -1144,6 +1176,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("workflow.get", {
+    access: "read",
     description: "Get a workflow",
     inputSchema: {
       owner: {
@@ -1169,6 +1202,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("workflow.dispatch", {
+    access: "write",
     description: "Trigger a workflow dispatch event",
     inputSchema: {
       owner: {
@@ -1211,6 +1245,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("workflow.enable", {
+    access: "write",
     description: "Enable a workflow",
     inputSchema: {
       owner: {
@@ -1237,6 +1272,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("workflow.disable", {
+    access: "write",
     description: "Disable a workflow",
     inputSchema: {
       owner: {
@@ -1263,6 +1299,7 @@ export default function github(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("workflow.getUsage", {
+    access: "read",
     description: "Get workflow usage billing",
     inputSchema: {
       owner: {

@@ -50,6 +50,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   // ── Message ─────────────────────────────────────────
 
   rl.registerAction("message.send", {
+    access: "write",
     description: "Send a text message",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -75,6 +76,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.edit", {
+    access: "write",
     description: "Edit a text message",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -95,6 +97,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.delete", {
+    access: "write",
     description: "Delete a message",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -110,6 +113,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.pin", {
+    access: "write",
     description: "Pin a message in a chat",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -128,6 +132,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.unpin", {
+    access: "write",
     description: "Unpin a message in a chat",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -143,6 +148,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendLocation", {
+    access: "write",
     description: "Send a location",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -160,6 +166,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendChatAction", {
+    access: "write",
     description: "Send a chat action (typing, upload_photo, etc.)",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -179,6 +186,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendPhoto", {
+    access: "write",
     description: "Send a photo by URL",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -201,6 +209,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendDocument", {
+    access: "write",
     description: "Send a document by URL",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -223,6 +232,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendVideo", {
+    access: "write",
     description: "Send a video by URL",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -245,6 +255,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendSticker", {
+    access: "write",
     description: "Send a sticker",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -264,6 +275,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendAnimation", {
+    access: "write",
     description: "Send a GIF/animation",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -286,6 +298,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendAudio", {
+    access: "write",
     description: "Send audio by URL",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -310,6 +323,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   // ── Chat ────────────────────────────────────────────
 
   rl.registerAction("chat.get", {
+    access: "read",
     description: "Get chat info",
     inputSchema: { chatId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -320,6 +334,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("chat.getAdministrators", {
+    access: "read",
     description: "Get chat administrators",
     inputSchema: { chatId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -330,6 +345,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("chat.getMember", {
+    access: "read",
     description: "Get a chat member",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -345,6 +361,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("chat.leave", {
+    access: "write",
     description: "Leave a chat",
     inputSchema: { chatId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -355,6 +372,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("chat.setDescription", {
+    access: "write",
     description: "Set chat description",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -370,6 +388,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("chat.setTitle", {
+    access: "write",
     description: "Set chat title",
     inputSchema: {
       chatId: { type: "string", required: true },
@@ -387,6 +406,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   // ── Callback ────────────────────────────────────────
 
   rl.registerAction("callback.answer", {
+    access: "write",
     description: "Answer a callback query",
     inputSchema: {
       callbackQueryId: { type: "string", required: true },
@@ -407,6 +427,7 @@ export default function telegram(rl: RunlinePluginAPI) {
   // ── File ────────────────────────────────────────────
 
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get file metadata (use result.file_path to download)",
     inputSchema: { fileId: { type: "string", required: true } },
     async execute(input, ctx) {

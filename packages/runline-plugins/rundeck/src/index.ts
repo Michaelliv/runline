@@ -53,6 +53,7 @@ export default function rundeck(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("job.execute", {
+    access: "write",
     description: "Execute a Rundeck job",
     inputSchema: {
       jobId: { type: "string", required: true },
@@ -92,6 +93,7 @@ export default function rundeck(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("job.getMetadata", {
+    access: "read",
     description: "Get metadata for a Rundeck job",
     inputSchema: { jobId: { type: "string", required: true } },
     async execute(input, ctx) {

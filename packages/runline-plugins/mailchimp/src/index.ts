@@ -58,6 +58,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   // ── Member ──────────────────────────────────────────
 
   rl.registerAction("member.create", {
+    access: "write",
     description: "Add a member to a list/audience",
     inputSchema: {
       listId: {
@@ -134,6 +135,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.get", {
+    access: "read",
     description:
       "Get a list member by email (used directly as subscriber hash)",
     inputSchema: {
@@ -173,6 +175,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.list", {
+    access: "read",
     description: "List members in a list/audience",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -231,6 +234,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.update", {
+    access: "write",
     description: "Update a list member (PUT — full replace)",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -280,6 +284,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.delete", {
+    access: "write",
     description: "Permanently delete a list member",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -299,6 +304,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   // ── Member Tag ──────────────────────────────────────
 
   rl.registerAction("memberTag.add", {
+    access: "write",
     description: "Add tags to a member",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -334,6 +340,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("memberTag.remove", {
+    access: "write",
     description: "Remove tags from a member",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -367,6 +374,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   // ── List Group ──────────────────────────────────────
 
   rl.registerAction("listGroup.list", {
+    access: "read",
     description: "List interests in a specific interest category for a list",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -395,6 +403,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   // ── Campaign ────────────────────────────────────────
 
   rl.registerAction("campaign.get", {
+    access: "read",
     description: "Get a campaign",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -407,6 +416,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.list", {
+    access: "read",
     description: "List campaigns",
     inputSchema: {
       count: { type: "number", required: false, description: "Max results" },
@@ -485,6 +495,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.send", {
+    access: "write",
     description: "Send a campaign",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -498,6 +509,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.replicate", {
+    access: "write",
     description: "Replicate a campaign",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -510,6 +522,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.resend", {
+    access: "write",
     description: "Create a resend to non-openers",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -522,6 +535,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.delete", {
+    access: "write",
     description: "Delete a campaign",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {

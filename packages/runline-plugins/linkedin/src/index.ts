@@ -54,6 +54,7 @@ export default function linkedin(rl: RunlinePluginAPI) {
     ctx.connection.config.accessToken as string;
 
   rl.registerAction("post.create", {
+    access: "write",
     description:
       "Create a post on LinkedIn. Supports text-only, article shares, and text with commentary. Image uploads require binary data and are not supported in this plugin.",
     inputSchema: {

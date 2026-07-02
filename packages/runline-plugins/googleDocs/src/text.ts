@@ -18,6 +18,7 @@ function range(p: Record<string, unknown>): Record<string, unknown> {
 
 export function registerTextActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertText", {
+    access: "write",
     description:
       "Insert text at a specific index, or at the end of a segment (body/header/footer/footnote).",
     inputSchema: {
@@ -59,6 +60,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.replaceAllText", {
+    access: "write",
     description:
       "Replace every occurrence of a text string throughout the document.",
     inputSchema: {
@@ -93,6 +95,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deleteContentRange", {
+    access: "write",
     description: "Delete text between two indices in a segment.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -111,6 +114,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.createParagraphBullets", {
+    access: "write",
     description:
       "Apply a bullet preset to paragraphs spanning a range. Presets: BULLET_DISC_CIRCLE_SQUARE, BULLET_DIAMONDX_ARROW3D_SQUARE, BULLET_CHECKBOX, NUMBERED_DECIMAL_ALPHA_ROMAN, NUMBERED_DECIMAL_NESTED, etc.",
     inputSchema: {
@@ -134,6 +138,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deleteParagraphBullets", {
+    access: "write",
     description: "Remove bullets from paragraphs in a range.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -152,6 +157,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.insertPerson", {
+    access: "write",
     description:
       "Insert a smart chip person mention at a location or at the end of a segment.",
     inputSchema: {
@@ -191,6 +197,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.insertRichLink", {
+    access: "write",
     description:
       "Insert a rich link smart chip at a location or at the end of a segment.",
     inputSchema: {
@@ -230,6 +237,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.insertDate", {
+    access: "write",
     description:
       "Insert a date smart chip at a location or at the end of a segment.",
     inputSchema: {
@@ -271,6 +279,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.updateTextStyle", {
+    access: "write",
     description:
       "Apply text styling (bold, italic, underline, color, fontSize, fontFamily, link) to a range. Pass `fields` listing which TextStyle properties were set.",
     inputSchema: {

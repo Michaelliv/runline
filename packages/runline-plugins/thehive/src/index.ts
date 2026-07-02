@@ -56,6 +56,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   // ── Alert ───────────────────────────────────────────
 
   rl.registerAction("alert.create", {
+    access: "write",
     description: "Create an alert",
     inputSchema: {
       title: { type: "string", required: true },
@@ -77,6 +78,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.get", {
+    access: "read",
     description: "Get an alert by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -89,6 +91,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.list", {
+    access: "read",
     description: "List alerts",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -104,6 +107,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.update", {
+    access: "write",
     description: "Update an alert",
     inputSchema: {
       id: { type: "string", required: true },
@@ -121,6 +125,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.markAsRead", {
+    access: "write",
     description: "Mark an alert as read",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -133,6 +138,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.markAsUnread", {
+    access: "write",
     description: "Mark an alert as unread",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -145,6 +151,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.promote", {
+    access: "write",
     description: "Promote an alert to a case",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -157,6 +164,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.merge", {
+    access: "write",
     description: "Merge an alert into an existing case",
     inputSchema: {
       alertId: { type: "string", required: true },
@@ -171,6 +179,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   // ── Case ────────────────────────────────────────────
 
   rl.registerAction("case.create", {
+    access: "write",
     description: "Create a case",
     inputSchema: {
       title: { type: "string", required: true },
@@ -190,6 +199,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("case.get", {
+    access: "read",
     description: "Get a case",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -202,6 +212,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("case.list", {
+    access: "read",
     description: "List cases",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -217,6 +228,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("case.update", {
+    access: "write",
     description: "Update a case",
     inputSchema: {
       id: { type: "string", required: true },
@@ -236,6 +248,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   // ── Observable ──────────────────────────────────────
 
   rl.registerAction("observable.create", {
+    access: "write",
     description: "Create an observable on a case",
     inputSchema: {
       caseId: { type: "string", required: true },
@@ -253,6 +266,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("observable.get", {
+    access: "read",
     description: "Get an observable",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -274,6 +288,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("observable.list", {
+    access: "read",
     description: "List observables for a case",
     inputSchema: {
       caseId: { type: "string", required: true },
@@ -296,6 +311,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("observable.update", {
+    access: "write",
     description: "Update an observable",
     inputSchema: {
       id: { type: "string", required: true },
@@ -315,6 +331,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   // ── Task ────────────────────────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a task on a case",
     inputSchema: {
       caseId: { type: "string", required: true },
@@ -333,6 +350,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a task",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -354,6 +372,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.list", {
+    access: "read",
     description: "List tasks for a case",
     inputSchema: {
       caseId: { type: "string", required: true },
@@ -373,6 +392,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description: "Update a task",
     inputSchema: {
       id: { type: "string", required: true },
@@ -392,6 +412,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   // ── Log ─────────────────────────────────────────────
 
   rl.registerAction("log.create", {
+    access: "write",
     description: "Create a log entry on a task",
     inputSchema: {
       taskId: { type: "string", required: true },
@@ -406,6 +427,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("log.get", {
+    access: "read",
     description: "Get a log entry",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -427,6 +449,7 @@ export default function thehive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("log.list", {
+    access: "read",
     description: "List logs for a task",
     inputSchema: {
       taskId: { type: "string", required: true },

@@ -46,6 +46,7 @@ export default function slack(rl: RunlinePluginAPI) {
   // ── Message ─────────────────────────────────────────
 
   rl.registerAction("message.post", {
+    access: "write",
     description: "Post a message to a channel or user",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -68,6 +69,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.update", {
+    access: "write",
     description: "Update a message",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -86,6 +88,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.delete", {
+    access: "write",
     description: "Delete a message",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -102,6 +105,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.getPermalink", {
+    access: "read",
     description: "Get a message permalink",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -117,6 +121,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.search", {
+    access: "read",
     description: "Search messages",
     inputSchema: {
       query: { type: "string", required: true },
@@ -146,6 +151,7 @@ export default function slack(rl: RunlinePluginAPI) {
   // ── Channel ─────────────────────────────────────────
 
   rl.registerAction("channel.create", {
+    access: "write",
     description: "Create a channel",
     inputSchema: {
       name: { type: "string", required: true },
@@ -162,6 +168,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.get", {
+    access: "read",
     description: "Get channel info",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -177,6 +184,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.list", {
+    access: "read",
     description: "List channels",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -206,6 +214,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.history", {
+    access: "read",
     description: "Get channel message history",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -231,6 +240,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.replies", {
+    access: "read",
     description: "Get thread replies",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -253,6 +263,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.invite", {
+    access: "write",
     description: "Invite users to a channel",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -273,6 +284,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.kick", {
+    access: "write",
     description: "Remove a user from a channel",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -289,6 +301,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.join", {
+    access: "write",
     description: "Join a channel",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -300,6 +313,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.leave", {
+    access: "write",
     description: "Leave a channel",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -310,6 +324,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.archive", {
+    access: "write",
     description: "Archive a channel",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -320,6 +335,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.unarchive", {
+    access: "write",
     description: "Unarchive a channel",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -330,6 +346,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.rename", {
+    access: "write",
     description: "Rename a channel",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -347,6 +364,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.setTopic", {
+    access: "write",
     description: "Set channel topic",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -364,6 +382,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.setPurpose", {
+    access: "write",
     description: "Set channel purpose",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -381,6 +400,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.members", {
+    access: "read",
     description: "List channel members",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -404,6 +424,7 @@ export default function slack(rl: RunlinePluginAPI) {
   // ── Reaction ────────────────────────────────────────
 
   rl.registerAction("reaction.add", {
+    access: "write",
     description: "Add a reaction to a message",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -425,6 +446,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("reaction.remove", {
+    access: "write",
     description: "Remove a reaction",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -442,6 +464,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("reaction.get", {
+    access: "read",
     description: "Get reactions for a message",
     inputSchema: {
       channel: { type: "string", required: true },
@@ -461,6 +484,7 @@ export default function slack(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.info", {
+    access: "read",
     description: "Get user info",
     inputSchema: { user: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -472,6 +496,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List all users",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -490,6 +515,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.getPresence", {
+    access: "read",
     description: "Get a user's presence",
     inputSchema: { user: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -500,6 +526,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.getProfile", {
+    access: "read",
     description: "Get a user's profile",
     inputSchema: { user: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -511,6 +538,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.updateProfile", {
+    access: "write",
     description: "Update the authenticated user's profile",
     inputSchema: {
       profile: {
@@ -530,6 +558,7 @@ export default function slack(rl: RunlinePluginAPI) {
   // ── User Group ──────────────────────────────────────
 
   rl.registerAction("userGroup.create", {
+    access: "write",
     description: "Create a user group",
     inputSchema: {
       name: { type: "string", required: true },
@@ -548,6 +577,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("userGroup.list", {
+    access: "read",
     description: "List user groups",
     inputSchema: { includeUsers: { type: "boolean", required: false } },
     async execute(input, ctx) {
@@ -566,6 +596,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("userGroup.update", {
+    access: "write",
     description: "Update a user group",
     inputSchema: {
       usergroup: { type: "string", required: true },
@@ -585,6 +616,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("userGroup.enable", {
+    access: "write",
     description: "Enable a user group",
     inputSchema: { usergroup: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -596,6 +628,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("userGroup.disable", {
+    access: "write",
     description: "Disable a user group",
     inputSchema: { usergroup: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -609,6 +642,7 @@ export default function slack(rl: RunlinePluginAPI) {
   // ── File ────────────────────────────────────────────
 
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get file info",
     inputSchema: { file: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -620,6 +654,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.list", {
+    access: "read",
     description: "List files",
     inputSchema: {
       channel: { type: "string", required: false },
@@ -646,6 +681,7 @@ export default function slack(rl: RunlinePluginAPI) {
   // ── Star ────────────────────────────────────────────
 
   rl.registerAction("star.add", {
+    access: "write",
     description: "Star an item",
     inputSchema: {
       channel: { type: "string", required: false },
@@ -663,6 +699,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("star.remove", {
+    access: "write",
     description: "Unstar an item",
     inputSchema: {
       channel: { type: "string", required: false },
@@ -680,6 +717,7 @@ export default function slack(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("star.list", {
+    access: "read",
     description: "List starred items",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {

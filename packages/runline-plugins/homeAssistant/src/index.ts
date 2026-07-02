@@ -89,6 +89,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("config.get", {
+    access: "read",
     description: "Get Home Assistant configuration",
     async execute(_input, ctx) {
       return ha(ctx, "GET", "/config");
@@ -96,6 +97,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("config.check", {
+    access: "read",
     description: "Check if configuration is valid",
     async execute(_input, ctx) {
       return ha(ctx, "POST", "/config/core/check_config");
@@ -103,6 +105,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("service.list", {
+    access: "read",
     description: "List available services",
     async execute(_input, ctx) {
       return ha(ctx, "GET", "/services");
@@ -110,6 +113,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("service.call", {
+    access: "write",
     description: "Call a service",
     inputSchema: {
       domain: {
@@ -140,6 +144,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("state.list", {
+    access: "read",
     description: "List all entity states",
     async execute(_input, ctx) {
       return ha(ctx, "GET", "/states");
@@ -147,6 +152,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("state.get", {
+    access: "read",
     description: "Get state of an entity",
     inputSchema: {
       entityId: {
@@ -165,6 +171,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("state.set", {
+    access: "write",
     description: "Set/update state of an entity",
     inputSchema: {
       entityId: { type: "string", required: true, description: "Entity ID" },
@@ -184,6 +191,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.list", {
+    access: "read",
     description: "List event types",
     async execute(_input, ctx) {
       return ha(ctx, "GET", "/events");
@@ -191,6 +199,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.fire", {
+    access: "write",
     description: "Fire an event",
     inputSchema: {
       eventType: { type: "string", required: true, description: "Event type" },
@@ -208,6 +217,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("log.getErrors", {
+    access: "read",
     description: "Get error log",
     async execute(_input, ctx) {
       return ha(ctx, "GET", "/error_log");
@@ -215,6 +225,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("log.getLogbook", {
+    access: "read",
     description: "Get logbook entries",
     inputSchema: {
       entityId: {
@@ -248,6 +259,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("template.render", {
+    access: "read",
     description: "Render a Jinja2 template",
     inputSchema: {
       template: {
@@ -264,6 +276,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("history.get", {
+    access: "read",
     description: "Get state history for entities",
     inputSchema: {
       entityIds: {

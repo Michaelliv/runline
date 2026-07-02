@@ -63,6 +63,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("script.list", {
+    access: "read",
     description: "List Apps Script projects in Drive (standalone scripts; bound scripts live inside their container and don't appear here).",
     inputSchema: {
       query: { type: "string", required: false, description: "Case-insensitive name substring filter." },
@@ -86,6 +87,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("project.getContent", {
+    access: "read",
     description: "Get all files of an Apps Script project (name, type, source).",
     inputSchema: { scriptId: { type: "string", required: true } },
     async execute(input: any, ctx: ActionContext) {
@@ -95,6 +97,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("project.readFile", {
+    access: "read",
     description: "Read one file's source from a project.",
     inputSchema: {
       scriptId: { type: "string", required: true },
@@ -109,6 +112,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("file.edit", {
+    access: "write",
     description: "Replace (or add) a single file's source, leaving other files untouched. Read-modify-write — the safe way to change code.",
     inputSchema: {
       scriptId: { type: "string", required: true },
@@ -130,6 +134,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("project.updateContent", {
+    access: "write",
     description: "Replace the entire project file set. files = [{name, type, source}], must include the appsscript JSON manifest. Prefer file.edit for single changes.",
     inputSchema: {
       scriptId: { type: "string", required: true },
@@ -142,6 +147,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("project.create", {
+    access: "write",
     description: "Create a new Apps Script project. Pass parentId (a Drive file id, e.g. a Sheet) to bind it to that container.",
     inputSchema: {
       title: { type: "string", required: true },
@@ -156,6 +162,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("version.create", {
+    access: "write",
     description: "Create an immutable version of the project (needed before deploying).",
     inputSchema: {
       scriptId: { type: "string", required: true },
@@ -168,6 +175,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("deployment.create", {
+    access: "write",
     description: "Deploy a version. For function.run, deploy with an API-executable manifest (executionApi access).",
     inputSchema: {
       scriptId: { type: "string", required: true },
@@ -186,6 +194,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("function.run", {
+    access: "write",
     description: "Run a function via scripts.run. Requires the project linked to a standard GCP project, the Apps Script API enabled, and an API-executable deployment (or devMode for the owner).",
     inputSchema: {
       scriptId: { type: "string", required: true },
@@ -208,6 +217,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("process.list", {
+    access: "read",
     description: "Recent executions for a project (status, function, times) — a log view.",
     inputSchema: {
       scriptId: { type: "string", required: true },

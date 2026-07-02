@@ -92,6 +92,7 @@ export default function contentful(rl: RunlinePluginAPI) {
   // ── Space ───────────────────────────────────────────
 
   rl.registerAction("space.get", {
+    access: "read",
     description: "Get space details",
     async execute(_input, ctx) {
       const { host, token, spaceId } = getConn(ctx);
@@ -102,6 +103,7 @@ export default function contentful(rl: RunlinePluginAPI) {
   // ── Content Type ────────────────────────────────────
 
   rl.registerAction("contentType.get", {
+    access: "read",
     description: "Get a content type",
     inputSchema: {
       environmentId: {
@@ -129,6 +131,7 @@ export default function contentful(rl: RunlinePluginAPI) {
   // ── Entry ───────────────────────────────────────────
 
   rl.registerAction("entry.get", {
+    access: "read",
     description: "Get an entry by ID",
     inputSchema: {
       environmentId: {
@@ -150,6 +153,7 @@ export default function contentful(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("entry.list", {
+    access: "read",
     description: "List entries",
     inputSchema: {
       environmentId: {
@@ -197,6 +201,7 @@ export default function contentful(rl: RunlinePluginAPI) {
   // ── Asset ───────────────────────────────────────────
 
   rl.registerAction("asset.get", {
+    access: "read",
     description: "Get an asset by ID",
     inputSchema: {
       environmentId: {
@@ -218,6 +223,7 @@ export default function contentful(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("asset.list", {
+    access: "read",
     description: "List assets",
     inputSchema: {
       environmentId: {
@@ -243,6 +249,7 @@ export default function contentful(rl: RunlinePluginAPI) {
   // ── Locale ──────────────────────────────────────────
 
   rl.registerAction("locale.list", {
+    access: "read",
     description: "List locales",
     inputSchema: {
       environmentId: {

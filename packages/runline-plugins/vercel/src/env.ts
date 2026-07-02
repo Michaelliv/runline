@@ -23,6 +23,7 @@ function assertCreateEnvInput(body: Record<string, unknown>): void {
 
 export function registerEnvActions(rl: RunlinePluginAPI) {
   rl.registerAction("env.list", {
+    access: "read",
     description: "List environment variables for a Vercel project.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,
@@ -39,6 +40,7 @@ export function registerEnvActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("env.get", {
+    access: "read",
     description: "Get one environment variable by ID for a Vercel project, including decrypted value when permitted.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,
@@ -52,6 +54,7 @@ export function registerEnvActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("env.set", {
+    access: "write",
     description: "Create or update a Vercel project environment variable. Without id, creates a variable and requires key, value, type, and target/customEnvironmentIds. With id, updates that exact variable. Be explicit about target to avoid changing the wrong environment.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,
@@ -90,6 +93,7 @@ export function registerEnvActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("env.delete", {
+    access: "write",
     description: "Delete an environment variable from a Vercel project. This removes the variable for the specified project/environment scope.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,

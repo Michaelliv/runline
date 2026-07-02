@@ -52,6 +52,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   // ── Player ──────────────────────────────────────────
 
   rl.registerAction("player.pause", {
+    access: "write",
     description: "Pause playback",
     inputSchema: {},
     async execute(_i, ctx) {
@@ -60,6 +61,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("player.resume", {
+    access: "write",
     description: "Resume playback",
     inputSchema: {},
     async execute(_i, ctx) {
@@ -68,6 +70,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("player.next", {
+    access: "write",
     description: "Skip to next track",
     inputSchema: {},
     async execute(_i, ctx) {
@@ -76,6 +79,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("player.previous", {
+    access: "write",
     description: "Skip to previous track",
     inputSchema: {},
     async execute(_i, ctx) {
@@ -84,6 +88,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("player.currentlyPlaying", {
+    access: "read",
     description: "Get currently playing track",
     inputSchema: {},
     async execute(_i, ctx) {
@@ -92,6 +97,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("player.recentlyPlayed", {
+    access: "read",
     description: "Get recently played tracks",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -110,6 +116,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("player.addToQueue", {
+    access: "write",
     description: "Add a track to the queue",
     inputSchema: {
       uri: { type: "string", required: true, description: "Track URI or ID" },
@@ -122,6 +129,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("player.setVolume", {
+    access: "write",
     description: "Set playback volume",
     inputSchema: {
       volumePercent: { type: "number", required: true, description: "0-100" },
@@ -134,6 +142,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("player.startMusic", {
+    access: "write",
     description: "Start playing an album, artist, or playlist",
     inputSchema: {
       contextUri: {
@@ -152,6 +161,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   // ── Album ───────────────────────────────────────────
 
   rl.registerAction("album.get", {
+    access: "read",
     description: "Get an album",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -164,6 +174,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("album.getTracks", {
+    access: "read",
     description: "Get an album's tracks",
     inputSchema: {
       id: { type: "string", required: true },
@@ -185,6 +196,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("album.getNewReleases", {
+    access: "read",
     description: "Get new album releases",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -207,6 +219,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("album.search", {
+    access: "read",
     description: "Search albums",
     inputSchema: {
       query: { type: "string", required: true },
@@ -231,6 +244,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   // ── Artist ──────────────────────────────────────────
 
   rl.registerAction("artist.get", {
+    access: "read",
     description: "Get an artist",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -243,6 +257,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("artist.getAlbums", {
+    access: "read",
     description: "Get an artist's albums",
     inputSchema: {
       id: { type: "string", required: true },
@@ -264,6 +279,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("artist.getRelatedArtists", {
+    access: "read",
     description: "Get related artists",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -277,6 +293,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("artist.getTopTracks", {
+    access: "read",
     description: "Get an artist's top tracks",
     inputSchema: {
       id: { type: "string", required: true },
@@ -296,6 +313,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("artist.search", {
+    access: "read",
     description: "Search artists",
     inputSchema: {
       query: { type: "string", required: true },
@@ -322,6 +340,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   // ── Playlist ────────────────────────────────────────
 
   rl.registerAction("playlist.get", {
+    access: "read",
     description: "Get a playlist",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -334,6 +353,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("playlist.getTracks", {
+    access: "read",
     description: "Get a playlist's tracks",
     inputSchema: {
       id: { type: "string", required: true },
@@ -355,6 +375,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("playlist.create", {
+    access: "write",
     description: "Create a playlist",
     inputSchema: {
       name: { type: "string", required: true },
@@ -372,6 +393,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("playlist.addTrack", {
+    access: "write",
     description: "Add a track to a playlist",
     inputSchema: {
       id: { type: "string", required: true },
@@ -393,6 +415,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("playlist.removeTrack", {
+    access: "write",
     description: "Remove a track from a playlist",
     inputSchema: {
       id: { type: "string", required: true },
@@ -410,6 +433,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("playlist.listMine", {
+    access: "read",
     description: "Get the current user's playlists",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -428,6 +452,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("playlist.search", {
+    access: "read",
     description: "Search playlists",
     inputSchema: {
       query: { type: "string", required: true },
@@ -454,6 +479,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   // ── Track ───────────────────────────────────────────
 
   rl.registerAction("track.get", {
+    access: "read",
     description: "Get a track",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -466,6 +492,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("track.getAudioFeatures", {
+    access: "read",
     description: "Get audio features for a track",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -478,6 +505,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("track.search", {
+    access: "read",
     description: "Search tracks",
     inputSchema: {
       query: { type: "string", required: true },
@@ -504,6 +532,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   // ── Library ─────────────────────────────────────────
 
   rl.registerAction("library.getLikedTracks", {
+    access: "read",
     description: "Get liked tracks",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -524,6 +553,7 @@ export default function spotify(rl: RunlinePluginAPI) {
   // ── My Data ─────────────────────────────────────────
 
   rl.registerAction("myData.getFollowingArtists", {
+    access: "read",
     description: "Get followed artists",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {

@@ -93,6 +93,7 @@ export default function gong(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("call.get", {
+    access: "read",
     description: "Get detailed call data",
     inputSchema: {
       callId: { type: "string", required: true, description: "Call ID" },
@@ -122,6 +123,7 @@ export default function gong(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("call.list", {
+    access: "read",
     description: "List calls",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -180,6 +182,7 @@ export default function gong(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user",
     inputSchema: {
       userId: { type: "string", required: true, description: "User ID" },
@@ -203,6 +206,7 @@ export default function gong(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },

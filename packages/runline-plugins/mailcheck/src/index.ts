@@ -14,6 +14,7 @@ export default function mailcheck(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("email.check", {
+    access: "write",
     description: "Verify an email address",
     inputSchema: {
       email: {

@@ -76,6 +76,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   // ── Dashboard ───────────────────────────────────────
 
   rl.registerAction("dashboard.create", {
+    access: "write",
     description: "Create or save a dashboard",
     inputSchema: {
       dashboard: {
@@ -105,6 +106,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("dashboard.get", {
+    access: "read",
     description: "Get a dashboard by UID",
     inputSchema: {
       uid: { type: "string", required: true, description: "Dashboard UID" },
@@ -119,6 +121,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("dashboard.list", {
+    access: "read",
     description: "Search dashboards",
     inputSchema: {
       query: { type: "string", required: false, description: "Search query" },
@@ -151,6 +154,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("dashboard.delete", {
+    access: "write",
     description: "Delete a dashboard by UID",
     inputSchema: {
       uid: { type: "string", required: true, description: "Dashboard UID" },
@@ -165,6 +169,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("dashboard.update", {
+    access: "write",
     description: "Update an existing dashboard",
     inputSchema: {
       uid: {
@@ -198,6 +203,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   // ── Team ────────────────────────────────────────────
 
   rl.registerAction("team.create", {
+    access: "write",
     description: "Create a team",
     inputSchema: {
       name: { type: "string", required: true, description: "Team name" },
@@ -212,6 +218,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.get", {
+    access: "read",
     description: "Get a team by ID",
     inputSchema: {
       teamId: { type: "number", required: true, description: "Team ID" },
@@ -222,6 +229,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.list", {
+    access: "read",
     description: "Search teams",
     inputSchema: {
       query: { type: "string", required: false, description: "Search by name" },
@@ -246,6 +254,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.update", {
+    access: "write",
     description: "Update a team",
     inputSchema: {
       teamId: { type: "number", required: true, description: "Team ID" },
@@ -262,6 +271,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.delete", {
+    access: "write",
     description: "Delete a team",
     inputSchema: {
       teamId: { type: "number", required: true, description: "Team ID" },
@@ -278,6 +288,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   // ── Team Member ─────────────────────────────────────
 
   rl.registerAction("teamMember.add", {
+    access: "write",
     description: "Add a user to a team",
     inputSchema: {
       teamId: { type: "number", required: true, description: "Team ID" },
@@ -290,6 +301,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("teamMember.remove", {
+    access: "write",
     description: "Remove a user from a team",
     inputSchema: {
       teamId: { type: "number", required: true, description: "Team ID" },
@@ -306,6 +318,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("teamMember.list", {
+    access: "read",
     description: "List members of a team",
     inputSchema: {
       teamId: { type: "number", required: true, description: "Team ID" },
@@ -322,6 +335,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   // ── User (Org) ──────────────────────────────────────
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Add a user to the current organization",
     inputSchema: {
       loginOrEmail: {
@@ -345,6 +359,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users in the current organization",
     async execute(_input, ctx) {
       return gf(ctx, "GET", "/org/users");
@@ -352,6 +367,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.update", {
+    access: "write",
     description: "Update a user's role in the organization",
     inputSchema: {
       userId: { type: "number", required: true, description: "User ID" },
@@ -368,6 +384,7 @@ export default function grafana(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.delete", {
+    access: "write",
     description: "Remove a user from the organization",
     inputSchema: {
       userId: { type: "number", required: true, description: "User ID" },

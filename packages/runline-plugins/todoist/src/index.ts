@@ -83,6 +83,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   // ── Task ────────────────────────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a task",
     inputSchema: {
       content: { type: "string", required: true },
@@ -121,6 +122,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a task by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -133,6 +135,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.list", {
+    access: "read",
     description: "List tasks",
     inputSchema: {
       projectId: { type: "string", required: false },
@@ -160,6 +163,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description: "Update a task",
     inputSchema: {
       id: { type: "string", required: true },
@@ -186,6 +190,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.close", {
+    access: "write",
     description: "Close (complete) a task",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -199,6 +204,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.reopen", {
+    access: "write",
     description: "Reopen a task",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -212,6 +218,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.delete", {
+    access: "write",
     description: "Delete a task",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -225,6 +232,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.quickAdd", {
+    access: "write",
     description: "Quick add a task using natural language",
     inputSchema: {
       text: {
@@ -247,6 +255,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   // ── Project ─────────────────────────────────────────
 
   rl.registerAction("project.create", {
+    access: "write",
     description: "Create a project",
     inputSchema: {
       name: { type: "string", required: true },
@@ -271,6 +280,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.get", {
+    access: "read",
     description: "Get a project",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -283,6 +293,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.list", {
+    access: "read",
     description: "List all projects",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -291,6 +302,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.update", {
+    access: "write",
     description: "Update a project",
     inputSchema: {
       id: { type: "string", required: true },
@@ -311,6 +323,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.delete", {
+    access: "write",
     description: "Delete a project",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -324,6 +337,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.archive", {
+    access: "write",
     description: "Archive a project",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -337,6 +351,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.unarchive", {
+    access: "write",
     description: "Unarchive a project",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -350,6 +365,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.getCollaborators", {
+    access: "read",
     description: "Get project collaborators",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -364,6 +380,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   // ── Section ─────────────────────────────────────────
 
   rl.registerAction("section.create", {
+    access: "write",
     description: "Create a section",
     inputSchema: {
       projectId: { type: "string", required: true },
@@ -381,6 +398,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("section.get", {
+    access: "read",
     description: "Get a section",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -393,6 +411,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("section.list", {
+    access: "read",
     description: "List sections",
     inputSchema: { projectId: { type: "string", required: false } },
     async execute(input, ctx) {
@@ -404,6 +423,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("section.update", {
+    access: "write",
     description: "Update a section",
     inputSchema: {
       id: { type: "string", required: true },
@@ -416,6 +436,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("section.delete", {
+    access: "write",
     description: "Delete a section",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -431,6 +452,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   // ── Comment ─────────────────────────────────────────
 
   rl.registerAction("comment.create", {
+    access: "write",
     description: "Create a comment on a task",
     inputSchema: {
       taskId: { type: "string", required: true },
@@ -446,6 +468,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.get", {
+    access: "read",
     description: "Get a comment",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -458,6 +481,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.list", {
+    access: "read",
     description: "List comments",
     inputSchema: {
       taskId: { type: "string", required: false },
@@ -473,6 +497,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.update", {
+    access: "write",
     description: "Update a comment",
     inputSchema: {
       id: { type: "string", required: true },
@@ -485,6 +510,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.delete", {
+    access: "write",
     description: "Delete a comment",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -500,6 +526,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   // ── Label ───────────────────────────────────────────
 
   rl.registerAction("label.create", {
+    access: "write",
     description: "Create a label",
     inputSchema: {
       name: { type: "string", required: true },
@@ -518,6 +545,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.get", {
+    access: "read",
     description: "Get a label",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -530,6 +558,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.list", {
+    access: "read",
     description: "List all labels",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -538,6 +567,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.update", {
+    access: "write",
     description: "Update a label",
     inputSchema: {
       id: { type: "string", required: true },
@@ -558,6 +588,7 @@ export default function todoist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.delete", {
+    access: "write",
     description: "Delete a label",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {

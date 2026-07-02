@@ -55,6 +55,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   // Helper for CRM objects (contacts, companies, deals, tickets)
   function registerCrmObject(resource: string, objectType: string) {
     rl.registerAction(`${resource}.create`, {
+      access: "write",
       description: `Create a ${resource}`,
       inputSchema: {
         properties: {
@@ -71,6 +72,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       },
     });
     rl.registerAction(`${resource}.get`, {
+      access: "read",
       description: `Get a ${resource}`,
       inputSchema: {
         id: { type: "string", required: true, description: `${resource} ID` },
@@ -95,6 +97,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       },
     });
     rl.registerAction(`${resource}.list`, {
+      access: "read",
       description: `List ${resource}s`,
       inputSchema: {
         limit: {
@@ -133,6 +136,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       },
     });
     rl.registerAction(`${resource}.update`, {
+      access: "write",
       description: `Update a ${resource}`,
       inputSchema: {
         id: { type: "string", required: true, description: `${resource} ID` },
@@ -156,6 +160,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       },
     });
     rl.registerAction(`${resource}.delete`, {
+      access: "write",
       description: `Delete a ${resource}`,
       inputSchema: {
         id: { type: "string", required: true, description: `${resource} ID` },
@@ -170,6 +175,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       },
     });
     rl.registerAction(`${resource}.search`, {
+      access: "read",
       description: `Search ${resource}s`,
       inputSchema: {
         filterGroups: {
@@ -213,6 +219,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   // ── Contact List ────────────────────────────────────
 
   rl.registerAction("contactList.addContacts", {
+    access: "write",
     description: "Add contacts to a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -234,6 +241,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactList.removeContacts", {
+    access: "write",
     description: "Remove contacts from a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -260,6 +268,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   // ── Engagement ──────────────────────────────────────
 
   rl.registerAction("engagement.create", {
+    access: "write",
     description: "Create an engagement (note, email, task, meeting, call)",
     inputSchema: {
       type: {
@@ -292,6 +301,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("engagement.get", {
+    access: "read",
     description: "Get an engagement",
     inputSchema: {
       engagementId: {
@@ -310,6 +320,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("engagement.list", {
+    access: "read",
     description: "List engagements",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -331,6 +342,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("engagement.delete", {
+    access: "write",
     description: "Delete an engagement",
     inputSchema: {
       engagementId: {
@@ -352,6 +364,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   // ── Form ────────────────────────────────────────────
 
   rl.registerAction("form.submit", {
+    access: "write",
     description: "Submit a HubSpot form",
     inputSchema: {
       portalId: {
@@ -388,6 +401,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("form.getFields", {
+    access: "read",
     description: "Get form fields",
     inputSchema: {
       formId: { type: "string", required: true, description: "Form GUID" },

@@ -12,6 +12,7 @@ describe("createPluginAPI", () => {
     api.setName("myPlugin");
     api.setVersion("2.0.0");
     api.registerAction("doThing", {
+      access: "write",
       description: "Does a thing",
       inputSchema: { x: { type: "number", required: true } },
       execute: (input) => input,
@@ -22,6 +23,7 @@ describe("createPluginAPI", () => {
     assert.equal(plugin.version, "2.0.0");
     assert.equal(plugin.actions.length, 1);
     assert.equal(plugin.actions[0].name, "doThing");
+    assert.equal(plugin.actions[0].access, "write");
     assert.equal(plugin.actions[0].description, "Does a thing");
   });
 
@@ -95,6 +97,15 @@ describe("createPluginAPI", () => {
     const plugin = resolve();
     assert.ok(plugin.initHooks);
     assert.equal(plugin.initHooks.length, 1);
+  });
+
+  it("keeps action access optional for backwards compatibility", () => {
+    const { api, resolve } = createPluginAPI("test");
+    api.setName("legacy");
+    api.registerAction("ping", { execute: () => "pong" });
+
+    const plugin = resolve();
+    assert.equal(plugin.actions[0].access, undefined);
   });
 
   it("registers multiple actions", () => {

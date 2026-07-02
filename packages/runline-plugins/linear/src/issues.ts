@@ -18,6 +18,7 @@ import {
 
 export function registerIssueActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.create", {
+    access: "write",
     description:
       "Create an issue. teamId is required; title is required unless a template is applied.",
     inputSchema: t.Object({
@@ -135,6 +136,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.get", {
+    access: "read",
     description: "Get an issue by ID or identifier (e.g. 'THE-154')",
     inputSchema: t.Object({
       issueId: t.String({
@@ -158,6 +160,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.list", {
+    access: "read",
     description:
       "List issues. Pass `filter` for state/label/project/etc. Default hides archived.",
     inputSchema: t.Object({
@@ -197,6 +200,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.update", {
+    access: "write",
     description:
       "Update an issue. All fields optional; only provided fields are updated.",
     inputSchema: t.Object({
@@ -338,6 +342,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.delete", {
+    access: "write",
     description:
       "Trash (soft-delete) an issue. Pass permanentlyDelete=true to bypass 30d grace period (admin only).",
     inputSchema: t.Object({
@@ -360,6 +365,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.archive", {
+    access: "write",
     description: "Archive an issue.",
     inputSchema: t.Object({
       issueId: t.String(),
@@ -378,6 +384,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.unarchive", {
+    access: "write",
     description: "Unarchive an issue.",
     inputSchema: t.Object({ issueId: t.String() }),
     async execute(input, ctx) {
@@ -393,6 +400,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.search", {
+    access: "read",
     description:
       "Search issues by text query using full-text and vector search. Rate-limited to 30 req/min.",
     inputSchema: t.Object({
@@ -458,6 +466,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.addLabel", {
+    access: "write",
     description: "Add a single label to an issue.",
     inputSchema: t.Object({
       issueId: t.String(),
@@ -479,6 +488,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.removeLabel", {
+    access: "write",
     description: "Remove a single label from an issue.",
     inputSchema: t.Object({
       issueId: t.String(),
@@ -501,6 +511,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.subscribe", {
+    access: "write",
     description:
       "Subscribe a user to issue notifications (defaults to current user).",
     inputSchema: t.Object({
@@ -523,6 +534,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.unsubscribe", {
+    access: "write",
     description:
       "Unsubscribe a user from issue notifications (defaults to current user).",
     inputSchema: t.Object({
@@ -545,6 +557,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.addLink", {
+    access: "write",
     description: "Create a relation between two issues.",
     inputSchema: t.Object({
       issueId: t.String({
@@ -574,6 +587,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.listComments", {
+    access: "read",
     description: "List comments on an issue.",
     inputSchema: t.Object({
       issueId: t.String(),

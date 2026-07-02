@@ -86,6 +86,7 @@ export default function coda(rl: RunlinePluginAPI) {
   // ── Table Row ───────────────────────────────────────
 
   rl.registerAction("table.createRow", {
+    access: "write",
     description: "Create/upsert a row in a table",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -127,6 +128,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("table.getRow", {
+    access: "read",
     description: "Get a row by ID",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -165,6 +167,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("table.listRows", {
+    access: "read",
     description: "List rows in a table",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -218,6 +221,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("table.deleteRow", {
+    access: "write",
     description: "Delete a row",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -236,6 +240,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("table.pushButton", {
+    access: "write",
     description: "Push a button on a row",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -263,6 +268,7 @@ export default function coda(rl: RunlinePluginAPI) {
   // ── Table Column ────────────────────────────────────
 
   rl.registerAction("table.getColumn", {
+    access: "read",
     description: "Get a column",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -280,6 +286,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("table.listColumns", {
+    access: "read",
     description: "List columns in a table",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -303,6 +310,7 @@ export default function coda(rl: RunlinePluginAPI) {
   // ── Formula ─────────────────────────────────────────
 
   rl.registerAction("formula.get", {
+    access: "read",
     description: "Get a formula",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -319,6 +327,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("formula.list", {
+    access: "read",
     description: "List formulas in a doc",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -338,6 +347,7 @@ export default function coda(rl: RunlinePluginAPI) {
   // ── Control ─────────────────────────────────────────
 
   rl.registerAction("control.get", {
+    access: "read",
     description: "Get a control",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -354,6 +364,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("control.list", {
+    access: "read",
     description: "List controls in a doc",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -373,6 +384,7 @@ export default function coda(rl: RunlinePluginAPI) {
   // ── View ────────────────────────────────────────────
 
   rl.registerAction("view.get", {
+    access: "read",
     description: "Get a view",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -389,6 +401,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("view.list", {
+    access: "read",
     description: "List views in a doc",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -406,6 +419,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("view.listRows", {
+    access: "read",
     description: "List rows in a view",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -452,6 +466,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("view.deleteRow", {
+    access: "write",
     description: "Delete a row from a view",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -469,6 +484,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("view.updateRow", {
+    access: "write",
     description: "Update a row in a view",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -506,6 +522,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("view.pushButton", {
+    access: "write",
     description: "Push a button on a view row",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },
@@ -531,6 +548,7 @@ export default function coda(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("view.listColumns", {
+    access: "read",
     description: "List columns in a view",
     inputSchema: {
       docId: { type: "string", required: true, description: "Doc ID" },

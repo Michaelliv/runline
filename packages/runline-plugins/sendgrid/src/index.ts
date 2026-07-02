@@ -53,6 +53,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   // ── Mail ────────────────────────────────────────────
 
   rl.registerAction("mail.send", {
+    access: "write",
     description: "Send an email via SendGrid",
     inputSchema: {
       to: {
@@ -136,6 +137,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID or email",
     inputSchema: {
       contactId: { type: "string", required: false },
@@ -167,6 +169,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts (optionally with SGQL query)",
     inputSchema: {
       query: {
@@ -200,6 +203,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.upsert", {
+    access: "write",
     description: "Create or update contacts",
     inputSchema: {
       contacts: {
@@ -229,6 +233,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete contacts by IDs",
     inputSchema: {
       ids: {
@@ -253,6 +258,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   // ── List ────────────────────────────────────────────
 
   rl.registerAction("list.create", {
+    access: "write",
     description: "Create a contact list",
     inputSchema: { name: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -264,6 +270,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.get", {
+    access: "read",
     description: "Get a list by ID",
     inputSchema: { listId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -277,6 +284,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.list", {
+    access: "read",
     description: "List all contact lists",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -293,6 +301,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.update", {
+    access: "write",
     description: "Update a list name",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -311,6 +320,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.delete", {
+    access: "write",
     description: "Delete a list",
     inputSchema: {
       listId: { type: "string", required: true },

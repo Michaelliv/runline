@@ -22,6 +22,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
   );
   getAction("webhook.get", "Get a webhook by ID.", "webhook", WEBHOOK_FIELDS);
   rl.registerAction("webhook.create", {
+    access: "write",
     description:
       "Create a webhook. resourceTypes example: ['Issue','Comment','Project'].",
     inputSchema: t.Object({
@@ -72,6 +73,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("webhook.update", {
+    access: "write",
     description:
       "Update a webhook. teamId and allPublicTeams cannot be changed after creation.",
     inputSchema: t.Object({
@@ -108,6 +110,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("webhook.delete", {
+    access: "write",
     description: "Delete a webhook.",
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the webhook to delete" }),
@@ -123,6 +126,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("webhook.rotateSecret", {
+    access: "write",
     description: "Rotate a webhook's signing secret. Returns the new secret.",
     inputSchema: t.Object({
       id: t.String({

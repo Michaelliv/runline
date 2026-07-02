@@ -12,6 +12,7 @@ function tabProperties(p: Record<string, unknown>): Record<string, unknown> {
 
 export function registerTabActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.addDocumentTab", {
+    access: "write",
     description:
       "Add a Google Docs document tab, optionally at an index or under a parent tab.",
     inputSchema: {
@@ -30,6 +31,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deleteTab", {
+    access: "write",
     description:
       "Delete a Google Docs document tab by tab ID. Child tabs are deleted too.",
     inputSchema: {
@@ -46,6 +48,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.updateDocumentTabProperties", {
+    access: "write",
     description:
       "Update Google Docs tab properties such as title, index, or parent tab.",
     inputSchema: {

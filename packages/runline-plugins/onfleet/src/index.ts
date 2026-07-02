@@ -42,6 +42,7 @@ function registerCrud(
   >,
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: createSchema,
     async execute(input, ctx) {
@@ -50,6 +51,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by ID`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -62,6 +64,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${plural}`,
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -72,6 +75,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "string", required: true },
@@ -84,6 +88,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -114,6 +119,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   // ── Organization ────────────────────────────────────
 
   rl.registerAction("organization.get", {
+    access: "read",
     description: "Get organization details",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -124,6 +130,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   // ── Task ────────────────────────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a task",
     inputSchema: {
       destination: {
@@ -155,6 +162,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a task by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -165,6 +173,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.list", {
+    access: "read",
     description: "List tasks",
     inputSchema: {
       from: { type: "number", required: false, description: "Unix ms start" },
@@ -190,6 +199,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description: "Update a task",
     inputSchema: {
       id: { type: "string", required: true },
@@ -202,6 +212,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.delete", {
+    access: "write",
     description: "Delete a task",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -215,6 +226,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.complete", {
+    access: "write",
     description: "Force-complete a task",
     inputSchema: {
       id: { type: "string", required: true },
@@ -251,6 +263,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   // ── Hub ─────────────────────────────────────────────
 
   rl.registerAction("hub.create", {
+    access: "write",
     description: "Create a hub",
     inputSchema: {
       name: { type: "string", required: true },
@@ -262,6 +275,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("hub.list", {
+    access: "read",
     description: "List hubs",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -272,6 +286,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("hub.update", {
+    access: "write",
     description: "Update a hub",
     inputSchema: {
       id: { type: "string", required: true },
@@ -302,6 +317,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   // ── Recipient ───────────────────────────────────────
 
   rl.registerAction("recipient.create", {
+    access: "write",
     description: "Create a recipient",
     inputSchema: {
       name: { type: "string", required: true },
@@ -314,6 +330,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("recipient.get", {
+    access: "read",
     description: "Get a recipient by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -326,6 +343,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("recipient.update", {
+    access: "write",
     description: "Update a recipient",
     inputSchema: {
       id: { type: "string", required: true },
@@ -340,6 +358,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   // ── Container ────────────────────────────────────────
 
   rl.registerAction("container.get", {
+    access: "read",
     description: "Get a container by type and ID",
     inputSchema: {
       containerType: {
@@ -360,6 +379,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("container.updateTasks", {
+    access: "write",
     description: "Update tasks in a container",
     inputSchema: {
       containerType: {
@@ -386,6 +406,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.getTimeEstimates", {
+    access: "read",
     description: "Get driver time estimates for a team",
     inputSchema: {
       id: { type: "string", required: true },
@@ -407,6 +428,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.autoDispatch", {
+    access: "write",
     description: "Auto-dispatch tasks for a team",
     inputSchema: {
       id: { type: "string", required: true },
@@ -426,6 +448,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   // ── Destination ─────────────────────────────────────
 
   rl.registerAction("destination.create", {
+    access: "write",
     description: "Create a destination",
     inputSchema: {
       address: {
@@ -441,6 +464,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("destination.get", {
+    access: "read",
     description: "Get a destination by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {

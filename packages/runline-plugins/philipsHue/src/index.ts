@@ -49,6 +49,7 @@ export default function philipsHue(rl: RunlinePluginAPI) {
   }
 
   rl.registerAction("light.get", {
+    access: "read",
     description: "Get a light by ID",
     inputSchema: { lightId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -59,6 +60,7 @@ export default function philipsHue(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("light.list", {
+    access: "read",
     description: "List all lights",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -79,6 +81,7 @@ export default function philipsHue(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("light.update", {
+    access: "write",
     description: "Update a light's state (on/off, brightness, color, etc.)",
     inputSchema: {
       lightId: { type: "string", required: true },
@@ -152,6 +155,7 @@ export default function philipsHue(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("light.delete", {
+    access: "write",
     description: "Delete a light from the bridge",
     inputSchema: { lightId: { type: "string", required: true } },
     async execute(input, ctx) {

@@ -55,6 +55,7 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("mail.send", {
+    access: "write",
     description:
       "Send an email as the connected mailbox. Returns {success}. Get user approval before sending external mail.",
     inputSchema: {
@@ -74,6 +75,7 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("mail.draft", {
+    access: "write",
     description: "Create a draft email (not sent). Returns {id, webLink}.",
     inputSchema: {
       to: { type: "array", required: false },
@@ -89,6 +91,7 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("mail.list", {
+    access: "read",
     description:
       "List recent messages. Optional KQL search. Returns [{id,subject,from,receivedDateTime,bodyPreview,hasAttachments}].",
     inputSchema: {
@@ -108,6 +111,7 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("mail.get", {
+    access: "read",
     description: "Get one message with full body by id.",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input: any, ctx: Ctx) {

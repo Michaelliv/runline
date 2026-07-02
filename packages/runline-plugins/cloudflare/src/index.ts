@@ -58,6 +58,7 @@ export default function cloudflare(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("zoneCertificate.get", {
+    access: "read",
     description: "Get a zone-level origin certificate",
     inputSchema: {
       zoneId: { type: "string", required: true, description: "Zone ID" },
@@ -82,6 +83,7 @@ export default function cloudflare(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("zoneCertificate.list", {
+    access: "read",
     description: "List zone-level origin certificates",
     inputSchema: {
       zoneId: { type: "string", required: true, description: "Zone ID" },
@@ -103,6 +105,7 @@ export default function cloudflare(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("zoneCertificate.upload", {
+    access: "write",
     description: "Upload a zone-level origin certificate",
     inputSchema: {
       zoneId: { type: "string", required: true, description: "Zone ID" },
@@ -136,6 +139,7 @@ export default function cloudflare(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("zoneCertificate.delete", {
+    access: "write",
     description: "Delete a zone-level origin certificate",
     inputSchema: {
       zoneId: { type: "string", required: true, description: "Zone ID" },

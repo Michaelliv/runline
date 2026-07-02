@@ -518,6 +518,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // ── File ──────────────────────────────────────────────
 
   rl.registerAction("file.upload", {
+    access: "write",
     description:
       "Upload a file to Drive. Supply one of contentBase64 / contentPath / content. Uses multipart for small files, resumable (2 MiB chunks) for large streamed paths.",
     inputSchema: {
@@ -577,6 +578,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.createFromText", {
+    access: "write",
     description:
       "Create a text file from inline content. Set convertToGoogleDocument=true to convert to a Google Doc.",
     inputSchema: {
@@ -656,6 +658,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.download", {
+    access: "write",
     description:
       "Download a file. Google-native docs are exported to the chosen format; regular files are downloaded as-is. Returns base64 by default, or writes to disk when savePath is set.",
     inputSchema: {
@@ -733,6 +736,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.copy", {
+    access: "write",
     description: "Copy a file",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -768,6 +772,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.move", {
+    access: "write",
     description:
       "Move a file to another folder. Resolves current parents and swaps them in a single PATCH.",
     inputSchema: {
@@ -801,6 +806,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.update", {
+    access: "write",
     description:
       "Patch file metadata and/or replace its bytes. Supply content{Base64,Path} to update bytes.",
     inputSchema: {
@@ -921,6 +927,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description:
       "Delete a file. Moves to trash by default; pass deletePermanently=true to erase.",
     inputSchema: {
@@ -947,6 +954,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get file metadata",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -965,6 +973,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.share", {
+    access: "write",
     description:
       "Add a permission to a file. Create one permission per call; list the existing permissions via file.listPermissions.",
     inputSchema: {
@@ -1022,6 +1031,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.listPermissions", {
+    access: "read",
     description: "List permissions on a file",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1044,6 +1054,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.deletePermission", {
+    access: "write",
     description: "Revoke a permission on a file",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1065,6 +1076,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // ── Folder ────────────────────────────────────────────
 
   rl.registerAction("folder.create", {
+    access: "write",
     description: "Create a folder",
     inputSchema: {
       name: { type: "string", required: false, description: 'Default: "Untitled"' },
@@ -1090,6 +1102,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.delete", {
+    access: "write",
     description:
       "Delete a folder. Moves to trash by default; pass deletePermanently=true to erase.",
     inputSchema: {
@@ -1116,6 +1129,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.share", {
+    access: "write",
     description: "Add a permission to a folder (same shape as file.share)",
     inputSchema: {
       folderId: { type: "string", required: true },
@@ -1159,6 +1173,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // ── File / folder search ──────────────────────────────
 
   rl.registerAction("fileFolder.search", {
+    access: "read",
     description:
       "Search files and folders. `query` is passed directly; `name` wraps it as `name contains '…'`. Combine with folderId/driveId/whatToSearch/fileTypes filters.",
     inputSchema: {
@@ -1248,6 +1263,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // ── Shared drive ──────────────────────────────────────
 
   rl.registerAction("drive.create", {
+    access: "write",
     description: "Create a shared drive. requestId is generated automatically.",
     inputSchema: {
       name: { type: "string", required: true },
@@ -1267,6 +1283,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("drive.get", {
+    access: "read",
     description: "Get a shared drive",
     inputSchema: {
       driveId: { type: "string", required: true },
@@ -1281,6 +1298,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("drive.list", {
+    access: "read",
     description: "List shared drives",
     inputSchema: {
       q: { type: "string", required: false, description: "Shared-drive search syntax" },
@@ -1305,6 +1323,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("drive.update", {
+    access: "write",
     description: "Patch a shared drive",
     inputSchema: {
       driveId: { type: "string", required: true },
@@ -1323,6 +1342,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("drive.delete", {
+    access: "write",
     description: "Delete a shared drive",
     inputSchema: { driveId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1352,6 +1372,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   const REPLY_LIST_FIELDS = `kind,nextPageToken,replies(${REPLY_FIELDS})`;
 
   rl.registerAction("comment.list", {
+    access: "read",
     description:
       "List all comments on a Drive file, including each comment's replies. Returns an array sorted by Drive's default (most recent first).",
     inputSchema: {
@@ -1401,6 +1422,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.get", {
+    access: "read",
     description: "Fetch a single comment (with its replies) by ID.",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1420,6 +1442,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.create", {
+    access: "write",
     description:
       "Create a new top-level comment on a file. Pass quotedFileContent.value (and optionally mimeType) to anchor the comment to a specific snippet.",
     inputSchema: {
@@ -1446,6 +1469,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.update", {
+    access: "write",
     description:
       "Edit the content of an existing comment. Caller must be the author or have edit rights.",
     inputSchema: {
@@ -1466,6 +1490,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.delete", {
+    access: "write",
     description: "Soft-delete a comment.",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1483,6 +1508,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.resolve", {
+    access: "write",
     description:
       "Resolve a comment thread by posting a resolution reply. `resolved` on a Comment is computed from replies; this is the canonical way to mark a thread done.",
     inputSchema: {
@@ -1507,6 +1533,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.reopen", {
+    access: "write",
     description: "Re-open a previously resolved comment by posting a reopen reply.",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1526,6 +1553,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("reply.list", {
+    access: "read",
     description: "List replies on a specific comment.",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1559,6 +1587,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("reply.create", {
+    access: "write",
     description:
       "Post a reply to a comment. Pass action: 'resolve' | 'reopen' to also flip the comment state.",
     inputSchema: {
@@ -1586,6 +1615,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("reply.update", {
+    access: "write",
     description: "Edit the content of a reply.",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1606,6 +1636,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("reply.delete", {
+    access: "write",
     description: "Soft-delete a reply.",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1645,6 +1676,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   const REVISION_LIST_FIELDS = `kind,nextPageToken,revisions(${REVISION_FIELDS})`;
 
   rl.registerAction("revision.list", {
+    access: "read",
     description:
       "List every revision Drive retains for a file, oldest first. For Office files the per-revision bytes are what `revision.download` returns.",
     inputSchema: {
@@ -1677,6 +1709,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("revision.get", {
+    access: "read",
     description: "Fetch metadata for a single revision.",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1695,6 +1728,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("revision.download", {
+    access: "write",
     description:
       "Download the bytes of a specific revision. Pass savePath to write to disk and get back the path; otherwise returns { contentBase64, mimeType, size }. This is the recovery path when an in-place file.update has overwritten in-document comments on an Office file.",
     inputSchema: {
@@ -1738,6 +1772,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("revision.update", {
+    access: "write",
     description:
       "Patch revision metadata. The most useful flag is keepForever — without it Drive can garbage-collect revisions after 30 days / 100 versions on Office files. Set keepForever=true on the head revision before any risky file.update so prior bytes are guaranteed recoverable.",
     inputSchema: {
@@ -1775,6 +1810,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("revision.delete", {
+    access: "write",
     description: "Permanently delete a revision (head revision cannot be deleted).",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -1792,6 +1828,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("revision.restore", {
+    access: "write",
     description:
       "Restore an older revision as the head of the file. Downloads the revision bytes and re-uploads them via multipart so the head moves to that content. Drive's REST API has no native restore endpoint for binary files; this performs the equivalent in two calls. Returns the new head file resource.",
     inputSchema: {
@@ -1860,6 +1897,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // corpus or in a specific shared drive.
 
   rl.registerAction("changes.getStartPageToken", {
+    access: "read",
     description:
       "Get the current Drive change-feed start page token. Use as the seed `pageToken` for the first `changes.list` call.",
     inputSchema: {
@@ -1876,6 +1914,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("changes.list", {
+    access: "read",
     description:
       "List changes to files and Shared Drives since the given `pageToken`. Returns `{ changes, newStartPageToken, nextPageToken? }`. Drive does not surface comment-level changes here — use this for file metadata/content changes; pair with comments.list for review activity.",
     inputSchema: {
@@ -1908,6 +1947,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("changes.watch", {
+    access: "write",
     description:
       "Subscribe to push notifications on the change feed. Drive will POST to `address` whenever a change in this corpus is recorded. Returns a channel resource; pair with `channels.stop` (`changes.stop`) when done.",
     inputSchema: {
@@ -1939,6 +1979,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("changes.stop", {
+    access: "write",
     description: "Stop a previously-subscribed change channel. Pass the same `channelId` and `resourceId` returned by `changes.watch`.",
     inputSchema: {
       channelId: { type: "string", required: true },
@@ -1959,6 +2000,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // need the PATCH endpoint.
 
   rl.registerAction("permission.update", {
+    access: "write",
     description:
       "Patch an existing file/folder permission. Use to change the role on an existing share, set an expiration time, or transfer ownership.",
     inputSchema: {
@@ -1995,6 +2037,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // agent triage and resolve those requests programmatically.
 
   rl.registerAction("accessProposal.list", {
+    access: "read",
     description: "List access proposals (Request-access entries) on a file.",
     inputSchema: {
       fileId: { type: "string", required: true },
@@ -2020,6 +2063,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("accessProposal.resolve", {
+    access: "write",
     description:
       "Resolve an access proposal. `action` is one of 'ACCEPT' or 'DENY'. When accepting, pass `role` (default 'reader') to grant.",
     inputSchema: {
@@ -2050,6 +2094,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // ─── About ───────────────────────────────────────────────────────
 
   rl.registerAction("about.get", {
+    access: "read",
     description:
       "Current user info: storage quota, export formats, max upload size, importable mime types. Useful for healthchecks and conversion planning.",
     inputSchema: {
@@ -2068,6 +2113,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // ─── File export (ergonomic wrapper) ────────────────────────────
 
   rl.registerAction("file.export", {
+    access: "write",
     description:
       "Export a Google-native file (Doc/Sheet/Slide/Drawing/Form) to a non-native mimeType. Wrapper around the export endpoint; pass `savePath` to write to disk and get the path back, otherwise returns base64.",
     inputSchema: {
@@ -2102,6 +2148,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   // ─── Raw file.list ──────────────────────────────────────────────
 
   rl.registerAction("file.list", {
+    access: "read",
     description:
       "Raw Drive `files.list`. Pass Drive search-syntax `q` and any combination of corpora / driveId / spaces / orderBy. `fileFolder.search` is the friendlier wrapper; reach for `file.list` only when you need the unwrapped surface.",
     inputSchema: {

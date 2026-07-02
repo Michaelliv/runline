@@ -65,6 +65,7 @@ export default function unleashedSoftware(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("salesOrder.list", {
+    access: "read",
     description: "List sales orders",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -95,6 +96,7 @@ export default function unleashedSoftware(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("stockOnHand.list", {
+    access: "read",
     description: "List stock on hand",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -119,6 +121,7 @@ export default function unleashedSoftware(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("stockOnHand.get", {
+    access: "read",
     description: "Get stock on hand for a product",
     inputSchema: { productId: { type: "string", required: true } },
     async execute(input, ctx) {

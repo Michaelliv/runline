@@ -60,6 +60,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("field.list", {
+    access: "read",
     description: "List all fields for a table",
     inputSchema: {
       tableId: { type: "string", required: true },
@@ -80,6 +81,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file attachment",
     inputSchema: {
       tableId: { type: "string", required: true },
@@ -101,6 +103,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.create", {
+    access: "write",
     description: "Create records in a QuickBase table",
     inputSchema: {
       tableId: { type: "string", required: true },
@@ -125,6 +128,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.delete", {
+    access: "write",
     description: "Delete records matching a query",
     inputSchema: {
       tableId: { type: "string", required: true },
@@ -144,6 +148,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.query", {
+    access: "read",
     description: "Query records from a table",
     inputSchema: {
       tableId: { type: "string", required: true },
@@ -176,6 +181,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.upsert", {
+    access: "write",
     description: "Create or update records (upsert) using a merge field",
     inputSchema: {
       tableId: { type: "string", required: true },
@@ -208,6 +214,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("report.get", {
+    access: "read",
     description: "Get report metadata",
     inputSchema: {
       tableId: { type: "string", required: true },
@@ -226,6 +233,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("report.run", {
+    access: "read",
     description: "Run a report and get results",
     inputSchema: {
       tableId: { type: "string", required: true },

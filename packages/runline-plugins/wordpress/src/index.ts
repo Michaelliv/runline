@@ -46,6 +46,7 @@ function registerContentCrud(
   }) => ReturnType<typeof getConn>,
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: {
       title: { type: "string", required: true },
@@ -68,6 +69,7 @@ function registerContentCrud(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by ID`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -80,6 +82,7 @@ function registerContentCrud(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${plural}`,
     inputSchema: {
       limit: { type: "number", required: false },
@@ -99,6 +102,7 @@ function registerContentCrud(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "string", required: true },
@@ -114,6 +118,7 @@ function registerContentCrud(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: {
       id: { type: "string", required: true },
@@ -164,6 +169,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a user",
     inputSchema: {
       username: { type: "string", required: true },
@@ -182,6 +188,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -194,6 +201,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -209,6 +217,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.update", {
+    access: "write",
     description: "Update a user",
     inputSchema: {
       id: { type: "string", required: true },
@@ -223,6 +232,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.delete", {
+    access: "write",
     description: "Delete the current user",
     inputSchema: {
       reassign: {

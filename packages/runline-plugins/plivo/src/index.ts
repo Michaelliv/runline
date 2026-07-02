@@ -45,6 +45,7 @@ export default function plivo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sms.send", {
+    access: "write",
     description: "Send an SMS message via Plivo",
     inputSchema: {
       from: { type: "string", required: true, description: "Sender number" },
@@ -62,6 +63,7 @@ export default function plivo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("mms.send", {
+    access: "write",
     description: "Send an MMS message via Plivo",
     inputSchema: {
       from: { type: "string", required: true, description: "Sender number" },
@@ -86,6 +88,7 @@ export default function plivo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("call.make", {
+    access: "write",
     description: "Make a phone call via Plivo",
     inputSchema: {
       from: { type: "string", required: true, description: "Caller number" },

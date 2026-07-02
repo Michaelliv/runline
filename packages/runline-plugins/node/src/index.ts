@@ -73,6 +73,7 @@ export default function node(rl: RunlinePluginAPI): void {
 const nodeActions: ActionDef[] = [
   // fs/promises-shaped actions
   action("fs.readFile", {
+    access: "read",
     description: "Read a file from the host filesystem",
     inputSchema: {
       path: { type: "string", required: true, description: "File path" },
@@ -92,6 +93,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.writeFile", {
+    access: "write",
     description: "Write text data to a file on the host filesystem",
     inputSchema: {
       path: { type: "string", required: true, description: "File path" },
@@ -117,6 +119,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.appendFile", {
+    access: "write",
     description: "Append text data to a file on the host filesystem",
     inputSchema: {
       path: { type: "string", required: true, description: "File path" },
@@ -146,6 +149,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.readdir", {
+    access: "read",
     description: "List a directory",
     inputSchema: {
       ...pathInput("Directory path"),
@@ -171,6 +175,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.stat", {
+    access: "read",
     description: "Stat a filesystem path",
     inputSchema: pathInput(),
     async execute(input) {
@@ -180,6 +185,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.lstat", {
+    access: "read",
     description: "lstat a filesystem path",
     inputSchema: pathInput(),
     async execute(input) {
@@ -189,6 +195,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.exists", {
+    access: "read",
     description: "Check whether a filesystem path exists",
     inputSchema: pathInput(),
     execute(input) {
@@ -196,6 +203,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.access", {
+    access: "read",
     description: "Check file access",
     inputSchema: pathInput(),
     async execute(input) {
@@ -204,6 +212,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.mkdir", {
+    access: "write",
     description: "Create a directory",
     inputSchema: {
       ...pathInput(),
@@ -223,6 +232,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.rm", {
+    access: "write",
     description: "Remove a file or directory",
     inputSchema: {
       ...pathInput(),
@@ -252,6 +262,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.unlink", {
+    access: "write",
     description: "Remove a file",
     inputSchema: pathInput(),
     async execute(input) {
@@ -261,6 +272,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.rename", {
+    access: "write",
     description: "Rename a file or directory",
     inputSchema: {
       from: { type: "string", required: true, description: "Source path" },
@@ -273,6 +285,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fs.copyFile", {
+    access: "write",
     description: "Copy a file",
     inputSchema: {
       from: { type: "string", required: true, description: "Source path" },
@@ -287,6 +300,7 @@ const nodeActions: ActionDef[] = [
 
   // path-shaped actions. Most accept either an array or { segments: string[] }.
   action("path.join", {
+    access: "read",
     description: "Join path segments",
     inputSchema: {
       segments: {
@@ -300,6 +314,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.resolve", {
+    access: "read",
     description: "Resolve path segments",
     inputSchema: {
       segments: {
@@ -313,6 +328,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.normalize", {
+    access: "read",
     description: "Normalize a path",
     inputSchema: pathInput(),
     execute(input) {
@@ -320,6 +336,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.dirname", {
+    access: "read",
     description: "Get a path dirname",
     inputSchema: pathInput(),
     execute(input) {
@@ -327,6 +344,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.basename", {
+    access: "read",
     description: "Get a path basename",
     inputSchema: {
       ...pathInput(),
@@ -344,6 +362,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.extname", {
+    access: "read",
     description: "Get a path extension",
     inputSchema: pathInput(),
     execute(input) {
@@ -351,6 +370,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.relative", {
+    access: "read",
     description: "Get a relative path",
     inputSchema: {
       from: { type: "string", required: true, description: "Source path" },
@@ -362,6 +382,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.isAbsolute", {
+    access: "read",
     description: "Check whether a path is absolute",
     inputSchema: pathInput(),
     execute(input) {
@@ -369,6 +390,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.parse", {
+    access: "read",
     description: "Parse a path into components",
     inputSchema: pathInput(),
     execute(input) {
@@ -376,6 +398,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.format", {
+    access: "read",
     description: "Format a path object into a path string",
     inputSchema: {
       pathObject: {
@@ -392,6 +415,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("path.constants", {
+    access: "read",
     description: "Get path separator constants",
     execute() {
       return { sep, delimiter };
@@ -400,6 +424,7 @@ const nodeActions: ActionDef[] = [
 
   // os/process/shell actions
   action("os.info", {
+    access: "read",
     description: "Get useful host OS information",
     execute() {
       return {
@@ -419,22 +444,27 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("os.platform", {
+    access: "read",
     description: "Get OS platform",
     execute: () => platform(),
   }),
   action("os.arch", {
+    access: "read",
     description: "Get OS architecture",
     execute: () => arch(),
   }),
   action("os.homedir", {
+    access: "read",
     description: "Get home directory",
     execute: () => homedir(),
   }),
   action("os.tmpdir", {
+    access: "read",
     description: "Get temp directory",
     execute: () => tmpdir(),
   }),
   action("os.userInfo", {
+    access: "read",
     description: "Get current user information",
     execute() {
       const info = userInfo();
@@ -448,10 +478,12 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("process.cwd", {
+    access: "read",
     description: "Get the current working directory",
     execute: () => process.cwd(),
   }),
   action("process.env", {
+    access: "read",
     description: "Read environment variables from the host process",
     inputSchema: {
       name: {
@@ -466,6 +498,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("process.exec", {
+    access: "write",
     description: "Run a shell command on the host",
     inputSchema: {
       command: {
@@ -499,6 +532,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("process.execFile", {
+    access: "write",
     description: "Run a host executable without a shell",
     inputSchema: {
       file: {
@@ -539,12 +573,14 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("crypto.randomUUID", {
+    access: "read",
     description: "Generate a random UUID using the host crypto runtime",
     execute() {
       return randomUUID();
     },
   }),
   action("crypto.randomBytes", {
+    access: "read",
     description:
       "Generate cryptographically strong random bytes as hex or base64",
     inputSchema: {
@@ -568,6 +604,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("crypto.hash", {
+    access: "read",
     description: "Hash text data with a Node crypto digest algorithm",
     inputSchema: {
       algorithm: {
@@ -596,6 +633,7 @@ const nodeActions: ActionDef[] = [
     },
   }),
   action("fetch", {
+    access: "write",
     description: "Perform an HTTP fetch from the host runtime",
     inputSchema: {
       url: { type: "string", required: true, description: "Request URL" },

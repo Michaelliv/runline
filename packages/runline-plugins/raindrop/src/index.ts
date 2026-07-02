@@ -41,6 +41,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   // ── Bookmark ────────────────────────────────────────
 
   rl.registerAction("bookmark.create", {
+    access: "write",
     description: "Create a bookmark (raindrop)",
     inputSchema: {
       link: { type: "string", required: true, description: "URL to bookmark" },
@@ -78,6 +79,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("bookmark.get", {
+    access: "read",
     description: "Get a bookmark by ID",
     inputSchema: { bookmarkId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -92,6 +94,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("bookmark.list", {
+    access: "read",
     description: "List bookmarks in a collection",
     inputSchema: {
       collectionId: { type: "string", required: true },
@@ -111,6 +114,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("bookmark.update", {
+    access: "write",
     description: "Update a bookmark",
     inputSchema: {
       bookmarkId: { type: "string", required: true },
@@ -142,6 +146,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("bookmark.delete", {
+    access: "write",
     description: "Delete a bookmark",
     inputSchema: { bookmarkId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -153,6 +158,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   // ── Collection ──────────────────────────────────────
 
   rl.registerAction("collection.create", {
+    access: "write",
     description: "Create a collection",
     inputSchema: {
       title: { type: "string", required: true },
@@ -177,6 +183,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.get", {
+    access: "read",
     description: "Get a collection by ID",
     inputSchema: { collectionId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -191,6 +198,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.list", {
+    access: "read",
     description: "List collections",
     inputSchema: {
       type: {
@@ -215,6 +223,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.update", {
+    access: "write",
     description: "Update a collection",
     inputSchema: {
       collectionId: { type: "string", required: true },
@@ -237,6 +246,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.delete", {
+    access: "write",
     description: "Delete a collection",
     inputSchema: { collectionId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -248,6 +258,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   // ── Tag ─────────────────────────────────────────────
 
   rl.registerAction("tag.list", {
+    access: "read",
     description: "List tags (optionally filtered by collection)",
     inputSchema: {
       collectionId: { type: "string", required: false },
@@ -267,6 +278,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.delete", {
+    access: "write",
     description: "Delete tags",
     inputSchema: {
       tags: {
@@ -288,6 +300,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get user info (self or by ID)",
     inputSchema: {
       userId: {

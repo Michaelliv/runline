@@ -11,6 +11,7 @@ import {
 
 export function registerAttachmentActions(rl: RunlinePluginAPI) {
   rl.registerAction("attachment.list", {
+    access: "read",
     description:
       "List issue attachments. Disabled for scoped Linear connections.",
     inputSchema: t.Object({ limit: t.Optional(t.Number()) }),
@@ -26,6 +27,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("attachment.get", {
+    access: "read",
     description: "Get an attachment by ID.",
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
@@ -40,6 +42,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("attachment.create", {
+    access: "write",
     description: "Create an attachment on an issue.",
     inputSchema: t.Object({
       issueId: t.String({
@@ -97,6 +100,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("attachment.update", {
+    access: "write",
     description: "Update an attachment. title is required.",
     inputSchema: t.Object({
       id: t.String({
@@ -131,6 +135,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("attachment.linkURL", {
+    access: "write",
     description:
       "Link any URL to an issue. If a workspace integration matches the URL (Zendesk, GitHub, Slack, etc.) a rich attachment is created; otherwise a basic one.",
     inputSchema: t.Object({
@@ -162,6 +167,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("attachment.delete", {
+    access: "write",
     description: "Delete an attachment.",
     inputSchema: t.Object({
       id: t.String({

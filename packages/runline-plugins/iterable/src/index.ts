@@ -60,6 +60,7 @@ export default function iterable(rl: RunlinePluginAPI) {
 
   // ── Event ───────────────────────────────────────────
   rl.registerAction("event.track", {
+    access: "write",
     description:
       "Track events for users (bulk). Each event requires email or userId, plus eventName.",
     inputSchema: {
@@ -81,6 +82,7 @@ export default function iterable(rl: RunlinePluginAPI) {
 
   // ── User ────────────────────────────────────────────
   rl.registerAction("user.upsert", {
+    access: "write",
     description: "Create or update a user",
     inputSchema: {
       identifier: {
@@ -124,6 +126,7 @@ export default function iterable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by email or userId",
     inputSchema: {
       by: {
@@ -161,6 +164,7 @@ export default function iterable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.delete", {
+    access: "write",
     description: "Delete a user by email or userId",
     inputSchema: {
       by: {
@@ -187,6 +191,7 @@ export default function iterable(rl: RunlinePluginAPI) {
 
   // ── User List ───────────────────────────────────────
   rl.registerAction("userList.add", {
+    access: "write",
     description: "Subscribe users to a list",
     inputSchema: {
       listId: { type: "number", required: true, description: "List ID" },
@@ -215,6 +220,7 @@ export default function iterable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("userList.remove", {
+    access: "write",
     description: "Unsubscribe users from a list",
     inputSchema: {
       listId: { type: "number", required: true, description: "List ID" },

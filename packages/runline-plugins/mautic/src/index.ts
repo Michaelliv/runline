@@ -135,6 +135,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   // ── Company ─────────────────────────────────────────
 
   rl.registerAction("company.create", {
+    access: "write",
     description: "Create a company",
     inputSchema: {
       companyname: { type: "string", required: true },
@@ -161,6 +162,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.update", {
+    access: "write",
     description: "Update a company",
     inputSchema: {
       companyId: { type: "string", required: true },
@@ -183,6 +185,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.get", {
+    access: "read",
     description: "Get a company by ID",
     inputSchema: { companyId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -196,6 +199,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.list", {
+    access: "read",
     description: "List companies",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -230,6 +234,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.delete", {
+    access: "write",
     description: "Delete a company",
     inputSchema: { companyId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -245,6 +250,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a contact",
     inputSchema: {
       email: { type: "string", required: false },
@@ -287,6 +293,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -310,6 +317,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: { contactId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -323,6 +331,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -361,6 +370,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: { contactId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -374,6 +384,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.sendEmail", {
+    access: "write",
     description: "Send a campaign/template email to a contact",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -390,6 +401,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.editDoNotContact", {
+    access: "write",
     description: "Add or remove a contact from the Do Not Contact list",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -430,6 +442,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.editPoints", {
+    access: "write",
     description: "Add or subtract points from a contact",
     inputSchema: {
       contactId: { type: "string", required: true },
@@ -454,6 +467,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   // ── Contact Segment ─────────────────────────────────
 
   rl.registerAction("contactSegment.add", {
+    access: "write",
     description: "Add a contact to a segment",
     inputSchema: {
       segmentId: { type: "string", required: true },
@@ -470,6 +484,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactSegment.remove", {
+    access: "write",
     description: "Remove a contact from a segment",
     inputSchema: {
       segmentId: { type: "string", required: true },
@@ -488,6 +503,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   // ── Campaign Contact ────────────────────────────────
 
   rl.registerAction("campaignContact.add", {
+    access: "write",
     description: "Add a contact to a campaign",
     inputSchema: {
       campaignId: { type: "string", required: true },
@@ -504,6 +520,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaignContact.remove", {
+    access: "write",
     description: "Remove a contact from a campaign",
     inputSchema: {
       campaignId: { type: "string", required: true },
@@ -522,6 +539,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   // ── Company Contact ─────────────────────────────────
 
   rl.registerAction("companyContact.add", {
+    access: "write",
     description: "Add a contact to a company",
     inputSchema: {
       companyId: { type: "string", required: true },
@@ -538,6 +556,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("companyContact.remove", {
+    access: "write",
     description: "Remove a contact from a company",
     inputSchema: {
       companyId: { type: "string", required: true },
@@ -556,6 +575,7 @@ export default function mautic(rl: RunlinePluginAPI) {
   // ── Segment Email ───────────────────────────────────
 
   rl.registerAction("segmentEmail.send", {
+    access: "write",
     description: "Send a segment (list) email",
     inputSchema: {
       emailId: {

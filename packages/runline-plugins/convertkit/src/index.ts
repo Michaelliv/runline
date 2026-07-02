@@ -56,6 +56,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   // ── Custom Field ────────────────────────────────────
 
   rl.registerAction("customField.create", {
+    access: "write",
     description: "Create a custom field",
     inputSchema: {
       label: { type: "string", required: true, description: "Field label" },
@@ -67,6 +68,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customField.get", {
+    access: "read",
     description: "Get a custom field",
     inputSchema: {
       id: { type: "string", required: true, description: "Field ID" },
@@ -81,6 +83,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customField.list", {
+    access: "read",
     description: "List custom fields",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -99,6 +102,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customField.update", {
+    access: "write",
     description: "Update a custom field label",
     inputSchema: {
       id: { type: "string", required: true, description: "Field ID" },
@@ -114,6 +118,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customField.delete", {
+    access: "write",
     description: "Delete a custom field",
     inputSchema: {
       id: { type: "string", required: true, description: "Field ID" },
@@ -130,6 +135,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   // ── Form ────────────────────────────────────────────
 
   rl.registerAction("form.addSubscriber", {
+    access: "write",
     description: "Add a subscriber to a form",
     inputSchema: {
       formId: { type: "string", required: true, description: "Form ID" },
@@ -166,6 +172,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("form.list", {
+    access: "read",
     description: "List forms",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -184,6 +191,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("form.getSubscriptions", {
+    access: "read",
     description: "List subscriptions for a form",
     inputSchema: {
       formId: { type: "string", required: true, description: "Form ID" },
@@ -217,6 +225,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   // ── Sequence ────────────────────────────────────────
 
   rl.registerAction("sequence.addSubscriber", {
+    access: "write",
     description: "Add a subscriber to a sequence",
     inputSchema: {
       sequenceId: {
@@ -253,6 +262,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sequence.list", {
+    access: "read",
     description: "List sequences",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -271,6 +281,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sequence.getSubscriptions", {
+    access: "read",
     description: "List subscriptions for a sequence",
     inputSchema: {
       sequenceId: {
@@ -308,6 +319,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   // ── Tag ─────────────────────────────────────────────
 
   rl.registerAction("tag.create", {
+    access: "write",
     description: "Create one or more tags",
     inputSchema: {
       names: {
@@ -324,6 +336,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.list", {
+    access: "read",
     description: "List tags",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -343,6 +356,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   // ── Tag Subscriber ──────────────────────────────────
 
   rl.registerAction("tagSubscriber.add", {
+    access: "write",
     description: "Tag a subscriber",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },
@@ -373,6 +387,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tagSubscriber.list", {
+    access: "read",
     description: "List subscribers for a tag",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },
@@ -392,6 +407,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tagSubscriber.remove", {
+    access: "write",
     description: "Remove a tag from a subscriber",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },

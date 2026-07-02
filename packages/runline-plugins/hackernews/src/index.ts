@@ -34,6 +34,7 @@ export default function hackernews(rl: RunlinePluginAPI) {
   rl.setConnectionSchema({});
 
   rl.registerAction("article.get", {
+    access: "read",
     description: "Get a Hacker News article/item by ID",
     inputSchema: {
       articleId: { type: "string", required: true, description: "Item ID" },
@@ -46,6 +47,7 @@ export default function hackernews(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("article.search", {
+    access: "read",
     description: "Search Hacker News articles",
     inputSchema: {
       query: { type: "string", required: true, description: "Search query" },
@@ -71,6 +73,7 @@ export default function hackernews(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a Hacker News user by username",
     inputSchema: {
       username: { type: "string", required: true, description: "Username" },
@@ -83,6 +86,7 @@ export default function hackernews(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("all.top", {
+    access: "read",
     description: "Get top stories",
     inputSchema: {
       limit: {
@@ -102,6 +106,7 @@ export default function hackernews(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("all.new", {
+    access: "read",
     description: "Get newest stories",
     inputSchema: {
       limit: {
@@ -121,6 +126,7 @@ export default function hackernews(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("all.best", {
+    access: "read",
     description: "Get best stories",
     inputSchema: {
       limit: {

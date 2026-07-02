@@ -57,6 +57,7 @@ export default function xero(rl: RunlinePluginAPI) {
   // ── Invoice ─────────────────────────────────────────
 
   rl.registerAction("invoice.create", {
+    access: "write",
     description: "Create an invoice",
     inputSchema: {
       Type: {
@@ -103,6 +104,7 @@ export default function xero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("invoice.get", {
+    access: "read",
     description: "Get an invoice by ID",
     inputSchema: { invoiceId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -116,6 +118,7 @@ export default function xero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("invoice.list", {
+    access: "read",
     description: "List invoices",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -144,6 +147,7 @@ export default function xero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("invoice.update", {
+    access: "write",
     description: "Update an invoice",
     inputSchema: {
       invoiceId: { type: "string", required: true },
@@ -168,6 +172,7 @@ export default function xero(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a contact",
     inputSchema: {
       Name: { type: "string", required: true },
@@ -189,6 +194,7 @@ export default function xero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: { contactId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -202,6 +208,7 @@ export default function xero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -226,6 +233,7 @@ export default function xero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       contactId: { type: "string", required: true },

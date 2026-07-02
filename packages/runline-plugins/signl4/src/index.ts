@@ -17,6 +17,7 @@ export default function signl4(rl: RunlinePluginAPI) {
     `https://connect.signl4.com/webhook/${ctx.connection.config.teamSecret}`;
 
   rl.registerAction("alert.send", {
+    access: "write",
     description: "Send a SIGNL4 alert",
     inputSchema: {
       message: { type: "string", required: true },
@@ -59,6 +60,7 @@ export default function signl4(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.resolve", {
+    access: "write",
     description: "Resolve a SIGNL4 alert by external ID",
     inputSchema: {
       externalId: { type: "string", required: true },

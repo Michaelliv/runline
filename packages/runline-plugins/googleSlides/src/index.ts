@@ -163,6 +163,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   // ── Presentation ──────────────────────────────────────
 
   rl.registerAction("presentation.create", {
+    access: "write",
     description: "Create a new empty presentation",
     inputSchema: { title: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -172,6 +173,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("presentation.get", {
+    access: "read",
     description:
       "Get a presentation. Accepts a bare ID or a docs.google.com/presentation URL.",
     inputSchema: {
@@ -192,6 +194,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("presentation.listSlides", {
+    access: "read",
     description: "List slides in a presentation",
     inputSchema: {
       presentation: { type: "string", required: true },
@@ -214,6 +217,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("presentation.replaceText", {
+    access: "write",
     description:
       "Replace text in a presentation. Pass one or more {text, replaceText, matchCase?, pageObjectIds?} entries; each becomes a replaceAllText request in a single batchUpdate.",
     inputSchema: {
@@ -257,6 +261,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("presentation.batchUpdate", {
+    access: "write",
     description:
       "Raw passthrough to presentations.batchUpdate — pass a full `requests` array for layout edits, shape inserts, transform updates, etc.",
     inputSchema: {
@@ -280,6 +285,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   // ── Page (slide) ──────────────────────────────────────
 
   rl.registerAction("page.get", {
+    access: "read",
     description: "Get a single slide (page) by objectId",
     inputSchema: {
       presentation: { type: "string", required: true },
@@ -293,6 +299,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.getThumbnail", {
+    access: "write",
     description:
       "Get a thumbnail for a slide. Returns Slides' response { contentUrl, width, height } by default; set `savePath` to also download the PNG to disk, or `download=true` to return base64.",
     inputSchema: {

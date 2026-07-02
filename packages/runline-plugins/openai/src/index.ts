@@ -58,6 +58,7 @@ export default function openai(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("image.create", {
+    access: "write",
     description:
       "Generate an image with OpenAI (GPT Image / DALL-E). Writes the PNG(s) to disk and returns their file `path`s (plus any revised prompt) — not base64. Deliver each image to the user with send_file using its `path`.",
     inputSchema: {

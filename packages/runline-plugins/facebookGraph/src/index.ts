@@ -14,6 +14,7 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("request", {
+    access: "write",
     description:
       "Make a request to the Facebook Graph API. Supports GET, POST, DELETE against any node/edge combination.",
     inputSchema: {

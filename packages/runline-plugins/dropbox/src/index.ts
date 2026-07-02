@@ -93,6 +93,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   // ── File ────────────────────────────────────────────
 
   rl.registerAction("file.copy", {
+    access: "write",
     description: "Copy a file",
     inputSchema: {
       fromPath: {
@@ -119,6 +120,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.move", {
+    access: "write",
     description: "Move a file",
     inputSchema: {
       fromPath: {
@@ -145,6 +147,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file",
     inputSchema: {
       path: {
@@ -163,6 +166,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   // ── Folder ──────────────────────────────────────────
 
   rl.registerAction("folder.create", {
+    access: "write",
     description: "Create a folder",
     inputSchema: {
       path: {
@@ -179,6 +183,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.list", {
+    access: "read",
     description: "List contents of a folder",
     inputSchema: {
       path: {
@@ -214,6 +219,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.copy", {
+    access: "write",
     description: "Copy a folder",
     inputSchema: {
       fromPath: {
@@ -240,6 +246,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.move", {
+    access: "write",
     description: "Move a folder",
     inputSchema: {
       fromPath: {
@@ -266,6 +273,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.delete", {
+    access: "write",
     description: "Delete a folder",
     inputSchema: {
       path: {
@@ -284,6 +292,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
   // ── Search ──────────────────────────────────────────
 
   rl.registerAction("search.query", {
+    access: "read",
     description: "Search for files and folders",
     inputSchema: {
       query: { type: "string", required: true, description: "Search query" },

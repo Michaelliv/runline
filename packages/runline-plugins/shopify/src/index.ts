@@ -90,6 +90,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   // ── Order ───────────────────────────────────────────
 
   rl.registerAction("order.create", {
+    access: "write",
     description: "Create an order",
     inputSchema: {
       lineItems: {
@@ -123,6 +124,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.get", {
+    access: "read",
     description: "Get an order by ID",
     inputSchema: {
       orderId: { type: "string", required: true },
@@ -144,6 +146,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.list", {
+    access: "read",
     description: "List orders",
     inputSchema: {
       status: {
@@ -178,6 +181,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.update", {
+    access: "write",
     description: "Update an order",
     inputSchema: {
       orderId: { type: "string", required: true },
@@ -202,6 +206,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.delete", {
+    access: "write",
     description: "Delete an order",
     inputSchema: { orderId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -217,6 +222,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   // ── Product ─────────────────────────────────────────
 
   rl.registerAction("product.create", {
+    access: "write",
     description: "Create a product",
     inputSchema: {
       title: { type: "string", required: true },
@@ -235,6 +241,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.get", {
+    access: "read",
     description: "Get a product by ID",
     inputSchema: {
       productId: { type: "string", required: true },
@@ -256,6 +263,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.list", {
+    access: "read",
     description: "List products",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -282,6 +290,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.update", {
+    access: "write",
     description: "Update a product",
     inputSchema: {
       productId: { type: "string", required: true },
@@ -304,6 +313,7 @@ export default function shopify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.delete", {
+    access: "write",
     description: "Delete a product",
     inputSchema: { productId: { type: "string", required: true } },
     async execute(input, ctx) {

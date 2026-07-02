@@ -102,6 +102,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description:
       "Create a new contact (or update if exists with updateIfExists flag)",
     inputSchema: {
@@ -131,6 +132,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -143,6 +145,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List all contacts",
     inputSchema: {
       limit: {
@@ -159,6 +162,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -183,6 +187,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -202,6 +207,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── Account ─────────────────────────────────────────
 
   rl.registerAction("account.create", {
+    access: "write",
     description: "Create a new account",
     inputSchema: {
       name: { type: "string", required: true, description: "Account name" },
@@ -216,6 +222,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("account.get", {
+    access: "read",
     description: "Get an account by ID",
     inputSchema: {
       accountId: { type: "string", required: true, description: "Account ID" },
@@ -228,6 +235,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("account.list", {
+    access: "read",
     description: "List all accounts",
     inputSchema: {
       limit: {
@@ -244,6 +252,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("account.update", {
+    access: "write",
     description: "Update an account",
     inputSchema: {
       accountId: { type: "string", required: true, description: "Account ID" },
@@ -265,6 +274,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("account.delete", {
+    access: "write",
     description: "Delete an account",
     inputSchema: {
       accountId: { type: "string", required: true, description: "Account ID" },
@@ -284,6 +294,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── Account Contact ─────────────────────────────────
 
   rl.registerAction("accountContact.create", {
+    access: "write",
     description: "Associate a contact with an account",
     inputSchema: {
       contact: { type: "string", required: true, description: "Contact ID" },
@@ -300,6 +311,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("accountContact.update", {
+    access: "write",
     description: "Update an account-contact association",
     inputSchema: {
       accountContactId: {
@@ -325,6 +337,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("accountContact.delete", {
+    access: "write",
     description: "Remove a contact from an account",
     inputSchema: {
       accountContactId: {
@@ -348,6 +361,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── Contact Tag ─────────────────────────────────────
 
   rl.registerAction("contactTag.add", {
+    access: "write",
     description: "Add a tag to a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -366,6 +380,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactTag.remove", {
+    access: "write",
     description: "Remove a tag from a contact",
     inputSchema: {
       contactTagId: {
@@ -389,6 +404,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── Contact List ────────────────────────────────────
 
   rl.registerAction("contactList.add", {
+    access: "write",
     description: "Add a contact to a list",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -407,6 +423,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactList.remove", {
+    access: "write",
     description: "Remove a contact from a list",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -427,6 +444,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── List ────────────────────────────────────────────
 
   rl.registerAction("list.list", {
+    access: "read",
     description: "List all lists",
     inputSchema: {
       limit: {
@@ -445,6 +463,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── Tag ─────────────────────────────────────────────
 
   rl.registerAction("tag.create", {
+    access: "write",
     description: "Create a new tag",
     inputSchema: {
       name: { type: "string", required: true, description: "Tag name" },
@@ -464,6 +483,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.get", {
+    access: "read",
     description: "Get a tag by ID",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },
@@ -476,6 +496,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.list", {
+    access: "read",
     description: "List all tags",
     inputSchema: {
       limit: {
@@ -492,6 +513,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.update", {
+    access: "write",
     description: "Update a tag",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },
@@ -514,6 +536,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.delete", {
+    access: "write",
     description: "Delete a tag",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },
@@ -528,6 +551,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── Deal ────────────────────────────────────────────
 
   rl.registerAction("deal.create", {
+    access: "write",
     description: "Create a new deal",
     inputSchema: {
       title: { type: "string", required: true, description: "Deal title" },
@@ -563,6 +587,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.get", {
+    access: "read",
     description: "Get a deal by ID",
     inputSchema: {
       dealId: { type: "string", required: true, description: "Deal ID" },
@@ -575,6 +600,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.list", {
+    access: "read",
     description: "List all deals",
     inputSchema: {
       limit: {
@@ -591,6 +617,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.update", {
+    access: "write",
     description: "Update a deal",
     inputSchema: {
       dealId: { type: "string", required: true, description: "Deal ID" },
@@ -611,6 +638,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.delete", {
+    access: "write",
     description: "Delete a deal",
     inputSchema: {
       dealId: { type: "string", required: true, description: "Deal ID" },
@@ -623,6 +651,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.createNote", {
+    access: "write",
     description: "Add a note to a deal",
     inputSchema: {
       dealId: { type: "string", required: true, description: "Deal ID" },
@@ -644,6 +673,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.updateNote", {
+    access: "write",
     description: "Update a note on a deal",
     inputSchema: {
       dealId: { type: "string", required: true, description: "Deal ID" },
@@ -672,6 +702,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── Connection ──────────────────────────────────────
 
   rl.registerAction("connection.create", {
+    access: "write",
     description: "Create a new connection (e-commerce integration)",
     inputSchema: {
       service: { type: "string", required: true, description: "Service name" },
@@ -693,6 +724,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("connection.get", {
+    access: "read",
     description: "Get a connection by ID",
     inputSchema: {
       connectionId: {
@@ -714,6 +746,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("connection.list", {
+    access: "read",
     description: "List all connections",
     inputSchema: {
       limit: {
@@ -736,6 +769,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("connection.update", {
+    access: "write",
     description: "Update a connection",
     inputSchema: {
       connectionId: {
@@ -760,6 +794,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("connection.delete", {
+    access: "write",
     description: "Delete a connection",
     inputSchema: {
       connectionId: {
@@ -783,6 +818,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── E-Commerce Customer ─────────────────────────────
 
   rl.registerAction("ecomCustomer.create", {
+    access: "write",
     description: "Create an e-commerce customer",
     inputSchema: {
       connectionid: {
@@ -816,6 +852,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomCustomer.get", {
+    access: "read",
     description: "Get an e-commerce customer by ID",
     inputSchema: {
       customerId: {
@@ -837,6 +874,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomCustomer.list", {
+    access: "read",
     description: "List all e-commerce customers",
     inputSchema: {
       limit: {
@@ -859,6 +897,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomCustomer.update", {
+    access: "write",
     description: "Update an e-commerce customer",
     inputSchema: {
       customerId: {
@@ -895,6 +934,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomCustomer.delete", {
+    access: "write",
     description: "Delete an e-commerce customer",
     inputSchema: {
       customerId: {
@@ -918,6 +958,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── E-Commerce Order ────────────────────────────────
 
   rl.registerAction("ecomOrder.create", {
+    access: "write",
     description: "Create an e-commerce order",
     inputSchema: {
       source: { type: "string", required: true, description: "Order source" },
@@ -963,6 +1004,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomOrder.get", {
+    access: "read",
     description: "Get an e-commerce order by ID",
     inputSchema: {
       orderId: { type: "string", required: true, description: "Order ID" },
@@ -975,6 +1017,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomOrder.list", {
+    access: "read",
     description: "List all e-commerce orders",
     inputSchema: {
       limit: {
@@ -997,6 +1040,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomOrder.update", {
+    access: "write",
     description: "Update an e-commerce order",
     inputSchema: {
       orderId: { type: "string", required: true, description: "Order ID" },
@@ -1017,6 +1061,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomOrder.delete", {
+    access: "write",
     description: "Delete an e-commerce order",
     inputSchema: {
       orderId: { type: "string", required: true, description: "Order ID" },
@@ -1036,6 +1081,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   // ── E-Commerce Order Products ───────────────────────
 
   rl.registerAction("ecomOrderProduct.getByProductId", {
+    access: "read",
     description: "Get an order product by product ID",
     inputSchema: {
       productId: { type: "string", required: true, description: "Product ID" },
@@ -1053,6 +1099,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomOrderProduct.getByOrderId", {
+    access: "read",
     description: "Get order products for an order",
     inputSchema: {
       orderId: { type: "string", required: true, description: "Order ID" },
@@ -1070,6 +1117,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ecomOrderProduct.list", {
+    access: "read",
     description: "List all e-commerce order products",
     inputSchema: {
       limit: {

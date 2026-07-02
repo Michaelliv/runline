@@ -54,6 +54,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("image.create", {
+    access: "write",
     description:
       "Generate an image with Google's Gemini image models (Nano Banana / Imagen). Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each image to the user with send_file using its `path`.",
     inputSchema: {

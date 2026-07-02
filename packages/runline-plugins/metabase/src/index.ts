@@ -54,6 +54,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   // ── Question (Card) ─────────────────────────────────
 
   rl.registerAction("question.get", {
+    access: "read",
     description: "Get a specific question/card",
     inputSchema: { questionId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -68,6 +69,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("question.list", {
+    access: "read",
     description: "List all questions/cards",
     async execute(_input, ctx) {
       const { baseUrl, token } = conn(ctx);
@@ -76,6 +78,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("question.getResults", {
+    access: "read",
     description: "Get the results of a question as JSON",
     inputSchema: {
       questionId: { type: "number", required: true },
@@ -101,6 +104,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   // ── Alert ───────────────────────────────────────────
 
   rl.registerAction("alert.get", {
+    access: "read",
     description: "Get a specific alert",
     inputSchema: { alertId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -115,6 +119,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.list", {
+    access: "read",
     description: "List all alerts",
     async execute(_input, ctx) {
       const { baseUrl, token } = conn(ctx);
@@ -125,6 +130,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   // ── Database ────────────────────────────────────────
 
   rl.registerAction("database.list", {
+    access: "read",
     description: "List all databases",
     async execute(_input, ctx) {
       const { baseUrl, token } = conn(ctx);
@@ -139,6 +145,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("database.getFields", {
+    access: "read",
     description: "Get fields from a database",
     inputSchema: { databaseId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -153,6 +160,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("database.add", {
+    access: "write",
     description: "Add a new database/datasource",
     inputSchema: {
       name: { type: "string", required: true, description: "Display name" },
@@ -214,6 +222,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   // ── Metric ──────────────────────────────────────────
 
   rl.registerAction("metric.get", {
+    access: "read",
     description: "Get a specific metric",
     inputSchema: { metricId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -228,6 +237,7 @@ export default function metabase(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("metric.list", {
+    access: "read",
     description: "List all metrics",
     async execute(_input, ctx) {
       const { baseUrl, token } = conn(ctx);

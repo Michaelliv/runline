@@ -4,6 +4,7 @@ import { api, type Ctx, getSession, identity } from "./shared.js";
 
 export function registerMetadataActions(rl: RunlinePluginAPI) {
   rl.registerAction("connection.test", {
+    access: "read",
     description: "Validate Salesforce auth and return safe connection metadata",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
@@ -36,6 +37,7 @@ export function registerMetadataActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("auth.identity", {
+    access: "read",
     description:
       "Return the Salesforce OAuth identity for the current connection",
     inputSchema: t.Object({}),
@@ -45,6 +47,7 @@ export function registerMetadataActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("limits.get", {
+    access: "read",
     description: "Return Salesforce org REST API limits",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
@@ -53,6 +56,7 @@ export function registerMetadataActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("metadata.objects", {
+    access: "read",
     description: "List available Salesforce sObjects and metadata summaries",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {

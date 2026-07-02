@@ -69,6 +69,7 @@ export default function deepl(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("language.translate", {
+    access: "write",
     description: "Translate text to a target language",
     inputSchema: {
       text: {
@@ -113,6 +114,7 @@ export default function deepl(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("language.list", {
+    access: "read",
     description: "List available target languages",
     inputSchema: {
       type: {

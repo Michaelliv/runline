@@ -42,6 +42,7 @@ export default function urlscanio(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("scan.perform", {
+    access: "write",
     description: "Submit a URL for scanning",
     inputSchema: {
       url: { type: "string", required: true },
@@ -69,6 +70,7 @@ export default function urlscanio(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("scan.get", {
+    access: "read",
     description: "Get scan results by ID",
     inputSchema: { scanId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -81,6 +83,7 @@ export default function urlscanio(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("scan.search", {
+    access: "read",
     description: "Search scan results",
     inputSchema: {
       query: { type: "string", required: false, description: "Search query" },

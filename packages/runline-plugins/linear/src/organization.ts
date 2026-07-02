@@ -4,6 +4,7 @@ import { gql, key, ORG_FIELDS, requireUnscoped } from "./shared.js";
 
 export function registerOrganizationActions(rl: RunlinePluginAPI) {
   rl.registerAction("org.get", {
+    access: "read",
     description: "Get the authenticated workspace.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {

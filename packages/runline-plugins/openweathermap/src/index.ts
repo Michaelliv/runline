@@ -66,6 +66,7 @@ export default function openWeatherMap(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("weather.current", {
+    access: "read",
     description: "Get current weather data for a location",
     inputSchema: locationSchema,
     async execute(input, ctx) {
@@ -81,6 +82,7 @@ export default function openWeatherMap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("weather.forecast5day", {
+    access: "read",
     description: "Get 5-day / 3-hour weather forecast for a location",
     inputSchema: locationSchema,
     async execute(input, ctx) {

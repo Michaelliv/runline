@@ -36,6 +36,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("brand.getLogos", {
+    access: "read",
     description: "Get a company's logos and icons",
     inputSchema: {
       domain: {
@@ -52,6 +53,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("brand.getColors", {
+    access: "read",
     description: "Get a company's brand colors",
     inputSchema: {
       domain: { type: "string", required: true, description: "Company domain" },
@@ -64,6 +66,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("brand.getFonts", {
+    access: "read",
     description: "Get a company's fonts",
     inputSchema: {
       domain: { type: "string", required: true, description: "Company domain" },
@@ -76,6 +79,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("brand.getCompany", {
+    access: "read",
     description: "Get a company's data (name, description, etc.)",
     inputSchema: {
       domain: { type: "string", required: true, description: "Company domain" },
@@ -88,6 +92,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("brand.getIndustry", {
+    access: "read",
     description: "Get a company's industry classification",
     inputSchema: {
       domain: { type: "string", required: true, description: "Company domain" },

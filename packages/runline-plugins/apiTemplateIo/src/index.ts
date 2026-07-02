@@ -55,6 +55,7 @@ export default function apiTemplateIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("account.get", {
+    access: "read",
     description: "Get account information",
     async execute(_input, ctx) {
       return apiRequest(getKey(ctx), "GET", "/account-information");
@@ -62,6 +63,7 @@ export default function apiTemplateIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("template.list", {
+    access: "read",
     description: "List all templates",
     inputSchema: {
       format: {
@@ -85,6 +87,7 @@ export default function apiTemplateIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("image.create", {
+    access: "write",
     description: "Create an image from a template",
     inputSchema: {
       templateId: {
@@ -116,6 +119,7 @@ export default function apiTemplateIo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("pdf.create", {
+    access: "write",
     description: "Create a PDF from a template",
     inputSchema: {
       templateId: {

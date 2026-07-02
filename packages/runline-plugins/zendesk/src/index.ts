@@ -66,6 +66,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   // ── Ticket ──────────────────────────────────────────
 
   rl.registerAction("ticket.create", {
+    access: "write",
     description: "Create a ticket",
     inputSchema: {
       description: { type: "string", required: true },
@@ -95,6 +96,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.get", {
+    access: "read",
     description: "Get a ticket",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -108,6 +110,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.list", {
+    access: "read",
     description: "Search tickets",
     inputSchema: {
       query: {
@@ -137,6 +140,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.update", {
+    access: "write",
     description: "Update a ticket",
     inputSchema: {
       id: { type: "string", required: true },
@@ -156,6 +160,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.delete", {
+    access: "write",
     description: "Delete a ticket",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -171,6 +176,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a user",
     inputSchema: {
       name: { type: "string", required: true },
@@ -186,6 +192,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -199,6 +206,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -217,6 +225,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.update", {
+    access: "write",
     description: "Update a user",
     inputSchema: {
       id: { type: "string", required: true },
@@ -232,6 +241,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.delete", {
+    access: "write",
     description: "Delete a user",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -245,6 +255,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.search", {
+    access: "read",
     description: "Search users",
     inputSchema: {
       query: { type: "string", required: true },
@@ -268,6 +279,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   // ── Organization ────────────────────────────────────
 
   rl.registerAction("organization.create", {
+    access: "write",
     description: "Create an organization",
     inputSchema: { name: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -279,6 +291,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.get", {
+    access: "read",
     description: "Get an organization",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -292,6 +305,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.list", {
+    access: "read",
     description: "List organizations",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -310,6 +324,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.update", {
+    access: "write",
     description: "Update an organization",
     inputSchema: {
       id: { type: "string", required: true },
@@ -325,6 +340,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.delete", {
+    access: "write",
     description: "Delete an organization",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -340,6 +356,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   // ── Ticket Field ────────────────────────────────────
 
   rl.registerAction("ticketField.get", {
+    access: "read",
     description: "Get a ticket field",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -353,6 +370,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticketField.list", {
+    access: "read",
     description: "List ticket fields",
     inputSchema: {},
     async execute(_input, ctx) {

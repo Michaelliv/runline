@@ -43,6 +43,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   // ── Coin ────────────────────────────────────────────
 
   rl.registerAction("coin.get", {
+    access: "read",
     description: "Get detailed coin data by ID or contract address",
     inputSchema: {
       coinId: {
@@ -111,6 +112,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coin.list", {
+    access: "read",
     description: "List all supported coins",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -128,6 +130,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coin.market", {
+    access: "read",
     description:
       "Get coin market data (price, mcap, volume) for multiple coins",
     inputSchema: {
@@ -173,6 +176,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coin.price", {
+    access: "read",
     description: "Get simple price for coins",
     inputSchema: {
       ids: {
@@ -221,6 +225,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coin.tokenPrice", {
+    access: "read",
     description: "Get token price by contract address",
     inputSchema: {
       platformId: {
@@ -256,6 +261,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coin.ticker", {
+    access: "read",
     description: "Get tickers for a coin",
     inputSchema: {
       coinId: { type: "string", required: true, description: "Coin ID" },
@@ -285,6 +291,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coin.history", {
+    access: "read",
     description: "Get historical data for a coin on a specific date",
     inputSchema: {
       coinId: { type: "string", required: true, description: "Coin ID" },
@@ -308,6 +315,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coin.marketChart", {
+    access: "read",
     description: "Get price, market cap, and volume chart data",
     inputSchema: {
       coinId: { type: "string", required: false, description: "Coin ID" },
@@ -357,6 +365,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coin.candlestick", {
+    access: "read",
     description: "Get OHLC candlestick data",
     inputSchema: {
       coinId: { type: "string", required: true, description: "Coin ID" },
@@ -394,6 +403,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
   // ── Event ───────────────────────────────────────────
 
   rl.registerAction("event.list", {
+    access: "read",
     description: "List crypto events",
     inputSchema: {
       countryCode: {

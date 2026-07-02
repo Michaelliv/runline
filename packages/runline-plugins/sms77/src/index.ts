@@ -38,6 +38,7 @@ export default function sms77(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("sms.send", {
+    access: "write",
     description: "Send an SMS via seven",
     inputSchema: {
       to: {
@@ -75,6 +76,7 @@ export default function sms77(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("voice.send", {
+    access: "write",
     description: "Convert text to voice and call a number",
     inputSchema: {
       to: { type: "string", required: true },

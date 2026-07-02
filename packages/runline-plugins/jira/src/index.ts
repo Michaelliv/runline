@@ -86,6 +86,7 @@ export default function jira(rl: RunlinePluginAPI) {
   // ── Issue ───────────────────────────────────────────
 
   rl.registerAction("issue.create", {
+    access: "write",
     description: "Create an issue",
     inputSchema: {
       projectKey: {
@@ -154,6 +155,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.get", {
+    access: "read",
     description: "Get an issue",
     inputSchema: {
       issueKey: {
@@ -185,6 +187,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.search", {
+    access: "read",
     description:
       "Search issues using JQL (uses /rest/api/3/search/jql; pagination is cursor-based via nextPageToken)",
     inputSchema: {
@@ -232,6 +235,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.update", {
+    access: "write",
     description: "Update an issue",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -261,6 +265,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.delete", {
+    access: "write",
     description: "Delete an issue",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -276,6 +281,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.transition", {
+    access: "write",
     description: "Transition an issue to a new status",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -304,6 +310,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.getTransitions", {
+    access: "read",
     description: "Get available transitions for an issue",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -318,6 +325,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.getChangelog", {
+    access: "read",
     description: "Get issue changelog",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -332,6 +340,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.notify", {
+    access: "write",
     description: "Send notification about an issue",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -359,6 +368,7 @@ export default function jira(rl: RunlinePluginAPI) {
   // ── Issue Comment ───────────────────────────────────
 
   rl.registerAction("issueComment.add", {
+    access: "write",
     description: "Add a comment to an issue",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -373,6 +383,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issueComment.get", {
+    access: "read",
     description: "Get a comment",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -385,6 +396,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issueComment.list", {
+    access: "read",
     description: "List comments on an issue",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -399,6 +411,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issueComment.update", {
+    access: "write",
     description: "Update a comment",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -414,6 +427,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issueComment.delete", {
+    access: "write",
     description: "Delete a comment",
     inputSchema: {
       issueKey: { type: "string", required: true, description: "Issue key" },
@@ -429,6 +443,7 @@ export default function jira(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by account ID",
     inputSchema: {
       accountId: { type: "string", required: true, description: "Account ID" },
@@ -441,6 +456,7 @@ export default function jira(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.search", {
+    access: "read",
     description: "Search users",
     inputSchema: {
       query: { type: "string", required: true, description: "Search query" },

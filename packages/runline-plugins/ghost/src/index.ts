@@ -107,6 +107,7 @@ export default function ghost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.create", {
+    access: "write",
     description: "Create a post",
     inputSchema: {
       title: { type: "string", required: true, description: "Post title" },
@@ -187,6 +188,7 @@ export default function ghost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.get", {
+    access: "read",
     description: "Get a post by ID or slug",
     inputSchema: {
       id: { type: "string", required: false, description: "Post ID" },
@@ -214,6 +216,7 @@ export default function ghost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.list", {
+    access: "read",
     description: "List posts",
     inputSchema: {
       limit: {
@@ -258,6 +261,7 @@ export default function ghost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.update", {
+    access: "write",
     description: "Update a post",
     inputSchema: {
       postId: { type: "string", required: true, description: "Post ID" },
@@ -333,6 +337,7 @@ export default function ghost(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.delete", {
+    access: "write",
     description: "Delete a post",
     inputSchema: {
       postId: { type: "string", required: true, description: "Post ID" },

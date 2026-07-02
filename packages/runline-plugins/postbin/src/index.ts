@@ -45,6 +45,7 @@ export default function postbin(rl: RunlinePluginAPI) {
   rl.setConnectionSchema({});
 
   rl.registerAction("bin.create", {
+    access: "write",
     description: "Create a new PostBin bin (no auth required)",
     inputSchema: {},
     async execute() {
@@ -57,6 +58,7 @@ export default function postbin(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("bin.get", {
+    access: "read",
     description: "Get a bin's info",
     inputSchema: { binId: { type: "string", required: true } },
     async execute(input) {
@@ -70,6 +72,7 @@ export default function postbin(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("bin.delete", {
+    access: "write",
     description: "Delete a bin",
     inputSchema: { binId: { type: "string", required: true } },
     async execute(input) {
@@ -80,6 +83,7 @@ export default function postbin(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("request.get", {
+    access: "read",
     description: "Get a specific request from a bin",
     inputSchema: {
       binId: { type: "string", required: true },
@@ -93,6 +97,7 @@ export default function postbin(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("request.removeFirst", {
+    access: "write",
     description: "Remove and return the first request from a bin",
     inputSchema: { binId: { type: "string", required: true } },
     async execute(input) {
@@ -102,6 +107,7 @@ export default function postbin(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("request.send", {
+    access: "write",
     description: "Send a test request to a bin",
     inputSchema: {
       binId: { type: "string", required: true },

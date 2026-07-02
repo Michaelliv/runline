@@ -38,6 +38,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   // ── Website ─────────────────────────────────────────
 
   rl.registerAction("website.pdf", {
+    access: "write",
     description: "Generate a PDF from a webpage (returns URL to the PDF)",
     inputSchema: {
       url: { type: "string", required: true, description: "Webpage URL" },
@@ -62,6 +63,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("website.screenshot", {
+    access: "write",
     description: "Take a screenshot of a webpage (returns URL to the image)",
     inputSchema: {
       url: { type: "string", required: true, description: "Webpage URL" },
@@ -93,6 +95,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("website.seo", {
+    access: "read",
     description: "Get SEO information from a webpage",
     inputSchema: {
       url: { type: "string", required: true, description: "Webpage URL" },
@@ -113,6 +116,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   // ── Social Profile ──────────────────────────────────
 
   rl.registerAction("socialProfile.instagram", {
+    access: "read",
     description: "Get details about an Instagram profile",
     inputSchema: {
       profile: {
@@ -128,6 +132,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("socialProfile.spotify", {
+    access: "read",
     description: "Get details about a Spotify artist",
     inputSchema: {
       profile: {
@@ -145,6 +150,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   // ── Information ─────────────────────────────────────
 
   rl.registerAction("information.exchangeRate", {
+    access: "read",
     description: "Convert a value between currencies",
     inputSchema: {
       value: {
@@ -177,6 +183,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("information.imageMetadata", {
+    access: "read",
     description: "Get metadata from an image URL",
     inputSchema: {
       url: { type: "string", required: true, description: "Image URL" },
@@ -190,6 +197,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   // ── Utility ─────────────────────────────────────────
 
   rl.registerAction("utility.validateEmail", {
+    access: "read",
     description: "Validate an email address",
     inputSchema: {
       email: {
@@ -205,6 +213,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("utility.expandUrl", {
+    access: "read",
     description: "Expand a shortened URL",
     inputSchema: {
       url: { type: "string", required: true, description: "Shortened URL" },
@@ -216,6 +225,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("utility.qrCode", {
+    access: "write",
     description: "Generate a QR code (returns URL to the image)",
     inputSchema: {
       message: {

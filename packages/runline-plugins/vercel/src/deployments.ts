@@ -6,6 +6,7 @@ export function registerDeploymentActions(rl: RunlinePluginAPI) {
   const getAction = bindGetAction(rl);
 
   rl.registerAction("deployment.list", {
+    access: "read",
     description: "List Vercel deployments. Filter by project, state, target, user, or time window.",
     inputSchema: t.Object({
       ...LIST_INPUT_SCHEMA,
@@ -24,6 +25,7 @@ export function registerDeploymentActions(rl: RunlinePluginAPI) {
   getAction("deployment.get", "Get a Vercel deployment by ID or URL.", (id) => `/v13/deployments/${encodeURIComponent(id)}`);
 
   rl.registerAction("deployment.logs", {
+    access: "read",
     description: "Get build/deployment logs/events for a deployment. Use builds=1 for build logs and limit/since/until to avoid huge responses.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,
@@ -45,6 +47,7 @@ export function registerDeploymentActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deployment.runtimeLogs", {
+    access: "read",
     description: "Get runtime logs for a deployment. Requires projectId and deploymentId; use limit/since/until to keep responses bounded.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,
@@ -61,6 +64,7 @@ export function registerDeploymentActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deployment.cancel", {
+    access: "write",
     description: "Cancel a queued or building Vercel deployment.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,
@@ -73,6 +77,7 @@ export function registerDeploymentActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deployment.promote", {
+    access: "write",
     description: "Promote an existing deployment to production for a project, where supported by Vercel.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,

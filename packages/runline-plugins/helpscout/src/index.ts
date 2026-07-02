@@ -69,6 +69,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   // ── Conversation ────────────────────────────────────
 
   rl.registerAction("conversation.create", {
+    access: "write",
     description: "Create a conversation",
     inputSchema: {
       subject: { type: "string", required: true, description: "Subject" },
@@ -112,6 +113,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("conversation.get", {
+    access: "read",
     description: "Get a conversation",
     inputSchema: {
       conversationId: {
@@ -130,6 +132,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("conversation.list", {
+    access: "read",
     description: "List conversations",
     inputSchema: {
       mailboxId: {
@@ -163,6 +166,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("conversation.delete", {
+    access: "write",
     description: "Delete a conversation",
     inputSchema: {
       conversationId: {
@@ -184,6 +188,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   // ── Customer ────────────────────────────────────────
 
   rl.registerAction("customer.create", {
+    access: "write",
     description: "Create a customer",
     inputSchema: {
       firstName: { type: "string", required: true, description: "First name" },
@@ -209,6 +214,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.get", {
+    access: "read",
     description: "Get a customer",
     inputSchema: {
       customerId: {
@@ -227,6 +233,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.list", {
+    access: "read",
     description: "List customers",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -245,6 +252,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.update", {
+    access: "write",
     description: "Update a customer",
     inputSchema: {
       customerId: {
@@ -273,6 +281,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("customer.getProperties", {
+    access: "read",
     description: "Get custom properties for a customer",
     inputSchema: {
       customerId: {
@@ -293,6 +302,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   // ── Mailbox ─────────────────────────────────────────
 
   rl.registerAction("mailbox.get", {
+    access: "read",
     description: "Get a mailbox",
     inputSchema: {
       mailboxId: { type: "number", required: true, description: "Mailbox ID" },
@@ -307,6 +317,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("mailbox.list", {
+    access: "read",
     description: "List mailboxes",
     async execute(_input, ctx) {
       return unwrapEmbedded(
@@ -319,6 +330,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   // ── Thread ──────────────────────────────────────────
 
   rl.registerAction("thread.create", {
+    access: "write",
     description: "Create a thread (reply/note) on a conversation",
     inputSchema: {
       conversationId: {
@@ -359,6 +371,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.list", {
+    access: "read",
     description: "List threads in a conversation",
     inputSchema: {
       conversationId: {

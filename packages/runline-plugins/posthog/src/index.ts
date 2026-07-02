@@ -44,6 +44,7 @@ export default function posthog(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alias.create", {
+    access: "write",
     description: "Create an alias for a distinct ID",
     inputSchema: {
       distinctId: { type: "string", required: true },
@@ -73,6 +74,7 @@ export default function posthog(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.create", {
+    access: "write",
     description: "Capture one or more events",
     inputSchema: {
       events: {
@@ -89,6 +91,7 @@ export default function posthog(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("identity.create", {
+    access: "write",
     description: "Identify a user (set person properties)",
     inputSchema: {
       distinctId: { type: "string", required: true },
@@ -112,6 +115,7 @@ export default function posthog(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("track.page", {
+    access: "write",
     description: "Track a page view",
     inputSchema: {
       distinctId: { type: "string", required: true },
@@ -136,6 +140,7 @@ export default function posthog(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("track.screen", {
+    access: "write",
     description: "Track a screen view",
     inputSchema: {
       distinctId: { type: "string", required: true },

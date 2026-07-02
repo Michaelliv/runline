@@ -64,6 +64,7 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("certificate.create", {
+    access: "write",
     description: "Create an SSL certificate on the appliance",
     inputSchema: {
       certificateFileName: {
@@ -163,6 +164,7 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("certificate.install", {
+    access: "write",
     description: "Install an SSL certificate-key pair on the appliance",
     inputSchema: {
       certificateKeyPairName: {
@@ -231,6 +233,7 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file from the Netscaler ADC appliance",
     inputSchema: {
       fileName: {

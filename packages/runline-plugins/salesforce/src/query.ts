@@ -19,6 +19,7 @@ async function queryPage(
 
 export function registerQueryActions(rl: RunlinePluginAPI) {
   rl.registerAction("soql.query", {
+    access: "read",
     description:
       "Execute a raw SOQL query and return the first page of records",
     inputSchema: QueryInput,
@@ -34,6 +35,7 @@ export function registerQueryActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("soql.queryPage", {
+    access: "read",
     description:
       "Execute a raw SOQL query and return Salesforce pagination metadata",
     inputSchema: QueryInput,
@@ -47,6 +49,7 @@ export function registerQueryActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("soql.queryAll", {
+    access: "read",
     description:
       "Execute a raw SOQL query including deleted and archived records; returns the first page of records",
     inputSchema: QueryInput,
@@ -62,6 +65,7 @@ export function registerQueryActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("soql.queryAllPage", {
+    access: "read",
     description:
       "Execute a raw SOQL query including deleted and archived records and return Salesforce pagination metadata",
     inputSchema: QueryInput,
@@ -75,6 +79,7 @@ export function registerQueryActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("soql.nextPage", {
+    access: "read",
     description:
       "Fetch the next page from a Salesforce nextRecordsUrl returned by soql.queryPage or soql.queryAllPage",
     inputSchema: t.Object({

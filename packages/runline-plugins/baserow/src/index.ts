@@ -92,6 +92,7 @@ export default function baserow(rl: RunlinePluginAPI) {
   // ── Row ─────────────────────────────────────────────
 
   rl.registerAction("row.create", {
+    access: "write",
     description: "Create a row in a table",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -119,6 +120,7 @@ export default function baserow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.get", {
+    access: "read",
     description: "Get a row by ID",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -137,6 +139,7 @@ export default function baserow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.list", {
+    access: "read",
     description: "List rows from a table with optional filtering and sorting",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -173,6 +176,7 @@ export default function baserow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.update", {
+    access: "write",
     description: "Update a row (PATCH — only updates specified fields)",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -201,6 +205,7 @@ export default function baserow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.delete", {
+    access: "write",
     description: "Delete a row",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -220,6 +225,7 @@ export default function baserow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.batchCreate", {
+    access: "write",
     description: "Create up to 200 rows in one request",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -243,6 +249,7 @@ export default function baserow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.batchUpdate", {
+    access: "write",
     description: "Update up to 200 rows in one request",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },
@@ -266,6 +273,7 @@ export default function baserow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.batchDelete", {
+    access: "write",
     description: "Delete up to 200 rows in one request",
     inputSchema: {
       tableId: { type: "string", required: true, description: "Table ID" },

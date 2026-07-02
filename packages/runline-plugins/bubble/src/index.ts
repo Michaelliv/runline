@@ -109,6 +109,7 @@ export default function bubble(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("object.create", {
+    access: "write",
     description: "Create an object",
     inputSchema: {
       typeName: {
@@ -139,6 +140,7 @@ export default function bubble(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("object.get", {
+    access: "read",
     description: "Get an object by ID",
     inputSchema: {
       typeName: {
@@ -169,6 +171,7 @@ export default function bubble(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("object.list", {
+    access: "read",
     description: "List objects of a type with optional constraints and sorting",
     inputSchema: {
       typeName: {
@@ -247,6 +250,7 @@ export default function bubble(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("object.update", {
+    access: "write",
     description: "Update an object",
     inputSchema: {
       typeName: {
@@ -284,6 +288,7 @@ export default function bubble(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("object.delete", {
+    access: "write",
     description: "Delete an object",
     inputSchema: {
       typeName: {

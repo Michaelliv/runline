@@ -55,6 +55,7 @@ function registerQbResource(
     `/v3/company/${c.companyId}`;
 
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: { data: { type: "object", required: true } },
     async execute(input, ctx) {
@@ -69,6 +70,7 @@ function registerQbResource(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by ID`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -83,6 +85,7 @@ function registerQbResource(
   });
 
   rl.registerAction(`${resource}.query`, {
+    access: "read",
     description: `Query ${resource}s (SQL-like)`,
     inputSchema: {
       query: {
@@ -106,6 +109,7 @@ function registerQbResource(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource} (must include Id and SyncToken)`,
     inputSchema: { data: { type: "object", required: true } },
     async execute(input, ctx) {
@@ -120,6 +124,7 @@ function registerQbResource(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: {
       id: { type: "string", required: true },

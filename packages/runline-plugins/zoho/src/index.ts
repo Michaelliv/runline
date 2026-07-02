@@ -61,6 +61,7 @@ function registerCrmResource(
   const mod = MODULES[resource];
 
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: {
       data: { type: "object", required: true, description: "Record fields" },
@@ -77,6 +78,7 @@ function registerCrmResource(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by ID`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -90,6 +92,7 @@ function registerCrmResource(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${mod}`,
     inputSchema: {
       limit: { type: "number", required: false },
@@ -116,6 +119,7 @@ function registerCrmResource(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "string", required: true },
@@ -133,6 +137,7 @@ function registerCrmResource(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -144,6 +149,7 @@ function registerCrmResource(
   });
 
   rl.registerAction(`${resource}.upsert`, {
+    access: "write",
     description: `Upsert a ${resource}`,
     inputSchema: {
       data: { type: "object", required: true },

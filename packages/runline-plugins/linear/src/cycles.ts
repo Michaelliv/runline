@@ -22,6 +22,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
   );
   getAction("cycle.get", "Get a cycle by ID.", "cycle", CYCLE_FIELDS);
   rl.registerAction("cycle.create", {
+    access: "write",
     description: "Create a cycle for a team.",
     inputSchema: t.Object({
       teamId: t.String({ description: "The team to associate the cycle with" }),
@@ -61,6 +62,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("cycle.update", {
+    access: "write",
     description: "Update a cycle.",
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the cycle to update" }),

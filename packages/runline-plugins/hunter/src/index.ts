@@ -33,6 +33,7 @@ export default function hunter(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("domainSearch", {
+    access: "read",
     description: "Search for email addresses associated with a domain",
     inputSchema: {
       domain: {
@@ -62,6 +63,7 @@ export default function hunter(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("emailFinder", {
+    access: "read",
     description: "Find the email address of a person",
     inputSchema: {
       domain: { type: "string", required: true, description: "Domain" },
@@ -80,6 +82,7 @@ export default function hunter(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("emailVerifier", {
+    access: "read",
     description: "Verify an email address",
     inputSchema: {
       email: { type: "string", required: true, description: "Email to verify" },

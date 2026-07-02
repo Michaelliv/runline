@@ -43,6 +43,7 @@ export default function clearbit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("person.enrich", {
+    access: "read",
     description: "Look up a person by email address",
     inputSchema: {
       email: { type: "string", required: true, description: "Email address" },
@@ -120,6 +121,7 @@ export default function clearbit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.enrich", {
+    access: "read",
     description: "Look up a company by domain",
     inputSchema: {
       domain: { type: "string", required: true, description: "Company domain" },
@@ -162,6 +164,7 @@ export default function clearbit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.autocomplete", {
+    access: "read",
     description: "Autocomplete company names",
     inputSchema: {
       name: {

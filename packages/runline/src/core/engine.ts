@@ -298,6 +298,7 @@ const minisearchSource = readFileSync(
 
 interface HelpEntry {
   action: string;
+  access?: "read" | "write";
   description?: string;
   inputs: Record<string, HelpInput>;
 }
@@ -307,6 +308,7 @@ function buildHelpData(plugins: PluginDef[]): Record<string, HelpEntry[]> {
   for (const p of plugins) {
     data[p.name] = p.actions.map((a) => ({
       action: a.name,
+      access: a.access,
       description: a.description,
       inputs: helpInputs(a.inputSchema),
     }));
@@ -467,6 +469,7 @@ const __actionsApi = {
       path,
       plugin: hit.plugin,
       action: hit.entry.action,
+      access: hit.entry.access,
       description: hit.entry.description,
       signature: __formatSignature(hit.plugin, hit.entry),
       inputs: hit.entry.inputs,
@@ -477,6 +480,7 @@ const __actionsApi = {
     if (!q) return [];
     return __search.search(q).slice(0, limit).map((r) => ({
       path: r.path,
+      access: __index[r.path]?.entry?.access,
       description: r.description || undefined,
       score: r.score,
     }));

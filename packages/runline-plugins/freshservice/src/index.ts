@@ -78,6 +78,7 @@ function registerCrud(
   },
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: {
       ...(opts?.extraCreateFields ?? {}),
@@ -95,6 +96,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by ID`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },
@@ -107,6 +109,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${resource}s`,
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -122,6 +125,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },
@@ -142,6 +146,7 @@ function registerCrud(
 
   if (!opts?.noDelete) {
     rl.registerAction(`${resource}.delete`, {
+      access: "write",
       description: `Delete a ${resource}`,
       inputSchema: {
         id: { type: "number", required: true, description: `${resource} ID` },
@@ -192,6 +197,7 @@ export default function freshservice(rl: RunlinePluginAPI) {
 
   // agentRole is read-only (get + list only)
   rl.registerAction("agentRole.get", {
+    access: "read",
     description: "Get an agent role by ID",
     inputSchema: {
       id: { type: "number", required: true, description: "Role ID" },
@@ -204,6 +210,7 @@ export default function freshservice(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("agentRole.list", {
+    access: "read",
     description: "List agent roles",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },

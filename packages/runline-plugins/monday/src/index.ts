@@ -43,6 +43,7 @@ export default function monday(rl: RunlinePluginAPI) {
   // ── Board ───────────────────────────────────────────
 
   rl.registerAction("board.create", {
+    access: "write",
     description: "Create a board",
     inputSchema: {
       name: { type: "string", required: true },
@@ -67,6 +68,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.archive", {
+    access: "write",
     description: "Archive a board",
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -80,6 +82,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.get", {
+    access: "read",
     description: "Get a board by ID",
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -93,6 +96,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.list", {
+    access: "read",
     description: "List boards",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -109,6 +113,7 @@ export default function monday(rl: RunlinePluginAPI) {
   // ── Board Column ────────────────────────────────────
 
   rl.registerAction("boardColumn.create", {
+    access: "write",
     description: "Create a column on a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -143,6 +148,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardColumn.list", {
+    access: "read",
     description: "List columns on a board",
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -158,6 +164,7 @@ export default function monday(rl: RunlinePluginAPI) {
   // ── Board Group ─────────────────────────────────────
 
   rl.registerAction("boardGroup.create", {
+    access: "write",
     description: "Create a group on a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -175,6 +182,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardGroup.delete", {
+    access: "write",
     description: "Delete a group from a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -192,6 +200,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardGroup.list", {
+    access: "read",
     description: "List groups on a board",
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -207,6 +216,7 @@ export default function monday(rl: RunlinePluginAPI) {
   // ── Board Item ──────────────────────────────────────
 
   rl.registerAction("boardItem.create", {
+    access: "write",
     description: "Create an item in a board group",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -240,6 +250,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardItem.get", {
+    access: "read",
     description: "Get item(s) by ID",
     inputSchema: {
       itemIds: {
@@ -262,6 +273,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardItem.list", {
+    access: "read",
     description: "List items in a board group",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -309,6 +321,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardItem.delete", {
+    access: "write",
     description: "Delete an item",
     inputSchema: { itemId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -322,6 +335,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardItem.move", {
+    access: "write",
     description: "Move an item to a different group",
     inputSchema: {
       itemId: { type: "string", required: true },
@@ -339,6 +353,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardItem.addUpdate", {
+    access: "write",
     description: "Add an update (comment) to an item",
     inputSchema: {
       itemId: { type: "string", required: true },
@@ -360,6 +375,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardItem.changeColumnValue", {
+    access: "write",
     description: "Change a single column value on an item",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -391,6 +407,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardItem.changeMultipleColumnValues", {
+    access: "write",
     description: "Change multiple column values on an item",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -420,6 +437,7 @@ export default function monday(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardItem.getByColumnValue", {
+    access: "read",
     description: "Search items by column value",
     inputSchema: {
       boardId: { type: "string", required: true },

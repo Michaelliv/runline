@@ -38,6 +38,7 @@ export default function vero(rl: RunlinePluginAPI) {
     ctx.connection.config.authToken as string;
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create/identify a user",
     inputSchema: {
       id: { type: "string", required: true },
@@ -58,6 +59,7 @@ export default function vero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.alias", {
+    access: "write",
     description: "Alias (re-identify) a user",
     inputSchema: {
       id: { type: "string", required: true },
@@ -74,6 +76,7 @@ export default function vero(rl: RunlinePluginAPI) {
 
   for (const op of ["unsubscribe", "resubscribe", "delete"] as const) {
     rl.registerAction(`user.${op}`, {
+      access: "write",
       description: `${op.charAt(0).toUpperCase() + op.slice(1)} a user`,
       inputSchema: { id: { type: "string", required: true } },
       async execute(input, ctx) {
@@ -85,6 +88,7 @@ export default function vero(rl: RunlinePluginAPI) {
   }
 
   rl.registerAction("user.addTags", {
+    access: "write",
     description: "Add tags to a user",
     inputSchema: {
       id: { type: "string", required: true },
@@ -104,6 +108,7 @@ export default function vero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.removeTags", {
+    access: "write",
     description: "Remove tags from a user",
     inputSchema: {
       id: { type: "string", required: true },
@@ -125,6 +130,7 @@ export default function vero(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.track", {
+    access: "write",
     description: "Track an event",
     inputSchema: {
       id: { type: "string", required: true },

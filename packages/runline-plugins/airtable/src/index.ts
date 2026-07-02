@@ -118,6 +118,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   // ── Base ────────────────────────────────────────────
 
   rl.registerAction("base.list", {
+    access: "read",
     description: "List all accessible bases",
     inputSchema: {
       limit: {
@@ -156,6 +157,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("base.getSchema", {
+    access: "read",
     description: "Get the schema (tables and fields) of a base",
     inputSchema: {
       baseId: {
@@ -173,6 +175,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   // ── Record ──────────────────────────────────────────
 
   rl.registerAction("record.create", {
+    access: "write",
     description: "Create a record in a table",
     inputSchema: {
       baseId: { type: "string", required: true, description: "Base ID" },
@@ -206,6 +209,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.createMany", {
+    access: "write",
     description: "Create multiple records in a table (batched in groups of 10)",
     inputSchema: {
       baseId: { type: "string", required: true, description: "Base ID" },
@@ -245,6 +249,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.get", {
+    access: "read",
     description: "Get a single record by ID",
     inputSchema: {
       baseId: { type: "string", required: true, description: "Base ID" },
@@ -274,6 +279,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.search", {
+    access: "read",
     description: "Search/list records with optional formula filter and sorting",
     inputSchema: {
       baseId: { type: "string", required: true, description: "Base ID" },
@@ -328,6 +334,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.update", {
+    access: "write",
     description:
       "Update a record by ID (PATCH — only updates specified fields)",
     inputSchema: {
@@ -369,6 +376,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.updateMany", {
+    access: "write",
     description: "Update multiple records (batched in groups of 10)",
     inputSchema: {
       baseId: { type: "string", required: true, description: "Base ID" },
@@ -408,6 +416,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.upsert", {
+    access: "write",
     description:
       "Create or update a record based on matching fields (uses Airtable's performUpsert)",
     inputSchema: {
@@ -447,6 +456,7 @@ export default function airtable(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.delete", {
+    access: "write",
     description: "Delete a record by ID",
     inputSchema: {
       baseId: { type: "string", required: true, description: "Base ID" },

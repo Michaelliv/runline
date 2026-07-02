@@ -22,6 +22,7 @@ export async function actions(options: {
       filtered.map(({ plugin, action }) => ({
         plugin,
         action: action.name,
+        access: action.access,
         description: action.description,
         inputSchema: action.inputSchema,
       })),
@@ -52,6 +53,7 @@ export async function actions(options: {
     console.log(chalk.bold(`\n${plugin}`));
     for (const { action } of entries) {
       const path = chalk.cyan(`${plugin}.${action.name}`);
+      const access = action.access ? chalk.dim(` [${action.access}]`) : "";
       const desc = action.description
         ? chalk.dim(` — ${action.description}`)
         : "";
@@ -62,7 +64,7 @@ export async function actions(options: {
               .join(", ")})`,
           )
         : "";
-      console.log(`  ${path}${schema}${desc}`);
+      console.log(`  ${path}${access}${schema}${desc}`);
     }
   }
   console.log();

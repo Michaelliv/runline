@@ -48,6 +48,7 @@ function registerCrud(
   >,
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: createSchema,
     async execute(input, ctx) {
@@ -62,6 +63,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource}`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -75,6 +77,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${plural}`,
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -93,6 +96,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "string", required: true },
@@ -111,6 +115,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {

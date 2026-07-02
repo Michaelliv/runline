@@ -78,6 +78,7 @@ export default function keap(rl: RunlinePluginAPI) {
 
   // ── Company ─────────────────────────────────────────
   rl.registerAction("company.create", {
+    access: "write",
     description: "Create a company",
     inputSchema: {
       companyName: {
@@ -121,6 +122,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.list", {
+    access: "read",
     description: "List companies",
     inputSchema: {
       limit: {
@@ -157,6 +159,7 @@ export default function keap(rl: RunlinePluginAPI) {
 
   // ── Contact ─────────────────────────────────────────
   rl.registerAction("contact.upsert", {
+    access: "write",
     description:
       "Create or update a contact (PUT). Duplicate matching is controlled by duplicate_option.",
     inputSchema: {
@@ -230,6 +233,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: {
       contactId: { type: "number", required: true },
@@ -257,6 +261,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -295,6 +300,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: { contactId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -309,6 +315,7 @@ export default function keap(rl: RunlinePluginAPI) {
 
   // ── Contact Note ────────────────────────────────────
   rl.registerAction("contactNote.create", {
+    access: "write",
     description: "Create a note on a contact",
     inputSchema: {
       userId: {
@@ -345,6 +352,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactNote.get", {
+    access: "read",
     description: "Get a note",
     inputSchema: { noteId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -357,6 +365,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactNote.list", {
+    access: "read",
     description: "List notes (optionally filtered by contact_id, user_id)",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -389,6 +398,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactNote.update", {
+    access: "write",
     description: "Update a note",
     inputSchema: {
       noteId: { type: "number", required: true },
@@ -407,6 +417,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactNote.delete", {
+    access: "write",
     description: "Delete a note",
     inputSchema: { noteId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -421,6 +432,7 @@ export default function keap(rl: RunlinePluginAPI) {
 
   // ── Contact Tag ─────────────────────────────────────
   rl.registerAction("contactTag.add", {
+    access: "write",
     description: "Apply tags to a contact",
     inputSchema: {
       contactId: { type: "number", required: true },
@@ -439,6 +451,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactTag.remove", {
+    access: "write",
     description: "Remove tags from a contact",
     inputSchema: {
       contactId: { type: "number", required: true },
@@ -462,6 +475,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactTag.list", {
+    access: "read",
     description: "List tags on a contact",
     inputSchema: {
       contactId: { type: "number", required: true },
@@ -484,6 +498,7 @@ export default function keap(rl: RunlinePluginAPI) {
 
   // ── E-commerce Order ────────────────────────────────
   rl.registerAction("order.create", {
+    access: "write",
     description: "Create an order",
     inputSchema: {
       contactId: { type: "number", required: true },
@@ -532,6 +547,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.get", {
+    access: "read",
     description: "Get an order",
     inputSchema: { orderId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -544,6 +560,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.list", {
+    access: "read",
     description: "List orders",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -570,6 +587,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("order.delete", {
+    access: "write",
     description: "Delete an order",
     inputSchema: { orderId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -584,6 +602,7 @@ export default function keap(rl: RunlinePluginAPI) {
 
   // ── E-commerce Product ──────────────────────────────
   rl.registerAction("product.create", {
+    access: "write",
     description: "Create a product",
     inputSchema: {
       productName: { type: "string", required: true },
@@ -605,6 +624,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.get", {
+    access: "read",
     description: "Get a product",
     inputSchema: { productId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -617,6 +637,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.list", {
+    access: "read",
     description: "List products",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -635,6 +656,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("product.delete", {
+    access: "write",
     description: "Delete a product",
     inputSchema: { productId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -649,6 +671,7 @@ export default function keap(rl: RunlinePluginAPI) {
 
   // ── Email ───────────────────────────────────────────
   rl.registerAction("email.createRecord", {
+    access: "write",
     description: "Create an email record (log a sent email)",
     inputSchema: {
       sentFromAddress: { type: "string", required: true },
@@ -673,6 +696,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("email.delete", {
+    access: "write",
     description: "Delete an email record",
     inputSchema: { emailRecordId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -686,6 +710,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("email.list", {
+    access: "read",
     description: "List email records",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -712,6 +737,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("email.send", {
+    access: "write",
     description: "Queue an email to be sent",
     inputSchema: {
       userId: {
@@ -757,6 +783,7 @@ export default function keap(rl: RunlinePluginAPI) {
 
   // ── File ────────────────────────────────────────────
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file",
     inputSchema: { fileId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -770,6 +797,7 @@ export default function keap(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.list", {
+    access: "read",
     description: "List files",
     inputSchema: {
       limit: { type: "number", required: false },

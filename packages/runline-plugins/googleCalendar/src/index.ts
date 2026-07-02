@@ -436,6 +436,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   // ── Calendar ──────────────────────────────────────────
 
   rl.registerAction("calendar.list", {
+    access: "read",
     description: "List calendars the authenticated user has access to",
     inputSchema: {
       returnAll: { type: "boolean", required: false },
@@ -463,6 +464,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("calendar.get", {
+    access: "read",
     description: "Get a calendar's metadata (including conference solutions)",
     inputSchema: {
       calendarId: {
@@ -482,6 +484,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("calendar.availability", {
+    access: "read",
     description:
       "Check free/busy information for one or more calendars over a time range",
     inputSchema: {
@@ -557,6 +560,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("calendar.listColors", {
+    access: "read",
     description: "List event and calendar color palettes available in Google Calendar",
     async execute(_input, ctx) {
       return calRequest(ctx, "GET", "/colors");
@@ -566,6 +570,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   // ── Event ─────────────────────────────────────────────
 
   rl.registerAction("event.create", {
+    access: "write",
     description: "Create a calendar event",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -653,6 +658,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.get", {
+    access: "read",
     description: "Get a single event",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -683,6 +689,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.list", {
+    access: "read",
     description:
       "List events in a calendar. Set `singleEvents=true` to expand recurring events into instances.",
     inputSchema: {
@@ -751,6 +758,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.listInstances", {
+    access: "read",
     description: "List instances of a recurring event",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -781,6 +789,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.update", {
+    access: "write",
     description:
       "Patch an event (only supplied fields are changed). Set modifyTarget='series' to edit the entire recurrence instead of a single instance.",
     inputSchema: {
@@ -871,6 +880,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.delete", {
+    access: "write",
     description: "Delete an event",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -892,6 +902,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.move", {
+    access: "write",
     description: "Move an event from one calendar to another",
     inputSchema: {
       calendarId: { type: "string", required: true, description: "Source calendar" },
@@ -918,6 +929,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   // ─── FreeBusy ────────────────────────────────────────────────────
 
   rl.registerAction("freeBusy.query", {
+    access: "read",
     description:
       "Query free/busy windows across one or more calendars in a time range. Returns an array of busy intervals per calendar id, plus any errors.",
     inputSchema: {
@@ -945,6 +957,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   // ─── Calendar list management ───────────────────────────────────
 
   rl.registerAction("calendarList.list", {
+    access: "read",
     description: "List calendars on the user's calendar list (the user's left sidebar).",
     inputSchema: {
       minAccessRole: { type: "string", required: false, description: "freeBusyReader | reader | writer | owner" },
@@ -967,6 +980,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("calendarList.insert", {
+    access: "write",
     description: "Add a calendar (by id) to the user's calendar list.",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -984,6 +998,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("calendarList.patch", {
+    access: "write",
     description: "Patch a calendar entry on the user's calendar list (colors, summary override, reminders, selected).",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -1011,6 +1026,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("calendarList.delete", {
+    access: "write",
     description: "Remove a calendar from the user's calendar list (does not delete the underlying calendar).",
     inputSchema: { calendarId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -1023,6 +1039,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   // ─── ACL (calendar sharing) ──────────────────────────────────────
 
   rl.registerAction("acl.list", {
+    access: "read",
     description: "List ACL rules on a calendar.",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -1038,6 +1055,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("acl.insert", {
+    access: "write",
     description: "Add an ACL rule to a calendar. Roles: 'none' | 'freeBusyReader' | 'reader' | 'writer' | 'owner'.",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -1059,6 +1077,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("acl.update", {
+    access: "write",
     description: "Patch an ACL rule's role.",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -1076,6 +1095,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("acl.delete", {
+    access: "write",
     description: "Remove an ACL rule.",
     inputSchema: {
       calendarId: { type: "string", required: true },
@@ -1094,6 +1114,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   // ─── Settings ────────────────────────────────────────────────────
 
   rl.registerAction("settings.list", {
+    access: "read",
     description: "List the user's calendar settings (timezone, week start, working location, etc.).",
     inputSchema: { returnAll: { type: "boolean", required: false, default: true } },
     async execute(_input, ctx) {
@@ -1102,6 +1123,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("settings.get", {
+    access: "read",
     description: "Get a single setting by key (e.g. 'timezone', 'weekStart', 'locale').",
     inputSchema: { setting: { type: "string", required: true } },
     async execute(input, ctx) {

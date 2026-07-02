@@ -83,6 +83,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.get", {
+    access: "read",
     description: "Get a document by DocType and name",
     inputSchema: {
       docType: {
@@ -111,6 +112,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.list", {
+    access: "read",
     description: "List documents of a DocType",
     inputSchema: {
       docType: { type: "string", required: true, description: "Document type" },
@@ -157,6 +159,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.create", {
+    access: "write",
     description: "Create a document",
     inputSchema: {
       docType: { type: "string", required: true, description: "Document type" },
@@ -182,6 +185,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.update", {
+    access: "write",
     description: "Update a document",
     inputSchema: {
       docType: { type: "string", required: true, description: "Document type" },
@@ -213,6 +217,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.delete", {
+    access: "write",
     description: "Delete a document",
     inputSchema: {
       docType: { type: "string", required: true, description: "Document type" },

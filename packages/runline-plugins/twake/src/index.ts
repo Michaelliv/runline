@@ -13,6 +13,7 @@ export default function twake(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.send", {
+    access: "write",
     description: "Send a message to a Twake channel",
     inputSchema: {
       channelId: { type: "string", required: true },

@@ -69,6 +69,7 @@ export default function marketstack(rl: RunlinePluginAPI) {
   // ── End-of-Day Data ─────────────────────────────────
 
   rl.registerAction("endOfDayData.list", {
+    access: "read",
     description:
       "Get end-of-day stock market closing data. Must specify exactly one of: latest, specificDate, or dateFrom+dateTo.",
     inputSchema: {
@@ -140,6 +141,7 @@ export default function marketstack(rl: RunlinePluginAPI) {
   // ── Exchange ────────────────────────────────────────
 
   rl.registerAction("exchange.get", {
+    access: "read",
     description: "Get details about a stock exchange",
     inputSchema: {
       exchange: {
@@ -162,6 +164,7 @@ export default function marketstack(rl: RunlinePluginAPI) {
   // ── Ticker ──────────────────────────────────────────
 
   rl.registerAction("ticker.get", {
+    access: "read",
     description: "Get details about a stock ticker symbol",
     inputSchema: {
       symbol: {

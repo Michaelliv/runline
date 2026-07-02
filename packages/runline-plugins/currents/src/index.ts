@@ -77,6 +77,7 @@ export default function currents(rl: RunlinePluginAPI) {
   // ── Action ──────────────────────────────────────────
 
   rl.registerAction("action.create", {
+    access: "write",
     description: "Create a new action (skip, quarantine, or tag rule)",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -167,6 +168,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("action.get", {
+    access: "read",
     description: "Get an action by ID",
     inputSchema: {
       actionId: { type: "string", required: true, description: "Action ID" },
@@ -183,6 +185,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("action.list", {
+    access: "read",
     description: "List actions for a project",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -212,6 +215,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("action.update", {
+    access: "write",
     description: "Update an action",
     inputSchema: {
       actionId: { type: "string", required: true, description: "Action ID" },
@@ -234,6 +238,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("action.enable", {
+    access: "write",
     description: "Enable a disabled action",
     inputSchema: {
       actionId: { type: "string", required: true, description: "Action ID" },
@@ -248,6 +253,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("action.disable", {
+    access: "write",
     description: "Disable an active action",
     inputSchema: {
       actionId: { type: "string", required: true, description: "Action ID" },
@@ -262,6 +268,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("action.delete", {
+    access: "write",
     description: "Archive (soft delete) an action",
     inputSchema: {
       actionId: { type: "string", required: true, description: "Action ID" },
@@ -279,6 +286,7 @@ export default function currents(rl: RunlinePluginAPI) {
   // ── Instance ────────────────────────────────────────
 
   rl.registerAction("instance.get", {
+    access: "read",
     description: "Get a spec file execution instance with full test results",
     inputSchema: {
       instanceId: {
@@ -301,6 +309,7 @@ export default function currents(rl: RunlinePluginAPI) {
   // ── Project ─────────────────────────────────────────
 
   rl.registerAction("project.get", {
+    access: "read",
     description: "Get a project by ID",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -315,6 +324,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.list", {
+    access: "read",
     description: "List projects",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -330,6 +340,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.getInsights", {
+    access: "read",
     description: "Get project insights and metrics",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -393,6 +404,7 @@ export default function currents(rl: RunlinePluginAPI) {
   // ── Run ─────────────────────────────────────────────
 
   rl.registerAction("run.get", {
+    access: "read",
     description: "Get a run by ID",
     inputSchema: {
       runId: { type: "string", required: true, description: "Run ID" },
@@ -409,6 +421,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("run.list", {
+    access: "read",
     description: "List runs for a project",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -482,6 +495,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("run.find", {
+    access: "read",
     description: "Find a run by project and filters",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -513,6 +527,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("run.cancel", {
+    access: "write",
     description: "Cancel a run in progress",
     inputSchema: {
       runId: { type: "string", required: true, description: "Run ID" },
@@ -527,6 +542,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("run.cancelGithub", {
+    access: "write",
     description: "Cancel a run by GitHub Actions workflow run ID",
     inputSchema: {
       githubRunId: {
@@ -557,6 +573,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("run.reset", {
+    access: "write",
     description: "Reset failed specs for re-execution on specified machines",
     inputSchema: {
       runId: { type: "string", required: true, description: "Run ID" },
@@ -583,6 +600,7 @@ export default function currents(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("run.delete", {
+    access: "write",
     description: "Delete a run and all associated data",
     inputSchema: {
       runId: { type: "string", required: true, description: "Run ID" },
@@ -600,6 +618,7 @@ export default function currents(rl: RunlinePluginAPI) {
   // ── Signature ───────────────────────────────────────
 
   rl.registerAction("signature.generate", {
+    access: "write",
     description: "Generate a unique test signature",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -629,6 +648,7 @@ export default function currents(rl: RunlinePluginAPI) {
   // ── Spec File ───────────────────────────────────────
 
   rl.registerAction("specFile.list", {
+    access: "read",
     description: "Get aggregated spec file metrics for a project",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -679,6 +699,7 @@ export default function currents(rl: RunlinePluginAPI) {
   // ── Test ────────────────────────────────────────────
 
   rl.registerAction("test.list", {
+    access: "read",
     description: "Get aggregated test metrics for a project",
     inputSchema: {
       projectId: { type: "string", required: true, description: "Project ID" },
@@ -741,6 +762,7 @@ export default function currents(rl: RunlinePluginAPI) {
   // ── Test Result ─────────────────────────────────────
 
   rl.registerAction("testResult.list", {
+    access: "read",
     description: "Get historical test execution results for a test signature",
     inputSchema: {
       signature: {

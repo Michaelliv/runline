@@ -3,6 +3,7 @@ import { compact, extractDocumentId, runBatchUpdate } from "./shared.js";
 
 export function registerFormattingActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.updateParagraphStyle", {
+    access: "write",
     description:
       "Apply paragraph styling (alignment, named style, indents, spacing, direction) to the paragraphs intersecting the range.",
     inputSchema: {
@@ -102,6 +103,7 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.updateNamedStyle", {
+    access: "write",
     description:
       "Update a named style such as NORMAL_TEXT, TITLE, or HEADING_1 using a Docs API NamedStyle object.",
     inputSchema: {

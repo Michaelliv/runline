@@ -17,6 +17,7 @@ function makeGithub() {
   api.setName("github");
   api.setVersion("1.0.0");
   api.registerAction("issue.create", {
+    access: "write",
     description: "Create an issue",
     inputSchema: {
       owner: { type: "string", required: true },
@@ -28,6 +29,7 @@ function makeGithub() {
     execute: async (input) => ({ created: true, input }),
   });
   api.registerAction("issue.list", {
+    access: "read",
     description: "List issues",
     inputSchema: {
       owner: { type: "string", required: true },
@@ -36,11 +38,13 @@ function makeGithub() {
     execute: async () => [],
   });
   api.registerAction("user.listRepos", {
+    access: "read",
     description: "List repos for a user",
     inputSchema: { username: { type: "string", required: true } },
     execute: async () => [],
   });
   api.registerAction("settings.update", {
+    access: "write",
     description: "Update typed settings",
     inputSchema: TObject(
       {
@@ -160,11 +164,17 @@ describe("actions.find", () => {
 
   it("each result has path, optional description, and score", async () => {
     const result = await run<
-      Array<{ path: string; description?: string; score: number }>
+      Array<{
+        path: string;
+        access?: string;
+        description?: string;
+        score: number;
+      }>
     >('return actions.find("create")');
     assert.ok(result.length > 0);
     for (const r of result) {
       assert.equal(typeof r.path, "string");
+      if (r.access !== undefined) assert.match(r.access, /^(read|write)$/);
       assert.equal(typeof r.score, "number");
     }
   });
@@ -176,6 +186,7 @@ describe("actions.describe", () => {
       path: string;
       plugin: string;
       action: string;
+      access?: string;
       description?: string;
       signature: string;
       inputs: Record<string, { type: string; required: boolean }>;
@@ -183,6 +194,7 @@ describe("actions.describe", () => {
     assert.equal(result.path, "github.issue.create");
     assert.equal(result.plugin, "github");
     assert.equal(result.action, "issue.create");
+    assert.equal(result.access, "write");
     assert.equal(result.description, "Create an issue");
     assert.match(result.signature, /^github\.issue\.create\({.*}\)$/);
     assert.equal(result.inputs.owner.required, true);

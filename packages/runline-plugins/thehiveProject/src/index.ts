@@ -80,6 +80,7 @@ function searchAction(
   extraInputs?: Record<string, unknown>,
 ) {
   rl.registerAction(name, {
+    access: "read",
     description,
     inputSchema: {
       limit: { type: "number", required: false },
@@ -145,6 +146,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   // ── Alert ───────────────────────────────────────────
 
   rl.registerAction("alert.create", {
+    access: "write",
     description: "Create an alert",
     inputSchema: {
       type: { type: "string", required: true },
@@ -170,6 +172,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.get", {
+    access: "read",
     description: "Get an alert by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -184,6 +187,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.update", {
+    access: "write",
     description: "Update an alert by ID",
     inputSchema: {
       id: { type: "string", required: true },
@@ -204,6 +208,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.delete", {
+    access: "write",
     description: "Delete an alert",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -221,6 +226,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   searchAction(rl, "alert.search", "listAlert", "Search alerts");
 
   rl.registerAction("alert.merge", {
+    access: "write",
     description: "Merge an alert into a case",
     inputSchema: {
       alertId: { type: "string", required: true },
@@ -234,6 +240,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.promote", {
+    access: "write",
     description: "Promote an alert to a case",
     inputSchema: {
       id: { type: "string", required: true },
@@ -249,6 +256,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.setStatus", {
+    access: "write",
     description: "Set alert status",
     inputSchema: {
       id: { type: "string", required: true },
@@ -267,6 +275,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   // ── Case ────────────────────────────────────────────
 
   rl.registerAction("case.create", {
+    access: "write",
     description: "Create a case",
     inputSchema: {
       title: { type: "string", required: true },
@@ -290,6 +299,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("case.get", {
+    access: "read",
     description: "Get a case by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -304,6 +314,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("case.update", {
+    access: "write",
     description: "Update a case by ID",
     inputSchema: {
       id: { type: "string", required: true },
@@ -325,6 +336,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("case.delete", {
+    access: "write",
     description: "Delete a case",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -342,6 +354,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   searchAction(rl, "case.search", "listCase", "Search cases");
 
   rl.registerAction("case.getTimeline", {
+    access: "read",
     description: "Get case timeline",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -358,6 +371,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   // ── Task ────────────────────────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a task in a case",
     inputSchema: {
       caseId: { type: "string", required: true },
@@ -375,6 +389,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a task by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -388,6 +403,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description: "Update a task by ID",
     inputSchema: {
       id: { type: "string", required: true },
@@ -406,6 +422,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.delete", {
+    access: "write",
     description: "Delete a task",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -425,6 +442,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   // ── Observable ──────────────────────────────────────
 
   rl.registerAction("observable.create", {
+    access: "write",
     description: "Create an observable in a case or alert",
     inputSchema: {
       createIn: {
@@ -462,6 +480,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("observable.get", {
+    access: "read",
     description: "Get an observable by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -478,6 +497,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("observable.update", {
+    access: "write",
     description: "Update an observable by ID",
     inputSchema: {
       id: { type: "string", required: true },
@@ -496,6 +516,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("observable.delete", {
+    access: "write",
     description: "Delete an observable",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -515,6 +536,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   // ── Comment ─────────────────────────────────────────
 
   rl.registerAction("comment.add", {
+    access: "write",
     description: "Add a comment to a case or alert",
     inputSchema: {
       addTo: { type: "string", required: true, description: "case or alert" },
@@ -531,6 +553,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.update", {
+    access: "write",
     description: "Update a comment",
     inputSchema: {
       id: { type: "string", required: true },
@@ -546,6 +569,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.delete", {
+    access: "write",
     description: "Delete a comment",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -565,6 +589,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   // ── Task Log ────────────────────────────────────────
 
   rl.registerAction("log.create", {
+    access: "write",
     description: "Create a task log entry",
     inputSchema: {
       taskId: { type: "string", required: true },
@@ -580,6 +605,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("log.get", {
+    access: "read",
     description: "Get a log entry by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -593,6 +619,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("log.delete", {
+    access: "write",
     description: "Delete a log entry",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -612,6 +639,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   // ── Page ────────────────────────────────────────────
 
   rl.registerAction("page.create", {
+    access: "write",
     description: "Create a page (case page or knowledge base)",
     inputSchema: {
       caseId: {
@@ -632,6 +660,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.update", {
+    access: "write",
     description: "Update a page",
     inputSchema: {
       pageId: { type: "string", required: true },
@@ -652,6 +681,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.delete", {
+    access: "write",
     description: "Delete a page",
     inputSchema: {
       pageId: { type: "string", required: true },
@@ -673,6 +703,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
   // ── Query ───────────────────────────────────────────
 
   rl.registerAction("query.execute", {
+    access: "read",
     description: "Execute a raw TheHive Query API request",
     inputSchema: {
       query: {

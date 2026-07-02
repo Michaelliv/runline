@@ -83,6 +83,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.upsert", {
+    access: "write",
     description: "Create or update a contact",
     inputSchema: {
       email: { type: "string", required: true, description: "Contact email" },
@@ -124,6 +125,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID or email",
     inputSchema: {
       contactId: {
@@ -139,6 +141,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List all contacts",
     inputSchema: {
       limit: {
@@ -154,6 +157,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -168,6 +172,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   // ── Contact Journey ─────────────────────────────────
 
   rl.registerAction("contactJourney.add", {
+    access: "write",
     description: "Add a contact to a journey/trigger",
     inputSchema: {
       triggerId: {
@@ -194,6 +199,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   // ── Contact List ────────────────────────────────────
 
   rl.registerAction("contactList.add", {
+    access: "write",
     description: "Add a contact to a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -214,6 +220,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactList.remove", {
+    access: "write",
     description: "Remove a contact from a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -234,6 +241,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactList.exists", {
+    access: "read",
     description: "Check if a contact is in a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -258,6 +266,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactList.list", {
+    access: "read",
     description: "List all contacts in a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -281,6 +290,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   // ── List ────────────────────────────────────────────
 
   rl.registerAction("list.create", {
+    access: "write",
     description: "Create a new list",
     inputSchema: {
       name: { type: "string", required: true, description: "List name" },
@@ -292,6 +302,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.list", {
+    access: "read",
     description: "List all lists",
     inputSchema: {
       limit: {

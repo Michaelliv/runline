@@ -49,6 +49,7 @@ function registerCrud(
   >,
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: createSchema,
     async execute(input, ctx) {
@@ -62,6 +63,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by ID`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -74,6 +76,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${plural}`,
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -84,6 +87,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "string", required: true },
@@ -101,6 +105,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -147,6 +152,7 @@ export default function zammad(rl: RunlinePluginAPI) {
   // ── Ticket (special: includes article) ──────────────
 
   rl.registerAction("ticket.create", {
+    access: "write",
     description: "Create a ticket",
     inputSchema: {
       title: { type: "string", required: true },
@@ -175,6 +181,7 @@ export default function zammad(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.get", {
+    access: "read",
     description: "Get a ticket with articles",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -190,6 +197,7 @@ export default function zammad(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.list", {
+    access: "read",
     description: "List tickets",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -201,6 +209,7 @@ export default function zammad(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.update", {
+    access: "write",
     description: "Update a ticket",
     inputSchema: {
       id: { type: "string", required: true },
@@ -218,6 +227,7 @@ export default function zammad(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.delete", {
+    access: "write",
     description: "Delete a ticket",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -233,6 +243,7 @@ export default function zammad(rl: RunlinePluginAPI) {
   // ── User extras ─────────────────────────────────────
 
   rl.registerAction("user.getSelf", {
+    access: "read",
     description: "Get the current user",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -241,6 +252,7 @@ export default function zammad(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.search", {
+    access: "read",
     description: "Search users",
     inputSchema: {
       query: { type: "string", required: true },

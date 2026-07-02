@@ -80,6 +80,7 @@ export function bindGetAction(rl: RunlinePluginAPI) {
     pathForId: (id: string) => string,
   ) => {
     rl.registerAction(name, {
+      access: "read",
       description,
       inputSchema: t.Object({
         id: t.String({ description: "Resource ID, name, or URL" }),

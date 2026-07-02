@@ -43,6 +43,7 @@ export default function stackby(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("row.read", {
+    access: "read",
     description: "Read a row by ID",
     inputSchema: {
       stackId: { type: "string", required: true },
@@ -63,6 +64,7 @@ export default function stackby(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.list", {
+    access: "read",
     description: "List rows from a table",
     inputSchema: {
       stackId: { type: "string", required: true },
@@ -87,6 +89,7 @@ export default function stackby(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.append", {
+    access: "write",
     description: "Append rows to a table",
     inputSchema: {
       stackId: { type: "string", required: true },
@@ -110,6 +113,7 @@ export default function stackby(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("row.delete", {
+    access: "write",
     description: "Delete a row by ID",
     inputSchema: {
       stackId: { type: "string", required: true },

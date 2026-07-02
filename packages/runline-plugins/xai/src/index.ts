@@ -41,6 +41,7 @@ export default function xai(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("image.create", {
+    access: "write",
     description:
       "Generate an image with xAI Grok Imagine (Aurora). Writes the JPEG(s) to disk and returns their file `path`s (plus any revised prompt) — not base64. Deliver each with send_file using its `path`.",
     inputSchema: {

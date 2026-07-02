@@ -8,6 +8,7 @@ import {
 
 export function registerDocumentsActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.create", {
+    access: "write",
     description:
       "Create a new Google Doc, optionally in a specific Drive folder (goes through the Drive API; needs drive.file scope).",
     inputSchema: {
@@ -32,6 +33,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.createBlank", {
+    access: "write",
     description:
       "Create a blank Google Doc through the native Docs API. Use document.create when you need Drive folder placement.",
     inputSchema: {
@@ -44,6 +46,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.get", {
+    access: "read",
     description:
       "Get a document. Accepts a bare ID or a docs.google.com URL. `simple=true` collapses the body to plain text.",
     inputSchema: {
@@ -86,6 +89,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.batchUpdate", {
+    access: "write",
     description:
       "Raw passthrough to documents.batchUpdate — pass a full `requests` array for atomic multi-edit operations.",
     inputSchema: {

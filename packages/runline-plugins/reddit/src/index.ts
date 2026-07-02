@@ -46,6 +46,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   // ── Post ────────────────────────────────────────────
 
   rl.registerAction("post.create", {
+    access: "write",
     description: "Submit a new post to a subreddit (requires auth)",
     inputSchema: {
       subreddit: { type: "string", required: true },
@@ -88,6 +89,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.get", {
+    access: "read",
     description: "Get a post by ID",
     inputSchema: {
       subreddit: { type: "string", required: true },
@@ -108,6 +110,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.list", {
+    access: "read",
     description:
       "List posts from a subreddit (no auth required for public subreddits)",
     inputSchema: {
@@ -143,6 +146,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.delete", {
+    access: "write",
     description: "Delete a post (requires auth)",
     inputSchema: { postId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -155,6 +159,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("post.search", {
+    access: "read",
     description: "Search posts",
     inputSchema: {
       keyword: { type: "string", required: true },
@@ -193,6 +198,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   // ── Comment ─────────────────────────────────────────
 
   rl.registerAction("comment.create", {
+    access: "write",
     description: "Add a comment to a post (requires auth)",
     inputSchema: {
       postId: { type: "string", required: true },
@@ -212,6 +218,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.reply", {
+    access: "write",
     description: "Reply to a comment (requires auth)",
     inputSchema: {
       commentId: { type: "string", required: true },
@@ -231,6 +238,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.delete", {
+    access: "write",
     description: "Delete a comment (requires auth)",
     inputSchema: { commentId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -245,6 +253,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   // ── Subreddit ───────────────────────────────────────
 
   rl.registerAction("subreddit.get", {
+    access: "read",
     description: "Get subreddit info or rules (no auth required)",
     inputSchema: {
       subreddit: { type: "string", required: true },
@@ -270,6 +279,7 @@ export default function reddit(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get user profile info (no auth required)",
     inputSchema: { username: { type: "string", required: true } },
     async execute(input, ctx) {

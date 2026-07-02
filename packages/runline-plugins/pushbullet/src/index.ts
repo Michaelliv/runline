@@ -67,6 +67,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
     ctx.connection.config.accessToken as string;
 
   rl.registerAction("push.create", {
+    access: "write",
     description: "Create a push (note or link)",
     inputSchema: {
       type: { type: "string", required: true, description: "note or link" },
@@ -104,6 +105,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("push.list", {
+    access: "read",
     description: "List pushes",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -142,6 +144,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("push.delete", {
+    access: "write",
     description: "Delete a push",
     inputSchema: { pushId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -152,6 +155,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("push.update", {
+    access: "write",
     description: "Update a push (dismiss it)",
     inputSchema: {
       pushId: { type: "string", required: true },

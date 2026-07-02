@@ -12,6 +12,7 @@ import {
 
 export function registerIssueActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.list", {
+    access: "read",
     description: "List Shift Labs issues for the API key's organization.",
     inputSchema: t.Object({
       status: t.Optional(enumSchema("Issue status", ISSUE_STATUS)),
@@ -35,6 +36,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.get", {
+    access: "read",
     description: "Get a Shift Labs issue by ID.",
     inputSchema: t.Object({ id: t.String({ description: "Issue ID" }) }),
     async execute(input, ctx) {
@@ -48,6 +50,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.create", {
+    access: "write",
     description: "Create a Shift Labs issue. The issue starts in triage.",
     inputSchema: t.Object({
       title: t.String({ description: "Issue title" }),
@@ -74,6 +77,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.comment", {
+    access: "write",
     description: "Add a comment to a Shift Labs issue.",
     inputSchema: t.Object({
       id: t.String({ description: "Issue ID" }),

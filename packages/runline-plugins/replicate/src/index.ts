@@ -67,6 +67,7 @@ export default function replicate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("image.create", {
+    access: "write",
     description:
       "Generate an image via Replicate. Default model is black-forest-labs/flux-dev. Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
     inputSchema: {

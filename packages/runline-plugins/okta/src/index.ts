@@ -87,6 +87,7 @@ export default function okta(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a new user in Okta",
     inputSchema: {
       firstName: { type: "string", required: true },
@@ -140,6 +141,7 @@ export default function okta(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get user details by ID or login",
     inputSchema: {
       userId: {
@@ -160,6 +162,7 @@ export default function okta(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users (with optional search query)",
     inputSchema: {
       search: {
@@ -194,6 +197,7 @@ export default function okta(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.update", {
+    access: "write",
     description: "Update a user's profile",
     inputSchema: {
       userId: { type: "string", required: true, description: "User ID" },
@@ -217,6 +221,7 @@ export default function okta(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.delete", {
+    access: "write",
     description: "Delete (deactivate and then delete) a user",
     inputSchema: {
       userId: { type: "string", required: true, description: "User ID" },

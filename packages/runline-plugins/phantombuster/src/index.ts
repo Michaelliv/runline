@@ -47,6 +47,7 @@ export default function phantombuster(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("agent.delete", {
+    access: "write",
     description: "Delete an agent",
     inputSchema: { agentId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -57,6 +58,7 @@ export default function phantombuster(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("agent.get", {
+    access: "read",
     description: "Get agent details",
     inputSchema: { agentId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -68,6 +70,7 @@ export default function phantombuster(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("agent.getOutput", {
+    access: "read",
     description: "Get the output of the last agent run",
     inputSchema: {
       agentId: { type: "string", required: true },
@@ -102,6 +105,7 @@ export default function phantombuster(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("agent.list", {
+    access: "read",
     description: "List all agents",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -117,6 +121,7 @@ export default function phantombuster(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("agent.launch", {
+    access: "write",
     description: "Launch an agent",
     inputSchema: {
       agentId: { type: "string", required: true },

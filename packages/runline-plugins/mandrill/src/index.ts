@@ -152,6 +152,7 @@ export default function mandrill(rl: RunlinePluginAPI) {
   };
 
   rl.registerAction("message.sendHtml", {
+    access: "write",
     description: "Send an email with HTML/text content via Mandrill",
     inputSchema: messageInputSchema,
     async execute(input, ctx) {
@@ -166,6 +167,7 @@ export default function mandrill(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendTemplate", {
+    access: "write",
     description: "Send an email using a Mandrill template",
     inputSchema: {
       templateName: {

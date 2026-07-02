@@ -64,6 +64,7 @@ export default function cortex(rl: RunlinePluginAPI) {
   // ── Analyzer ────────────────────────────────────────
 
   rl.registerAction("analyzer.execute", {
+    access: "write",
     description: "Run an analyzer on an observable",
     inputSchema: {
       analyzerId: {
@@ -136,6 +137,7 @@ export default function cortex(rl: RunlinePluginAPI) {
   // ── Job ─────────────────────────────────────────────
 
   rl.registerAction("job.get", {
+    access: "read",
     description: "Get job details",
     inputSchema: {
       jobId: { type: "string", required: true, description: "Job ID" },
@@ -148,6 +150,7 @@ export default function cortex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("job.getReport", {
+    access: "read",
     description: "Get job report",
     inputSchema: {
       jobId: { type: "string", required: true, description: "Job ID" },
@@ -162,6 +165,7 @@ export default function cortex(rl: RunlinePluginAPI) {
   // ── Responder ───────────────────────────────────────
 
   rl.registerAction("responder.execute", {
+    access: "write",
     description: "Run a responder on an entity",
     inputSchema: {
       responderId: {

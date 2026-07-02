@@ -80,6 +80,7 @@ export default function egoi(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a contact in a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -156,6 +157,7 @@ export default function egoi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID or email",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -190,6 +192,7 @@ export default function egoi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts in a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -207,6 +210,7 @@ export default function egoi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },

@@ -34,6 +34,7 @@ function point(value: unknown): Record<string, unknown> {
 
 export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertTable", {
+    access: "write",
     description: "Insert an empty table with the given dimensions.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -65,6 +66,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.insertTableRow", {
+    access: "write",
     description:
       "Insert a table row above or below a cell in an existing table.",
     inputSchema: {
@@ -97,6 +99,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deleteTableRow", {
+    access: "write",
     description: "Delete a specific row from a table.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -118,6 +121,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.insertTableColumn", {
+    access: "write",
     description: "Insert a column left or right of a cell.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -145,6 +149,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deleteTableColumn", {
+    access: "write",
     description: "Delete a specific column from a table.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -166,6 +171,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.updateTableCellStyle", {
+    access: "write",
     description:
       "Apply table-cell styling (background color, borders, padding) to a contiguous span of cells. Pass either a single cell via `tableStartLocation+rowIndex+columnIndex`, or a range via `tableStartLocation+rowSpan+columnSpan`.",
     inputSchema: {
@@ -250,6 +256,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.mergeTableCells", {
+    access: "write",
     description: "Merge a contiguous block of cells in a table.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -283,6 +290,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.unmergeTableCells", {
+    access: "write",
     description: "Unmerge a previously merged block of cells.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -316,6 +324,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.updateTableColumnProperties", {
+    access: "write",
     description:
       "Update table column properties such as width for selected columns or all columns.",
     inputSchema: {
@@ -376,6 +385,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.updateTableRowStyle", {
+    access: "write",
     description:
       "Update table row style such as minimum row height for selected rows or all rows.",
     inputSchema: {
@@ -422,6 +432,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.pinTableHeaderRows", {
+    access: "write",
     description: "Pin or unpin header rows in a table.",
     inputSchema: {
       document: { type: "string", required: true },

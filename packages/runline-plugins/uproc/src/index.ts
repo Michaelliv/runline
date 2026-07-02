@@ -19,6 +19,7 @@ export default function uproc(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("process.run", {
+    access: "write",
     description: "Run a uProc data processor tool",
     inputSchema: {
       processor: {

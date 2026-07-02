@@ -37,6 +37,7 @@ export default function dhl(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("shipment.track", {
+    access: "read",
     description: "Get tracking details for a shipment",
     inputSchema: {
       trackingNumber: {

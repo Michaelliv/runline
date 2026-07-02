@@ -96,6 +96,7 @@ export default function paypal(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("payout.create", {
+    access: "write",
     description: "Create a batch payout",
     inputSchema: {
       senderBatchId: {
@@ -129,6 +130,7 @@ export default function paypal(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("payout.get", {
+    access: "read",
     description: "Get a batch payout by ID (returns items)",
     inputSchema: {
       payoutBatchId: { type: "string", required: true },
@@ -154,6 +156,7 @@ export default function paypal(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("payoutItem.get", {
+    access: "read",
     description: "Get a payout item by ID",
     inputSchema: { payoutItemId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -167,6 +170,7 @@ export default function paypal(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("payoutItem.cancel", {
+    access: "write",
     description: "Cancel an unclaimed payout item",
     inputSchema: { payoutItemId: { type: "string", required: true } },
     async execute(input, ctx) {

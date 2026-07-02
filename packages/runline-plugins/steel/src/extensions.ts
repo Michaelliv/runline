@@ -10,6 +10,7 @@ function extensionForm(input: Record<string, unknown>): FormData {
 
 export function registerExtensionActions(rl: RunlinePluginAPI) {
   rl.registerAction("extension.list", {
+    access: "read",
     description: "List Steel Chrome extensions installed for the organization.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
@@ -18,6 +19,7 @@ export function registerExtensionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("extension.upload", {
+    access: "write",
     description: "Upload an extension from a Chrome Web Store URL. Raw zip/crx uploads should use the API directly.",
     inputSchema: t.Object({ url: t.String() }),
     async execute(input, ctx) {
@@ -26,6 +28,7 @@ export function registerExtensionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("extension.update", {
+    access: "write",
     description: "Update an extension from a Chrome Web Store URL.",
     inputSchema: t.Object({ id: t.String(), url: t.String() }),
     async execute(input, ctx) {
@@ -35,6 +38,7 @@ export function registerExtensionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("extension.delete", {
+    access: "write",
     description: "Delete an extension by ID.",
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
@@ -43,6 +47,7 @@ export function registerExtensionActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("extension.deleteAll", {
+    access: "write",
     description: "Delete all organization extensions.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {

@@ -8,6 +8,7 @@ import { resolvePluginExport } from "./plugin/api.js";
 import { discoverPlugins } from "./plugin/loader.js";
 import { PluginRegistry } from "./plugin/registry.js";
 import type {
+  ActionAccess,
   ConnectionConfig,
   InputSchema,
   PluginDef,
@@ -77,12 +78,14 @@ export class Runline {
   actions(): Array<{
     plugin: string;
     action: string;
+    access?: ActionAccess;
     description?: string;
     inputSchema?: InputSchema;
   }> {
     return this._registry.getAllActions().map(({ plugin, action }) => ({
       plugin,
       action: action.name,
+      access: action.access,
       description: action.description,
       inputSchema: action.inputSchema,
     }));

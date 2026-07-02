@@ -88,6 +88,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   // ── Session ─────────────────────────────────────────
 
   rl.registerAction("session.create", {
+    access: "write",
     description: "Create a new browser session and wait until it's running",
     inputSchema: {
       profileName: {
@@ -187,6 +188,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.terminate", {
+    access: "write",
     description: "Terminate a browser session",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -199,6 +201,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.save", {
+    access: "write",
     description: "Save a browser profile on session termination",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -227,6 +230,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.waitForDownload", {
+    access: "read",
     description: "Wait for a file download to become available in a session",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -269,6 +273,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   // ── Window ──────────────────────────────────────────
 
   rl.registerAction("window.create", {
+    access: "write",
     description: "Create a new browser window in a session",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -301,6 +306,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("window.close", {
+    access: "write",
     description: "Close a browser window",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -321,6 +327,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("window.load", {
+    access: "write",
     description: "Navigate a window to a URL",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -353,6 +360,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("window.list", {
+    access: "read",
     description: "List all windows in a session",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -364,6 +372,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("window.getLiveView", {
+    access: "read",
     description: "Get the live view URL for a window",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -407,6 +416,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("window.takeScreenshot", {
+    access: "write",
     description: "Take a screenshot of a window (returns base64 data URL)",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -428,6 +438,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   // ── Extraction ──────────────────────────────────────
 
   rl.registerAction("extraction.query", {
+    access: "write",
     description: "Query page content using a natural language prompt",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -477,6 +488,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("extraction.scrape", {
+    access: "write",
     description: "Scrape the content of the current page",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -497,6 +509,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("extraction.getPaginated", {
+    access: "write",
     description: "Extract data across paginated pages using a prompt",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -547,6 +560,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   // ── Interaction ─────────────────────────────────────
 
   rl.registerAction("interaction.click", {
+    access: "write",
     description: "Click on an element described in natural language",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -582,6 +596,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("interaction.hover", {
+    access: "write",
     description: "Hover over an element described in natural language",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -609,6 +624,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("interaction.type", {
+    access: "write",
     description:
       "Type text into a browser window, optionally targeting a specific element",
     inputSchema: {
@@ -642,6 +658,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("interaction.fill", {
+    access: "write",
     description: "Fill a form using natural language description of the data",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -684,6 +701,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("interaction.scroll", {
+    access: "write",
     description: "Scroll within a browser window",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -736,6 +754,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   // ── Agent ───────────────────────────────────────────
 
   rl.registerAction("agent.run", {
+    access: "write",
     description: "Run an Airtop agent and optionally wait for completion",
     inputSchema: {
       agentId: { type: "string", required: true, description: "Agent ID" },
@@ -815,6 +834,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   // ── File ────────────────────────────────────────────
 
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get file details by ID",
     inputSchema: {
       fileId: { type: "string", required: true, description: "File ID" },
@@ -826,6 +846,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.list", {
+    access: "read",
     description: "List files, optionally filtered by session",
     inputSchema: {
       sessionIds: {
@@ -852,6 +873,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file by ID",
     inputSchema: {
       fileId: { type: "string", required: true, description: "File ID" },
@@ -864,6 +886,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.upload", {
+    access: "write",
     description: "Upload a file from a URL to a session",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },
@@ -945,6 +968,7 @@ export default function airtop(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.load", {
+    access: "write",
     description: "Load an existing file into a session and trigger file input",
     inputSchema: {
       sessionId: { type: "string", required: true, description: "Session ID" },

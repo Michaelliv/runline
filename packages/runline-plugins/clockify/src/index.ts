@@ -84,6 +84,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   // ── Client ──────────────────────────────────────────
 
   rl.registerAction("client.create", {
+    access: "write",
     description: "Create a client",
     inputSchema: {
       workspaceId: {
@@ -108,6 +109,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("client.get", {
+    access: "read",
     description: "Get a client",
     inputSchema: {
       workspaceId: {
@@ -131,6 +133,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("client.list", {
+    access: "read",
     description: "List clients in a workspace",
     inputSchema: {
       workspaceId: {
@@ -164,6 +167,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("client.update", {
+    access: "write",
     description: "Update a client",
     inputSchema: {
       workspaceId: {
@@ -190,6 +194,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("client.delete", {
+    access: "write",
     description: "Delete a client",
     inputSchema: {
       workspaceId: {
@@ -216,6 +221,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   // ── Project ─────────────────────────────────────────
 
   rl.registerAction("project.create", {
+    access: "write",
     description: "Create a project",
     inputSchema: {
       workspaceId: {
@@ -246,6 +252,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.get", {
+    access: "read",
     description: "Get a project",
     inputSchema: {
       workspaceId: {
@@ -269,6 +276,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.list", {
+    access: "read",
     description: "List projects in a workspace",
     inputSchema: {
       workspaceId: {
@@ -302,6 +310,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.update", {
+    access: "write",
     description: "Update a project",
     inputSchema: {
       workspaceId: {
@@ -333,6 +342,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.delete", {
+    access: "write",
     description: "Delete a project",
     inputSchema: {
       workspaceId: {
@@ -359,6 +369,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   // ── Tag ─────────────────────────────────────────────
 
   rl.registerAction("tag.create", {
+    access: "write",
     description: "Create a tag",
     inputSchema: {
       workspaceId: {
@@ -380,6 +391,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.list", {
+    access: "read",
     description: "List tags in a workspace",
     inputSchema: {
       workspaceId: {
@@ -413,6 +425,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.update", {
+    access: "write",
     description: "Update a tag",
     inputSchema: {
       workspaceId: {
@@ -436,6 +449,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.delete", {
+    access: "write",
     description: "Delete a tag",
     inputSchema: {
       workspaceId: {
@@ -462,6 +476,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   // ── Task ────────────────────────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a task in a project",
     inputSchema: {
       workspaceId: {
@@ -506,6 +521,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a task",
     inputSchema: {
       workspaceId: {
@@ -530,6 +546,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.list", {
+    access: "read",
     description: "List tasks in a project",
     inputSchema: {
       workspaceId: {
@@ -571,6 +588,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description: "Update a task",
     inputSchema: {
       workspaceId: {
@@ -610,6 +628,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.delete", {
+    access: "write",
     description: "Delete a task",
     inputSchema: {
       workspaceId: {
@@ -637,6 +656,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   // ── Time Entry ──────────────────────────────────────
 
   rl.registerAction("timeEntry.create", {
+    access: "write",
     description: "Create a time entry",
     inputSchema: {
       workspaceId: {
@@ -676,6 +696,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.get", {
+    access: "read",
     description: "Get a time entry",
     inputSchema: {
       workspaceId: {
@@ -703,6 +724,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.update", {
+    access: "write",
     description: "Update a time entry",
     inputSchema: {
       workspaceId: {
@@ -752,6 +774,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.delete", {
+    access: "write",
     description: "Delete a time entry",
     inputSchema: {
       workspaceId: {
@@ -782,6 +805,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users in a workspace",
     inputSchema: {
       workspaceId: {
@@ -821,6 +845,7 @@ export default function clockify(rl: RunlinePluginAPI) {
   // ── Workspace ───────────────────────────────────────
 
   rl.registerAction("workspace.list", {
+    access: "read",
     description: "List all workspaces",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },

@@ -51,6 +51,7 @@ export default function strava(rl: RunlinePluginAPI) {
     ctx.connection.config.accessToken as string;
 
   rl.registerAction("activity.create", {
+    access: "write",
     description: "Create an activity",
     inputSchema: {
       name: { type: "string", required: true },
@@ -95,6 +96,7 @@ export default function strava(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("activity.get", {
+    access: "read",
     description: "Get an activity by ID",
     inputSchema: { activityId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -107,6 +109,7 @@ export default function strava(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("activity.list", {
+    access: "read",
     description: "List the authenticated athlete's activities",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -118,6 +121,7 @@ export default function strava(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("activity.update", {
+    access: "write",
     description: "Update an activity",
     inputSchema: {
       activityId: { type: "string", required: true },
@@ -160,6 +164,7 @@ export default function strava(rl: RunlinePluginAPI) {
     },
   ]) {
     rl.registerAction(`activity.${sub.name}`, {
+      access: "read",
       description: sub.description,
       inputSchema: {
         activityId: { type: "string", required: true },
@@ -179,6 +184,7 @@ export default function strava(rl: RunlinePluginAPI) {
   }
 
   rl.registerAction("activity.getStreams", {
+    access: "read",
     description: "Get activity streams (time-series data)",
     inputSchema: {
       activityId: { type: "string", required: true },

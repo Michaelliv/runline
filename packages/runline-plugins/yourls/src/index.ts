@@ -45,6 +45,7 @@ export default function yourls(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("url.shorten", {
+    access: "write",
     description: "Shorten a URL",
     inputSchema: {
       url: { type: "string", required: true },
@@ -65,6 +66,7 @@ export default function yourls(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("url.expand", {
+    access: "read",
     description: "Expand a short URL to its original",
     inputSchema: { shortUrl: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -76,6 +78,7 @@ export default function yourls(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("url.stats", {
+    access: "read",
     description: "Get stats for a short URL",
     inputSchema: { shortUrl: { type: "string", required: true } },
     async execute(input, ctx) {

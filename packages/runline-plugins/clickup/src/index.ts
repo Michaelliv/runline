@@ -89,6 +89,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Checklist ───────────────────────────────────────
 
   rl.registerAction("checklist.create", {
+    access: "write",
     description: "Create a checklist on a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -107,6 +108,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.update", {
+    access: "write",
     description: "Update a checklist",
     inputSchema: {
       checklistId: {
@@ -130,6 +132,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.delete", {
+    access: "write",
     description: "Delete a checklist",
     inputSchema: {
       checklistId: {
@@ -148,6 +151,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Checklist Item ──────────────────────────────────
 
   rl.registerAction("checklistItem.create", {
+    access: "write",
     description: "Create a checklist item",
     inputSchema: {
       checklistId: {
@@ -177,6 +181,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklistItem.update", {
+    access: "write",
     description: "Update a checklist item",
     inputSchema: {
       checklistId: {
@@ -214,6 +219,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklistItem.delete", {
+    access: "write",
     description: "Delete a checklist item",
     inputSchema: {
       checklistId: {
@@ -244,6 +250,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Comment ─────────────────────────────────────────
 
   rl.registerAction("comment.create", {
+    access: "write",
     description: "Create a comment on a task, view, or list",
     inputSchema: {
       commentOn: {
@@ -284,6 +291,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.list", {
+    access: "read",
     description: "List comments on a task, view, or list",
     inputSchema: {
       commentsOn: {
@@ -308,6 +316,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.update", {
+    access: "write",
     description: "Update a comment",
     inputSchema: {
       commentId: { type: "string", required: true, description: "Comment ID" },
@@ -330,6 +339,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.delete", {
+    access: "write",
     description: "Delete a comment",
     inputSchema: {
       commentId: { type: "string", required: true, description: "Comment ID" },
@@ -344,6 +354,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Folder ──────────────────────────────────────────
 
   rl.registerAction("folder.create", {
+    access: "write",
     description: "Create a folder in a space",
     inputSchema: {
       spaceId: { type: "string", required: true, description: "Space ID" },
@@ -358,6 +369,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.get", {
+    access: "read",
     description: "Get a folder",
     inputSchema: {
       folderId: { type: "string", required: true, description: "Folder ID" },
@@ -372,6 +384,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.list", {
+    access: "read",
     description: "List folders in a space",
     inputSchema: {
       spaceId: { type: "string", required: true, description: "Space ID" },
@@ -403,6 +416,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.update", {
+    access: "write",
     description: "Update a folder",
     inputSchema: {
       folderId: { type: "string", required: true, description: "Folder ID" },
@@ -415,6 +429,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.delete", {
+    access: "write",
     description: "Delete a folder",
     inputSchema: {
       folderId: { type: "string", required: true, description: "Folder ID" },
@@ -432,6 +447,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Goal ────────────────────────────────────────────
 
   rl.registerAction("goal.create", {
+    access: "write",
     description: "Create a goal",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -485,6 +501,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.get", {
+    access: "read",
     description: "Get a goal",
     inputSchema: {
       goalId: { type: "string", required: true, description: "Goal ID" },
@@ -500,6 +517,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.list", {
+    access: "read",
     description: "List goals for a team",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -519,6 +537,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.update", {
+    access: "write",
     description: "Update a goal",
     inputSchema: {
       goalId: { type: "string", required: true, description: "Goal ID" },
@@ -560,6 +579,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.delete", {
+    access: "write",
     description: "Delete a goal",
     inputSchema: {
       goalId: { type: "string", required: true, description: "Goal ID" },
@@ -577,6 +597,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Goal Key Result ─────────────────────────────────
 
   rl.registerAction("goalKeyResult.create", {
+    access: "write",
     description: "Create a key result for a goal",
     inputSchema: {
       goalId: { type: "string", required: true, description: "Goal ID" },
@@ -629,6 +650,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goalKeyResult.update", {
+    access: "write",
     description: "Update a key result",
     inputSchema: {
       keyResultId: {
@@ -670,6 +692,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goalKeyResult.delete", {
+    access: "write",
     description: "Delete a key result",
     inputSchema: {
       keyResultId: {
@@ -691,6 +714,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Guest ───────────────────────────────────────────
 
   rl.registerAction("guest.create", {
+    access: "write",
     description: "Invite a guest to a workspace",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -736,6 +760,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("guest.get", {
+    access: "read",
     description: "Get a guest",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -753,6 +778,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("guest.update", {
+    access: "write",
     description: "Update a guest",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -787,6 +813,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("guest.delete", {
+    access: "write",
     description: "Remove a guest",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -806,6 +833,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Task ────────────────────────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a task in a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -890,6 +918,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -911,6 +940,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.list", {
+    access: "read",
     description: "List tasks in a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -975,6 +1005,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description: "Update a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1021,6 +1052,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.delete", {
+    access: "write",
     description: "Delete a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1036,6 +1068,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.getMembers", {
+    access: "read",
     description: "Get task members",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1055,6 +1088,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.setCustomField", {
+    access: "write",
     description: "Set a custom field value on a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1087,6 +1121,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Task Tag ────────────────────────────────────────
 
   rl.registerAction("taskTag.add", {
+    access: "write",
     description: "Add a tag to a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1100,6 +1135,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskTag.remove", {
+    access: "write",
     description: "Remove a tag from a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1119,6 +1155,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Task List ───────────────────────────────────────
 
   rl.registerAction("taskList.add", {
+    access: "write",
     description: "Add a task to a list",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1132,6 +1169,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskList.remove", {
+    access: "write",
     description: "Remove a task from a list",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1151,6 +1189,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Task Dependency ─────────────────────────────────
 
   rl.registerAction("taskDependency.create", {
+    access: "write",
     description: "Add a dependency to a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1173,6 +1212,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskDependency.delete", {
+    access: "write",
     description: "Remove a dependency from a task",
     inputSchema: {
       taskId: { type: "string", required: true, description: "Task ID" },
@@ -1201,6 +1241,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Space Tag ───────────────────────────────────────
 
   rl.registerAction("spaceTag.create", {
+    access: "write",
     description: "Create a tag in a space",
     inputSchema: {
       spaceId: { type: "string", required: true, description: "Space ID" },
@@ -1227,6 +1268,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("spaceTag.list", {
+    access: "read",
     description: "List tags in a space",
     inputSchema: {
       spaceId: { type: "string", required: true, description: "Space ID" },
@@ -1246,6 +1288,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("spaceTag.update", {
+    access: "write",
     description: "Update a space tag",
     inputSchema: {
       spaceId: { type: "string", required: true, description: "Space ID" },
@@ -1286,6 +1329,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("spaceTag.delete", {
+    access: "write",
     description: "Delete a space tag",
     inputSchema: {
       spaceId: { type: "string", required: true, description: "Space ID" },
@@ -1308,6 +1352,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── List ────────────────────────────────────────────
 
   rl.registerAction("list.create", {
+    access: "write",
     description: "Create a list (in a folder or folderless in a space)",
     inputSchema: {
       name: { type: "string", required: true, description: "List name" },
@@ -1348,6 +1393,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.get", {
+    access: "read",
     description: "Get a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -1362,6 +1408,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.list", {
+    access: "read",
     description: "List lists in a folder or space",
     inputSchema: {
       spaceId: {
@@ -1401,6 +1448,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.update", {
+    access: "write",
     description: "Update a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -1425,6 +1473,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.delete", {
+    access: "write",
     description: "Delete a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -1440,6 +1489,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.getMembers", {
+    access: "read",
     description: "Get list members",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -1459,6 +1509,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.getCustomFields", {
+    access: "read",
     description: "Get custom fields for a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -1476,6 +1527,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Time Entry ──────────────────────────────────────
 
   rl.registerAction("timeEntry.create", {
+    access: "write",
     description: "Create a time entry",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1520,6 +1572,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.get", {
+    access: "read",
     description: "Get a time entry (or current running timer)",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1546,6 +1599,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.list", {
+    access: "read",
     description: "List time entries for a team",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1587,6 +1641,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.update", {
+    access: "write",
     description: "Update a time entry",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1627,6 +1682,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.start", {
+    access: "write",
     description: "Start a timer on a task",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1652,6 +1708,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.stop", {
+    access: "write",
     description: "Stop the running timer",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1668,6 +1725,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntry.delete", {
+    access: "write",
     description: "Delete a time entry",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1694,6 +1752,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   // ── Time Entry Tag ──────────────────────────────────
 
   rl.registerAction("timeEntryTag.add", {
+    access: "write",
     description: "Add tags to time entries",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1724,6 +1783,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntryTag.list", {
+    access: "read",
     description: "List time entry tags for a team",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },
@@ -1743,6 +1803,7 @@ export default function clickup(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("timeEntryTag.remove", {
+    access: "write",
     description: "Remove tags from time entries",
     inputSchema: {
       teamId: { type: "string", required: true, description: "Team ID" },

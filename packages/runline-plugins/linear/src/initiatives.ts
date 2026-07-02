@@ -27,6 +27,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     INITIATIVE_FIELDS,
   );
   rl.registerAction("initiative.create", {
+    access: "write",
     description: "Create an initiative. Status: Planned | Active | Completed.",
     inputSchema: t.Object({
       name: t.String({ description: "The name of the initiative" }),
@@ -87,6 +88,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("initiative.update", {
+    access: "write",
     description: "Update an initiative.",
     inputSchema: t.Object({
       id: t.String({
@@ -151,6 +153,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("initiative.delete", {
+    access: "write",
     description: "Trash an initiative.",
     inputSchema: t.Object({
       id: t.String({
@@ -168,6 +171,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("initiative.addProject", {
+    access: "write",
     description:
       "Associate a project with an initiative. Use this action for project-to-initiative linking; project.update does not accept initiativeId. Verify with initiative.get or the returned initiative.projects list.",
     inputSchema: t.Object({
@@ -199,6 +203,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("initiative.removeProject", {
+    access: "write",
     description:
       "Remove a project from an initiative. Pass the link id returned by initiative.addProject, then verify with initiative.get.",
     inputSchema: t.Object({

@@ -40,6 +40,7 @@ export default function parallel(rl: RunlinePluginAPI): void {
   });
 
   rl.registerAction("search", {
+    access: "read",
     description:
       "Search the live web with Parallel.ai and get ranked results with extracted excerpts. Use this to ground answers in current web content (news, prices, regulations, company info) instead of stale knowledge. Provide an `objective` (natural-language goal) and/or explicit `search_queries`.",
     inputSchema: {

@@ -7,6 +7,7 @@ export default function openThesaurus(rl: RunlinePluginAPI) {
   rl.setConnectionSchema({});
 
   rl.registerAction("synonyms.get", {
+    access: "read",
     description:
       "Get synonyms for a German word (OpenThesaurus API, no auth required)",
     inputSchema: {

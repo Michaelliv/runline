@@ -47,6 +47,7 @@ export default function drift(rl: RunlinePluginAPI) {
     ctx.connection.config.accessToken as string;
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a contact",
     inputSchema: {
       email: { type: "string", required: true, description: "Email address" },
@@ -66,6 +67,7 @@ export default function drift(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -81,6 +83,7 @@ export default function drift(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -108,6 +111,7 @@ export default function drift(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -123,6 +127,7 @@ export default function drift(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.getCustomAttributes", {
+    access: "read",
     description: "List all custom contact attributes",
     async execute(_input, ctx) {
       const data = (await apiRequest(

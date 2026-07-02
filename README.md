@@ -325,6 +325,7 @@ export default function orders(rl: RunlinePluginAPI) {
   }));
 
   rl.registerAction("list", {
+    access: "read",
     description: "List orders for an organization",
     inputSchema: t.Object({
       orgId: t.String(),
@@ -346,6 +347,7 @@ export default function orders(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("create", {
+    access: "write",
     description: "Create a new order",
     inputSchema: t.Object({
       orgId: t.String(),
@@ -400,6 +402,8 @@ A package directory can also expose multiple plugins:
 
 A plugin may export the default registration function shown above, or a plain plugin definition object with `{ name, version, actions }`. ESM, TypeScript, and CommonJS object exports are supported. The function form is preferred because it validates plugin names, keeps action registration consistent, and gives authors the public `RunlinePluginAPI` surface.
 
+Actions can include optional `access: "read" | "write"` metadata. Use `read` for actions that only retrieve data, and `write` for anything that creates, updates, deletes, sends, uploads, executes, triggers, deploys, imports, changes config, writes local files, or may otherwise affect an external system. Omit it only for legacy compatibility; built-in plugins include it.
+
 Plugin `execute` handlers run **outside** the QuickJS runtime with full Node.js access (`fetch`, `fs`, npm dependencies available to the host process, etc). Agent code calls them through configured plugin globals. `ctx.connection.config` contains the resolved connection config with env var overrides applied, and `ctx.updateConnection(patch)` can persist refreshed credentials. Add a `node` connection only when you explicitly want to expose host APIs through the built-in `node` plugin.
 
 Agents can inspect custom plugins from inside `runline exec` before calling them:
@@ -412,9 +416,9 @@ runline exec 'return actions.check("orders.list", { orgId: "acme" })'
 runline exec 'return await orders.list({ orgId: "acme", status: "open" })'
 ```
 
-For debugging, run `runline actions --json` to see loaded actions and schemas. Loader failures include the plugin path and reason on stderr. A broken plugin does not stop discovery of healthy plugins in the same directory; common failures include invalid exports, invalid plugin names, malformed `package.json`/`plugins.json`, missing entrypoints, and duplicate plugin names.
+For debugging, run `runline actions --json` to see loaded actions, access metadata, and schemas. Loader failures include the plugin path and reason on stderr. A broken plugin does not stop discovery of healthy plugins in the same directory; common failures include invalid exports, invalid plugin names, malformed `package.json`/`plugins.json`, missing entrypoints, and duplicate plugin names.
 
-See [`packages/runline-plugins/`](packages/runline-plugins) for 202 real-world examples.
+See [`packages/runline-plugins/`](packages/runline-plugins) for 211 real-world examples.
 
 ## Sandbox
 

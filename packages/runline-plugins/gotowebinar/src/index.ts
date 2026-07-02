@@ -64,6 +64,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   // ── Webinar ─────────────────────────────────────────
 
   rl.registerAction("webinar.create", {
+    access: "write",
     description: "Create a webinar",
     inputSchema: {
       subject: {
@@ -119,6 +120,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("webinar.get", {
+    access: "read",
     description: "Get a webinar",
     inputSchema: {
       webinarKey: {
@@ -138,6 +140,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("webinar.list", {
+    access: "read",
     description: "List webinars",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -158,6 +161,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("webinar.update", {
+    access: "write",
     description: "Update a webinar",
     inputSchema: {
       webinarKey: {
@@ -202,6 +206,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("webinar.delete", {
+    access: "write",
     description: "Delete a webinar",
     inputSchema: {
       webinarKey: {
@@ -238,6 +243,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   // ── Registrant ──────────────────────────────────────
 
   rl.registerAction("registrant.create", {
+    access: "write",
     description: "Register a person for a webinar",
     inputSchema: {
       webinarKey: {
@@ -265,6 +271,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("registrant.get", {
+    access: "read",
     description: "Get a registrant",
     inputSchema: {
       webinarKey: {
@@ -290,6 +297,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("registrant.list", {
+    access: "read",
     description: "List registrants for a webinar",
     inputSchema: {
       webinarKey: {
@@ -309,6 +317,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("registrant.delete", {
+    access: "write",
     description: "Delete a registrant",
     inputSchema: {
       webinarKey: {
@@ -337,6 +346,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   // ── Session ─────────────────────────────────────────
 
   rl.registerAction("session.get", {
+    access: "read",
     description: "Get a session",
     inputSchema: {
       webinarKey: {
@@ -362,6 +372,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.list", {
+    access: "read",
     description: "List sessions for a webinar",
     inputSchema: {
       webinarKey: {
@@ -381,6 +392,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("session.getPerformance", {
+    access: "read",
     description: "Get session performance details",
     inputSchema: {
       webinarKey: {
@@ -408,6 +420,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   // ── Attendee ────────────────────────────────────────
 
   rl.registerAction("attendee.get", {
+    access: "read",
     description: "Get an attendee",
     inputSchema: {
       webinarKey: {
@@ -441,6 +454,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attendee.list", {
+    access: "read",
     description: "List attendees for a session",
     inputSchema: {
       webinarKey: {
@@ -468,6 +482,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   // ── Coorganizer ─────────────────────────────────────
 
   rl.registerAction("coorganizer.create", {
+    access: "write",
     description: "Add a co-organizer to a webinar",
     inputSchema: {
       webinarKey: {
@@ -519,6 +534,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coorganizer.list", {
+    access: "read",
     description: "List co-organizers",
     inputSchema: {
       webinarKey: {
@@ -538,6 +554,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("coorganizer.delete", {
+    access: "write",
     description: "Remove a co-organizer",
     inputSchema: {
       webinarKey: {
@@ -578,6 +595,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   // ── Panelist ────────────────────────────────────────
 
   rl.registerAction("panelist.create", {
+    access: "write",
     description: "Add a panelist to a webinar",
     inputSchema: {
       webinarKey: {
@@ -601,6 +619,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("panelist.list", {
+    access: "read",
     description: "List panelists",
     inputSchema: {
       webinarKey: {
@@ -620,6 +639,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("panelist.delete", {
+    access: "write",
     description: "Remove a panelist",
     inputSchema: {
       webinarKey: {

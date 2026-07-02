@@ -86,6 +86,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   // ── Document ────────────────────────────────────────
 
   rl.registerAction("document.create", {
+    access: "write",
     description: "Index (create) a document",
     inputSchema: {
       index: { type: "string", required: true, description: "Index name" },
@@ -109,6 +110,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.get", {
+    access: "read",
     description: "Get a document by ID",
     inputSchema: {
       index: { type: "string", required: true, description: "Index name" },
@@ -121,6 +123,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.update", {
+    access: "write",
     description: "Update a document",
     inputSchema: {
       index: { type: "string", required: true, description: "Index name" },
@@ -138,6 +141,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.delete", {
+    access: "write",
     description: "Delete a document",
     inputSchema: {
       index: { type: "string", required: true, description: "Index name" },
@@ -150,6 +154,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.search", {
+    access: "read",
     description: "Search documents in an index",
     inputSchema: {
       index: { type: "string", required: true, description: "Index name" },
@@ -192,6 +197,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   // ── Index ───────────────────────────────────────────
 
   rl.registerAction("index.create", {
+    access: "write",
     description: "Create an index",
     inputSchema: {
       index: { type: "string", required: true, description: "Index name" },
@@ -224,6 +230,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("index.get", {
+    access: "read",
     description: "Get index details",
     inputSchema: {
       index: { type: "string", required: true, description: "Index name" },
@@ -234,6 +241,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("index.list", {
+    access: "read",
     description: "List all indices",
     async execute(_input, ctx) {
       return req(ctx, "GET", "/_cat/indices", undefined, { format: "json" });
@@ -241,6 +249,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("index.delete", {
+    access: "write",
     description: "Delete an index",
     inputSchema: {
       index: { type: "string", required: true, description: "Index name" },

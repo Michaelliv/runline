@@ -44,6 +44,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   // ── Affiliate ───────────────────────────────────────
 
   rl.registerAction("affiliate.create", {
+    access: "write",
     description: "Create an affiliate",
     inputSchema: {
       firstname: { type: "string", required: true },
@@ -64,6 +65,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("affiliate.get", {
+    access: "read",
     description: "Get an affiliate by ID",
     inputSchema: { affiliateId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -76,6 +78,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("affiliate.list", {
+    access: "read",
     description: "List affiliates",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -97,6 +100,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("affiliate.delete", {
+    access: "write",
     description: "Delete an affiliate",
     inputSchema: { affiliateId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -112,6 +116,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   // ── Affiliate Metadata ──────────────────────────────
 
   rl.registerAction("affiliateMetadata.set", {
+    access: "write",
     description: "Set metadata key-value on an affiliate",
     inputSchema: {
       affiliateId: { type: "string", required: true },
@@ -130,6 +135,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("affiliateMetadata.delete", {
+    access: "write",
     description: "Delete a metadata key from an affiliate",
     inputSchema: {
       affiliateId: { type: "string", required: true },
@@ -149,6 +155,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   // ── Program Affiliate ───────────────────────────────
 
   rl.registerAction("programAffiliate.add", {
+    access: "write",
     description: "Add an affiliate to a program",
     inputSchema: {
       programId: { type: "string", required: true },
@@ -166,6 +173,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("programAffiliate.approve", {
+    access: "write",
     description: "Approve an affiliate for a program",
     inputSchema: {
       programId: { type: "string", required: true },
@@ -182,6 +190,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("programAffiliate.disapprove", {
+    access: "write",
     description: "Disapprove an affiliate for a program",
     inputSchema: {
       programId: { type: "string", required: true },
@@ -199,6 +208,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("programAffiliate.get", {
+    access: "read",
     description: "Get an affiliate in a program",
     inputSchema: {
       programId: { type: "string", required: true },
@@ -215,6 +225,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("programAffiliate.list", {
+    access: "read",
     description: "List affiliates in a program",
     inputSchema: {
       programId: { type: "string", required: true },

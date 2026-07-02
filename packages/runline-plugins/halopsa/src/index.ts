@@ -99,6 +99,7 @@ async function req(
 
 function registerCrud(rl: RunlinePluginAPI, resource: string, apiPath: string) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: {
       properties: {
@@ -114,6 +115,7 @@ function registerCrud(rl: RunlinePluginAPI, resource: string, apiPath: string) {
     },
   });
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },
@@ -123,6 +125,7 @@ function registerCrud(rl: RunlinePluginAPI, resource: string, apiPath: string) {
     },
   });
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${resource}s`,
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -137,6 +140,7 @@ function registerCrud(rl: RunlinePluginAPI, resource: string, apiPath: string) {
     },
   });
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },
@@ -155,6 +159,7 @@ function registerCrud(rl: RunlinePluginAPI, resource: string, apiPath: string) {
     },
   });
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },

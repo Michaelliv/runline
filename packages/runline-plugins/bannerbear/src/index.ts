@@ -50,6 +50,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
   // ── Image ───────────────────────────────────────────
 
   rl.registerAction("image.create", {
+    access: "write",
     description: "Create an image from a template",
     inputSchema: {
       templateId: {
@@ -132,6 +133,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("image.get", {
+    access: "read",
     description: "Get an image by ID",
     inputSchema: {
       imageId: { type: "string", required: true, description: "Image UID" },
@@ -145,6 +147,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
   // ── Template ────────────────────────────────────────
 
   rl.registerAction("template.get", {
+    access: "read",
     description: "Get a template by ID",
     inputSchema: {
       templateId: {
@@ -160,6 +163,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("template.list", {
+    access: "read",
     description: "List all templates",
     async execute(_input, ctx) {
       return apiRequest(getKey(ctx), "GET", "/templates");

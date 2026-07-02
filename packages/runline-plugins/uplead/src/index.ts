@@ -36,6 +36,7 @@ export default function uplead(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("person.enrich", {
+    access: "write",
     description: "Enrich a person by email or name+domain",
     inputSchema: {
       email: { type: "string", required: false },
@@ -55,6 +56,7 @@ export default function uplead(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.enrich", {
+    access: "write",
     description: "Enrich a company by domain or name",
     inputSchema: {
       domain: { type: "string", required: false },

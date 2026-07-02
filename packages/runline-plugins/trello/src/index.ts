@@ -58,6 +58,7 @@ export default function trello(rl: RunlinePluginAPI) {
   // ── Board ───────────────────────────────────────────
 
   rl.registerAction("board.create", {
+    access: "write",
     description: "Create a board",
     inputSchema: {
       name: { type: "string", required: true },
@@ -73,6 +74,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.get", {
+    access: "read",
     description: "Get a board by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -85,6 +87,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.update", {
+    access: "write",
     description: "Update a board",
     inputSchema: {
       id: { type: "string", required: true },
@@ -103,6 +106,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.delete", {
+    access: "write",
     description: "Delete a board",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -117,6 +121,7 @@ export default function trello(rl: RunlinePluginAPI) {
   // ── Board Member ────────────────────────────────────
 
   rl.registerAction("boardMember.list", {
+    access: "read",
     description: "List members of a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -134,6 +139,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardMember.add", {
+    access: "write",
     description: "Add a member to a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -157,6 +163,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("boardMember.remove", {
+    access: "write",
     description: "Remove a member from a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -175,6 +182,7 @@ export default function trello(rl: RunlinePluginAPI) {
   // ── Card ────────────────────────────────────────────
 
   rl.registerAction("card.create", {
+    access: "write",
     description: "Create a card",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -192,6 +200,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("card.get", {
+    access: "read",
     description: "Get a card by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -204,6 +213,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("card.update", {
+    access: "write",
     description: "Update a card",
     inputSchema: {
       id: { type: "string", required: true },
@@ -226,6 +236,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("card.delete", {
+    access: "write",
     description: "Delete a card",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -240,6 +251,7 @@ export default function trello(rl: RunlinePluginAPI) {
   // ── Card Comment ────────────────────────────────────
 
   rl.registerAction("cardComment.create", {
+    access: "write",
     description: "Add a comment to a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -257,6 +269,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("cardComment.update", {
+    access: "write",
     description: "Update a comment on a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -276,6 +289,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("cardComment.delete", {
+    access: "write",
     description: "Delete a comment from a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -294,6 +308,7 @@ export default function trello(rl: RunlinePluginAPI) {
   // ── List ────────────────────────────────────────────
 
   rl.registerAction("list.create", {
+    access: "write",
     description: "Create a list on a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -309,6 +324,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.get", {
+    access: "read",
     description: "Get a list by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -321,6 +337,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.listAll", {
+    access: "read",
     description: "List all lists on a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -338,6 +355,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.getCards", {
+    access: "read",
     description: "Get cards in a list",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -355,6 +373,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.update", {
+    access: "write",
     description: "Update a list",
     inputSchema: {
       id: { type: "string", required: true },
@@ -373,6 +392,7 @@ export default function trello(rl: RunlinePluginAPI) {
   // ── Attachment ──────────────────────────────────────
 
   rl.registerAction("attachment.create", {
+    access: "write",
     description: "Add a URL attachment to a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -393,6 +413,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attachment.get", {
+    access: "read",
     description: "Get an attachment",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -409,6 +430,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attachment.list", {
+    access: "read",
     description: "List attachments on a card",
     inputSchema: { cardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -421,6 +443,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attachment.delete", {
+    access: "write",
     description: "Delete an attachment from a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -439,6 +462,7 @@ export default function trello(rl: RunlinePluginAPI) {
   // ── Checklist ───────────────────────────────────────
 
   rl.registerAction("checklist.create", {
+    access: "write",
     description: "Create a checklist on a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -453,6 +477,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.get", {
+    access: "read",
     description: "Get a checklist by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -465,6 +490,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.list", {
+    access: "read",
     description: "List checklists on a card",
     inputSchema: { cardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -477,6 +503,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.delete", {
+    access: "write",
     description: "Delete a checklist from a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -493,6 +520,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.createItem", {
+    access: "write",
     description: "Create a check item in a checklist",
     inputSchema: {
       checklistId: { type: "string", required: true },
@@ -510,6 +538,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.updateItem", {
+    access: "write",
     description: "Update a check item on a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -537,6 +566,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.deleteItem", {
+    access: "write",
     description: "Delete a check item from a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -555,6 +585,7 @@ export default function trello(rl: RunlinePluginAPI) {
   // ── Label ───────────────────────────────────────────
 
   rl.registerAction("label.create", {
+    access: "write",
     description: "Create a label on a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -577,6 +608,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.get", {
+    access: "read",
     description: "Get a label by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -589,6 +621,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.list", {
+    access: "read",
     description: "List labels on a board",
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -601,6 +634,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.update", {
+    access: "write",
     description: "Update a label",
     inputSchema: {
       id: { type: "string", required: true },
@@ -614,6 +648,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.delete", {
+    access: "write",
     description: "Delete a label",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -626,6 +661,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.addToCard", {
+    access: "write",
     description: "Add a label to a card",
     inputSchema: {
       cardId: { type: "string", required: true },
@@ -640,6 +676,7 @@ export default function trello(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("label.removeFromCard", {
+    access: "write",
     description: "Remove a label from a card",
     inputSchema: {
       cardId: { type: "string", required: true },

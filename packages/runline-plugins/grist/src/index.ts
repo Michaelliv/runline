@@ -74,6 +74,7 @@ export default function grist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.create", {
+    access: "write",
     description: "Create records in a table",
     inputSchema: {
       docId: { type: "string", required: true, description: "Document ID" },
@@ -98,6 +99,7 @@ export default function grist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.list", {
+    access: "read",
     description: "List records from a table",
     inputSchema: {
       docId: { type: "string", required: true, description: "Document ID" },
@@ -137,6 +139,7 @@ export default function grist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.update", {
+    access: "write",
     description: "Update records in a table",
     inputSchema: {
       docId: { type: "string", required: true, description: "Document ID" },
@@ -161,6 +164,7 @@ export default function grist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("record.delete", {
+    access: "write",
     description: "Delete records from a table",
     inputSchema: {
       docId: { type: "string", required: true, description: "Document ID" },

@@ -35,6 +35,7 @@ export default function rocketchat(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("chat.postMessage", {
+    access: "write",
     description: "Post a message to a Rocket.Chat channel or DM",
     inputSchema: {
       channel: {

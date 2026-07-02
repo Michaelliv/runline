@@ -28,6 +28,7 @@ export default function mailgun(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("email.send", {
+    access: "write",
     description: "Send an email via Mailgun",
     inputSchema: {
       to: {

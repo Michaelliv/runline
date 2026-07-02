@@ -63,6 +63,7 @@ export default function gotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.create", {
+    access: "write",
     description: "Send a push message",
     inputSchema: {
       message: { type: "string", required: true, description: "Message text" },
@@ -94,6 +95,7 @@ export default function gotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.delete", {
+    access: "write",
     description: "Delete a message",
     inputSchema: {
       messageId: { type: "string", required: true, description: "Message ID" },
@@ -112,6 +114,7 @@ export default function gotify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.list", {
+    access: "read",
     description: "List messages",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },

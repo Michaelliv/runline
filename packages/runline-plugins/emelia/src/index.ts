@@ -44,6 +44,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   // ── Campaign ────────────────────────────────────────
 
   rl.registerAction("campaign.create", {
+    access: "write",
     description: "Create a new campaign",
     inputSchema: {
       name: { type: "string", required: true, description: "Campaign name" },
@@ -62,6 +63,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.get", {
+    access: "read",
     description: "Get a campaign by ID",
     inputSchema: {
       campaignId: {
@@ -88,6 +90,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.list", {
+    access: "read",
     description: "List all campaigns",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -111,6 +114,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.addContact", {
+    access: "write",
     description: "Add a contact to a campaign",
     inputSchema: {
       campaignId: {
@@ -147,6 +151,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.start", {
+    access: "write",
     description: "Start a campaign",
     inputSchema: {
       campaignId: {
@@ -166,6 +171,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.pause", {
+    access: "write",
     description: "Pause a campaign",
     inputSchema: {
       campaignId: {
@@ -185,6 +191,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.duplicate", {
+    access: "write",
     description: "Duplicate a campaign",
     inputSchema: {
       campaignId: {
@@ -249,6 +256,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   // ── Contact List ────────────────────────────────────
 
   rl.registerAction("contactList.list", {
+    access: "read",
     description: "List all contact lists",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -269,6 +277,7 @@ export default function emelia(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contactList.addContact", {
+    access: "write",
     description: "Add a contact to a contact list",
     inputSchema: {
       contactListId: {

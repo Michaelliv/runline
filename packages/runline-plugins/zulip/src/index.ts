@@ -64,6 +64,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   // ── Message ─────────────────────────────────────────
 
   rl.registerAction("message.sendPrivate", {
+    access: "write",
     description: "Send a private/direct message",
     inputSchema: {
       to: {
@@ -84,6 +85,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.sendStream", {
+    access: "write",
     description: "Send a message to a stream",
     inputSchema: {
       stream: {
@@ -106,6 +108,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.get", {
+    access: "read",
     description: "Get a message by ID",
     inputSchema: { messageId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -118,6 +121,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.update", {
+    access: "write",
     description: "Update a message",
     inputSchema: {
       messageId: { type: "string", required: true },
@@ -136,6 +140,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.delete", {
+    access: "write",
     description: "Delete a message",
     inputSchema: { messageId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -150,6 +155,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   // ── Stream ──────────────────────────────────────────
 
   rl.registerAction("stream.list", {
+    access: "read",
     description: "List all streams",
     inputSchema: {
       includePublic: { type: "boolean", required: false },
@@ -172,6 +178,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("stream.listSubscribed", {
+    access: "read",
     description: "List subscribed streams",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -185,6 +192,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("stream.create", {
+    access: "write",
     description: "Subscribe to / create a stream",
     inputSchema: {
       name: { type: "string", required: true },
@@ -204,6 +212,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("stream.update", {
+    access: "write",
     description: "Update a stream",
     inputSchema: {
       streamId: { type: "string", required: true },
@@ -223,6 +232,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("stream.delete", {
+    access: "write",
     description: "Delete a stream",
     inputSchema: { streamId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -237,6 +247,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by ID",
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -249,6 +260,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List all users",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -261,6 +273,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a user",
     inputSchema: {
       email: { type: "string", required: true },
@@ -280,6 +293,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.update", {
+    access: "write",
     description: "Update a user",
     inputSchema: {
       userId: { type: "string", required: true },
@@ -296,6 +310,7 @@ export default function zulip(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.deactivate", {
+    access: "write",
     description: "Deactivate a user",
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {

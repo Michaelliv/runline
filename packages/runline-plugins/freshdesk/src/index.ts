@@ -99,6 +99,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   // ── Ticket ──────────────────────────────────────────
 
   rl.registerAction("ticket.create", {
+    access: "write",
     description: "Create a ticket",
     inputSchema: {
       email: {
@@ -200,6 +201,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.get", {
+    access: "read",
     description: "Get a ticket by ID",
     inputSchema: {
       ticketId: { type: "string", required: true, description: "Ticket ID" },
@@ -214,6 +216,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.list", {
+    access: "read",
     description: "List tickets",
     inputSchema: {
       limit: {
@@ -282,6 +285,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.update", {
+    access: "write",
     description: "Update a ticket",
     inputSchema: {
       ticketId: { type: "string", required: true, description: "Ticket ID" },
@@ -348,6 +352,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("ticket.delete", {
+    access: "write",
     description: "Delete a ticket",
     inputSchema: {
       ticketId: { type: "string", required: true, description: "Ticket ID" },
@@ -365,6 +370,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a contact",
     inputSchema: {
       name: { type: "string", required: true, description: "Full name" },
@@ -414,6 +420,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -428,6 +435,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts",
     inputSchema: {
       email: {
@@ -470,6 +478,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -512,6 +521,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },

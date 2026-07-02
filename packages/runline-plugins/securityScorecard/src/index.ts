@@ -51,6 +51,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   // ── Company ─────────────────────────────────────────
 
   rl.registerAction("company.getScorecard", {
+    access: "read",
     description: "Get a company's scorecard by domain",
     inputSchema: { domain: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -63,6 +64,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.getFactors", {
+    access: "read",
     description: "Get factor scores for a company",
     inputSchema: {
       domain: { type: "string", required: true },
@@ -82,6 +84,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.getHistoricalScore", {
+    access: "read",
     description: "Get historical score data for a company",
     inputSchema: {
       domain: { type: "string", required: true },
@@ -116,6 +119,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.getScorePlan", {
+    access: "read",
     description: "Get score improvement plan for a target score",
     inputSchema: {
       domain: { type: "string", required: true },
@@ -135,6 +139,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   // ── Industry ────────────────────────────────────────
 
   rl.registerAction("industry.getScore", {
+    access: "read",
     description: "Get an industry's average score",
     inputSchema: { industry: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -149,6 +154,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   // ── Portfolio ───────────────────────────────────────
 
   rl.registerAction("portfolio.create", {
+    access: "write",
     description: "Create a portfolio",
     inputSchema: {
       name: { type: "string", required: true },
@@ -170,6 +176,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("portfolio.list", {
+    access: "read",
     description: "List all portfolios",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -188,6 +195,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("portfolio.delete", {
+    access: "write",
     description: "Delete a portfolio",
     inputSchema: { portfolioId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -201,6 +209,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("portfolioCompany.add", {
+    access: "write",
     description: "Add a company to a portfolio",
     inputSchema: {
       portfolioId: { type: "string", required: true },
@@ -217,6 +226,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("portfolioCompany.remove", {
+    access: "write",
     description: "Remove a company from a portfolio",
     inputSchema: {
       portfolioId: { type: "string", required: true },
@@ -234,6 +244,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("portfolioCompany.list", {
+    access: "read",
     description: "List companies in a portfolio",
     inputSchema: {
       portfolioId: { type: "string", required: true },
@@ -255,6 +266,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   // ── Invite ──────────────────────────────────────────
 
   rl.registerAction("invite.create", {
+    access: "write",
     description: "Send an invitation",
     inputSchema: {
       email: { type: "string", required: true },
@@ -276,6 +288,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   // ── Report ──────────────────────────────────────────
 
   rl.registerAction("report.generate", {
+    access: "write",
     description: "Generate a report",
     inputSchema: {
       reportType: {
@@ -314,6 +327,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("report.list", {
+    access: "read",
     description: "List recent reports",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {

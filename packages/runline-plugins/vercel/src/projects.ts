@@ -6,6 +6,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   const getAction = bindGetAction(rl);
 
   rl.registerAction("project.list", {
+    access: "read",
     description: "List Vercel projects visible to the token.",
     inputSchema: t.Object({
       ...LIST_INPUT_SCHEMA,
@@ -20,6 +21,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   getAction("project.get", "Get a Vercel project by ID or name.", (id) => `/v9/projects/${encodeURIComponent(id)}`);
 
   rl.registerAction("project.domains", {
+    access: "read",
     description: "List domains configured for a Vercel project.",
     inputSchema: t.Object({
       ...TEAM_INPUT_SCHEMA,

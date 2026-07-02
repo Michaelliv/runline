@@ -14,6 +14,7 @@ export default function msg91(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sms.send", {
+    access: "write",
     description: "Send a transactional SMS via MSG91",
     inputSchema: {
       from: { type: "string", required: true, description: "Sender ID" },

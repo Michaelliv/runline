@@ -42,6 +42,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   // ── Account ─────────────────────────────────────────
 
   rl.registerAction("account.get", {
+    access: "read",
     description: "Get account details",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -56,6 +57,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   // ── Monitor ─────────────────────────────────────────
 
   rl.registerAction("monitor.create", {
+    access: "write",
     description: "Create a monitor",
     inputSchema: {
       friendlyName: { type: "string", required: true },
@@ -78,6 +80,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("monitor.get", {
+    access: "read",
     description: "Get a monitor by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -89,6 +92,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("monitor.list", {
+    access: "read",
     description: "List monitors",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -104,6 +108,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("monitor.update", {
+    access: "write",
     description: "Update a monitor",
     inputSchema: {
       id: { type: "string", required: true },
@@ -126,6 +131,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("monitor.delete", {
+    access: "write",
     description: "Delete a monitor",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -137,6 +143,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("monitor.reset", {
+    access: "write",
     description: "Reset a monitor's stats",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -150,6 +157,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   // ── Alert Contact ───────────────────────────────────
 
   rl.registerAction("alertContact.create", {
+    access: "write",
     description: "Create an alert contact",
     inputSchema: {
       friendlyName: { type: "string", required: true },
@@ -172,6 +180,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alertContact.get", {
+    access: "read",
     description: "Get an alert contact by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -183,6 +192,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alertContact.list", {
+    access: "read",
     description: "List alert contacts",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -199,6 +209,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alertContact.update", {
+    access: "write",
     description: "Update an alert contact",
     inputSchema: {
       id: { type: "string", required: true },
@@ -220,6 +231,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alertContact.delete", {
+    access: "write",
     description: "Delete an alert contact",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -233,6 +245,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   // ── Maintenance Window ──────────────────────────────
 
   rl.registerAction("maintenanceWindow.create", {
+    access: "write",
     description: "Create a maintenance window",
     inputSchema: {
       friendlyName: { type: "string", required: true },
@@ -275,6 +288,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("maintenanceWindow.get", {
+    access: "read",
     description: "Get a maintenance window",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -286,6 +300,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("maintenanceWindow.list", {
+    access: "read",
     description: "List maintenance windows",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -301,6 +316,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("maintenanceWindow.update", {
+    access: "write",
     description: "Update a maintenance window",
     inputSchema: {
       id: { type: "string", required: true },
@@ -323,6 +339,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("maintenanceWindow.delete", {
+    access: "write",
     description: "Delete a maintenance window",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -335,6 +352,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   // ── Public Status Page ──────────────────────────────
 
   rl.registerAction("publicStatusPage.create", {
+    access: "write",
     description: "Create a public status page",
     inputSchema: {
       friendlyName: { type: "string", required: true },
@@ -355,6 +373,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("publicStatusPage.get", {
+    access: "read",
     description: "Get a public status page",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -366,6 +385,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("publicStatusPage.list", {
+    access: "read",
     description: "List public status pages",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -381,6 +401,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("publicStatusPage.update", {
+    access: "write",
     description: "Update a public status page",
     inputSchema: {
       id: { type: "string", required: true },
@@ -401,6 +422,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("publicStatusPage.delete", {
+    access: "write",
     description: "Delete a public status page",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {

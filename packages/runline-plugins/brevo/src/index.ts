@@ -67,6 +67,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a contact",
     inputSchema: {
       email: { type: "string", required: true, description: "Contact email" },
@@ -94,6 +95,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.upsert", {
+    access: "write",
     description: "Create or update a contact",
     inputSchema: {
       email: { type: "string", required: true, description: "Contact email" },
@@ -117,6 +119,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by email or ID",
     inputSchema: {
       identifier: {
@@ -136,6 +139,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts",
     inputSchema: {
       limit: {
@@ -181,6 +185,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       identifier: {
@@ -222,6 +227,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: {
       identifier: {
@@ -244,6 +250,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   // ── Attribute ───────────────────────────────────────
 
   rl.registerAction("attribute.create", {
+    access: "write",
     description: "Create a contact attribute",
     inputSchema: {
       category: {
@@ -289,6 +296,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attribute.update", {
+    access: "write",
     description: "Update a contact attribute",
     inputSchema: {
       category: {
@@ -322,6 +330,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attribute.delete", {
+    access: "write",
     description: "Delete a contact attribute",
     inputSchema: {
       category: { type: "string", required: true, description: "Category" },
@@ -339,6 +348,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attribute.list", {
+    access: "read",
     description: "List all contact attributes",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -359,6 +369,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   // ── Email ───────────────────────────────────────────
 
   rl.registerAction("email.send", {
+    access: "write",
     description: "Send a transactional email",
     inputSchema: {
       sender: {
@@ -417,6 +428,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("email.sendTemplate", {
+    access: "write",
     description: "Send an email using a template",
     inputSchema: {
       templateId: {
@@ -451,6 +463,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   // ── Sender ──────────────────────────────────────────
 
   rl.registerAction("sender.create", {
+    access: "write",
     description: "Create a sender",
     inputSchema: {
       name: { type: "string", required: true, description: "Sender name" },
@@ -463,6 +476,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sender.delete", {
+    access: "write",
     description: "Delete a sender",
     inputSchema: {
       id: { type: "string", required: true, description: "Sender ID" },
@@ -475,6 +489,7 @@ export default function brevo(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sender.list", {
+    access: "read",
     description: "List all senders",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },

@@ -19,6 +19,7 @@ export default function pushover(rl: RunlinePluginAPI) {
     ctx.connection.config.apiToken as string;
 
   rl.registerAction("message.push", {
+    access: "write",
     description: "Send a push notification via Pushover",
     inputSchema: {
       userKey: {

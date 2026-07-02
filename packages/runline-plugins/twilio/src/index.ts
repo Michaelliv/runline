@@ -65,6 +65,7 @@ export default function twilio(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sms.send", {
+    access: "write",
     description: "Send an SMS, MMS, or WhatsApp message",
     inputSchema: {
       from: {
@@ -103,6 +104,7 @@ export default function twilio(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("call.make", {
+    access: "write",
     description: "Make a phone call",
     inputSchema: {
       from: { type: "string", required: true },

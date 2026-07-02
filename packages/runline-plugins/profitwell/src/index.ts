@@ -38,6 +38,7 @@ export default function profitwell(rl: RunlinePluginAPI) {
     ctx.connection.config.accessToken as string;
 
   rl.registerAction("company.getSettings", {
+    access: "read",
     description: "Get company settings",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -46,6 +47,7 @@ export default function profitwell(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("metric.get", {
+    access: "read",
     description: "Get financial metrics (daily or monthly)",
     inputSchema: {
       type: { type: "string", required: true, description: "daily or monthly" },

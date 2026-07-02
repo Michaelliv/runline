@@ -37,6 +37,7 @@ export default function segment(rl: RunlinePluginAPI) {
     ctx.connection.config.writeKey as string;
 
   rl.registerAction("identify.create", {
+    access: "write",
     description: "Identify a user (tie user to traits)",
     inputSchema: {
       userId: {
@@ -66,6 +67,7 @@ export default function segment(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("track.event", {
+    access: "write",
     description: "Track an event",
     inputSchema: {
       event: { type: "string", required: true, description: "Event name" },
@@ -92,6 +94,7 @@ export default function segment(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("track.page", {
+    access: "write",
     description: "Track a page view",
     inputSchema: {
       name: { type: "string", required: true, description: "Page name" },
@@ -114,6 +117,7 @@ export default function segment(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.add", {
+    access: "write",
     description: "Associate a user with a group",
     inputSchema: {
       groupId: { type: "string", required: true },

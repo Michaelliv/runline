@@ -22,6 +22,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
   );
   getAction("label.get", "Get a label by ID.", "issueLabel", LABEL_FIELDS);
   rl.registerAction("label.create", {
+    access: "write",
     description: "Create a label. Omit teamId for a workspace-level label.",
     inputSchema: t.Object({
       name: t.String({ description: "The name of the label" }),
@@ -76,6 +77,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("label.update", {
+    access: "write",
     description: "Update a label.",
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the label to update" }),
@@ -120,6 +122,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("label.delete", {
+    access: "write",
     description: "Delete a label.",
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the label to delete" }),
@@ -135,6 +138,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("label.retire", {
+    access: "write",
     description:
       "Retire a label. Retired labels remain visible but cannot be applied to new issues.",
     inputSchema: t.Object({
@@ -151,6 +155,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("label.restore", {
+    access: "write",
     description: "Restore a previously retired label.",
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the label to restore" }),

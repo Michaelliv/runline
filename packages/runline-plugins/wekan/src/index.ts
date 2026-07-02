@@ -51,6 +51,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   // ── Board ───────────────────────────────────────────
 
   rl.registerAction("board.create", {
+    access: "write",
     description: "Create a board",
     inputSchema: {
       title: { type: "string", required: true },
@@ -67,6 +68,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.get", {
+    access: "read",
     description: "Get a board",
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -79,6 +81,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.list", {
+    access: "read",
     description: "List boards for a user",
     inputSchema: {
       userId: { type: "string", required: true },
@@ -96,6 +99,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("board.delete", {
+    access: "write",
     description: "Delete a board",
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -110,6 +114,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   // ── List ────────────────────────────────────────────
 
   rl.registerAction("list.create", {
+    access: "write",
     description: "Create a list on a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -124,6 +129,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.get", {
+    access: "read",
     description: "Get a list",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -136,6 +142,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.listAll", {
+    access: "read",
     description: "List all lists on a board",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -153,6 +160,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.delete", {
+    access: "write",
     description: "Delete a list",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -171,6 +179,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   // ── Card ────────────────────────────────────────────
 
   rl.registerAction("card.create", {
+    access: "write",
     description: "Create a card",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -192,6 +201,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("card.get", {
+    access: "read",
     description: "Get a card",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -209,6 +219,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("card.list", {
+    access: "read",
     description: "List cards in a list",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -227,6 +238,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("card.update", {
+    access: "write",
     description: "Update a card",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -246,6 +258,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("card.delete", {
+    access: "write",
     description: "Delete a card",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -265,6 +278,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   // ── Card Comment ────────────────────────────────────
 
   rl.registerAction("cardComment.create", {
+    access: "write",
     description: "Add a comment to a card",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -284,6 +298,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("cardComment.get", {
+    access: "read",
     description: "Get a comment",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -301,6 +316,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("cardComment.list", {
+    access: "read",
     description: "List comments on a card",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -317,6 +333,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("cardComment.delete", {
+    access: "write",
     description: "Delete a comment",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -336,6 +353,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   // ── Checklist ───────────────────────────────────────
 
   rl.registerAction("checklist.create", {
+    access: "write",
     description: "Create a checklist on a card",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -359,6 +377,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.get", {
+    access: "read",
     description: "Get a checklist",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -376,6 +395,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.list", {
+    access: "read",
     description: "List checklists on a card",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -392,6 +412,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklist.delete", {
+    access: "write",
     description: "Delete a checklist",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -411,6 +432,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   // ── Checklist Item ──────────────────────────────────
 
   rl.registerAction("checklistItem.get", {
+    access: "read",
     description: "Get a checklist item",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -429,6 +451,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklistItem.update", {
+    access: "write",
     description: "Update a checklist item",
     inputSchema: {
       boardId: { type: "string", required: true },
@@ -449,6 +472,7 @@ export default function wekan(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("checklistItem.delete", {
+    access: "write",
     description: "Delete a checklist item",
     inputSchema: {
       boardId: { type: "string", required: true },

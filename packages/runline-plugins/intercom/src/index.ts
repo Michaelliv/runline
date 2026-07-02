@@ -55,6 +55,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   // ── Contact (unified leads + users in v2) ───────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a contact (lead or user)",
     inputSchema: {
       role: { type: "string", required: true, description: "lead or user" },
@@ -86,6 +87,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -100,6 +102,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List contacts",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -119,6 +122,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -144,6 +148,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -158,6 +163,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.search", {
+    access: "read",
     description: "Search contacts",
     inputSchema: {
       query: {
@@ -182,6 +188,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   // ── Company ─────────────────────────────────────────
 
   rl.registerAction("company.create", {
+    access: "write",
     description: "Create or update a company",
     inputSchema: {
       companyId: {
@@ -211,6 +218,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.get", {
+    access: "read",
     description: "Get a company",
     inputSchema: {
       companyId: {
@@ -229,6 +237,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.list", {
+    access: "read",
     description: "List companies",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -244,6 +253,7 @@ export default function intercom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.listUsers", {
+    access: "read",
     description: "List users of a company",
     inputSchema: {
       companyId: { type: "string", required: true, description: "Company ID" },

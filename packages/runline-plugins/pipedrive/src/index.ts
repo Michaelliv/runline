@@ -83,6 +83,7 @@ function registerCrud(
   const updateMethod = opts?.updateMethod ?? "PATCH";
 
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: {
       data: {
@@ -104,6 +105,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource}`,
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -117,6 +119,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${resource}s`,
     inputSchema: {
       limit: { type: "number", required: false },
@@ -136,6 +139,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true },
@@ -155,6 +159,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -170,6 +175,7 @@ function registerCrud(
 
   if (opts?.hasSearch) {
     rl.registerAction(`${resource}.search`, {
+      access: "read",
       description: `Search ${resource}s`,
       inputSchema: {
         term: { type: "string", required: true },
@@ -208,6 +214,7 @@ function registerCrud(
 
   if (opts?.hasDuplicate) {
     rl.registerAction(`${resource}.duplicate`, {
+      access: "write",
       description: `Duplicate a ${resource}`,
       inputSchema: { id: { type: "number", required: true } },
       async execute(input, ctx) {
@@ -242,6 +249,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
 
   // ── Deal Product ────────────────────────────────────
   rl.registerAction("dealProduct.add", {
+    access: "write",
     description: "Add a product to a deal",
     inputSchema: {
       dealId: { type: "number", required: true },
@@ -271,6 +279,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("dealProduct.list", {
+    access: "read",
     description: "List products of a deal",
     inputSchema: {
       dealId: { type: "number", required: true },
@@ -286,6 +295,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("dealProduct.update", {
+    access: "write",
     description: "Update a product in a deal",
     inputSchema: {
       dealId: { type: "number", required: true },
@@ -305,6 +315,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("dealProduct.remove", {
+    access: "write",
     description: "Remove a product from a deal",
     inputSchema: {
       dealId: { type: "number", required: true },
@@ -324,6 +335,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
 
   // ── File (skip create/download — binary) ────────────
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get file metadata",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -339,6 +351,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -355,6 +368,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.update", {
+    access: "write",
     description: "Update file metadata",
     inputSchema: {
       id: { type: "number", required: true },

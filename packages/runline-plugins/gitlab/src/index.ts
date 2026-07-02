@@ -80,6 +80,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   // ── Issue ───────────────────────────────────────────
 
   rl.registerAction("issue.create", {
+    access: "write",
     description: "Create an issue",
     inputSchema: {
       owner: {
@@ -135,6 +136,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.get", {
+    access: "read",
     description: "Get an issue",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -152,6 +154,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.update", {
+    access: "write",
     description: "Update an issue",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -209,6 +212,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.createNote", {
+    access: "write",
     description: "Create a comment (note) on an issue",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -237,6 +241,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.lock", {
+    access: "write",
     description: "Lock an issue's discussion",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -257,6 +262,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   // ── Release ─────────────────────────────────────────
 
   rl.registerAction("release.create", {
+    access: "write",
     description: "Create a release",
     inputSchema: {
       projectId: {
@@ -306,6 +312,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.get", {
+    access: "read",
     description: "Get a release by tag",
     inputSchema: {
       projectId: {
@@ -326,6 +333,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.list", {
+    access: "read",
     description: "List releases",
     inputSchema: {
       projectId: {
@@ -361,6 +369,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.update", {
+    access: "write",
     description: "Update a release",
     inputSchema: {
       projectId: {
@@ -403,6 +412,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.delete", {
+    access: "write",
     description: "Delete a release",
     inputSchema: {
       projectId: {
@@ -426,6 +436,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   // ── Repository ──────────────────────────────────────
 
   rl.registerAction("repository.get", {
+    access: "read",
     description: "Get project details",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -438,6 +449,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("repository.listIssues", {
+    access: "read",
     description: "List issues for a project",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -476,6 +488,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.listProjects", {
+    access: "read",
     description: "List projects for a user",
     inputSchema: {
       username: { type: "string", required: true, description: "Username" },
@@ -492,6 +505,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   // ── File ────────────────────────────────────────────
 
   rl.registerAction("file.get", {
+    access: "read",
     description: "Get a file from repository",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -521,6 +535,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.createOrUpdate", {
+    access: "write",
     description: "Create or update a file in repository",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -593,6 +608,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file from repository",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },
@@ -623,6 +639,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.list", {
+    access: "read",
     description: "List repository tree (directory contents)",
     inputSchema: {
       owner: { type: "string", required: true, description: "Namespace" },

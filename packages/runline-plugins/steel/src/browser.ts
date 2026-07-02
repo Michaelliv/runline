@@ -81,30 +81,35 @@ async function connectMiniCdp(cdpUrl: string) {
 
 export function registerBrowserActions(rl: RunlinePluginAPI) {
   rl.registerAction("scrape", {
+    access: "write",
     description: "One-shot Steel scrape. Loads a URL and returns requested formats such as markdown, html, cleaned_html, or readability.",
     inputSchema: t.Object(SCRAPE_SCHEMA),
     execute: scrape,
   });
 
   rl.registerAction("browser.scrape", {
+    access: "write",
     description: "Backward-compatible alias for scrape.",
     inputSchema: t.Object(SCRAPE_SCHEMA),
     execute: scrape,
   });
 
   rl.registerAction("screenshot", {
+    access: "write",
     description: "One-shot Steel screenshot. Returns a hosted PNG URL.",
     inputSchema: t.Object(SCREENSHOT_SCHEMA),
     execute: screenshot,
   });
 
   rl.registerAction("browser.screenshot", {
+    access: "write",
     description: "Backward-compatible alias for screenshot.",
     inputSchema: t.Object(SCREENSHOT_SCHEMA),
     execute: screenshot,
   });
 
   rl.registerAction("browser.extract", {
+    access: "write",
     description: "Fetch a page through Steel scrape and return selected content fields. Use selectors with browser.run for DOM-specific extraction.",
     inputSchema: t.Object({
       url: t.String({ description: "URL to scrape" }),
@@ -119,6 +124,7 @@ export function registerBrowserActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("pdf", {
+    access: "write",
     description: "One-shot Steel PDF capture. Returns a hosted PDF URL.",
     inputSchema: t.Object({
       url: t.String({ description: "URL to render as PDF" }),
@@ -131,6 +137,7 @@ export function registerBrowserActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("browser.run", {
+    access: "write",
     description: "Create a Steel session, connect with Playwright over CDP, run an async JavaScript script, then release by default. The script receives { page, browser, context, session }. Requires the host app to have playwright installed.",
     inputSchema: t.Object({
       script: t.String({ description: "Async JavaScript body. Example: await page.goto('https://example.com'); return { title: await page.title() };" }),

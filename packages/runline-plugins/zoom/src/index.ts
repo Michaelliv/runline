@@ -45,6 +45,7 @@ export default function zoom(rl: RunlinePluginAPI) {
     ctx.connection.config.accessToken as string;
 
   rl.registerAction("meeting.create", {
+    access: "write",
     description: "Create a Zoom meeting",
     inputSchema: {
       topic: { type: "string", required: true },
@@ -88,6 +89,7 @@ export default function zoom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("meeting.get", {
+    access: "read",
     description: "Get a meeting by ID",
     inputSchema: { meetingId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -100,6 +102,7 @@ export default function zoom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("meeting.list", {
+    access: "read",
     description: "List meetings for the authenticated user",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -126,6 +129,7 @@ export default function zoom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("meeting.update", {
+    access: "write",
     description: "Update a meeting",
     inputSchema: {
       meetingId: { type: "string", required: true },
@@ -153,6 +157,7 @@ export default function zoom(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("meeting.delete", {
+    access: "write",
     description: "Delete a meeting",
     inputSchema: { meetingId: { type: "string", required: true } },
     async execute(input, ctx) {

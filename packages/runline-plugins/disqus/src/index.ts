@@ -69,6 +69,7 @@ export default function disqus(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("forum.get", {
+    access: "read",
     description: "Get forum details",
     inputSchema: {
       forum: {
@@ -103,6 +104,7 @@ export default function disqus(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("forum.listPosts", {
+    access: "read",
     description: "List posts in a forum",
     inputSchema: {
       forum: {
@@ -159,6 +161,7 @@ export default function disqus(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("forum.listCategories", {
+    access: "read",
     description: "List categories in a forum",
     inputSchema: {
       forum: {
@@ -188,6 +191,7 @@ export default function disqus(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("forum.listThreads", {
+    access: "read",
     description: "List threads in a forum",
     inputSchema: {
       forum: {

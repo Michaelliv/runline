@@ -112,6 +112,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   // ── File/Folder operations (non-binary) ─────────────
 
   rl.registerAction("file.copy", {
+    access: "write",
     description: "Copy a file on Nextcloud",
     inputSchema: {
       path: {
@@ -136,6 +137,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a file on Nextcloud",
     inputSchema: {
       path: {
@@ -152,6 +154,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.move", {
+    access: "write",
     description: "Move/rename a file on Nextcloud",
     inputSchema: {
       path: { type: "string", required: true, description: "Source file path" },
@@ -172,6 +175,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.share", {
+    access: "write",
     description: "Share a file or folder via Nextcloud sharing API",
     inputSchema: {
       path: {
@@ -220,6 +224,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.create", {
+    access: "write",
     description: "Create a folder on Nextcloud",
     inputSchema: {
       path: {
@@ -236,6 +241,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.delete", {
+    access: "write",
     description: "Delete a folder on Nextcloud",
     inputSchema: {
       path: {
@@ -252,6 +258,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.copy", {
+    access: "write",
     description: "Copy a folder on Nextcloud",
     inputSchema: {
       path: {
@@ -276,6 +283,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("folder.move", {
+    access: "write",
     description: "Move/rename a folder on Nextcloud",
     inputSchema: {
       path: {
@@ -302,6 +310,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   // ── User operations ─────────────────────────────────
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a user on Nextcloud",
     inputSchema: {
       userId: { type: "string", required: true, description: "Username" },
@@ -329,6 +338,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.delete", {
+    access: "write",
     description: "Delete a user on Nextcloud",
     inputSchema: {
       userId: { type: "string", required: true, description: "Username" },
@@ -345,6 +355,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user's information",
     inputSchema: {
       userId: { type: "string", required: true, description: "Username" },
@@ -361,6 +372,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List all users",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -385,6 +397,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.update", {
+    access: "write",
     description:
       "Update a user attribute (email, displayname, password, address, twitter, website)",
     inputSchema: {

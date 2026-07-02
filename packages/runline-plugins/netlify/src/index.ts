@@ -84,6 +84,7 @@ export default function netlify(rl: RunlinePluginAPI) {
   // ── Deploy ──────────────────────────────────────────
 
   rl.registerAction("deploy.cancel", {
+    access: "write",
     description: "Cancel a deployment",
     inputSchema: {
       deployId: { type: "string", required: true, description: "Deploy ID" },
@@ -95,6 +96,7 @@ export default function netlify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deploy.create", {
+    access: "write",
     description: "Create a new deployment for a site",
     inputSchema: {
       siteId: { type: "string", required: true, description: "Site ID" },
@@ -122,6 +124,7 @@ export default function netlify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deploy.get", {
+    access: "read",
     description: "Get a deployment",
     inputSchema: {
       siteId: { type: "string", required: true, description: "Site ID" },
@@ -138,6 +141,7 @@ export default function netlify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deploy.list", {
+    access: "read",
     description: "List deployments for a site",
     inputSchema: {
       siteId: { type: "string", required: true, description: "Site ID" },
@@ -162,6 +166,7 @@ export default function netlify(rl: RunlinePluginAPI) {
   // ── Site ────────────────────────────────────────────
 
   rl.registerAction("site.delete", {
+    access: "write",
     description: "Delete a site",
     inputSchema: {
       siteId: { type: "string", required: true, description: "Site ID" },
@@ -173,6 +178,7 @@ export default function netlify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("site.get", {
+    access: "read",
     description: "Get a site",
     inputSchema: {
       siteId: { type: "string", required: true, description: "Site ID" },
@@ -184,6 +190,7 @@ export default function netlify(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("site.list", {
+    access: "read",
     description: "List all sites",
     inputSchema: {
       limit: {

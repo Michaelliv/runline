@@ -80,6 +80,7 @@ export default function mailerlite(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("subscriber.create", {
+    access: "write",
     description: "Create a subscriber",
     inputSchema: {
       email: { type: "string", required: true },
@@ -125,6 +126,7 @@ export default function mailerlite(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscriber.get", {
+    access: "read",
     description: "Get a subscriber by ID or email",
     inputSchema: {
       subscriberId: {
@@ -144,6 +146,7 @@ export default function mailerlite(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscriber.list", {
+    access: "read",
     description: "List subscribers",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -174,6 +177,7 @@ export default function mailerlite(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscriber.update", {
+    access: "write",
     description: "Update a subscriber",
     inputSchema: {
       subscriberId: {

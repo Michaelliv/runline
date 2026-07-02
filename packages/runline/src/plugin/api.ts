@@ -1,4 +1,5 @@
 import type {
+  ActionAccess,
   ActionDef,
   ConnectionSchema,
   InputSchema,
@@ -7,6 +8,7 @@ import type {
 } from "./types.js";
 
 export interface ActionDefinition {
+  access?: ActionAccess;
   description?: string;
   inputSchema?: InputSchema;
   execute: ActionDef["execute"];

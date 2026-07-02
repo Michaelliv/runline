@@ -56,6 +56,7 @@ function registerTableResource(
   conn: typeof getConn,
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: { data: { type: "object", required: true } },
     async execute(input, ctx) {
@@ -70,6 +71,7 @@ function registerTableResource(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by sys_id`,
     inputSchema: { sysId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -83,6 +85,7 @@ function registerTableResource(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${resource}s`,
     inputSchema: {
       limit: { type: "number", required: false },
@@ -115,6 +118,7 @@ function registerTableResource(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       sysId: { type: "string", required: true },
@@ -133,6 +137,7 @@ function registerTableResource(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: { sysId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -177,6 +182,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
   // ── Generic Table Record ────────────────────────────
 
   rl.registerAction("tableRecord.create", {
+    access: "write",
     description: "Create a record in any table",
     inputSchema: {
       tableName: { type: "string", required: true },
@@ -195,6 +201,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tableRecord.get", {
+    access: "read",
     description: "Get a record from any table",
     inputSchema: {
       tableName: { type: "string", required: true },
@@ -212,6 +219,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tableRecord.list", {
+    access: "read",
     description: "List records from any table",
     inputSchema: {
       tableName: { type: "string", required: true },
@@ -235,6 +243,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tableRecord.update", {
+    access: "write",
     description: "Update a record in any table",
     inputSchema: {
       tableName: { type: "string", required: true },
@@ -254,6 +263,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tableRecord.delete", {
+    access: "write",
     description: "Delete a record from any table",
     inputSchema: {
       tableName: { type: "string", required: true },

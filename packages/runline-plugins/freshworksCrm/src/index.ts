@@ -74,6 +74,7 @@ function registerCrud(
   opts?: { noDelete?: boolean; noGet?: boolean; noList?: boolean },
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: {
       properties: {
@@ -90,6 +91,7 @@ function registerCrud(
 
   if (!opts?.noGet) {
     rl.registerAction(`${resource}.get`, {
+      access: "read",
       description: `Get a ${resource} by ID`,
       inputSchema: {
         id: { type: "number", required: true, description: `${resource} ID` },
@@ -104,6 +106,7 @@ function registerCrud(
 
   if (!opts?.noList) {
     rl.registerAction(`${resource}.list`, {
+      access: "read",
       description: `List ${resource}s`,
       inputSchema: {
         limit: { type: "number", required: false, description: "Max results" },
@@ -120,6 +123,7 @@ function registerCrud(
   }
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       id: { type: "number", required: true, description: `${resource} ID` },
@@ -142,6 +146,7 @@ function registerCrud(
 
   if (!opts?.noDelete) {
     rl.registerAction(`${resource}.delete`, {
+      access: "write",
       description: `Delete a ${resource}`,
       inputSchema: {
         id: { type: "number", required: true, description: `${resource} ID` },
@@ -184,6 +189,7 @@ export default function freshworksCrm(rl: RunlinePluginAPI) {
   // ── Search ──────────────────────────────────────────
 
   rl.registerAction("search.query", {
+    access: "read",
     description: "Search across entities using a query string",
     inputSchema: {
       query: { type: "string", required: true, description: "Search query" },
@@ -214,6 +220,7 @@ export default function freshworksCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("search.lookup", {
+    access: "read",
     description: "Lookup a record by field value",
     inputSchema: {
       query: { type: "string", required: true, description: "Value to search" },

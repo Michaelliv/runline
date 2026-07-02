@@ -41,6 +41,7 @@ export default function dropcontact(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("contact.enrich", {
+    access: "write",
     description: "Enrich contacts — find B2B emails from name and website",
     inputSchema: {
       contacts: {
@@ -70,6 +71,7 @@ export default function dropcontact(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.fetchRequest", {
+    access: "read",
     description: "Fetch results of a previous enrich request by ID",
     inputSchema: {
       requestId: {

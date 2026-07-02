@@ -180,6 +180,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   // ── Task lists ────────────────────────────────────────
 
   rl.registerAction("taskList.list", {
+    access: "read",
     description: "List the authenticated user's task lists",
     inputSchema: {
       returnAll: { type: "boolean", required: false },
@@ -200,6 +201,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskList.get", {
+    access: "read",
     description: "Get a task list by ID",
     inputSchema: { taskListId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -209,6 +211,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskList.create", {
+    access: "write",
     description: "Create a new task list",
     inputSchema: { title: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -218,6 +221,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskList.update", {
+    access: "write",
     description: "Update a task list (currently only `title` is writable).",
     inputSchema: {
       taskListId: { type: "string", required: true },
@@ -232,6 +236,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("taskList.delete", {
+    access: "write",
     description: "Delete a task list and all its tasks",
     inputSchema: { taskListId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -244,6 +249,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   // ── Tasks ─────────────────────────────────────────────
 
   rl.registerAction("task.create", {
+    access: "write",
     description: "Create a task in a list",
     inputSchema: {
       taskListId: { type: "string", required: true },
@@ -296,6 +302,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.get", {
+    access: "read",
     description: "Get a single task",
     inputSchema: {
       taskListId: { type: "string", required: true },
@@ -308,6 +315,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.list", {
+    access: "read",
     description:
       "List tasks in a list. Filters: dueMin/dueMax, completedMin/completedMax, updatedMin, showCompleted/showDeleted/showHidden.",
     inputSchema: {
@@ -347,6 +355,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.update", {
+    access: "write",
     description:
       "Patch a task. Only supplied fields are sent. Set status=completed (and optionally `completed` timestamp) to mark done.",
     inputSchema: {
@@ -391,6 +400,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.delete", {
+    access: "write",
     description: "Delete a task",
     inputSchema: {
       taskListId: { type: "string", required: true },
@@ -404,6 +414,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.move", {
+    access: "write",
     description:
       "Move a task within its list (reorder or reparent). `parent` nests under another task; `previous` places it after a sibling.",
     inputSchema: {
@@ -428,6 +439,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("task.clear", {
+    access: "write",
     description:
       "Hide all completed tasks in a list from the default view. They remain accessible via task.list with showHidden=true.",
     inputSchema: { taskListId: { type: "string", required: true } },

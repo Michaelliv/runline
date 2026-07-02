@@ -82,6 +82,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   // ── Search Jobs ─────────────────────────────────────
 
   rl.registerAction("search.create", {
+    access: "write",
     description: "Create a search job",
     inputSchema: {
       search: { type: "string", required: true, description: "SPL query" },
@@ -120,6 +121,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("search.get", {
+    access: "read",
     description: "Get a search job by ID",
     inputSchema: { searchJobId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -134,6 +136,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("search.list", {
+    access: "read",
     description: "List search jobs",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -160,6 +163,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("search.delete", {
+    access: "write",
     description: "Delete a search job",
     inputSchema: { searchJobId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -175,6 +179,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("search.getResults", {
+    access: "read",
     description: "Get results of a search job",
     inputSchema: {
       searchJobId: { type: "string", required: true },
@@ -212,6 +217,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   // ── Alerts ──────────────────────────────────────────
 
   rl.registerAction("alert.getMetrics", {
+    access: "read",
     description: "Get metric alerts",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -221,6 +227,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("alert.getFired", {
+    access: "read",
     description: "Get fired alerts report",
     inputSchema: {},
     async execute(_input, ctx) {
@@ -232,6 +239,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   // ── Reports (Saved Searches) ────────────────────────
 
   rl.registerAction("report.create", {
+    access: "write",
     description: "Create a saved search / report from a search job",
     inputSchema: {
       name: { type: "string", required: true },
@@ -260,6 +268,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("report.get", {
+    access: "read",
     description: "Get a saved search / report",
     inputSchema: { reportId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -274,6 +283,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("report.list", {
+    access: "read",
     description: "List saved searches / reports",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -294,6 +304,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("report.delete", {
+    access: "write",
     description: "Delete a saved search / report",
     inputSchema: { reportId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -311,6 +322,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   // ── Users ───────────────────────────────────────────
 
   rl.registerAction("user.create", {
+    access: "write",
     description: "Create a Splunk user",
     inputSchema: {
       name: { type: "string", required: true, description: "Login name" },
@@ -344,6 +356,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user",
     inputSchema: {
       userId: { type: "string", required: true, description: "Username" },
@@ -360,6 +373,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -380,6 +394,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.update", {
+    access: "write",
     description: "Update a user",
     inputSchema: {
       userId: { type: "string", required: true, description: "Username" },
@@ -411,6 +426,7 @@ export default function splunk(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.delete", {
+    access: "write",
     description: "Delete a user",
     inputSchema: {
       userId: { type: "string", required: true, description: "Username" },

@@ -7,6 +7,7 @@ export default function quickchart(rl: RunlinePluginAPI) {
   rl.setConnectionSchema({});
 
   rl.registerAction("chart.create", {
+    access: "write",
     description:
       "Generate a chart image URL via QuickChart.io (no auth required)",
     inputSchema: {

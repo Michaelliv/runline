@@ -400,6 +400,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   // ── Contact ───────────────────────────────────────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a new contact",
     inputSchema: {
       givenName: { type: "string", required: false },
@@ -470,6 +471,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: {
       contactId: {
@@ -499,6 +501,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description:
       "List contacts (people/me/connections) or search them. When `query` is set, hits people:searchContacts; otherwise returns the user's connections.",
     inputSchema: {
@@ -580,6 +583,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description:
       "Update a contact. Only supplied fields are sent; etag is resolved automatically if not provided.",
     inputSchema: {
@@ -652,6 +656,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: { contactId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -665,6 +670,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   // ── Contact groups ────────────────────────────────────
 
   rl.registerAction("group.list", {
+    access: "read",
     description: "List contact groups (including system groups like 'myContacts' and 'starred')",
     inputSchema: {
       returnAll: { type: "boolean", required: false },
@@ -687,6 +693,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.get", {
+    access: "read",
     description: "Get a contact group by ID",
     inputSchema: {
       groupId: { type: "string", required: true },
@@ -706,6 +713,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.create", {
+    access: "write",
     description: "Create a contact group",
     inputSchema: {
       name: { type: "string", required: true },
@@ -728,6 +736,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.update", {
+    access: "write",
     description:
       "Update a contact group. Pass a fresh `etag` or let the plugin resolve it automatically.",
     inputSchema: {
@@ -767,6 +776,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.delete", {
+    access: "write",
     description:
       "Delete a contact group. Pass `deleteContacts=true` to also delete every contact in the group.",
     inputSchema: {

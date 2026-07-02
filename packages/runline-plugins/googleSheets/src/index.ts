@@ -547,6 +547,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   // ── Spreadsheet ───────────────────────────────────────
 
   rl.registerAction("spreadsheet.create", {
+    access: "write",
     description: "Create a new spreadsheet",
     inputSchema: {
       title: { type: "string", required: true },
@@ -581,6 +582,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("spreadsheet.get", {
+    access: "read",
     description: "Get spreadsheet metadata (sheets, properties, optional grid data)",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -609,6 +611,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("spreadsheet.delete", {
+    access: "write",
     description: "Delete a spreadsheet (via Drive API — requires drive.file scope)",
     inputSchema: { spreadsheetId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -628,6 +631,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   // ── Sheet tabs ────────────────────────────────────────
 
   rl.registerAction("sheet.listTabs", {
+    access: "read",
     description: "List sheet tabs in a spreadsheet",
     inputSchema: { spreadsheetId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -637,6 +641,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sheet.addTab", {
+    access: "write",
     description: "Add a new sheet tab",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -668,6 +673,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sheet.deleteTab", {
+    access: "write",
     description: "Delete a sheet tab",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -694,6 +700,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   // ── Read ──────────────────────────────────────────────
 
   rl.registerAction("sheet.read", {
+    access: "read",
     description:
       "Read values from a range. Returns a 2D array by default; set `asObjects=true` to pair rows with a header row and return objects.",
     inputSchema: {
@@ -760,6 +767,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   // ── Append ────────────────────────────────────────────
 
   rl.registerAction("sheet.append", {
+    access: "write",
     description:
       "Append rows to the bottom. Pass `rows` as arrays (matching columns) or objects (keyed by header names; extra keys become new columns by default).",
     inputSchema: {
@@ -881,6 +889,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   // ── Update ────────────────────────────────────────────
 
   rl.registerAction("sheet.update", {
+    access: "write",
     description:
       "Update rows matched by a key column (or by the synthetic 'row_number' field). Rows are objects; undefined/null values are skipped.",
     inputSchema: {
@@ -904,6 +913,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sheet.appendOrUpdate", {
+    access: "write",
     description:
       "Upsert rows. Rows whose match value is found are updated in place; rows with a missing or unknown match value are appended.",
     inputSchema: {
@@ -926,6 +936,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   // ── Clear ─────────────────────────────────────────────
 
   rl.registerAction("sheet.clear", {
+    access: "write",
     description:
       "Clear values from a sheet. Modes: wholeSheet (optional keepFirstRow) | rows | columns | range.",
     inputSchema: {
@@ -1012,6 +1023,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   // ── Delete rows/columns ───────────────────────────────
 
   rl.registerAction("sheet.deleteDimension", {
+    access: "write",
     description: "Delete a range of rows or columns",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -1052,6 +1064,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   // ── Raw batchUpdate ───────────────────────────────────
 
   rl.registerAction("sheet.batchUpdate", {
+    access: "write",
     description:
       "Raw passthrough to spreadsheets:batchUpdate for anything this plugin doesn't expose directly (formatting, merges, conditional rules, …).",
     inputSchema: {
@@ -1195,6 +1208,7 @@ async function runUpdateOrUpsert(
   // ─── Charts ─────────────────────────────────────────────────────
 
   rl.registerAction("chart.add", {
+    access: "write",
     description:
       "Embed a chart on a sheet. Minimal signature: type ('COLUMN'|'BAR'|'LINE'|'AREA'|'PIE'|'SCATTER'|'COMBO'), data source (sheet name + A1 range), and target anchor cell. For full control pass a raw `chartSpec` object instead.",
     inputSchema: {
@@ -1259,6 +1273,7 @@ async function runUpdateOrUpsert(
   });
 
   rl.registerAction("chart.update", {
+    access: "write",
     description: "Update an existing chart's spec by chartId.",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -1281,6 +1296,7 @@ async function runUpdateOrUpsert(
   });
 
   rl.registerAction("chart.delete", {
+    access: "write",
     description: "Delete a chart by its embedded-object id.",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -1297,6 +1313,7 @@ async function runUpdateOrUpsert(
   // ─── Named ranges ───────────────────────────────────────────────
 
   rl.registerAction("namedRange.add", {
+    access: "write",
     description: "Create a named range on a sheet (so formulas can reference it by name).",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -1315,6 +1332,7 @@ async function runUpdateOrUpsert(
   });
 
   rl.registerAction("namedRange.delete", {
+    access: "write",
     description: "Delete a named range by its id.",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -1331,6 +1349,7 @@ async function runUpdateOrUpsert(
   // ─── Protected ranges ───────────────────────────────────────────
 
   rl.registerAction("protectedRange.add", {
+    access: "write",
     description:
       "Protect a range from edits. Pass `editorEmails` to restrict who can still edit; without it, only the sheet owner can edit.",
     inputSchema: {
@@ -1357,6 +1376,7 @@ async function runUpdateOrUpsert(
   });
 
   rl.registerAction("protectedRange.delete", {
+    access: "write",
     description: "Delete a protected range by its id.",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -1373,6 +1393,7 @@ async function runUpdateOrUpsert(
   // ─── Conditional formatting ─────────────────────────────────────
 
   rl.registerAction("conditionalFormat.add", {
+    access: "write",
     description:
       "Add a single-condition conditional-format rule. For complex rules pass a raw `rule` object instead of the simple builder.",
     inputSchema: {
@@ -1413,6 +1434,7 @@ async function runUpdateOrUpsert(
   });
 
   rl.registerAction("conditionalFormat.delete", {
+    access: "write",
     description: "Delete a conditional-format rule by its index within the sheet's rule list.",
     inputSchema: {
       spreadsheetId: { type: "string", required: true },
@@ -1431,6 +1453,7 @@ async function runUpdateOrUpsert(
   // ─── Data validation ────────────────────────────────────────────
 
   rl.registerAction("dataValidation.set", {
+    access: "write",
     description:
       "Apply a data-validation rule to a range. Pass either `condition` (BooleanCondition) or `oneOfList` (array of values for ONE_OF_LIST). Use `clear: true` to remove validation.",
     inputSchema: {

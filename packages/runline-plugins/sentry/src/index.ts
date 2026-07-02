@@ -50,6 +50,7 @@ function registerCrud(
   >,
 ) {
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by ${idField}`,
     inputSchema: {
       [idField]: { type: "string", required: true },
@@ -66,6 +67,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `List ${resource}s`,
     inputSchema: {
       org: { type: "string", required: true },
@@ -96,6 +98,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: {
       [idField]: { type: "string", required: true },
@@ -135,6 +138,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   // ── Event ───────────────────────────────────────────
 
   rl.registerAction("event.get", {
+    access: "read",
     description: "Get a project event by ID",
     inputSchema: {
       org: { type: "string", required: true },
@@ -152,6 +156,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.list", {
+    access: "read",
     description: "List project events",
     inputSchema: {
       org: { type: "string", required: true },
@@ -177,6 +182,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   // ── Issue ───────────────────────────────────────────
 
   rl.registerAction("issue.get", {
+    access: "read",
     description: "Get an issue by ID",
     inputSchema: { issueId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -189,6 +195,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.list", {
+    access: "read",
     description: "List issues for a project",
     inputSchema: {
       org: { type: "string", required: true },
@@ -212,6 +219,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.update", {
+    access: "write",
     description: "Update an issue",
     inputSchema: {
       issueId: { type: "string", required: true },
@@ -232,6 +240,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("issue.delete", {
+    access: "write",
     description: "Delete an issue",
     inputSchema: { issueId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -247,6 +256,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   // ── Organization ────────────────────────────────────
 
   rl.registerAction("organization.get", {
+    access: "read",
     description: "Get an organization",
     inputSchema: { org: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -259,6 +269,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.list", {
+    access: "read",
     description: "List organizations",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -276,6 +287,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("organization.create", {
+    access: "write",
     description: "Create an organization",
     inputSchema: {
       name: { type: "string", required: true },
@@ -294,6 +306,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   // ── Project ─────────────────────────────────────────
 
   rl.registerAction("project.get", {
+    access: "read",
     description: "Get a project",
     inputSchema: {
       org: { type: "string", required: true },
@@ -310,6 +323,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.list", {
+    access: "read",
     description: "List all projects",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -326,6 +340,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.create", {
+    access: "write",
     description: "Create a project",
     inputSchema: {
       org: { type: "string", required: true },
@@ -349,6 +364,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("project.delete", {
+    access: "write",
     description: "Delete a project",
     inputSchema: {
       org: { type: "string", required: true },
@@ -368,6 +384,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   // ── Release ─────────────────────────────────────────
 
   rl.registerAction("release.get", {
+    access: "read",
     description: "Get a release",
     inputSchema: {
       org: { type: "string", required: true },
@@ -384,6 +401,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.list", {
+    access: "read",
     description: "List releases",
     inputSchema: {
       org: { type: "string", required: true },
@@ -406,6 +424,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.create", {
+    access: "write",
     description: "Create a release",
     inputSchema: {
       org: { type: "string", required: true },
@@ -434,6 +453,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("release.delete", {
+    access: "write",
     description: "Delete a release",
     inputSchema: {
       org: { type: "string", required: true },
@@ -453,6 +473,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   // ── Team ────────────────────────────────────────────
 
   rl.registerAction("team.get", {
+    access: "read",
     description: "Get a team",
     inputSchema: {
       org: { type: "string", required: true },
@@ -469,6 +490,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.list", {
+    access: "read",
     description: "List teams in an organization",
     inputSchema: {
       org: { type: "string", required: true },
@@ -487,6 +509,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.create", {
+    access: "write",
     description: "Create a team",
     inputSchema: {
       org: { type: "string", required: true },
@@ -507,6 +530,7 @@ export default function sentry(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.delete", {
+    access: "write",
     description: "Delete a team",
     inputSchema: {
       org: { type: "string", required: true },

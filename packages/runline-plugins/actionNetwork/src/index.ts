@@ -82,6 +82,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   // ── Attendance ──────────────────────────────────────
 
   rl.registerAction("attendance.create", {
+    access: "write",
     description: "Record a person's attendance at an event",
     inputSchema: {
       eventId: { type: "string", required: true, description: "Event ID" },
@@ -109,6 +110,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attendance.get", {
+    access: "read",
     description: "Get a specific attendance record",
     inputSchema: {
       eventId: { type: "string", required: true, description: "Event ID" },
@@ -132,6 +134,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("attendance.list", {
+    access: "read",
     description: "List attendances for an event",
     inputSchema: {
       eventId: { type: "string", required: true, description: "Event ID" },
@@ -155,6 +158,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   // ── Event ───────────────────────────────────────────
 
   rl.registerAction("event.create", {
+    access: "write",
     description: "Create a new event",
     inputSchema: {
       title: { type: "string", required: true, description: "Event title" },
@@ -190,6 +194,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.get", {
+    access: "read",
     description: "Get a specific event",
     inputSchema: {
       eventId: { type: "string", required: true, description: "Event ID" },
@@ -205,6 +210,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("event.list", {
+    access: "read",
     description: "List all events",
     inputSchema: {
       limit: {
@@ -227,6 +233,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   // ── Person ──────────────────────────────────────────
 
   rl.registerAction("person.create", {
+    access: "write",
     description: "Create a new person",
     inputSchema: {
       email: { type: "string", required: true, description: "Email address" },
@@ -258,6 +265,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("person.get", {
+    access: "read",
     description: "Get a specific person",
     inputSchema: {
       personId: { type: "string", required: true, description: "Person ID" },
@@ -273,6 +281,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("person.list", {
+    access: "read",
     description: "List all people",
     inputSchema: {
       limit: {
@@ -293,6 +302,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("person.update", {
+    access: "write",
     description: "Update a person",
     inputSchema: {
       personId: { type: "string", required: true, description: "Person ID" },
@@ -319,6 +329,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   // ── Petition ────────────────────────────────────────
 
   rl.registerAction("petition.create", {
+    access: "write",
     description: "Create a new petition",
     inputSchema: {
       title: { type: "string", required: true, description: "Petition title" },
@@ -358,6 +369,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("petition.get", {
+    access: "read",
     description: "Get a specific petition",
     inputSchema: {
       petitionId: {
@@ -377,6 +389,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("petition.list", {
+    access: "read",
     description: "List all petitions",
     inputSchema: {
       limit: {
@@ -397,6 +410,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("petition.update", {
+    access: "write",
     description: "Update a petition",
     inputSchema: {
       petitionId: {
@@ -431,6 +445,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   // ── Signature ───────────────────────────────────────
 
   rl.registerAction("signature.create", {
+    access: "write",
     description: "Add a signature to a petition",
     inputSchema: {
       petitionId: {
@@ -460,6 +475,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("signature.get", {
+    access: "read",
     description: "Get a specific signature",
     inputSchema: {
       petitionId: {
@@ -487,6 +503,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("signature.list", {
+    access: "read",
     description: "List signatures on a petition",
     inputSchema: {
       petitionId: {
@@ -515,6 +532,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("signature.update", {
+    access: "write",
     description: "Update a signature",
     inputSchema: {
       petitionId: {
@@ -545,6 +563,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   // ── Tag ─────────────────────────────────────────────
 
   rl.registerAction("tag.create", {
+    access: "write",
     description: "Create a new tag",
     inputSchema: {
       name: { type: "string", required: true, description: "Tag name" },
@@ -561,6 +580,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.get", {
+    access: "read",
     description: "Get a specific tag",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },
@@ -576,6 +596,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tag.list", {
+    access: "read",
     description: "List all tags",
     inputSchema: {
       limit: {
@@ -598,6 +619,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   // ── Person Tag ──────────────────────────────────────
 
   rl.registerAction("personTag.add", {
+    access: "write",
     description: "Add a tag to a person",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },
@@ -620,6 +642,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("personTag.remove", {
+    access: "write",
     description: "Remove a tag from a person",
     inputSchema: {
       tagId: { type: "string", required: true, description: "Tag ID" },

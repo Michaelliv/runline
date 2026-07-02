@@ -119,6 +119,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   // ── Contact ─────────────────────────────────────────
 
   rl.registerAction("contact.create", {
+    access: "write",
     description: "Create a new contact",
     inputSchema: {
       firstName: { type: "string", required: false, description: "First name" },
@@ -185,6 +186,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.get", {
+    access: "read",
     description: "Get a contact by ID",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -203,6 +205,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.list", {
+    access: "read",
     description: "List/filter contacts",
     inputSchema: {
       limit: {
@@ -233,6 +236,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.update", {
+    access: "write",
     description: "Update a contact's properties",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -326,6 +330,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("contact.delete", {
+    access: "write",
     description: "Delete a contact",
     inputSchema: {
       contactId: { type: "string", required: true, description: "Contact ID" },
@@ -346,6 +351,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   // ── Company ─────────────────────────────────────────
 
   rl.registerAction("company.create", {
+    access: "write",
     description: "Create a new company",
     inputSchema: {
       name: { type: "string", required: true, description: "Company name" },
@@ -381,6 +387,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.get", {
+    access: "read",
     description: "Get a company by ID",
     inputSchema: {
       companyId: { type: "string", required: true, description: "Company ID" },
@@ -399,6 +406,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.list", {
+    access: "read",
     description: "List/filter companies",
     inputSchema: {
       limit: {
@@ -429,6 +437,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.update", {
+    access: "write",
     description: "Update a company's properties",
     inputSchema: {
       companyId: { type: "string", required: true, description: "Company ID" },
@@ -503,6 +512,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("company.delete", {
+    access: "write",
     description: "Delete a company",
     inputSchema: {
       companyId: { type: "string", required: true, description: "Company ID" },
@@ -523,6 +533,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   // ── Deal ────────────────────────────────────────────
 
   rl.registerAction("deal.create", {
+    access: "write",
     description: "Create a new deal",
     inputSchema: {
       name: { type: "string", required: true, description: "Deal name" },
@@ -582,6 +593,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.get", {
+    access: "read",
     description: "Get a deal by ID",
     inputSchema: {
       dealId: { type: "string", required: true, description: "Deal ID" },
@@ -600,6 +612,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.list", {
+    access: "read",
     description: "List all deals",
     inputSchema: {
       limit: {
@@ -625,6 +638,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.update", {
+    access: "write",
     description: "Update a deal",
     inputSchema: {
       dealId: { type: "string", required: true, description: "Deal ID" },
@@ -666,6 +680,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("deal.delete", {
+    access: "write",
     description: "Delete a deal",
     inputSchema: {
       dealId: { type: "string", required: true, description: "Deal ID" },

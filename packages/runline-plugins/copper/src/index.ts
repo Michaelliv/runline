@@ -74,6 +74,7 @@ function registerCrud(
   >,
 ) {
   rl.registerAction(`${resource}.create`, {
+    access: "write",
     description: `Create a ${resource}`,
     inputSchema: {
       ...(nameRequired
@@ -100,6 +101,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.get`, {
+    access: "read",
     description: `Get a ${resource} by ID`,
     inputSchema: {
       [idParam]: {
@@ -120,6 +122,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.list`, {
+    access: "read",
     description: `Search/list ${resource}s`,
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -132,6 +135,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.update`, {
+    access: "write",
     description: `Update a ${resource}`,
     inputSchema: {
       [idParam]: {
@@ -148,6 +152,7 @@ function registerCrud(
   });
 
   rl.registerAction(`${resource}.delete`, {
+    access: "write",
     description: `Delete a ${resource}`,
     inputSchema: {
       [idParam]: {
@@ -208,6 +213,7 @@ export default function copper(rl: RunlinePluginAPI) {
 
   // Read-only resources
   rl.registerAction("customerSource.list", {
+    access: "read",
     description: "List customer sources",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -227,6 +233,7 @@ export default function copper(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("user.list", {
+    access: "read",
     description: "List users",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },

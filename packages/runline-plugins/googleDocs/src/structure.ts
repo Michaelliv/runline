@@ -22,6 +22,7 @@ function point(value: unknown): Record<string, unknown> {
 
 export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertPageBreak", {
+    access: "write",
     description: "Insert a page break at an index or at the end of a segment.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -47,6 +48,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.createNamedRange", {
+    access: "write",
     description:
       "Create a named range over a span of text (useful for later programmatic edits).",
     inputSchema: {
@@ -70,6 +72,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deleteNamedRange", {
+    access: "write",
     description:
       "Delete named range(s). Pass one of `namedRangeId` or `name`; the latter deletes every range sharing that name.",
     inputSchema: {
@@ -97,6 +100,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.createHeader", {
+    access: "write",
     description: "Create a DEFAULT header attached to a SectionBreak.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -131,6 +135,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deleteHeader", {
+    access: "write",
     description: "Delete a header by ID.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -146,6 +151,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.createFooter", {
+    access: "write",
     description: "Create a DEFAULT footer attached to a SectionBreak.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -180,6 +186,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deleteFooter", {
+    access: "write",
     description: "Delete a footer by ID.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -195,6 +202,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.deletePositionedObject", {
+    access: "write",
     description:
       "Delete a positioned object (inline image, floating image, etc.) by its objectId.",
     inputSchema: {
@@ -215,6 +223,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.createFootnote", {
+    access: "write",
     description:
       "Create a footnote reference at a location or at the end of the document body.",
     inputSchema: {
@@ -246,6 +255,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.replaceNamedRangeContent", {
+    access: "write",
     description:
       "Replace the content of a named range by ID or name with text.",
     inputSchema: {
@@ -279,6 +289,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.updateSectionStyle", {
+    access: "write",
     description:
       "Update section style over a range, such as margins or column properties.",
     inputSchema: {
@@ -353,6 +364,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.insertSectionBreak", {
+    access: "write",
     description: "Insert a section break at the given location.",
     inputSchema: {
       document: { type: "string", required: true },
@@ -384,6 +396,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.updateDocumentStyle", {
+    access: "write",
     description:
       "Update document-level style (page size, margins, page numbers, default direction).",
     inputSchema: {

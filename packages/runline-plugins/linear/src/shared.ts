@@ -330,6 +330,7 @@ export function registerListAction(
   selection: string,
 ) {
   rl.registerAction(name, {
+    access: "read",
     description,
     inputSchema: t.Object(LIST_INPUT_SCHEMA),
     async execute(input, ctx) {
@@ -355,6 +356,7 @@ export function registerGetAction(
   selection: string,
 ) {
   rl.registerAction(name, {
+    access: "read",
     description,
     inputSchema: t.Object({
       id: t.String({ description: "Identifier or slug" }),

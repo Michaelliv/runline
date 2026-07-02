@@ -55,6 +55,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
   const lower = sObject.toLowerCase();
 
   rl.registerAction(`${lower}.create`, {
+    access: "write",
     description: `Create a ${sObject}`,
     inputSchema: t.Object({ data: Data }),
     async execute(input, ctx) {
@@ -68,6 +69,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
   });
 
   rl.registerAction(`${lower}.get`, {
+    access: "read",
     description: `Get a ${sObject} by ID`,
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
@@ -80,6 +82,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
   });
 
   rl.registerAction(`${lower}.update`, {
+    access: "write",
     description: `Update a ${sObject}`,
     inputSchema: t.Object({ id: t.String(), data: Data }),
     async execute(input, ctx) {
@@ -90,6 +93,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
   });
 
   rl.registerAction(`${lower}.delete`, {
+    access: "write",
     description: `Delete a ${sObject}`,
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
@@ -103,6 +107,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
   });
 
   rl.registerAction(`${lower}.query`, {
+    access: "read",
     description: `Query ${sObject}s with SOQL`,
     inputSchema: QueryInput(sObject),
     async execute(input, ctx) {
@@ -115,6 +120,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
   });
 
   rl.registerAction(`${lower}.queryPage`, {
+    access: "read",
     description: `Query ${sObject}s with SOQL and return Salesforce pagination metadata`,
     inputSchema: QueryInput(sObject),
     async execute(input, ctx) {
@@ -125,6 +131,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
   });
 
   rl.registerAction(`${lower}.upsert`, {
+    access: "write",
     description: `Upsert a ${sObject} by external ID`,
     inputSchema: t.Object({
       externalIdField: t.String(),
@@ -153,6 +160,7 @@ export function registerStandardSObjectActions(rl: RunlinePluginAPI) {
 
 export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
   rl.registerAction("sobject.create", {
+    access: "write",
     description: "Create any sObject record",
     inputSchema: t.Object({ sObject: t.String(), data: Data }),
     async execute(input, ctx) {
@@ -162,6 +170,7 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sobject.get", {
+    access: "read",
     description: "Get any sObject record",
     inputSchema: t.Object({ sObject: t.String(), id: t.String() }),
     async execute(input, ctx) {
@@ -171,6 +180,7 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sobject.update", {
+    access: "write",
     description: "Update any sObject record",
     inputSchema: t.Object({ sObject: t.String(), id: t.String(), data: Data }),
     async execute(input, ctx) {
@@ -185,6 +195,7 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sobject.delete", {
+    access: "write",
     description: "Delete any sObject record",
     inputSchema: t.Object({ sObject: t.String(), id: t.String() }),
     async execute(input, ctx) {
@@ -195,6 +206,7 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sobject.describe", {
+    access: "read",
     description: "Describe an sObject's metadata/fields",
     inputSchema: t.Object({ sObject: t.String() }),
     async execute(input, ctx) {

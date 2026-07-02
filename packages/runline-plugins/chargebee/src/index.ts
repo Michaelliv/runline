@@ -63,6 +63,7 @@ export default function chargebee(rl: RunlinePluginAPI) {
   // ── Customer ────────────────────────────────────────
 
   rl.registerAction("customer.create", {
+    access: "write",
     description: "Create a customer",
     inputSchema: {
       id: {
@@ -91,6 +92,7 @@ export default function chargebee(rl: RunlinePluginAPI) {
   // ── Invoice ─────────────────────────────────────────
 
   rl.registerAction("invoice.list", {
+    access: "read",
     description: "List invoices",
     inputSchema: {
       limit: {
@@ -124,6 +126,7 @@ export default function chargebee(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("invoice.getPdfUrl", {
+    access: "write",
     description: "Get the PDF download URL for an invoice",
     inputSchema: {
       invoiceId: { type: "string", required: true, description: "Invoice ID" },
@@ -145,6 +148,7 @@ export default function chargebee(rl: RunlinePluginAPI) {
   // ── Subscription ────────────────────────────────────
 
   rl.registerAction("subscription.cancel", {
+    access: "write",
     description: "Cancel a subscription",
     inputSchema: {
       subscriptionId: {
@@ -178,6 +182,7 @@ export default function chargebee(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscription.delete", {
+    access: "write",
     description: "Delete a subscription",
     inputSchema: {
       subscriptionId: {

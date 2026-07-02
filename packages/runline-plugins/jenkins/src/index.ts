@@ -88,6 +88,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   // ── Job ─────────────────────────────────────────────
 
   rl.registerAction("job.trigger", {
+    access: "write",
     description: "Trigger a job build",
     inputSchema: {
       jobName: {
@@ -124,6 +125,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("job.getParameters", {
+    access: "read",
     description: "Get build parameters for a job",
     inputSchema: {
       jobName: { type: "string", required: true, description: "Job name" },
@@ -142,6 +144,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("job.copy", {
+    access: "write",
     description: "Copy/create a job from an existing one",
     inputSchema: {
       fromJob: {
@@ -166,6 +169,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("job.create", {
+    access: "write",
     description: "Create a job from XML config",
     inputSchema: {
       name: { type: "string", required: true, description: "Job name" },
@@ -185,6 +189,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   // ── Build ───────────────────────────────────────────
 
   rl.registerAction("build.list", {
+    access: "read",
     description: "List builds for a job",
     inputSchema: {
       jobName: { type: "string", required: true, description: "Job name" },
@@ -208,6 +213,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   // ── Instance ────────────────────────────────────────
 
   rl.registerAction("instance.quietDown", {
+    access: "write",
     description: "Put Jenkins into quiet mode (no new builds)",
     async execute(_input, ctx) {
       await jk(ctx, "POST", "/quietDown");
@@ -216,6 +222,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("instance.cancelQuietDown", {
+    access: "write",
     description: "Cancel quiet mode",
     async execute(_input, ctx) {
       await jk(ctx, "POST", "/cancelQuietDown");
@@ -224,6 +231,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("instance.restart", {
+    access: "write",
     description: "Restart Jenkins immediately",
     async execute(_input, ctx) {
       await jk(ctx, "POST", "/restart");
@@ -232,6 +240,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("instance.safeRestart", {
+    access: "write",
     description: "Restart Jenkins after running builds finish",
     async execute(_input, ctx) {
       await jk(ctx, "POST", "/safeRestart");
@@ -240,6 +249,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("instance.exit", {
+    access: "write",
     description: "Shut down Jenkins immediately",
     async execute(_input, ctx) {
       await jk(ctx, "POST", "/exit");
@@ -248,6 +258,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("instance.safeExit", {
+    access: "write",
     description: "Shut down Jenkins after running builds finish",
     async execute(_input, ctx) {
       await jk(ctx, "POST", "/safeExit");

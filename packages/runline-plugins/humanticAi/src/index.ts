@@ -41,6 +41,7 @@ export default function humanticAi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("profile.create", {
+    access: "write",
     description: "Create a user profile from LinkedIn URL or text",
     inputSchema: {
       userId: {
@@ -74,6 +75,7 @@ export default function humanticAi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("profile.get", {
+    access: "read",
     description: "Get a user profile/personality analysis",
     inputSchema: {
       userId: {
@@ -102,6 +104,7 @@ export default function humanticAi(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("profile.update", {
+    access: "write",
     description: "Update a user profile with new data",
     inputSchema: {
       userId: {

@@ -100,6 +100,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   // ── Message ─────────────────────────────────────────
 
   rl.registerAction("message.create", {
+    access: "write",
     description: "Send a message to a room or person",
     inputSchema: {
       roomId: {
@@ -136,6 +137,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.get", {
+    access: "read",
     description: "Get message details",
     inputSchema: {
       messageId: { type: "string", required: true, description: "Message ID" },
@@ -147,6 +149,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.list", {
+    access: "read",
     description: "List messages in a room",
     inputSchema: {
       roomId: { type: "string", required: true, description: "Room ID" },
@@ -195,6 +198,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.update", {
+    access: "write",
     description: "Edit a message",
     inputSchema: {
       messageId: { type: "string", required: true, description: "Message ID" },
@@ -221,6 +225,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.delete", {
+    access: "write",
     description: "Delete a message",
     inputSchema: {
       messageId: { type: "string", required: true, description: "Message ID" },
@@ -235,6 +240,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   // ── Meeting ─────────────────────────────────────────
 
   rl.registerAction("meeting.create", {
+    access: "write",
     description: "Create a meeting",
     inputSchema: {
       title: { type: "string", required: true, description: "Meeting title" },
@@ -281,6 +287,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("meeting.get", {
+    access: "read",
     description: "Get meeting details",
     inputSchema: {
       meetingId: { type: "string", required: true, description: "Meeting ID" },
@@ -292,6 +299,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("meeting.list", {
+    access: "read",
     description: "List meetings",
     inputSchema: {
       from: {
@@ -343,6 +351,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("meeting.update", {
+    access: "write",
     description: "Update a meeting",
     inputSchema: {
       meetingId: { type: "string", required: true, description: "Meeting ID" },
@@ -389,6 +398,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("meeting.delete", {
+    access: "write",
     description: "Delete a meeting",
     inputSchema: {
       meetingId: { type: "string", required: true, description: "Meeting ID" },

@@ -69,6 +69,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   // ── Account ─────────────────────────────────────────
 
   rl.registerAction("account.me", {
+    access: "read",
     description: "Get info about the authenticated user",
     async execute(_input, ctx) {
       const { homeserver, token } = conn(ctx);
@@ -79,6 +80,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   // ── Room ────────────────────────────────────────────
 
   rl.registerAction("room.create", {
+    access: "write",
     description: "Create a new room",
     inputSchema: {
       name: { type: "string", required: true, description: "Room name" },
@@ -103,6 +105,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("room.join", {
+    access: "write",
     description: "Join a room",
     inputSchema: {
       roomIdOrAlias: {
@@ -123,6 +126,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("room.leave", {
+    access: "write",
     description: "Leave a room",
     inputSchema: { roomId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -137,6 +141,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("room.invite", {
+    access: "write",
     description: "Invite a user to a room",
     inputSchema: {
       roomId: { type: "string", required: true },
@@ -160,6 +165,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("room.kick", {
+    access: "write",
     description: "Kick a user from a room",
     inputSchema: {
       roomId: { type: "string", required: true },
@@ -188,6 +194,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   // ── Message ─────────────────────────────────────────
 
   rl.registerAction("message.create", {
+    access: "write",
     description: "Send a message to a room",
     inputSchema: {
       roomId: { type: "string", required: true },
@@ -243,6 +250,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("message.list", {
+    access: "read",
     description: "Get messages from a room (newest first)",
     inputSchema: {
       roomId: { type: "string", required: true },
@@ -305,6 +313,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   // ── Event ───────────────────────────────────────────
 
   rl.registerAction("event.get", {
+    access: "read",
     description: "Get a single event from a room",
     inputSchema: {
       roomId: { type: "string", required: true },
@@ -329,6 +338,7 @@ export default function matrix(rl: RunlinePluginAPI) {
   // ── Room Member ─────────────────────────────────────
 
   rl.registerAction("roomMember.list", {
+    access: "read",
     description: "List members of a room",
     inputSchema: {
       roomId: { type: "string", required: true },

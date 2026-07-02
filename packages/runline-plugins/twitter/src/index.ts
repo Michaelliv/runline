@@ -79,6 +79,7 @@ export default function twitter(rl: RunlinePluginAPI) {
   // ── Tweet ───────────────────────────────────────────
 
   rl.registerAction("tweet.create", {
+    access: "write",
     description: "Create a tweet (post, quote, or reply)",
     inputSchema: {
       text: { type: "string", required: true },
@@ -108,6 +109,7 @@ export default function twitter(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tweet.delete", {
+    access: "write",
     description: "Delete a tweet",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -120,6 +122,7 @@ export default function twitter(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tweet.like", {
+    access: "write",
     description: "Like a tweet (requires user context)",
     inputSchema: { tweetId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -134,6 +137,7 @@ export default function twitter(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tweet.retweet", {
+    access: "write",
     description: "Retweet a tweet (requires user context)",
     inputSchema: { tweetId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -148,6 +152,7 @@ export default function twitter(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("tweet.search", {
+    access: "read",
     description: "Search recent tweets (last 7 days)",
     inputSchema: {
       query: { type: "string", required: true },
@@ -192,6 +197,7 @@ export default function twitter(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by username or ID",
     inputSchema: {
       username: {
@@ -221,6 +227,7 @@ export default function twitter(rl: RunlinePluginAPI) {
   // ── List ────────────────────────────────────────────
 
   rl.registerAction("list.addMember", {
+    access: "write",
     description: "Add a user to a list",
     inputSchema: {
       listId: { type: "string", required: true },
@@ -237,6 +244,7 @@ export default function twitter(rl: RunlinePluginAPI) {
   // ── Direct Message ──────────────────────────────────
 
   rl.registerAction("dm.create", {
+    access: "write",
     description: "Send a direct message to a user",
     inputSchema: {
       userId: {

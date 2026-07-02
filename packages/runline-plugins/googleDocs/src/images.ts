@@ -3,6 +3,7 @@ import { buildLocation, extractDocumentId, runBatchUpdate } from "./shared.js";
 
 export function registerImagesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertInlineImage", {
+    access: "write",
     description:
       "Insert an inline image at the given location. `uri` must point to a publicly fetchable image.",
     inputSchema: {
@@ -47,6 +48,7 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("document.replaceImage", {
+    access: "write",
     description:
       "Replace an existing image (identified by its inline-object id) with a new image from a publicly fetchable URI.",
     inputSchema: {

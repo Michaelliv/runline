@@ -71,6 +71,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   // ── Employee ────────────────────────────────────────
 
   rl.registerAction("employee.create", {
+    access: "write",
     description: "Create a new employee",
     inputSchema: {
       firstName: { type: "string", required: true, description: "First name" },
@@ -129,6 +130,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("employee.get", {
+    access: "read",
     description: "Get an employee by ID",
     inputSchema: {
       employeeId: {
@@ -169,6 +171,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("employee.list", {
+    access: "read",
     description: "List all employees (directory)",
     inputSchema: {
       limit: {
@@ -193,6 +196,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("employee.update", {
+    access: "write",
     description: "Update an employee",
     inputSchema: {
       employeeId: {
@@ -238,6 +242,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   // ── Employee Document ───────────────────────────────
 
   rl.registerAction("employeeDocument.list", {
+    access: "read",
     description: "List documents for an employee",
     inputSchema: {
       employeeId: {
@@ -277,6 +282,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("employeeDocument.delete", {
+    access: "write",
     description: "Delete an employee document",
     inputSchema: {
       employeeId: {
@@ -303,6 +309,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("employeeDocument.update", {
+    access: "write",
     description: "Update an employee document's metadata",
     inputSchema: {
       employeeId: {
@@ -339,6 +346,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   // ── Company File ────────────────────────────────────
 
   rl.registerAction("file.list", {
+    access: "read",
     description: "List company files",
     inputSchema: {
       limit: {
@@ -369,6 +377,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a company file",
     inputSchema: {
       fileId: { type: "string", required: true, description: "File ID" },
@@ -382,6 +391,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.update", {
+    access: "write",
     description: "Update a company file's metadata",
     inputSchema: {
       fileId: { type: "string", required: true, description: "File ID" },
@@ -404,6 +414,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
   // ── Company Report ──────────────────────────────────
 
   rl.registerAction("companyReport.get", {
+    access: "read",
     description: "Get a company report",
     inputSchema: {
       reportId: { type: "string", required: true, description: "Report ID" },

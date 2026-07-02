@@ -50,6 +50,7 @@ export default function sendy(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.create", {
+    access: "write",
     description: "Create (and optionally send) an email campaign",
     inputSchema: {
       fromName: { type: "string", required: true },
@@ -109,6 +110,7 @@ export default function sendy(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscriber.add", {
+    access: "write",
     description: "Add a subscriber to a list",
     inputSchema: {
       email: { type: "string", required: true },
@@ -126,6 +128,7 @@ export default function sendy(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscriber.count", {
+    access: "read",
     description: "Get active subscriber count for a list",
     inputSchema: { listId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -141,6 +144,7 @@ export default function sendy(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscriber.delete", {
+    access: "write",
     description: "Delete a subscriber from a list",
     inputSchema: {
       email: { type: "string", required: true },
@@ -159,6 +163,7 @@ export default function sendy(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscriber.unsubscribe", {
+    access: "write",
     description: "Unsubscribe an email from a list",
     inputSchema: {
       email: { type: "string", required: true },
@@ -176,6 +181,7 @@ export default function sendy(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("subscriber.status", {
+    access: "read",
     description: "Get subscription status of an email",
     inputSchema: {
       email: { type: "string", required: true },

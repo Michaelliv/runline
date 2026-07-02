@@ -7,6 +7,7 @@ function mathPlugin(api: RunlinePluginAPI) {
   api.setName("math");
   api.setVersion("1.0.0");
   api.registerAction("add", {
+    access: "read",
     description: "Add two numbers",
     inputSchema: {
       a: { type: "number", required: true },
@@ -23,6 +24,7 @@ function echoPlugin(api: RunlinePluginAPI) {
   api.setName("echo");
   api.setVersion("1.0.0");
   api.registerAction("say", {
+    access: "read",
     description: "Echo back",
     execute(input) {
       return input;
@@ -67,7 +69,11 @@ describe("Runline SDK", () => {
     const rl = Runline.create({ plugins: [mathPlugin, echoPlugin] });
     const actions = rl.actions();
     assert.equal(actions.length, 2);
-    assert.ok(actions.some((a) => a.plugin === "math" && a.action === "add"));
+    assert.ok(
+      actions.some(
+        (a) => a.plugin === "math" && a.action === "add" && a.access === "read",
+      ),
+    );
     assert.ok(actions.some((a) => a.plugin === "echo" && a.action === "say"));
   });
 
@@ -102,6 +108,7 @@ describe("Runline SDK", () => {
       actions: [
         {
           name: "greet",
+          access: "read" as const,
           description: "Say hello",
           execute: (input: unknown) => {
             const { name } = input as { name: string };

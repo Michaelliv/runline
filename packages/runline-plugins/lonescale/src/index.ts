@@ -49,6 +49,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("list.create", {
+    access: "write",
     description: "Create a new list",
     inputSchema: {
       name: { type: "string", required: true, description: "List name" },
@@ -65,6 +66,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("list.list", {
+    access: "read",
     description: "List all lists, optionally filtered by entity type",
     inputSchema: {
       entity: {
@@ -82,6 +84,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("item.addPerson", {
+    access: "write",
     description: "Add a person (contact) to a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },
@@ -134,6 +137,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("item.addCompany", {
+    access: "write",
     description: "Add a company to a list",
     inputSchema: {
       listId: { type: "string", required: true, description: "List ID" },

@@ -146,6 +146,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   // ── Collection ──────────────────────────────────────
 
   rl.registerAction("collection.get", {
+    access: "read",
     description: "Get a collection by ID",
     inputSchema: {
       collectionId: {
@@ -161,6 +162,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.list", {
+    access: "read",
     description: "List all collections",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -176,6 +178,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.update", {
+    access: "write",
     description: "Update a collection",
     inputSchema: {
       collectionId: {
@@ -217,6 +220,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.delete", {
+    access: "write",
     description: "Delete a collection",
     inputSchema: {
       collectionId: {
@@ -235,6 +239,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   // ── Event ───────────────────────────────────────────
 
   rl.registerAction("event.list", {
+    access: "read",
     description: "List organization events",
     inputSchema: {
       start: {
@@ -278,6 +283,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   // ── Group ───────────────────────────────────────────
 
   rl.registerAction("group.create", {
+    access: "write",
     description: "Create a group",
     inputSchema: {
       name: { type: "string", required: true, description: "Group name" },
@@ -315,6 +321,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.get", {
+    access: "read",
     description: "Get a group by ID",
     inputSchema: {
       groupId: { type: "string", required: true, description: "Group ID" },
@@ -326,6 +333,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.list", {
+    access: "read",
     description: "List all groups",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -341,6 +349,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.getMembers", {
+    access: "read",
     description: "Get member IDs for a group",
     inputSchema: {
       groupId: { type: "string", required: true, description: "Group ID" },
@@ -357,6 +366,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.update", {
+    access: "write",
     description: "Update a group",
     inputSchema: {
       groupId: { type: "string", required: true, description: "Group ID" },
@@ -407,6 +417,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.updateMembers", {
+    access: "write",
     description: "Set the member IDs for a group",
     inputSchema: {
       groupId: { type: "string", required: true, description: "Group ID" },
@@ -429,6 +440,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("group.delete", {
+    access: "write",
     description: "Delete a group",
     inputSchema: {
       groupId: { type: "string", required: true, description: "Group ID" },
@@ -443,6 +455,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   // ── Member ──────────────────────────────────────────
 
   rl.registerAction("member.create", {
+    access: "write",
     description: "Invite a member to the organization",
     inputSchema: {
       email: { type: "string", required: true, description: "Email address" },
@@ -487,6 +500,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.get", {
+    access: "read",
     description: "Get a member by ID",
     inputSchema: {
       memberId: { type: "string", required: true, description: "Member ID" },
@@ -498,6 +512,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.list", {
+    access: "read",
     description: "List all members",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -513,6 +528,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.getGroups", {
+    access: "read",
     description: "Get group IDs for a member",
     inputSchema: {
       memberId: { type: "string", required: true, description: "Member ID" },
@@ -529,6 +545,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.update", {
+    access: "write",
     description: "Update a member",
     inputSchema: {
       memberId: { type: "string", required: true, description: "Member ID" },
@@ -571,6 +588,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.updateGroups", {
+    access: "write",
     description: "Set the group IDs for a member",
     inputSchema: {
       memberId: { type: "string", required: true, description: "Member ID" },
@@ -593,6 +611,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("member.delete", {
+    access: "write",
     description: "Remove a member from the organization",
     inputSchema: {
       memberId: { type: "string", required: true, description: "Member ID" },

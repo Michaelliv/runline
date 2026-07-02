@@ -42,6 +42,7 @@ export default function medium(rl: RunlinePluginAPI) {
     ctx.connection.config.accessToken as string;
 
   rl.registerAction("post.create", {
+    access: "write",
     description:
       "Create a post on Medium. Posts under the authenticated user by default, or under a publication if publicationId is provided.",
     inputSchema: {
@@ -142,6 +143,7 @@ export default function medium(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("publication.list", {
+    access: "read",
     description: "List publications for the authenticated user",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -163,6 +165,7 @@ export default function medium(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("me", {
+    access: "read",
     description: "Get the authenticated user's profile",
     async execute(_input, ctx) {
       const resp = (await apiRequest(tok(ctx), "GET", "/me")) as Record<

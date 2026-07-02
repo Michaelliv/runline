@@ -33,6 +33,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
     includeSubTeamsDescription?: string,
   ) {
     rl.registerAction(name, {
+      access: "read",
       description,
       inputSchema: t.Object({
         viewId: t.String({ description: "The custom view ID or slug" }),
@@ -98,6 +99,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
     CUSTOM_VIEW_FIELDS,
   );
   rl.registerAction("view.create", {
+    access: "write",
     description:
       "Create a custom view. Set filterData for issue views; projectFilterData, initiativeFilterData, or feedItemFilterData for other view types. Read matches back with view.issues/projects/initiatives/updates.",
     inputSchema: t.Object({
@@ -162,6 +164,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("view.update", {
+    access: "write",
     description:
       "Update a custom view. All fields optional; only provided fields are updated.",
     inputSchema: t.Object({
@@ -226,6 +229,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("view.delete", {
+    access: "write",
     description: "Delete a custom view.",
     inputSchema: t.Object({
       id: t.String({

@@ -54,6 +54,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
   // ── Collection ──────────────────────────────────────
 
   rl.registerAction("collection.create", {
+    access: "write",
     description: "Create an entry in a collection",
     inputSchema: {
       collection: {
@@ -84,6 +85,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.list", {
+    access: "read",
     description: "List entries in a collection",
     inputSchema: {
       collection: {
@@ -150,6 +152,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("collection.update", {
+    access: "write",
     description: "Update an entry in a collection",
     inputSchema: {
       collection: {
@@ -182,6 +185,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
   // ── Form ────────────────────────────────────────────
 
   rl.registerAction("form.submit", {
+    access: "write",
     description: "Submit a form",
     inputSchema: {
       form: { type: "string", required: true, description: "Form name" },
@@ -206,6 +210,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
   // ── Singleton ───────────────────────────────────────
 
   rl.registerAction("singleton.get", {
+    access: "read",
     description: "Get a singleton's data",
     inputSchema: {
       singleton: {

@@ -47,6 +47,7 @@ export default function travisci(rl: RunlinePluginAPI) {
     ctx.connection.config.apiToken as string;
 
   rl.registerAction("build.get", {
+    access: "read",
     description: "Get a build by ID",
     inputSchema: { buildId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -59,6 +60,7 @@ export default function travisci(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("build.list", {
+    access: "read",
     description: "List builds for the current user",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -81,6 +83,7 @@ export default function travisci(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("build.cancel", {
+    access: "write",
     description: "Cancel a build",
     inputSchema: { buildId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -93,6 +96,7 @@ export default function travisci(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("build.restart", {
+    access: "write",
     description: "Restart a build",
     inputSchema: { buildId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -105,6 +109,7 @@ export default function travisci(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("build.trigger", {
+    access: "write",
     description: "Trigger a build for a repository",
     inputSchema: {
       slug: {

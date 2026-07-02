@@ -11,6 +11,7 @@ import {
 
 export function registerCommentActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.addComment", {
+    access: "write",
     description: "Add a comment to an issue. Pass parentId to nest as a reply.",
     inputSchema: t.Object({
       issueId: t.String({
@@ -49,6 +50,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.list", {
+    access: "read",
     description:
       "List comments. Pass issueId (UUID or identifier like 'LIN-123') to list one issue's comments; without it, lists workspace-wide (unscoped connections only).",
     inputSchema: t.Object(
@@ -94,6 +96,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("comment.get", {
+    access: "read",
     description: "Get a comment by ID.",
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
@@ -108,6 +111,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("comment.update", {
+    access: "write",
     description: "Update a comment.",
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the comment to update" }),
@@ -133,6 +137,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("comment.delete", {
+    access: "write",
     description: "Delete a comment.",
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {

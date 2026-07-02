@@ -23,6 +23,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
   );
   getAction("team.get", "Get a team by ID or key.", "team", TEAM_FIELDS);
   rl.registerAction("team.create", {
+    access: "write",
     description: "Create a team. Most settings have sensible defaults.",
     inputSchema: t.Object({
       name: t.String({ description: "The name of the team" }),
@@ -107,6 +108,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("team.update", {
+    access: "write",
     description:
       "Update a team. Requires team owner or workspace admin permissions.",
     inputSchema: t.Object({
@@ -170,6 +172,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
     },
   });
   rl.registerAction("team.members", {
+    access: "read",
     description: "List members of a team.",
     inputSchema: t.Object({
       teamId: t.String({ description: "The identifier of the team" }),

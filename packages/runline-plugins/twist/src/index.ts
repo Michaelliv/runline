@@ -46,6 +46,7 @@ export default function twist(rl: RunlinePluginAPI) {
   // ── Channel ─────────────────────────────────────────
 
   rl.registerAction("channel.create", {
+    access: "write",
     description: "Create a channel",
     inputSchema: {
       workspaceId: { type: "number", required: true },
@@ -60,6 +61,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.get", {
+    access: "read",
     description: "Get a channel",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -70,6 +72,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.list", {
+    access: "read",
     description: "List channels in a workspace",
     inputSchema: {
       workspaceId: { type: "number", required: true },
@@ -85,6 +88,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.update", {
+    access: "write",
     description: "Update a channel",
     inputSchema: {
       id: { type: "number", required: true },
@@ -102,6 +106,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.delete", {
+    access: "write",
     description: "Delete a channel",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -112,6 +117,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.archive", {
+    access: "write",
     description: "Archive a channel",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -122,6 +128,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("channel.unarchive", {
+    access: "write",
     description: "Unarchive a channel",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -134,6 +141,7 @@ export default function twist(rl: RunlinePluginAPI) {
   // ── Thread ──────────────────────────────────────────
 
   rl.registerAction("thread.create", {
+    access: "write",
     description: "Create a thread",
     inputSchema: {
       channelId: { type: "number", required: true },
@@ -151,6 +159,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.get", {
+    access: "read",
     description: "Get a thread",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -161,6 +170,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.list", {
+    access: "read",
     description: "List threads in a channel",
     inputSchema: {
       channelId: { type: "number", required: true },
@@ -175,6 +185,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.update", {
+    access: "write",
     description: "Update a thread",
     inputSchema: {
       id: { type: "number", required: true },
@@ -192,6 +203,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("thread.delete", {
+    access: "write",
     description: "Delete a thread",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -204,6 +216,7 @@ export default function twist(rl: RunlinePluginAPI) {
   // ── Comment ─────────────────────────────────────────
 
   rl.registerAction("comment.create", {
+    access: "write",
     description: "Add a comment to a thread",
     inputSchema: {
       threadId: { type: "number", required: true },
@@ -219,6 +232,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.get", {
+    access: "read",
     description: "Get a comment",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -230,6 +244,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.list", {
+    access: "read",
     description: "List comments in a thread",
     inputSchema: {
       threadId: { type: "number", required: true },
@@ -244,6 +259,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.update", {
+    access: "write",
     description: "Update a comment",
     inputSchema: {
       id: { type: "number", required: true },
@@ -260,6 +276,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("comment.delete", {
+    access: "write",
     description: "Delete a comment",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -272,6 +289,7 @@ export default function twist(rl: RunlinePluginAPI) {
   // ── Message Conversation ────────────────────────────
 
   rl.registerAction("messageConversation.create", {
+    access: "write",
     description: "Send a message in a conversation",
     inputSchema: {
       workspaceId: { type: "number", required: true },
@@ -289,6 +307,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("messageConversation.get", {
+    access: "read",
     description: "Get a conversation message",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -299,6 +318,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("messageConversation.list", {
+    access: "read",
     description: "List messages in a conversation",
     inputSchema: { conversationId: { type: "number", required: true } },
     async execute(input, ctx) {
@@ -309,6 +329,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("messageConversation.update", {
+    access: "write",
     description: "Update a conversation message",
     inputSchema: {
       id: { type: "number", required: true },
@@ -325,6 +346,7 @@ export default function twist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("messageConversation.delete", {
+    access: "write",
     description: "Delete a conversation message",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {

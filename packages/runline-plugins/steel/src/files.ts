@@ -26,6 +26,7 @@ function encodeFilePath(path: unknown): string {
 
 export function registerFileActions(rl: RunlinePluginAPI) {
   rl.registerAction("file.list", {
+    access: "read",
     description: "List global Steel files.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
@@ -34,6 +35,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.upload", {
+    access: "write",
     description: "Upload a global file from a URL or existing path reference.",
     inputSchema: t.Object(fileSchema()),
     async execute(input, ctx) {
@@ -42,6 +44,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.download", {
+    access: "read",
     description: "Download/read a global file by path. Binary files are returned as text by fetch when possible; use the URL/API directly for raw bytes.",
     inputSchema: t.Object({ path: t.String() }),
     async execute(input, ctx) {
@@ -50,6 +53,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("file.delete", {
+    access: "write",
     description: "Delete a global Steel file by path.",
     inputSchema: t.Object({ path: t.String() }),
     async execute(input, ctx) {
@@ -58,6 +62,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sessionFile.list", {
+    access: "read",
     description: "List files in a Steel session filesystem.",
     inputSchema: t.Object({ sessionId: t.String() }),
     async execute(input, ctx) {
@@ -66,6 +71,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sessionFile.upload", {
+    access: "write",
     description: "Upload/copy a URL or global file into a session filesystem.",
     inputSchema: t.Object({ sessionId: t.String(), ...fileSchema() }),
     async execute(input, ctx) {
@@ -75,6 +81,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sessionFile.download", {
+    access: "read",
     description: "Download/read a session file by path.",
     inputSchema: t.Object({ sessionId: t.String(), path: t.String() }),
     async execute(input, ctx) {
@@ -84,6 +91,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sessionFile.downloadArchive", {
+    access: "read",
     description: "Download/read the zip archive of all files in a session.",
     inputSchema: t.Object({ sessionId: t.String() }),
     async execute(input, ctx) {
@@ -92,6 +100,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sessionFile.delete", {
+    access: "write",
     description: "Delete a file from a session filesystem.",
     inputSchema: t.Object({ sessionId: t.String(), path: t.String() }),
     async execute(input, ctx) {
@@ -101,6 +110,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("sessionFile.deleteAll", {
+    access: "write",
     description: "Delete all files in a session filesystem.",
     inputSchema: t.Object({ sessionId: t.String() }),
     async execute(input, ctx) {

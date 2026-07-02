@@ -81,6 +81,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   // ── Datapoint ───────────────────────────────────────
 
   rl.registerAction("datapoint.create", {
+    access: "write",
     description: "Create a datapoint for a goal",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -109,6 +110,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("datapoint.createAll", {
+    access: "write",
     description: "Create multiple datapoints at once",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -133,6 +135,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("datapoint.get", {
+    access: "read",
     description: "Get a single datapoint",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -156,6 +159,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("datapoint.list", {
+    access: "read",
     description: "List datapoints for a goal",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -206,6 +210,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("datapoint.update", {
+    access: "write",
     description: "Update a datapoint",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -237,6 +242,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("datapoint.delete", {
+    access: "write",
     description: "Delete a datapoint",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -262,6 +268,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   // ── Charge ──────────────────────────────────────────
 
   rl.registerAction("charge.create", {
+    access: "write",
     description: "Create a charge (pay money to Beeminder)",
     inputSchema: {
       amount: { type: "number", required: true, description: "Amount in USD" },
@@ -288,6 +295,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   // ── Goal ────────────────────────────────────────────
 
   rl.registerAction("goal.create", {
+    access: "write",
     description: "Create a new goal",
     inputSchema: {
       slug: {
@@ -360,6 +368,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.get", {
+    access: "read",
     description: "Get a specific goal",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -387,6 +396,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.list", {
+    access: "read",
     description: "List all goals",
     inputSchema: {
       emaciated: {
@@ -408,6 +418,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.listArchived", {
+    access: "read",
     description: "List archived goals",
     inputSchema: {
       emaciated: {
@@ -429,6 +440,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.update", {
+    access: "write",
     description: "Update a goal",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -478,6 +490,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.refresh", {
+    access: "write",
     description: "Refresh a goal's graph",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -493,6 +506,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.shortCircuit", {
+    access: "write",
     description: "Short-circuit a goal's pledge",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -508,6 +522,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.stepDown", {
+    access: "write",
     description: "Step down a goal's pledge",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -523,6 +538,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.cancelStepDown", {
+    access: "write",
     description: "Cancel a step-down on a goal's pledge",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -538,6 +554,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("goal.uncle", {
+    access: "write",
     description: "Derail a goal and charge the pledge amount",
     inputSchema: {
       goalName: { type: "string", required: true, description: "Goal slug" },
@@ -555,6 +572,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get current user information",
     inputSchema: {
       associations: {

@@ -34,6 +34,7 @@ export default function peekalink(rl: RunlinePluginAPI) {
     ctx.connection.config.apiKey as string;
 
   rl.registerAction("link.preview", {
+    access: "read",
     description: "Get a rich preview for a URL",
     inputSchema: {
       url: { type: "string", required: true, description: "URL to preview" },
@@ -45,6 +46,7 @@ export default function peekalink(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("link.isAvailable", {
+    access: "read",
     description: "Check whether a preview is available for a URL",
     inputSchema: {
       url: { type: "string", required: true, description: "URL to check" },

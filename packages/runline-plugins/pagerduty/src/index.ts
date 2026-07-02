@@ -80,6 +80,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   // ── Incident ────────────────────────────────────────
 
   rl.registerAction("incident.create", {
+    access: "write",
     description: "Create a new incident",
     inputSchema: {
       title: { type: "string", required: true },
@@ -130,6 +131,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("incident.get", {
+    access: "read",
     description: "Get an incident by ID",
     inputSchema: { incidentId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -144,6 +146,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("incident.list", {
+    access: "read",
     description: "List incidents",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -175,6 +178,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("incident.update", {
+    access: "write",
     description: "Update an incident",
     inputSchema: {
       incidentId: { type: "string", required: true },
@@ -225,6 +229,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   // ── Incident Note ───────────────────────────────────
 
   rl.registerAction("incidentNote.create", {
+    access: "write",
     description: "Add a note to an incident",
     inputSchema: {
       incidentId: { type: "string", required: true },
@@ -249,6 +254,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("incidentNote.list", {
+    access: "read",
     description: "List notes for an incident",
     inputSchema: {
       incidentId: { type: "string", required: true },
@@ -272,6 +278,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   // ── Log Entry ───────────────────────────────────────
 
   rl.registerAction("logEntry.get", {
+    access: "read",
     description: "Get a log entry by ID",
     inputSchema: { logEntryId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -286,6 +293,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("logEntry.list", {
+    access: "read",
     description: "List log entries",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -307,6 +315,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
   // ── User ────────────────────────────────────────────
 
   rl.registerAction("user.get", {
+    access: "read",
     description: "Get a user by ID",
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {

@@ -79,6 +79,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   // ── Activity ────────────────────────────────────────
 
   rl.registerAction("activity.list", {
+    access: "read",
     description: "List activities",
     inputSchema: {
       limit: { type: "number", required: false, description: "Max results" },
@@ -115,6 +116,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   // ── Campaign ────────────────────────────────────────
 
   rl.registerAction("campaign.list", {
+    access: "read",
     description: "List campaigns",
     inputSchema: {
       limit: { type: "number", required: false },
@@ -130,6 +132,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("campaign.getStats", {
+    access: "read",
     description: "Get campaign statistics",
     inputSchema: {
       campaignId: { type: "string", required: true },
@@ -167,6 +170,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   // ── Lead ────────────────────────────────────────────
 
   rl.registerAction("lead.create", {
+    access: "write",
     description: "Add a lead to a campaign",
     inputSchema: {
       campaignId: { type: "string", required: true },
@@ -213,6 +217,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("lead.get", {
+    access: "read",
     description: "Get a lead by email",
     inputSchema: { email: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -225,6 +230,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("lead.delete", {
+    access: "write",
     description:
       "Remove a lead from a campaign (keeps lead in unsubscribe list)",
     inputSchema: {
@@ -244,6 +250,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("lead.unsubscribe", {
+    access: "write",
     description: "Unsubscribe a lead from a campaign",
     inputSchema: {
       campaignId: { type: "string", required: true },
@@ -262,6 +269,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   // ── Team ────────────────────────────────────────────
 
   rl.registerAction("team.get", {
+    access: "read",
     description: "Get team information",
     async execute(_input, ctx) {
       return apiRequest(key(ctx), "GET", "/team");
@@ -269,6 +277,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("team.getCredits", {
+    access: "read",
     description: "Get team credits",
     async execute(_input, ctx) {
       return apiRequest(key(ctx), "GET", "/team/credits");
@@ -278,6 +287,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   // ── Unsubscribe ─────────────────────────────────────
 
   rl.registerAction("unsubscribe.add", {
+    access: "write",
     description: "Add an email to the unsubscribe list",
     inputSchema: { email: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -290,6 +300,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("unsubscribe.delete", {
+    access: "write",
     description: "Remove an email from the unsubscribe list",
     inputSchema: { email: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -302,6 +313,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("unsubscribe.list", {
+    access: "read",
     description: "List all unsubscribed emails",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
@@ -317,6 +329,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   // ── Enrichment ──────────────────────────────────────
 
   rl.registerAction("enrich.get", {
+    access: "read",
     description: "Get an enrichment result by ID",
     inputSchema: { enrichId: { type: "string", required: true } },
     async execute(input, ctx) {
@@ -329,6 +342,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("enrich.lead", {
+    access: "write",
     description: "Enrich a lead by ID",
     inputSchema: {
       leadId: { type: "string", required: true },
@@ -350,6 +364,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("enrich.person", {
+    access: "write",
     description: "Enrich a person (without existing lead)",
     inputSchema: {
       findEmail: { type: "boolean", required: true },

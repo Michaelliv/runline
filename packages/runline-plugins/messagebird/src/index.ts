@@ -41,6 +41,7 @@ export default function messagebird(rl: RunlinePluginAPI) {
     ctx.connection.config.accessKey as string;
 
   rl.registerAction("sms.send", {
+    access: "write",
     description: "Send an SMS message",
     inputSchema: {
       originator: {
@@ -128,6 +129,7 @@ export default function messagebird(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("balance.get", {
+    access: "read",
     description: "Get current account balance",
     async execute(_input, ctx) {
       return apiRequest(key(ctx), "GET", "/balance");

@@ -10,6 +10,7 @@ import {
 
 export function registerPageActions(rl: RunlinePluginAPI) {
   rl.registerAction("page.list", {
+    access: "read",
     description: "List Shift Labs pages for the API key's organization.",
     inputSchema: t.Object({
       status: t.Optional(enumSchema("Page status", PAGE_STATUS)),
@@ -29,6 +30,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.get", {
+    access: "read",
     description: "Get a Shift Labs page by ID.",
     inputSchema: t.Object({ id: t.String({ description: "Page ID" }) }),
     async execute(input, ctx) {
@@ -42,6 +44,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.create", {
+    access: "write",
     description:
       "Create a draft hosted HTML page. Agents can publish it with page.publish.",
     inputSchema: t.Object({
@@ -65,6 +68,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.update", {
+    access: "write",
     description:
       "Update a hosted HTML page's slug, title, visibility, or HTML.",
     inputSchema: t.Object({
@@ -91,6 +95,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.publish", {
+    access: "write",
     description: "Publish a Shift Labs hosted HTML page.",
     inputSchema: t.Object({ id: t.String({ description: "Page ID" }) }),
     async execute(input, ctx) {
@@ -105,6 +110,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.archive", {
+    access: "write",
     description: "Archive a Shift Labs page.",
     inputSchema: t.Object({ id: t.String({ description: "Page ID" }) }),
     async execute(input, ctx) {
@@ -119,6 +125,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.shares", {
+    access: "read",
     description: "List shares for a Shift Labs page.",
     inputSchema: t.Object({ pageId: t.String({ description: "Page ID" }) }),
     async execute(input, ctx) {
@@ -132,6 +139,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.share", {
+    access: "write",
     description: "Create a viewer share for a Shift Labs page.",
     inputSchema: t.Object({
       pageId: t.String({ description: "Page ID" }),
@@ -155,6 +163,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.revokeShare", {
+    access: "write",
     description: "Revoke a Shift Labs page share.",
     inputSchema: t.Object({
       shareId: t.String({ description: "Page share ID" }),
@@ -173,6 +182,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
   });
 
   rl.registerAction("page.renderUrl", {
+    access: "read",
     description: "Return the authenticated render URL for a page.",
     inputSchema: t.Object({
       pageId: t.String({ description: "Page ID" }),
