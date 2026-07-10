@@ -79,6 +79,8 @@ export const ISSUE_SOURCE = [
 ] as const;
 export const PAGE_STATUS = ["draft", "published", "archived"] as const;
 export const PAGE_VISIBILITY = ["org", "invited"] as const;
+export const TRANSCRIPTION_LANGUAGE = ["auto", "en", "he"] as const;
+export const TRANSCRIPT_FORMAT = ["txt", "srt", "vtt", "json"] as const;
 
 export function enumDescription(
   name: string,
