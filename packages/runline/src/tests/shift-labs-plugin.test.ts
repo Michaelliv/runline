@@ -106,12 +106,8 @@ describe("shiftLabs plugin", () => {
     ]);
   });
 
-  it("strictly validates the transcription service contract", () => {
-    const plugin = makeShiftLabs();
-    const transcriptionActions = plugin.actions.filter((action) =>
-      action.name.startsWith("transcription."),
-    );
-    for (const action of transcriptionActions) {
+  it("strictly validates every Shift Labs action schema", () => {
+    for (const action of makeShiftLabs().actions) {
       const schema = action.inputSchema as {
         type?: string;
         additionalProperties?: boolean;
@@ -119,7 +115,10 @@ describe("shiftLabs plugin", () => {
       assert.equal(schema.type, "object", action.name);
       assert.equal(schema.additionalProperties, false, action.name);
     }
+  });
 
+  it("strictly validates the transcription service contract", () => {
+    const plugin = makeShiftLabs();
     const transcribe = getAction(plugin, "transcription.transcribe");
     assert.ok(transcribe.inputSchema);
     assert.equal(
@@ -240,9 +239,41 @@ describe("shiftLabs plugin", () => {
     );
     assert.equal(Check(update.inputSchema as never, { id: "issue_1" }), false);
     assert.equal(
+      Check(update.inputSchema as never, { id: "issue_1", typo: true }),
+      false,
+    );
+    assert.equal(
       Check(update.inputSchema as never, {
         id: "issue_1",
         archived: true,
+      }),
+      true,
+    );
+    assert.equal(
+      Check(create.inputSchema as never, {
+        title: "Investigate",
+        dueAt: "not-a-timestamp",
+      }),
+      false,
+    );
+    assert.equal(
+      Check(create.inputSchema as never, {
+        title: "Investigate",
+        dueAt: "2026-07-14T12:00:00.000Z",
+      }),
+      true,
+    );
+    assert.equal(
+      Check(create.inputSchema as never, {
+        title: "Investigate",
+        dueAt: "2026-07-14T15:00:00+03:00",
+      }),
+      false,
+    );
+    assert.equal(Check(create.inputSchema as never, { title: "   " }), false);
+    assert.equal(
+      Check(getAction(plugin, "issue.list").inputSchema as never, {
+        includeArchived: true,
       }),
       true,
     );
@@ -261,6 +292,99 @@ describe("shiftLabs plugin", () => {
       }),
       false,
     );
+    assert.equal(
+      Check(getAction(plugin, "issueView.get").inputSchema as never, {
+        id: "",
+      }),
+      false,
+    );
+    for (const actionName of ["project.update", "issueView.update"]) {
+      assert.equal(
+        Check(getAction(plugin, actionName).inputSchema as never, {
+          id: "resource_1",
+        }),
+        false,
+        actionName,
+      );
+    }
+    assert.equal(
+      Check(getAction(plugin, "page.update").inputSchema as never, {
+        id: "page_1",
+      }),
+      true,
+    );
+    assert.equal(
+      Check(getAction(plugin, "issueView.list").inputSchema as never, {
+        createdById: "user_1",
+      }),
+      true,
+    );
+    assert.equal(
+      Check(getAction(plugin, "page.share").inputSchema as never, {
+        pageId: "page_1",
+        email: "not-an-email",
+      }),
+      false,
+    );
+  });
+
+  it("rejects cloud domain invariants before calling the API", async () => {
+    const plugin = makeShiftLabs();
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      throw new Error("fetch should not run");
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () =>
+        getAction(plugin, "project.create").execute(
+          {
+            name: "Invalid dates",
+            startAt: "2026-07-15T00:00:00.000Z",
+            targetAt: "2026-07-14T00:00:00.000Z",
+          },
+          ctx(),
+        ),
+      /targetAt must not precede startAt/,
+    );
+    await assert.rejects(
+      () =>
+        getAction(plugin, "issue.dependency.add").execute(
+          { blockedIssueId: "issue_1", blockingIssueId: "issue_1" },
+          ctx(),
+        ),
+      /cannot block itself/,
+    );
+    await assert.rejects(
+      () =>
+        getAction(plugin, "issueView.create").execute(
+          {
+            name: "Invalid dates",
+            startAfter: "2026-07-15T00:00:00.000Z",
+            dueBefore: "2026-07-14T00:00:00.000Z",
+          },
+          ctx(),
+        ),
+      /dueBefore must not precede startAfter/,
+    );
+    assert.equal(fetchCalls, 0);
+  });
+
+  it("rejects nested Issues without a Project before calling the API", async () => {
+    const action = getAction(makeShiftLabs(), "issue.create");
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      throw new Error("fetch should not run");
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () =>
+        action.execute({ title: "Nested", parentIssueId: "parent_1" }, ctx()),
+      /projectId is required/,
+    );
+    assert.equal(fetchCalls, 0);
   });
 
   it("creates Projects, nested Issues, and saved Issue Views", async () => {
