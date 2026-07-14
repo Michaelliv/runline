@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
+import { Check } from "typebox/value";
 import shiftLabs from "../../../runline-plugins/shiftLabs/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
@@ -24,6 +25,7 @@ const SHIFT_LABS_ACTIONS = [
   "page.share",
   "page.shares",
   "page.update",
+  "transcription.artifact.list",
   "transcription.job.cancel",
   "transcription.job.get",
   "transcription.job.list",
@@ -83,6 +85,65 @@ describe("shiftLabs plugin", () => {
     assert.deepEqual(plugin.actions.map((a) => a.name).sort(), [
       ...SHIFT_LABS_ACTIONS,
     ]);
+  });
+
+  it("strictly validates the transcription service contract", () => {
+    const plugin = makeShiftLabs();
+    const transcriptionActions = plugin.actions.filter((action) =>
+      action.name.startsWith("transcription."),
+    );
+    for (const action of transcriptionActions) {
+      const schema = action.inputSchema as {
+        type?: string;
+        additionalProperties?: boolean;
+      };
+      assert.equal(schema.type, "object", action.name);
+      assert.equal(schema.additionalProperties, false, action.name);
+    }
+
+    const transcribe = getAction(plugin, "transcription.transcribe");
+    assert.ok(transcribe.inputSchema);
+    assert.equal(
+      Check(transcribe.inputSchema as never, {
+        path: "/tmp/audio.mp3",
+        name: "Standup",
+        waitSeconds: 120,
+      }),
+      true,
+    );
+    assert.equal(
+      Check(transcribe.inputSchema as never, {
+        path: "/tmp/audio.mp3",
+        name: " ",
+      }),
+      false,
+    );
+    assert.equal(
+      Check(transcribe.inputSchema as never, {
+        path: "/tmp/audio.mp3",
+        waitSeconds: 121,
+      }),
+      false,
+    );
+    assert.equal(
+      Check(transcribe.inputSchema as never, {
+        path: "/tmp/audio.mp3",
+        unknown: true,
+      }),
+      false,
+    );
+
+    const transcript = getAction(plugin, "transcription.transcript");
+    assert.ok(transcript.inputSchema);
+    assert.equal(
+      Check(transcript.inputSchema as never, {
+        jobId: "job_1",
+        format: "json",
+        downloadOnly: true,
+      }),
+      true,
+    );
+    assert.equal(Check(transcript.inputSchema as never, { jobId: " " }), false);
   });
 
   it("does not expose issue.report or issue lifecycle transitions in v1", () => {
@@ -215,11 +276,22 @@ describe("shiftLabs plugin", () => {
         });
         return Response.json({
           asset: { id: "asset_1" },
-          upload: { url: "https://uploads.invalid/asset_1", headers: {} },
+          upload: {
+            method: "PUT",
+            url: "https://uploads.invalid/asset_1",
+            headers: {
+              "content-type": "audio/mpeg",
+              "x-upload-token": "grant-token",
+            },
+            expiresAt: "2026-07-14T12:15:00.000Z",
+          },
         });
       }
       if (url === "https://uploads.invalid/asset_1") {
         assert.equal(init?.method, "PUT");
+        const headers = new Headers(init?.headers);
+        assert.equal(headers.get("content-type"), "audio/mpeg");
+        assert.equal(headers.get("x-upload-token"), "grant-token");
         return new Response(null, { status: 200 });
       }
       if (url.endsWith("/assets/asset_1/complete")) {
@@ -268,6 +340,50 @@ describe("shiftLabs plugin", () => {
     );
   });
 
+  it("rejects empty and oversized media before any network call", async () => {
+    const action = getAction(makeShiftLabs(), "transcription.transcribe");
+    const directory = await mkdtemp(join(tmpdir(), "shift-labs-plugin-"));
+    const empty = join(directory, "empty.mp3");
+    const oversized = join(directory, "oversized.mp3");
+    await writeFile(empty, "");
+    await writeFile(oversized, "x");
+    await truncate(oversized, 5 * 1024 * 1024 * 1024 + 1);
+
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      throw new Error("fetch should not run");
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () => action.execute({ path: empty }, ctx({ organizationId: "org_1" })),
+      /Media file is empty/,
+    );
+    await assert.rejects(
+      () =>
+        action.execute({ path: oversized }, ctx({ organizationId: "org_1" })),
+      /service limit/,
+    );
+    assert.equal(fetchCalls, 0);
+  });
+
+  it("lists artifact metadata from the public service route", async () => {
+    const action = getAction(makeShiftLabs(), "transcription.artifact.list");
+
+    mockShift((input, init) => {
+      assert.equal(
+        String(input),
+        "https://d1ood6y5zobtne.cloudfront.net/v1/services/transcription/jobs/job_1/artifacts",
+      );
+      assert.equal(init?.method, undefined);
+      return { artifacts: [{ id: "artifact_1", format: "txt" }] };
+    });
+
+    assert.deepEqual(await action.execute({ jobId: "job_1" }, ctx()), [
+      { id: "artifact_1", format: "txt" },
+    ]);
+  });
+
   it("fetches transcripts through a signed download grant", async () => {
     const action = getAction(makeShiftLabs(), "transcription.transcript");
 
@@ -279,10 +395,16 @@ describe("shiftLabs plugin", () => {
       if (url.endsWith("/jobs/job_1/artifacts/txt/download")) {
         assert.equal(init?.method, "POST");
         return Response.json({
-          download: { url: "https://downloads.invalid/signed" },
+          artifact: { id: "artifact_1", sizeBytes: 23 },
+          download: {
+            method: "GET",
+            url: "https://downloads.invalid/signed",
+            expiresAt: "2026-07-14T12:05:00.000Z",
+          },
         });
       }
       if (url === "https://downloads.invalid/signed") {
+        assert.equal(init?.method, "GET");
         return new Response("Speaker 1: hello world\n");
       }
       throw new Error(`unexpected request: ${url}`);
@@ -295,6 +417,76 @@ describe("shiftLabs plugin", () => {
       ),
       { format: "txt", content: "Speaker 1: hello world\n" },
     );
+  });
+
+  it("returns download grants without fetching oversized transcripts", async () => {
+    const action = getAction(makeShiftLabs(), "transcription.transcript");
+    let downloadFetches = 0;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/jobs/job_1/artifacts/json/download")) {
+        return Response.json({
+          artifact: {
+            id: "artifact_1",
+            format: "json",
+            sizeBytes: 2 * 1024 * 1024 + 1,
+          },
+          download: {
+            method: "GET",
+            url: "https://downloads.invalid/large",
+            expiresAt: "2026-07-14T12:05:00.000Z",
+          },
+        });
+      }
+      downloadFetches += 1;
+      throw new Error(`unexpected request: ${url}`);
+    }) as typeof fetch;
+
+    assert.deepEqual(
+      await action.execute({ jobId: "job_1", format: "json" }, ctx()),
+      {
+        format: "json",
+        artifact: {
+          id: "artifact_1",
+          format: "json",
+          sizeBytes: 2 * 1024 * 1024 + 1,
+        },
+        download: {
+          method: "GET",
+          url: "https://downloads.invalid/large",
+          expiresAt: "2026-07-14T12:05:00.000Z",
+        },
+      },
+    );
+    assert.equal(downloadFetches, 0);
+  });
+
+  it("measures downloaded transcript limits in UTF-8 bytes", async () => {
+    const action = getAction(makeShiftLabs(), "transcription.transcript");
+    const content = "א".repeat(1024 * 1024 + 1);
+    const grant = {
+      artifact: { id: "artifact_1", format: "txt", sizeBytes: 1 },
+      download: {
+        method: "GET" as const,
+        url: "https://downloads.invalid/unexpected-large",
+        expiresAt: "2026-07-14T12:05:00.000Z",
+      },
+    };
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/jobs/job_1/artifacts/txt/download")) {
+        return Response.json(grant);
+      }
+      if (url === grant.download.url) return new Response(content);
+      throw new Error(`unexpected request: ${url}`);
+    }) as typeof fetch;
+
+    assert.deepEqual(await action.execute({ jobId: "job_1" }, ctx()), {
+      format: "txt",
+      ...grant,
+    });
   });
 
   it("builds render URLs from the fetched page's organization", async () => {
