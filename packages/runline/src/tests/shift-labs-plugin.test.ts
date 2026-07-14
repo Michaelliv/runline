@@ -13,8 +13,18 @@ const originalFetch = globalThis.fetch;
 const SHIFT_LABS_ACTIONS = [
   "issue.comment",
   "issue.create",
+  "issue.dependency.add",
+  "issue.dependency.list",
+  "issue.dependency.remove",
   "issue.get",
   "issue.list",
+  "issue.update",
+  "issueView.create",
+  "issueView.delete",
+  "issueView.get",
+  "issueView.issues",
+  "issueView.list",
+  "issueView.update",
   "page.archive",
   "page.create",
   "page.get",
@@ -25,6 +35,10 @@ const SHIFT_LABS_ACTIONS = [
   "page.share",
   "page.shares",
   "page.update",
+  "project.create",
+  "project.get",
+  "project.list",
+  "project.update",
   "transcription.artifact.list",
   "transcription.job.cancel",
   "transcription.job.get",
@@ -183,6 +197,70 @@ describe("shiftLabs plugin", () => {
         ctx(),
       ),
       { id: "issue_1", title: "Broken sync" },
+    );
+  });
+
+  it("creates Projects, nested Issues, and saved Issue Views", async () => {
+    const plugin = makeShiftLabs();
+    const project = getAction(plugin, "project.create");
+    const issue = getAction(plugin, "issue.create");
+    const view = getAction(plugin, "issueView.create");
+    const calls: Array<{ url: string; body: unknown }> = [];
+
+    mockShift((input, init) => {
+      const url = String(input);
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ url, body });
+      if (url.endsWith("/v1/projects")) return { project: { id: "project_1" } };
+      if (url.endsWith("/v1/issues")) return { issue: { id: "issue_1" } };
+      if (url.endsWith("/v1/issue-views")) return { view: { id: "view_1" } };
+      throw new Error(`unexpected request: ${url}`);
+    });
+
+    assert.deepEqual(await project.execute({ name: "Unified work" }, ctx()), {
+      id: "project_1",
+    });
+    assert.deepEqual(
+      await issue.execute(
+        {
+          title: "Sub-Issue",
+          projectId: "project_1",
+          parentIssueId: "parent_1",
+        },
+        ctx(),
+      ),
+      { id: "issue_1" },
+    );
+    assert.deepEqual(
+      await view.execute(
+        {
+          name: "Project board",
+          layout: "board",
+          projectId: "project_1",
+          groupBy: "status",
+        },
+        ctx(),
+      ),
+      { id: "view_1" },
+    );
+    assert.deepEqual(
+      calls.map((call) => call.body),
+      [
+        { name: "Unified work" },
+        {
+          title: "Sub-Issue",
+          projectId: "project_1",
+          parentIssueId: "parent_1",
+        },
+        {
+          name: "Project board",
+          visibility: "personal",
+          layout: "board",
+          filters: { projectId: "project_1" },
+          groupBy: "status",
+          sortBy: ["updatedAt"],
+        },
+      ],
     );
   });
 

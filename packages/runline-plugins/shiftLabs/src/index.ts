@@ -1,7 +1,9 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { registerIssueViewActions } from "./issue-views.js";
 import { registerIssueActions } from "./issues.js";
 import { registerPageActions } from "./pages.js";
+import { registerProjectActions } from "./projects.js";
 import { registerTranscriptionActions } from "./transcription.js";
 
 export default function shiftLabs(rl: RunlinePluginAPI) {
@@ -23,7 +25,9 @@ export default function shiftLabs(rl: RunlinePluginAPI) {
     }),
   );
 
+  registerProjectActions(rl);
   registerIssueActions(rl);
+  registerIssueViewActions(rl);
   registerPageActions(rl);
   registerTranscriptionActions(rl);
 }
