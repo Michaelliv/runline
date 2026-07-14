@@ -49,18 +49,17 @@ export function pageRenderUrl(organizationId: string, slug: string): string {
 }
 
 export const ISSUE_STATUS = [
-  "triage",
-  "open",
+  "backlog",
+  "todo",
   "in_progress",
-  "resolved",
-  "closed",
+  "done",
+  "canceled",
 ] as const;
-export const ISSUE_KIND = [
-  "bug",
-  "support",
-  "feature_request",
-  "incident",
-  "task",
+export const PROJECT_STATUS = [
+  "planned",
+  "active",
+  "completed",
+  "canceled",
 ] as const;
 export const ISSUE_PRIORITY = [
   "none",
@@ -69,13 +68,27 @@ export const ISSUE_PRIORITY = [
   "high",
   "urgent",
 ] as const;
-export const ISSUE_SEVERITY = ["info", "warning", "error", "critical"] as const;
 export const ISSUE_SOURCE = [
   "user",
   "agent",
   "system",
   "api",
   "integration",
+] as const;
+export const ISSUE_VIEW_VISIBILITY = ["personal", "organization"] as const;
+export const ISSUE_VIEW_LAYOUT = ["list", "board", "timeline"] as const;
+export const ISSUE_VIEW_GROUP = [
+  "status",
+  "assignee",
+  "priority",
+  "project",
+] as const;
+export const ISSUE_VIEW_SORT = [
+  "manual",
+  "priority",
+  "startAt",
+  "dueAt",
+  "updatedAt",
 ] as const;
 export const PAGE_STATUS = ["draft", "published", "archived"] as const;
 export const PAGE_VISIBILITY = ["org", "invited"] as const;
