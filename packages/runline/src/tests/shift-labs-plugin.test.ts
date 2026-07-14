@@ -15,15 +15,19 @@ const SHIFT_LABS_ACTIONS = [
   "issue.create",
   "issue.dependency.add",
   "issue.dependency.list",
+  "issue.dependency.listPage",
   "issue.dependency.remove",
   "issue.get",
   "issue.list",
+  "issue.listPage",
   "issue.update",
   "issueView.create",
   "issueView.delete",
   "issueView.get",
   "issueView.issues",
+  "issueView.issuesPage",
   "issueView.list",
+  "issueView.listPage",
   "issueView.update",
   "page.archive",
   "page.create",
@@ -38,6 +42,7 @@ const SHIFT_LABS_ACTIONS = [
   "project.create",
   "project.get",
   "project.list",
+  "project.listPage",
   "project.update",
   "transcription.artifact.list",
   "transcription.job.cancel",
@@ -200,6 +205,64 @@ describe("shiftLabs plugin", () => {
     );
   });
 
+  it("exposes strict cursor pagination without breaking first-page list actions", async () => {
+    const plugin = makeShiftLabs();
+    const page = getAction(plugin, "issue.listPage");
+    assert.ok(page.inputSchema);
+    assert.equal(Check(page.inputSchema as never, { limit: 25 }), true);
+    assert.equal(Check(page.inputSchema as never, { limit: 2.5 }), false);
+    assert.equal(Check(page.inputSchema as never, { cursor: "" }), false);
+
+    mockShift((input) => {
+      const url = new URL(String(input));
+      assert.equal(url.pathname, "/v1/issues");
+      assert.equal(url.searchParams.get("cursor"), "next_1");
+      assert.equal(url.searchParams.get("limit"), "25");
+      return { issues: [{ id: "issue_2" }], nextCursor: "next_2" };
+    });
+
+    assert.deepEqual(
+      await page.execute({ cursor: "next_1", limit: 25 }, ctx()),
+      { issues: [{ id: "issue_2" }], nextCursor: "next_2" },
+    );
+  });
+
+  it("accepts structured Issue metadata and rejects no-op updates", () => {
+    const plugin = makeShiftLabs();
+    const create = getAction(plugin, "issue.create");
+    const update = getAction(plugin, "issue.update");
+    assert.equal(
+      Check(create.inputSchema as never, {
+        title: "Investigate",
+        metadata: { source: "monitor", attempts: 3 },
+      }),
+      true,
+    );
+    assert.equal(Check(update.inputSchema as never, { id: "issue_1" }), false);
+    assert.equal(
+      Check(update.inputSchema as never, {
+        id: "issue_1",
+        archived: true,
+      }),
+      true,
+    );
+    const createView = getAction(plugin, "issueView.create");
+    assert.equal(
+      Check(createView.inputSchema as never, {
+        name: "Shared",
+        visibility: "organization",
+      }),
+      true,
+    );
+    assert.equal(
+      Check(createView.inputSchema as never, {
+        name: "Orphaned",
+        visibility: "personal",
+      }),
+      false,
+    );
+  });
+
   it("creates Projects, nested Issues, and saved Issue Views", async () => {
     const plugin = makeShiftLabs();
     const project = getAction(plugin, "project.create");
@@ -254,7 +317,7 @@ describe("shiftLabs plugin", () => {
         },
         {
           name: "Project board",
-          visibility: "personal",
+          visibility: "organization",
           layout: "board",
           filters: { projectId: "project_1" },
           groupBy: "status",

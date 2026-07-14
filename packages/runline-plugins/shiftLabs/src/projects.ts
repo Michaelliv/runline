@@ -2,35 +2,58 @@ import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { enumSchema, PROJECT_STATUS, pathSegment, request } from "./shared.js";
 
+const projectListFields = {
+  status: t.Optional(enumSchema("Project status", PROJECT_STATUS)),
+  leadUserId: t.Optional(t.String({ minLength: 1 })),
+  includeArchived: t.Optional(t.Boolean()),
+  cursor: t.Optional(
+    t.String({ minLength: 1, description: "Next-page cursor" }),
+  ),
+  limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+};
+
+function listParams(input: unknown): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(
+    (input ?? {}) as Record<string, unknown>,
+  )) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  return params;
+}
+
 export function registerProjectActions(rl: RunlinePluginAPI) {
   rl.registerAction("project.list", {
     access: "read",
-    description: "List concrete Shift Labs Projects.",
-    inputSchema: t.Object({
-      status: t.Optional(enumSchema("Project status", PROJECT_STATUS)),
-      leadUserId: t.Optional(t.String()),
-      includeArchived: t.Optional(t.Boolean()),
-      limit: t.Optional(t.Number({ minimum: 1, maximum: 100 })),
-    }),
+    description: "List the first page of concrete Shift Labs Projects.",
+    inputSchema: t.Object(projectListFields),
     async execute(input, ctx) {
-      const params = new URLSearchParams();
-      for (const [key, value] of Object.entries(
-        (input ?? {}) as Record<string, unknown>,
-      )) {
-        if (value !== undefined) params.set(key, String(value));
-      }
       const body = await request<{ projects: unknown[] }>(
         ctx,
-        `/v1/projects?${params}`,
+        `/v1/projects?${listParams(input)}`,
       );
       return body.projects;
+    },
+  });
+
+  rl.registerAction("project.listPage", {
+    access: "read",
+    description: "List a cursor-paginated page of concrete Projects.",
+    inputSchema: t.Object(projectListFields),
+    async execute(input, ctx) {
+      return request<{ projects: unknown[]; nextCursor?: string }>(
+        ctx,
+        `/v1/projects?${listParams(input)}`,
+      );
     },
   });
 
   rl.registerAction("project.get", {
     access: "read",
     description: "Get a Project and its derived Issue progress.",
-    inputSchema: t.Object({ id: t.String({ description: "Project ID" }) }),
+    inputSchema: t.Object({
+      id: t.String({ minLength: 1, description: "Project ID" }),
+    }),
     async execute(input, ctx) {
       const { id } = input as { id: string };
       const [project, progress] = await Promise.all([
@@ -48,10 +71,14 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     access: "write",
     description: "Create a concrete Project container.",
     inputSchema: t.Object({
-      name: t.String({ description: "Project name" }),
-      description: t.Optional(t.String()),
+      name: t.String({
+        minLength: 1,
+        maxLength: 160,
+        description: "Project name",
+      }),
+      description: t.Optional(t.String({ maxLength: 20_000 })),
       status: t.Optional(enumSchema("Project status", PROJECT_STATUS)),
-      leadUserId: t.Optional(t.String()),
+      leadUserId: t.Optional(t.String({ minLength: 1 })),
       startAt: t.Optional(
         t.String({ description: "ISO-8601 start timestamp" }),
       ),
@@ -71,16 +98,19 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   rl.registerAction("project.update", {
     access: "write",
     description: "Update Project lifecycle, ownership, dates, or content.",
-    inputSchema: t.Object({
-      id: t.String({ description: "Project ID" }),
-      name: t.Optional(t.String()),
-      description: t.Optional(t.String()),
-      status: t.Optional(enumSchema("Project status", PROJECT_STATUS)),
-      leadUserId: t.Optional(t.Union([t.String(), t.Null()])),
-      startAt: t.Optional(t.Union([t.String(), t.Null()])),
-      targetAt: t.Optional(t.Union([t.String(), t.Null()])),
-      archived: t.Optional(t.Boolean()),
-    }),
+    inputSchema: t.Object(
+      {
+        id: t.String({ minLength: 1, description: "Project ID" }),
+        name: t.Optional(t.String({ minLength: 1, maxLength: 160 })),
+        description: t.Optional(t.String({ maxLength: 20_000 })),
+        status: t.Optional(enumSchema("Project status", PROJECT_STATUS)),
+        leadUserId: t.Optional(t.Union([t.String({ minLength: 1 }), t.Null()])),
+        startAt: t.Optional(t.Union([t.String(), t.Null()])),
+        targetAt: t.Optional(t.Union([t.String(), t.Null()])),
+        archived: t.Optional(t.Boolean()),
+      },
+      { minProperties: 2 },
+    ),
     async execute(input, ctx) {
       const { id, ...patch } = input as { id: string } & Record<
         string,
