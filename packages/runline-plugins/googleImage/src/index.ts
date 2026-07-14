@@ -22,6 +22,7 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -57,24 +58,28 @@ export default function googleImage(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Generate an image with Google's Gemini image models (Nano Banana / Imagen). Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each image to the user with send_file using its `path`.",
-    inputSchema: {
-      prompt: {
-        type: "string",
-        required: true,
-        description: "Detailed description of the image",
+    inputSchema: t.Object(
+      {
+        prompt: t.String({
+          minLength: 1,
+          description: "Detailed description of the image",
+        }),
+        model: t.Optional(
+          t.String({
+            minLength: 1,
+            description:
+              "Gemini image model ID. Defaults to gemini-2.5-flash-image.",
+          }),
+        ),
+        saveDir: t.Optional(
+          t.String({
+            description:
+              "Directory to write the image file(s) into. Empty or omitted uses the OS temp directory.",
+          }),
+        ),
       },
-      model: {
-        type: "string",
-        required: false,
-        description:
-          "gemini-2.5-flash-image (Nano Banana, default) | gemini-3-pro-image-preview | gemini-3.1-flash-image-preview",
-      },
-      saveDir: {
-        type: "string",
-        required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
-      },
-    },
+      { additionalProperties: false },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as CreateInput;
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {

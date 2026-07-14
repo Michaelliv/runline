@@ -22,7 +22,14 @@
  */
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { googleAccessToken } from "../../_shared/googleAuth.js";
+import {
+  GoogleTimestamp,
+  Id,
+  NonEmptyString,
+  stringEnum,
+} from "../../_shared/googleSchemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -677,6 +684,91 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.labels",
 ];
 
+// ─── Action input schemas ────────────────────────────────────────
+
+const strict = { additionalProperties: false } as const;
+const EmptyInput = t.Object({}, strict);
+const IdInput = t.Object({ id: Id }, strict);
+const MessageFormat = stringEnum(["minimal", "full", "raw", "metadata"]);
+const ThreadFormat = stringEnum(["minimal", "full", "metadata"]);
+const ReadStatus = stringEnum(["read", "unread", "both"]);
+const LabelListVisibility = stringEnum([
+  "labelShow",
+  "labelShowIfUnread",
+  "labelHide",
+]);
+const MessageListVisibility = stringEnum(["show", "hide"]);
+const MetadataHeaders = t.Array(t.String());
+const LabelIds = t.Array(NonEmptyString, { minItems: 1 });
+const MaxResults = t.Integer({ minimum: 1, maximum: 500 });
+
+const AttachmentContent = t.Union([
+  t.String(),
+  t.Object({ contentBase64: t.String() }, strict),
+]);
+const Attachment = t.Object(
+  {
+    name: t.Optional(t.String()),
+    filename: t.Optional(t.String()),
+    mimeType: t.Optional(t.String()),
+    contentBase64: AttachmentContent,
+  },
+  strict,
+);
+const Attachments = t.Array(Attachment);
+
+const HasMessageContent = {
+  anyOf: [
+    {
+      required: ["text"],
+      properties: { text: { type: "string", minLength: 1, pattern: "\\S" } },
+    },
+    {
+      required: ["html"],
+      properties: { html: { type: "string", minLength: 1, pattern: "\\S" } },
+    },
+    {
+      required: ["attachments"],
+      properties: { attachments: { type: "array", minItems: 1 } },
+    },
+  ],
+} as const;
+
+const ReplyFields = {
+  text: t.Optional(t.String()),
+  html: t.Optional(t.String()),
+  cc: t.Optional(t.String()),
+  bcc: t.Optional(t.String()),
+  replyToSenderOnly: t.Optional(t.Boolean()),
+  replyToRecipientsOnly: t.Optional(t.Boolean()),
+  attachments: t.Optional(Attachments),
+};
+const ReplyOptions = {
+  ...strict,
+  ...HasMessageContent,
+  not: {
+    required: ["replyToSenderOnly", "replyToRecipientsOnly"],
+    properties: {
+      replyToSenderOnly: { const: true },
+      replyToRecipientsOnly: { const: true },
+    },
+  },
+} as const;
+
+const ListFields = {
+  q: t.Optional(t.String({ description: "Gmail search query" })),
+  sender: t.Optional(t.String()),
+  readStatus: t.Optional(ReadStatus),
+  receivedAfter: t.Optional(GoogleTimestamp),
+  receivedBefore: t.Optional(GoogleTimestamp),
+  labelIds: t.Optional(t.Array(NonEmptyString)),
+  maxResults: t.Optional(MaxResults),
+  pageToken: t.Optional(t.String()),
+  includeSpamTrash: t.Optional(t.Boolean()),
+  returnAll: t.Optional(t.Boolean()),
+};
+const ListInput = t.Object(ListFields, strict);
+
 export default function gmail(rl: RunlinePluginAPI) {
   rl.setName("gmail");
   rl.setVersion("0.1.0");
@@ -796,30 +888,23 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.send", {
     access: "write",
     description: "Send an email",
-    inputSchema: {
-      to: {
-        type: "string",
-        required: true,
-        description: "Comma-separated recipient list",
+    inputSchema: t.Object(
+      {
+        to: NonEmptyString,
+        subject: t.String(),
+        text: t.Optional(t.String({ description: "Plain body" })),
+        html: t.Optional(t.String({ description: "HTML body" })),
+        cc: t.Optional(t.String()),
+        bcc: t.Optional(t.String()),
+        replyTo: t.Optional(t.String()),
+        from: t.Optional(
+          t.String({ description: 'Override From (e.g. "Name <me@x.com>")' }),
+        ),
+        threadId: t.Optional(Id),
+        attachments: t.Optional(Attachments),
       },
-      subject: { type: "string", required: true },
-      text: { type: "string", required: false, description: "Plain body" },
-      html: { type: "string", required: false, description: "HTML body" },
-      cc: { type: "string", required: false },
-      bcc: { type: "string", required: false },
-      replyTo: { type: "string", required: false },
-      from: {
-        type: "string",
-        required: false,
-        description: 'Override From (e.g. "Name <me@x.com>")',
-      },
-      threadId: { type: "string", required: false },
-      attachments: {
-        type: "array",
-        required: false,
-        description: "[{name, mimeType, contentBase64}]",
-      },
-    },
+      { ...strict, ...HasMessageContent },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const email: EmailInput = {
@@ -843,16 +928,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Reply to a message, preserving threadId and In-Reply-To/References headers",
-    inputSchema: {
-      messageId: { type: "string", required: true },
-      text: { type: "string", required: false },
-      html: { type: "string", required: false },
-      cc: { type: "string", required: false },
-      bcc: { type: "string", required: false },
-      replyToSenderOnly: { type: "boolean", required: false },
-      replyToRecipientsOnly: { type: "boolean", required: false },
-      attachments: { type: "array", required: false },
-    },
+    inputSchema: t.Object({ messageId: Id, ...ReplyFields }, ReplyOptions),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       return replyToMessage(ctx, p.messageId as string, p);
@@ -862,21 +938,20 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.get", {
     access: "read",
     description: "Get a message by ID",
-    inputSchema: {
-      id: { type: "string", required: true },
-      format: {
-        type: "string",
-        required: false,
-        description: "minimal | full | raw | metadata (default: full)",
+    inputSchema: t.Object(
+      {
+        id: Id,
+        format: t.Optional(MessageFormat),
+        metadataHeaders: t.Optional(MetadataHeaders),
+        simple: t.Optional(
+          t.Boolean({
+            description:
+              "Flatten headers, resolve labels to names, and decode text/html bodies",
+          }),
+        ),
       },
-      metadataHeaders: { type: "array", required: false },
-      simple: {
-        type: "boolean",
-        required: false,
-        description:
-          "Flatten headers, resolve labels to names, and decode text/html bodies",
-      },
-    },
+      strict,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
@@ -898,30 +973,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "List messages. Supports Gmail search syntax via `q`, plus friendly filters: sender, readStatus ('read'|'unread'), receivedAfter/Before (ISO string, ms, or seconds).",
-    inputSchema: {
-      q: { type: "string", required: false, description: "Gmail search query" },
-      sender: { type: "string", required: false },
-      readStatus: {
-        type: "string",
-        required: false,
-        description: "read | unread | both (default: both)",
-      },
-      receivedAfter: {
-        type: "string",
-        required: false,
-        description: "ISO datetime, epoch ms, or epoch seconds",
-      },
-      receivedBefore: { type: "string", required: false },
-      labelIds: { type: "array", required: false },
-      maxResults: { type: "number", required: false },
-      pageToken: { type: "string", required: false },
-      includeSpamTrash: { type: "boolean", required: false },
-      returnAll: {
-        type: "boolean",
-        required: false,
-        description: "Paginate until exhausted",
-      },
-    },
+    inputSchema: ListInput,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs = buildListQuery(p);
@@ -936,7 +988,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.delete", {
     access: "write",
     description: "Permanently delete a message",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "DELETE", `/messages/${id}`);
@@ -946,7 +998,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.trash", {
     access: "write",
     description: "Move a message to trash (recoverable)",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "POST", `/messages/${id}/trash`);
@@ -956,7 +1008,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.untrash", {
     access: "write",
     description: "Remove a message from trash",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "POST", `/messages/${id}/untrash`);
@@ -966,7 +1018,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.markAsRead", {
     access: "write",
     description: "Remove the UNREAD label",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "POST", `/messages/${id}/modify`, {
@@ -978,7 +1030,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.markAsUnread", {
     access: "write",
     description: "Add the UNREAD label",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "POST", `/messages/${id}/modify`, {
@@ -990,10 +1042,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.addLabels", {
     access: "write",
     description: "Add labels to a message",
-    inputSchema: {
-      id: { type: "string", required: true },
-      labelIds: { type: "array", required: true },
-    },
+    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
     async execute(input, ctx) {
       const { id, labelIds } = input as { id: string; labelIds: string[] };
       return gmailRequest(ctx, "POST", `/messages/${id}/modify`, {
@@ -1005,10 +1054,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.removeLabels", {
     access: "write",
     description: "Remove labels from a message",
-    inputSchema: {
-      id: { type: "string", required: true },
-      labelIds: { type: "array", required: true },
-    },
+    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
     async execute(input, ctx) {
       const { id, labelIds } = input as { id: string; labelIds: string[] };
       return gmailRequest(ctx, "POST", `/messages/${id}/modify`, {
@@ -1021,10 +1067,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "Download an attachment by ID (returns {size, data} where data is base64url)",
-    inputSchema: {
-      messageId: { type: "string", required: true },
-      attachmentId: { type: "string", required: true },
-    },
+    inputSchema: t.Object({ messageId: Id, attachmentId: Id }, strict),
     async execute(input, ctx) {
       const { messageId, attachmentId } = input as {
         messageId: string;
@@ -1043,21 +1086,20 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.get", {
     access: "read",
     description: "Get a thread by ID",
-    inputSchema: {
-      id: { type: "string", required: true },
-      format: {
-        type: "string",
-        required: false,
-        description: "minimal | full | metadata",
+    inputSchema: t.Object(
+      {
+        id: Id,
+        format: t.Optional(ThreadFormat),
+        metadataHeaders: t.Optional(MetadataHeaders),
+        simple: t.Optional(
+          t.Boolean({
+            description:
+              "Return an array of simplified messages instead of the raw thread",
+          }),
+        ),
       },
-      metadataHeaders: { type: "array", required: false },
-      simple: {
-        type: "boolean",
-        required: false,
-        description:
-          "Return an array of simplified messages instead of the raw thread",
-      },
-    },
+      strict,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
@@ -1079,18 +1121,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "List threads. Same filter sugar as `message.list` (sender, readStatus, receivedAfter/Before).",
-    inputSchema: {
-      q: { type: "string", required: false },
-      sender: { type: "string", required: false },
-      readStatus: { type: "string", required: false },
-      receivedAfter: { type: "string", required: false },
-      receivedBefore: { type: "string", required: false },
-      labelIds: { type: "array", required: false },
-      maxResults: { type: "number", required: false },
-      pageToken: { type: "string", required: false },
-      includeSpamTrash: { type: "boolean", required: false },
-      returnAll: { type: "boolean", required: false },
-    },
+    inputSchema: ListInput,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs = buildListQuery(p);
@@ -1103,7 +1134,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.delete", {
     access: "write",
     description: "Permanently delete a thread",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "DELETE", `/threads/${id}`);
@@ -1113,7 +1144,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.trash", {
     access: "write",
     description: "Move a thread to trash",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "POST", `/threads/${id}/trash`);
@@ -1123,7 +1154,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.untrash", {
     access: "write",
     description: "Remove a thread from trash",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "POST", `/threads/${id}/untrash`);
@@ -1133,10 +1164,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.addLabels", {
     access: "write",
     description: "Add labels to all messages in a thread",
-    inputSchema: {
-      id: { type: "string", required: true },
-      labelIds: { type: "array", required: true },
-    },
+    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
     async execute(input, ctx) {
       const { id, labelIds } = input as { id: string; labelIds: string[] };
       return gmailRequest(ctx, "POST", `/threads/${id}/modify`, {
@@ -1148,10 +1176,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.removeLabels", {
     access: "write",
     description: "Remove labels from all messages in a thread",
-    inputSchema: {
-      id: { type: "string", required: true },
-      labelIds: { type: "array", required: true },
-    },
+    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
     async execute(input, ctx) {
       const { id, labelIds } = input as { id: string; labelIds: string[] };
       return gmailRequest(ctx, "POST", `/threads/${id}/modify`, {
@@ -1164,16 +1189,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Reply to the last message in a thread (convenience wrapper over message.reply)",
-    inputSchema: {
-      id: { type: "string", required: true, description: "Thread ID" },
-      text: { type: "string", required: false },
-      html: { type: "string", required: false },
-      cc: { type: "string", required: false },
-      bcc: { type: "string", required: false },
-      replyToSenderOnly: { type: "boolean", required: false },
-      replyToRecipientsOnly: { type: "boolean", required: false },
-      attachments: { type: "array", required: false },
-    },
+    inputSchema: t.Object({ id: Id, ...ReplyFields }, ReplyOptions),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const thread = (await gmailRequest(
@@ -1196,24 +1212,27 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("draft.create", {
     access: "write",
     description: "Create a draft",
-    inputSchema: {
-      to: { type: "string", required: false },
-      subject: { type: "string", required: false },
-      text: { type: "string", required: false },
-      html: { type: "string", required: false },
-      cc: { type: "string", required: false },
-      bcc: { type: "string", required: false },
-      replyTo: { type: "string", required: false },
-      from: { type: "string", required: false },
-      fromAlias: {
-        type: "string",
-        required: false,
-        description:
-          "Send-as alias address (e.g. 'me+alt@x.com'); sets the From header",
+    inputSchema: t.Object(
+      {
+        to: t.Optional(t.String()),
+        subject: t.Optional(t.String()),
+        text: t.Optional(t.String()),
+        html: t.Optional(t.String()),
+        cc: t.Optional(t.String()),
+        bcc: t.Optional(t.String()),
+        replyTo: t.Optional(t.String()),
+        from: t.Optional(t.String()),
+        fromAlias: t.Optional(
+          t.String({
+            description:
+              "Send-as alias address (e.g. 'me+alt@x.com'); sets the From header",
+          }),
+        ),
+        threadId: t.Optional(Id),
+        attachments: t.Optional(Attachments),
       },
-      threadId: { type: "string", required: false },
-      attachments: { type: "array", required: false },
-    },
+      strict,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const from =
@@ -1258,10 +1277,10 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("draft.get", {
     access: "read",
     description: "Get a draft by ID",
-    inputSchema: {
-      id: { type: "string", required: true },
-      format: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { id: Id, format: t.Optional(MessageFormat) },
+      strict,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
@@ -1272,13 +1291,16 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("draft.list", {
     access: "read",
     description: "List drafts",
-    inputSchema: {
-      q: { type: "string", required: false },
-      maxResults: { type: "number", required: false },
-      pageToken: { type: "string", required: false },
-      includeSpamTrash: { type: "boolean", required: false },
-      returnAll: { type: "boolean", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        q: t.Optional(t.String()),
+        maxResults: t.Optional(MaxResults),
+        pageToken: t.Optional(t.String()),
+        includeSpamTrash: t.Optional(t.Boolean()),
+        returnAll: t.Optional(t.Boolean()),
+      },
+      strict,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
@@ -1294,7 +1316,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("draft.delete", {
     access: "write",
     description: "Delete a draft",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "DELETE", `/drafts/${id}`);
@@ -1304,7 +1326,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("draft.send", {
     access: "write",
     description: "Send an existing draft",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "POST", "/drafts/send", { id });
@@ -1316,19 +1338,14 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("label.create", {
     access: "write",
     description: "Create a label",
-    inputSchema: {
-      name: { type: "string", required: true },
-      labelListVisibility: {
-        type: "string",
-        required: false,
-        description: "labelShow | labelShowIfUnread | labelHide",
+    inputSchema: t.Object(
+      {
+        name: NonEmptyString,
+        labelListVisibility: t.Optional(LabelListVisibility),
+        messageListVisibility: t.Optional(MessageListVisibility),
       },
-      messageListVisibility: {
-        type: "string",
-        required: false,
-        description: "show | hide",
-      },
-    },
+      strict,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = { name: p.name };
@@ -1345,7 +1362,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("label.get", {
     access: "read",
     description: "Get a label by ID",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "GET", `/labels/${id}`);
@@ -1355,6 +1372,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("label.list", {
     access: "read",
     description: "List all labels",
+    inputSchema: EmptyInput,
     async execute(_input, ctx) {
       const res = (await gmailRequest(ctx, "GET", "/labels")) as {
         labels?: unknown[];
@@ -1366,7 +1384,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("label.delete", {
     access: "write",
     description: "Delete a label",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return gmailRequest(ctx, "DELETE", `/labels/${id}`);
@@ -1376,12 +1394,22 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("label.update", {
     access: "write",
     description: "Update a label",
-    inputSchema: {
-      id: { type: "string", required: true },
-      name: { type: "string", required: false },
-      labelListVisibility: { type: "string", required: false },
-      messageListVisibility: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        id: Id,
+        name: t.Optional(NonEmptyString),
+        labelListVisibility: t.Optional(LabelListVisibility),
+        messageListVisibility: t.Optional(MessageListVisibility),
+      },
+      {
+        ...strict,
+        anyOf: [
+          { required: ["name"] },
+          { required: ["labelListVisibility"] },
+          { required: ["messageListVisibility"] },
+        ],
+      },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = {};
@@ -1401,6 +1429,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("profile.get", {
     access: "read",
     description: "Get the authenticated user's profile",
+    inputSchema: EmptyInput,
     async execute(_input, ctx) {
       return gmailRequest(ctx, "GET", "/profile");
     },
@@ -1409,6 +1438,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("alias.list", {
     access: "read",
     description: "List configured send-as aliases",
+    inputSchema: EmptyInput,
     async execute(_input, ctx) {
       const res = (await gmailRequest(ctx, "GET", "/settings/sendAs")) as {
         sendAs?: unknown[];

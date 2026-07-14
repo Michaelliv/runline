@@ -1,26 +1,37 @@
 import type { RunlinePluginAPI } from "runline";
-import { buildLocation, extractDocumentId, runBatchUpdate } from "./shared.js";
+import * as t from "typebox";
+import {
+  buildLocation,
+  DocumentInput,
+  extractDocumentId,
+  LOCATION_REQUIREMENT,
+  LocationInput,
+  PositivePoints,
+  runBatchUpdate,
+  STRICT_OBJECT,
+} from "./shared.js";
+
+const PublicImageUri = t.String({
+  minLength: 1,
+  pattern: "^https?://",
+  description: "Publicly fetchable HTTP(S) image URI",
+});
 
 export function registerImagesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertInlineImage", {
     access: "write",
     description:
       "Insert an inline image at the given location. `uri` must point to a publicly fetchable image.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      locationKind: {
-        type: "string",
-        required: false,
-        description:
-          "location (default; requires index) | endOfSegmentLocation",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...LocationInput,
+        uri: PublicImageUri,
+        widthPt: t.Optional(PositivePoints),
+        heightPt: t.Optional(PositivePoints),
       },
-      index: { type: "number", required: false },
-      uri: { type: "string", required: true },
-      widthPt: { type: "number", required: false },
-      heightPt: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -51,17 +62,16 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Replace an existing image (identified by its inline-object id) with a new image from a publicly fetchable URI.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      imageObjectId: { type: "string", required: true },
-      uri: { type: "string", required: true },
-      imageReplaceMethod: {
-        type: "string",
-        required: false,
-        description: "CENTER_CROP (default) | (others as Docs API adds them)",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        imageObjectId: t.String({ minLength: 1 }),
+        uri: PublicImageUri,
+        imageReplaceMethod: t.Optional(t.Literal("CENTER_CROP")),
+        tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      tabId: { type: "string", required: false },
-    },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);

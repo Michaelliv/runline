@@ -10,7 +10,14 @@
  * _shared/googleAuth.ts — same model as googleDrive.
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { googleAccessToken } from "../../_shared/googleAuth.js";
+import {
+  Id,
+  NonEmptyString,
+  PositiveInteger,
+  stringEnum,
+} from "../../_shared/googleSchemas.js";
 
 const SCRIPT_API = "https://script.googleapis.com/v1";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -21,6 +28,34 @@ const SCOPES = [
   "https://www.googleapis.com/auth/script.processes",
   "https://www.googleapis.com/auth/drive.metadata.readonly",
 ];
+
+const scriptFileTypeSchema = stringEnum(["SERVER_JS", "HTML", "JSON"] as const);
+const jsonValueSchema = t.Unsafe({
+  $defs: {
+    value: {
+      anyOf: [
+        { type: "null" },
+        { type: "string" },
+        { type: "number" },
+        { type: "boolean" },
+        { type: "array", items: { $ref: "#/$defs/value" } },
+        {
+          type: "object",
+          additionalProperties: { $ref: "#/$defs/value" },
+        },
+      ],
+    },
+  },
+  $ref: "#/$defs/value",
+});
+const scriptFileSchema = t.Object(
+  {
+    name: NonEmptyString,
+    type: scriptFileTypeSchema,
+    source: t.String(),
+  },
+  { additionalProperties: false },
+);
 
 function accessToken(ctx: ActionContext): Promise<string> {
   return googleAccessToken(ctx, "googleAppsScript", SCOPES);
@@ -65,10 +100,21 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("script.list", {
     access: "read",
     description: "List Apps Script projects in Drive (standalone scripts; bound scripts live inside their container and don't appear here).",
-    inputSchema: {
-      query: { type: "string", required: false, description: "Case-insensitive name substring filter." },
-      pageSize: { type: "number", required: false, description: "Max results (default 50)." },
-    },
+    inputSchema: t.Object(
+      {
+        query: t.Optional(
+          t.String({ description: "Case-insensitive name substring filter." }),
+        ),
+        pageSize: t.Optional(
+          t.Integer({
+            minimum: 1,
+            maximum: 1000,
+            description: "Max results (default 50).",
+          }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const params = new URLSearchParams({
         q: "mimeType='application/vnd.google-apps.script' and trashed=false",
@@ -89,7 +135,10 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("project.getContent", {
     access: "read",
     description: "Get all files of an Apps Script project (name, type, source).",
-    inputSchema: { scriptId: { type: "string", required: true } },
+    inputSchema: t.Object(
+      { scriptId: Id },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const res = await call(ctx, "GET", `${SCRIPT_API}/projects/${input.scriptId}/content`);
       return { scriptId: input.scriptId, files: res.files ?? [] };
@@ -99,10 +148,16 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("project.readFile", {
     access: "read",
     description: "Read one file's source from a project.",
-    inputSchema: {
-      scriptId: { type: "string", required: true },
-      name: { type: "string", required: true, description: "File name without extension (e.g. 'Code', 'appsscript')." },
-    },
+    inputSchema: t.Object(
+      {
+        scriptId: Id,
+        name: t.String({
+          minLength: 1,
+          description: "File name without extension (e.g. 'Code', 'appsscript').",
+        }),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const res = await call(ctx, "GET", `${SCRIPT_API}/projects/${input.scriptId}/content`);
       const file = (res.files ?? []).find((f: any) => f.name === input.name);
@@ -114,12 +169,17 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("file.edit", {
     access: "write",
     description: "Replace (or add) a single file's source, leaving other files untouched. Read-modify-write — the safe way to change code.",
-    inputSchema: {
-      scriptId: { type: "string", required: true },
-      name: { type: "string", required: true },
-      source: { type: "string", required: true },
-      type: { type: "string", required: false, description: "SERVER_JS (default), HTML, or JSON (for appsscript)." },
-    },
+    inputSchema: t.Object(
+      {
+        scriptId: Id,
+        name: NonEmptyString,
+        source: t.String(),
+        type: t.Optional(
+          stringEnum(["SERVER_JS", "HTML", "JSON"] as const),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const cur = await call(ctx, "GET", `${SCRIPT_API}/projects/${input.scriptId}/content`);
       const files = cur.files ?? [];
@@ -136,10 +196,20 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("project.updateContent", {
     access: "write",
     description: "Replace the entire project file set. files = [{name, type, source}], must include the appsscript JSON manifest. Prefer file.edit for single changes.",
-    inputSchema: {
-      scriptId: { type: "string", required: true },
-      files: { type: "array", required: true, description: "[{name, type: SERVER_JS|HTML|JSON, source}]" },
-    },
+    inputSchema: t.Object(
+      {
+        scriptId: Id,
+        files: t.Array(scriptFileSchema, {
+          minItems: 1,
+          contains: t.Object({
+            name: t.Literal("appsscript"),
+            type: t.Literal("JSON"),
+          }),
+          description: "Complete project files, including the appsscript JSON manifest",
+        }),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const res = await call(ctx, "PUT", `${SCRIPT_API}/projects/${input.scriptId}/content`, { files: input.files });
       return { scriptId: input.scriptId, fileCount: (res.files ?? []).length };
@@ -149,10 +219,18 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("project.create", {
     access: "write",
     description: "Create a new Apps Script project. Pass parentId (a Drive file id, e.g. a Sheet) to bind it to that container.",
-    inputSchema: {
-      title: { type: "string", required: true },
-      parentId: { type: "string", required: false, description: "Container Drive file id for a bound script." },
-    },
+    inputSchema: t.Object(
+      {
+        title: NonEmptyString,
+        parentId: t.Optional(
+          t.String({
+            minLength: 1,
+            description: "Container Drive file id for a bound script.",
+          }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const payload: any = { title: input.title };
       if (input.parentId) payload.parentId = input.parentId;
@@ -164,10 +242,13 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("version.create", {
     access: "write",
     description: "Create an immutable version of the project (needed before deploying).",
-    inputSchema: {
-      scriptId: { type: "string", required: true },
-      description: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        scriptId: Id,
+        description: t.Optional(t.String()),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const res = await call(ctx, "POST", `${SCRIPT_API}/projects/${input.scriptId}/versions`, { description: input.description || "" });
       return { scriptId: input.scriptId, versionNumber: res.versionNumber, description: res.description };
@@ -177,12 +258,17 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("deployment.create", {
     access: "write",
     description: "Deploy a version. For function.run, deploy with an API-executable manifest (executionApi access).",
-    inputSchema: {
-      scriptId: { type: "string", required: true },
-      versionNumber: { type: "number", required: true },
-      description: { type: "string", required: false },
-      manifestFileName: { type: "string", required: false, description: "Defaults to 'appsscript'." },
-    },
+    inputSchema: t.Object(
+      {
+        scriptId: Id,
+        versionNumber: PositiveInteger,
+        description: t.Optional(t.String()),
+        manifestFileName: t.Optional(
+          t.String({ minLength: 1, description: "Defaults to 'appsscript'." }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const res = await call(ctx, "POST", `${SCRIPT_API}/projects/${input.scriptId}/deployments`, {
         versionNumber: input.versionNumber,
@@ -196,12 +282,19 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("function.run", {
     access: "write",
     description: "Run a function via scripts.run. Requires the project linked to a standard GCP project, the Apps Script API enabled, and an API-executable deployment (or devMode for the owner).",
-    inputSchema: {
-      scriptId: { type: "string", required: true },
-      functionName: { type: "string", required: true },
-      parameters: { type: "array", required: false, description: "Positional args for the function." },
-      devMode: { type: "boolean", required: false, description: "Run latest saved code (owner only). Default true." },
-    },
+    inputSchema: t.Object(
+      {
+        scriptId: Id,
+        functionName: NonEmptyString,
+        parameters: t.Optional(t.Array(jsonValueSchema)),
+        devMode: t.Optional(
+          t.Boolean({
+            description: "Run latest saved code (owner only). Default true.",
+          }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const res = await call(ctx, "POST", `${SCRIPT_API}/scripts/${input.scriptId}:run`, {
         function: input.functionName,
@@ -219,10 +312,15 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.registerAction("process.list", {
     access: "read",
     description: "Recent executions for a project (status, function, times) — a log view.",
-    inputSchema: {
-      scriptId: { type: "string", required: true },
-      pageSize: { type: "number", required: false, description: "Default 20." },
-    },
+    inputSchema: t.Object(
+      {
+        scriptId: Id,
+        pageSize: t.Optional(
+          t.Integer({ minimum: 1, maximum: 50, description: "Default 20." }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input: any, ctx: ActionContext) {
       const params = new URLSearchParams({
         "userProcessFilter.scriptId": input.scriptId,

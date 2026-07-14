@@ -1,10 +1,18 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import {
   buildLocation,
   compact,
+  DocumentInput,
   extractDocumentId,
+  LOCATION_REQUIREMENT,
+  LocationInput,
   location,
+  PositivePoints,
+  RangeInput,
   runBatchUpdate,
+  SegmentInput,
+  STRICT_OBJECT,
 } from "./shared.js";
 
 function range(p: Record<string, unknown>): Record<string, unknown> {
@@ -24,13 +32,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertPageBreak", {
     access: "write",
     description: "Insert a page break at an index or at the end of a segment.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      locationKind: { type: "string", required: false },
-      index: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, ...LocationInput },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -51,14 +56,14 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Create a named range over a span of text (useful for later programmatic edits).",
-    inputSchema: {
-      document: { type: "string", required: true },
-      name: { type: "string", required: true },
-      startIndex: { type: "number", required: true },
-      endIndex: { type: "number", required: true },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        name: t.String({ minLength: 1 }),
+        ...RangeInput,
+      },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -75,16 +80,20 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Delete named range(s). Pass one of `namedRangeId` or `name`; the latter deletes every range sharing that name.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      namedRangeId: { type: "string", required: false },
-      name: { type: "string", required: false },
-      tabIds: {
-        type: "array",
-        required: false,
-        description: "Optional tab IDs for tabsCriteria.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        namedRangeId: t.Optional(t.String({ minLength: 1 })),
+        name: t.Optional(t.String({ minLength: 1 })),
+        tabIds: t.Optional(
+          t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
+        ),
       },
-    },
+      {
+        ...STRICT_OBJECT,
+        oneOf: [{ required: ["namedRangeId"] }, { required: ["name"] }],
+      },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -102,13 +111,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.createHeader", {
     access: "write",
     description: "Create a DEFAULT header attached to a SectionBreak.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      locationKind: { type: "string", required: false },
-      index: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, ...LocationInput },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -137,10 +143,14 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteHeader", {
     access: "write",
     description: "Delete a header by ID.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      headerId: { type: "string", required: true },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        headerId: t.String({ minLength: 1 }),
+        tabId: t.Optional(t.String({ minLength: 1 })),
+      },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -153,13 +163,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.createFooter", {
     access: "write",
     description: "Create a DEFAULT footer attached to a SectionBreak.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      locationKind: { type: "string", required: false },
-      index: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, ...LocationInput },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -188,10 +195,14 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteFooter", {
     access: "write",
     description: "Delete a footer by ID.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      footerId: { type: "string", required: true },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        footerId: t.String({ minLength: 1 }),
+        tabId: t.Optional(t.String({ minLength: 1 })),
+      },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -205,11 +216,14 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Delete a positioned object (inline image, floating image, etc.) by its objectId.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      objectId: { type: "string", required: true },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        objectId: t.String({ minLength: 1 }),
+        tabId: t.Optional(t.String({ minLength: 1 })),
+      },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -226,18 +240,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Create a footnote reference at a location or at the end of the document body.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      locationKind: {
-        type: "string",
-        required: false,
-        description:
-          "location (default; requires index) | endOfSegmentLocation",
-      },
-      index: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, ...LocationInput },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -258,17 +264,24 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Replace the content of a named range by ID or name with text.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      text: { type: "string", required: true },
-      namedRangeId: { type: "string", required: false },
-      namedRangeName: { type: "string", required: false },
-      tabIds: {
-        type: "array",
-        required: false,
-        description: "Optional tab IDs for tabsCriteria.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        text: t.String(),
+        namedRangeId: t.Optional(t.String({ minLength: 1 })),
+        namedRangeName: t.Optional(t.String({ minLength: 1 })),
+        tabIds: t.Optional(
+          t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
+        ),
       },
-    },
+      {
+        ...STRICT_OBJECT,
+        oneOf: [
+          { required: ["namedRangeId"] },
+          { required: ["namedRangeName"] },
+        ],
+      },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -292,33 +305,35 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Update section style over a range, such as margins or column properties.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      startIndex: { type: "number", required: true },
-      endIndex: { type: "number", required: true },
-      marginTopPt: { type: "number", required: false },
-      marginBottomPt: { type: "number", required: false },
-      marginLeftPt: { type: "number", required: false },
-      marginRightPt: { type: "number", required: false },
-      columnSeparatorStyle: {
-        type: "string",
-        required: false,
-        description: "NONE | BETWEEN_EACH_COLUMN",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...RangeInput,
+        marginTopPt: t.Optional(PositivePoints),
+        marginBottomPt: t.Optional(PositivePoints),
+        marginLeftPt: t.Optional(PositivePoints),
+        marginRightPt: t.Optional(PositivePoints),
+        columnSeparatorStyle: t.Optional(
+          t.Union([t.Literal("NONE"), t.Literal("BETWEEN_EACH_COLUMN")]),
+        ),
+        contentDirection: t.Optional(
+          t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
+        ),
+        fields: t.Optional(t.String({ minLength: 1 })),
       },
-      contentDirection: {
-        type: "string",
-        required: false,
-        description: "LEFT_TO_RIGHT | RIGHT_TO_LEFT",
+      {
+        ...STRICT_OBJECT,
+        anyOf: [
+          { required: ["marginTopPt"] },
+          { required: ["marginBottomPt"] },
+          { required: ["marginLeftPt"] },
+          { required: ["marginRightPt"] },
+          { required: ["columnSeparatorStyle"] },
+          { required: ["contentDirection"] },
+          { required: ["fields"] },
+        ],
       },
-      fields: {
-        type: "string",
-        required: false,
-        description:
-          "Field mask. Defaults to fields implied by supplied properties.",
-      },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -366,17 +381,17 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertSectionBreak", {
     access: "write",
     description: "Insert a section break at the given location.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      index: { type: "number", required: true },
-      sectionType: {
-        type: "string",
-        required: false,
-        description: "CONTINUOUS | NEXT_PAGE. Default CONTINUOUS.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        index: t.Integer({ minimum: 0 }),
+        sectionType: t.Optional(
+          t.Union([t.Literal("CONTINUOUS"), t.Literal("NEXT_PAGE")]),
+        ),
+        ...SegmentInput,
       },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -399,17 +414,31 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Update document-level style (page size, margins, page numbers, default direction).",
-    inputSchema: {
-      document: { type: "string", required: true },
-      pageMarginTopPt: { type: "number", required: false },
-      pageMarginBottomPt: { type: "number", required: false },
-      pageMarginLeftPt: { type: "number", required: false },
-      pageMarginRightPt: { type: "number", required: false },
-      pageSizeWidthPt: { type: "number", required: false },
-      pageSizeHeightPt: { type: "number", required: false },
-      useCustomHeaderFooterMargins: { type: "boolean", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        pageMarginTopPt: t.Optional(PositivePoints),
+        pageMarginBottomPt: t.Optional(PositivePoints),
+        pageMarginLeftPt: t.Optional(PositivePoints),
+        pageMarginRightPt: t.Optional(PositivePoints),
+        pageSizeWidthPt: t.Optional(PositivePoints),
+        pageSizeHeightPt: t.Optional(PositivePoints),
+        useCustomHeaderFooterMargins: t.Optional(t.Boolean()),
+        tabId: t.Optional(t.String({ minLength: 1 })),
+      },
+      {
+        ...STRICT_OBJECT,
+        anyOf: [
+          { required: ["pageMarginTopPt"] },
+          { required: ["pageMarginBottomPt"] },
+          { required: ["pageMarginLeftPt"] },
+          { required: ["pageMarginRightPt"] },
+          { required: ["pageSizeWidthPt"] },
+          { required: ["pageSizeHeightPt"] },
+          { required: ["useCustomHeaderFooterMargins"] },
+        ],
+      },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);

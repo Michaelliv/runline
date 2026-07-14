@@ -1,12 +1,23 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import {
   buildLocation,
   compact,
+  DocumentInput,
   extractDocumentId,
+  HexColor,
   hexToRgbF,
+  LOCATION_REQUIREMENT,
+  LocationInput,
   location,
+  PositivePoints,
   runBatchUpdate,
+  SegmentInput,
+  STRICT_OBJECT,
+  TableLocationInput,
 } from "./shared.js";
+
+const PositiveSpan = t.Integer({ minimum: 1 });
 
 function tableStartLocation(
   p: Record<string, unknown>,
@@ -36,15 +47,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertTable", {
     access: "write",
     description: "Insert an empty table with the given dimensions.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      rows: { type: "number", required: true },
-      columns: { type: "number", required: true },
-      locationKind: { type: "string", required: false },
-      index: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        rows: PositiveSpan,
+        columns: PositiveSpan,
+        ...LocationInput,
+      },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -69,23 +80,14 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Insert a table row above or below a cell in an existing table.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: {
-        type: "number",
-        required: true,
-        description: "Document index where the table begins",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...TableLocationInput,
+        insertBelow: t.Optional(t.Boolean()),
       },
-      rowIndex: { type: "number", required: true },
-      columnIndex: { type: "number", required: true },
-      insertBelow: {
-        type: "boolean",
-        required: false,
-        description: "default: false (insert above)",
-      },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -101,14 +103,10 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteTableRow", {
     access: "write",
     description: "Delete a specific row from a table.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: { type: "number", required: true },
-      rowIndex: { type: "number", required: true },
-      columnIndex: { type: "number", required: true },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, ...TableLocationInput },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -123,19 +121,14 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertTableColumn", {
     access: "write",
     description: "Insert a column left or right of a cell.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: { type: "number", required: true },
-      rowIndex: { type: "number", required: true },
-      columnIndex: { type: "number", required: true },
-      insertRight: {
-        type: "boolean",
-        required: false,
-        description: "default: false (insert left)",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...TableLocationInput,
+        insertRight: t.Optional(t.Boolean()),
       },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -151,14 +144,10 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteTableColumn", {
     access: "write",
     description: "Delete a specific column from a table.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: { type: "number", required: true },
-      rowIndex: { type: "number", required: true },
-      columnIndex: { type: "number", required: true },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, ...TableLocationInput },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -174,30 +163,33 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Apply table-cell styling (background color, borders, padding) to a contiguous span of cells. Pass either a single cell via `tableStartLocation+rowIndex+columnIndex`, or a range via `tableStartLocation+rowSpan+columnSpan`.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: {
-        type: "number",
-        required: true,
-        description: "The startIndex of the table element.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...TableLocationInput,
+        rowSpan: t.Optional(PositiveSpan),
+        columnSpan: t.Optional(PositiveSpan),
+        backgroundColorHex: t.Optional(HexColor),
+        paddingLeftPt: t.Optional(PositivePoints),
+        paddingRightPt: t.Optional(PositivePoints),
+        paddingTopPt: t.Optional(PositivePoints),
+        paddingBottomPt: t.Optional(PositivePoints),
+        contentAlignment: t.Optional(
+          t.Union([t.Literal("TOP"), t.Literal("MIDDLE"), t.Literal("BOTTOM")]),
+        ),
       },
-      rowIndex: { type: "number", required: true },
-      columnIndex: { type: "number", required: true },
-      rowSpan: { type: "number", required: false, default: 1 },
-      columnSpan: { type: "number", required: false, default: 1 },
-      backgroundColorHex: { type: "string", required: false },
-      paddingLeftPt: { type: "number", required: false },
-      paddingRightPt: { type: "number", required: false },
-      paddingTopPt: { type: "number", required: false },
-      paddingBottomPt: { type: "number", required: false },
-      contentAlignment: {
-        type: "string",
-        required: false,
-        description: "TOP | MIDDLE | BOTTOM",
+      {
+        ...STRICT_OBJECT,
+        anyOf: [
+          { required: ["backgroundColorHex"] },
+          { required: ["paddingLeftPt"] },
+          { required: ["paddingRightPt"] },
+          { required: ["paddingTopPt"] },
+          { required: ["paddingBottomPt"] },
+          { required: ["contentAlignment"] },
+        ],
       },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -258,16 +250,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.mergeTableCells", {
     access: "write",
     description: "Merge a contiguous block of cells in a table.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: { type: "number", required: true },
-      rowIndex: { type: "number", required: true },
-      columnIndex: { type: "number", required: true },
-      rowSpan: { type: "number", required: true },
-      columnSpan: { type: "number", required: true },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...TableLocationInput,
+        rowSpan: PositiveSpan,
+        columnSpan: PositiveSpan,
+      },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -292,16 +283,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.unmergeTableCells", {
     access: "write",
     description: "Unmerge a previously merged block of cells.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: { type: "number", required: true },
-      rowIndex: { type: "number", required: true },
-      columnIndex: { type: "number", required: true },
-      rowSpan: { type: "number", required: true },
-      columnSpan: { type: "number", required: true },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...TableLocationInput,
+        rowSpan: PositiveSpan,
+        columnSpan: PositiveSpan,
+      },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -327,34 +317,33 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Update table column properties such as width for selected columns or all columns.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: { type: "number", required: true },
-      columnIndices: {
-        type: "array",
-        required: false,
-        description: "Zero-based column indices. Omit to update all columns.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        tableStartIndex: t.Integer({ minimum: 0 }),
+        columnIndices: t.Optional(
+          t.Array(t.Integer({ minimum: 0 }), { minItems: 1 }),
+        ),
+        widthPt: t.Optional(PositivePoints),
+        widthType: t.Optional(
+          t.Union([
+            t.Literal("WIDTH_TYPE_UNSPECIFIED"),
+            t.Literal("EVENLY_DISTRIBUTED"),
+            t.Literal("FIXED_WIDTH"),
+          ]),
+        ),
+        fields: t.Optional(t.String({ minLength: 1 })),
+        ...SegmentInput,
       },
-      widthPt: {
-        type: "number",
-        required: false,
-        description: "Column width in points.",
+      {
+        ...STRICT_OBJECT,
+        anyOf: [
+          { required: ["widthPt"] },
+          { required: ["widthType"] },
+          { required: ["fields"] },
+        ],
       },
-      widthType: {
-        type: "string",
-        required: false,
-        description:
-          "WIDTH_TYPE_UNSPECIFIED | EVENLY_DISTRIBUTED | FIXED_WIDTH. Defaults to FIXED_WIDTH when widthPt is provided.",
-      },
-      fields: {
-        type: "string",
-        required: false,
-        description:
-          "Field mask. Defaults to fields implied by supplied properties.",
-      },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -388,24 +377,22 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Update table row style such as minimum row height for selected rows or all rows.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: { type: "number", required: true },
-      rowIndices: {
-        type: "array",
-        required: false,
-        description: "Zero-based row indices. Omit to update all rows.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        tableStartIndex: t.Integer({ minimum: 0 }),
+        rowIndices: t.Optional(
+          t.Array(t.Integer({ minimum: 0 }), { minItems: 1 }),
+        ),
+        minRowHeightPt: t.Optional(PositivePoints),
+        fields: t.Optional(t.String({ minLength: 1 })),
+        ...SegmentInput,
       },
-      minRowHeightPt: { type: "number", required: false },
-      fields: {
-        type: "string",
-        required: false,
-        description:
-          "Field mask. Defaults to fields implied by supplied properties.",
+      {
+        ...STRICT_OBJECT,
+        anyOf: [{ required: ["minRowHeightPt"] }, { required: ["fields"] }],
       },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -434,17 +421,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.pinTableHeaderRows", {
     access: "write",
     description: "Pin or unpin header rows in a table.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tableStartIndex: { type: "number", required: true },
-      pinnedHeaderRowsCount: {
-        type: "number",
-        required: true,
-        description: "Use 0 to unpin all header rows.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        tableStartIndex: t.Integer({ minimum: 0 }),
+        pinnedHeaderRowsCount: t.Integer({ minimum: 0 }),
+        ...SegmentInput,
       },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);

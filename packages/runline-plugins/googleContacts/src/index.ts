@@ -24,7 +24,14 @@
  */
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { googleAccessToken } from "../../_shared/googleAuth.js";
+import {
+  Id,
+  NonEmptyString,
+  PositiveInteger,
+  stringEnum,
+} from "../../_shared/googleSchemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -349,6 +356,151 @@ function attachContactId<T extends { resourceName?: string }>(
 
 const SCOPES = ["https://www.googleapis.com/auth/contacts"];
 
+const strictObject = <T extends t.TProperties>(properties: T, options = {}) =>
+  t.Object(properties, { ...options, additionalProperties: false });
+const optionalString = (description?: string) =>
+  t.Optional(t.String(description ? { description } : {}));
+const optionalBoolean = t.Optional(t.Boolean());
+const personField = stringEnum([...ALL_PERSON_FIELDS, "*"] as const);
+const personFields = t.Optional(
+  t.Union([t.String(), t.Array(personField, { minItems: 1 })]),
+);
+const structuredDate = strictObject({
+  year: t.Optional(t.Integer({ minimum: 0 })),
+  month: t.Integer({ minimum: 1, maximum: 12 }),
+  day: t.Integer({ minimum: 1, maximum: 31 }),
+});
+const contactDate = t.Union([NonEmptyString, structuredDate]);
+const typedValue = strictObject({
+  value: NonEmptyString,
+  type: optionalString(),
+});
+const relation = strictObject({
+  person: NonEmptyString,
+  type: optionalString(),
+});
+const contactEvent = strictObject({
+  date: contactDate,
+  type: optionalString(),
+});
+const userDefined = strictObject({ key: NonEmptyString, value: t.String() });
+// These two People API resources are intentionally extensible. Known fields are
+// typed, while additional provider fields remain available for forward
+// compatibility and parity with the plugin's existing passthrough behavior.
+const address = t.Object(
+  {
+    formattedValue: optionalString(),
+    type: optionalString(),
+    poBox: optionalString(),
+    streetAddress: optionalString(),
+    extendedAddress: optionalString(),
+    city: optionalString(),
+    region: optionalString(),
+    postalCode: optionalString(),
+    country: optionalString(),
+    countryCode: optionalString(),
+  },
+  { additionalProperties: true },
+);
+const organization = t.Object(
+  {
+    name: optionalString(),
+    title: optionalString(),
+    department: optionalString(),
+    type: optionalString(),
+    symbol: optionalString(),
+    domain: optionalString(),
+    location: optionalString(),
+    jobDescription: optionalString(),
+    phoneticName: optionalString(),
+    costCenter: optionalString(),
+    fullTimeEquivalentMillipercent: t.Optional(
+      t.Integer({ minimum: 0, maximum: 100_000 }),
+    ),
+    startDate: t.Optional(structuredDate),
+    endDate: t.Optional(structuredDate),
+    current: optionalBoolean,
+  },
+  { additionalProperties: true },
+);
+const clientData = strictObject({ key: NonEmptyString, value: t.String() });
+const contactWritableFields = {
+  givenName: optionalString(),
+  familyName: optionalString(),
+  middleName: optionalString(),
+  honorificPrefix: optionalString(),
+  honorificSuffix: optionalString(),
+  phoneNumbers: t.Optional(t.Array(typedValue)),
+  emailAddresses: t.Optional(t.Array(typedValue)),
+  addresses: t.Optional(t.Array(address)),
+  organizations: t.Optional(t.Array(organization)),
+  relations: t.Optional(t.Array(relation)),
+  urls: t.Optional(t.Array(typedValue)),
+  events: t.Optional(t.Array(contactEvent)),
+  birthday: t.Optional(contactDate),
+  biography: optionalString(),
+  userDefined: t.Optional(t.Array(userDefined)),
+  groups: t.Optional(t.Array(NonEmptyString)),
+};
+const writableContactKeys = Object.keys(contactWritableFields);
+
+const contactSchemas = {
+  create: strictObject(contactWritableFields),
+  get: strictObject({ contactId: Id, fields: personFields }),
+  list: strictObject({
+    query: optionalString(),
+    fields: personFields,
+    sortOrder: t.Optional(
+      stringEnum([
+        "LAST_MODIFIED_ASCENDING",
+        "LAST_MODIFIED_DESCENDING",
+        "FIRST_NAME_ASCENDING",
+        "LAST_NAME_ASCENDING",
+      ] as const),
+    ),
+    returnAll: optionalBoolean,
+    maxResults: t.Optional(PositiveInteger),
+    pageToken: optionalString(),
+  }),
+  update: strictObject(
+    {
+      contactId: Id,
+      etag: optionalString(),
+      fields: personFields,
+      ...contactWritableFields,
+    },
+    { anyOf: writableContactKeys.map((key) => ({ required: [key] })) },
+  ),
+  delete: strictObject({ contactId: Id }),
+};
+
+const groupSchemas = {
+  list: strictObject({
+    returnAll: optionalBoolean,
+    maxResults: t.Optional(PositiveInteger),
+    pageToken: optionalString(),
+    syncToken: optionalString(),
+  }),
+  get: strictObject({
+    groupId: Id,
+    maxMembers: t.Optional(t.Integer({ minimum: 0 })),
+  }),
+  create: strictObject({
+    name: NonEmptyString,
+    clientData: t.Optional(t.Array(clientData)),
+  }),
+  update: strictObject(
+    {
+      groupId: Id,
+      name: optionalString(),
+      clientData: t.Optional(t.Array(clientData)),
+      etag: optionalString(),
+    },
+    { anyOf: [{ required: ["name"] }, { required: ["clientData"] }] },
+  ),
+  delete: strictObject({ groupId: Id, deleteContacts: optionalBoolean }),
+};
+
 export default function googleContacts(rl: RunlinePluginAPI) {
   rl.setName("googleContacts");
   rl.setVersion("0.1.0");
@@ -402,61 +554,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   rl.registerAction("contact.create", {
     access: "write",
     description: "Create a new contact",
-    inputSchema: {
-      givenName: { type: "string", required: false },
-      familyName: { type: "string", required: false },
-      middleName: { type: "string", required: false },
-      honorificPrefix: { type: "string", required: false },
-      honorificSuffix: { type: "string", required: false },
-      phoneNumbers: {
-        type: "array",
-        required: false,
-        description: "[{value, type?}]",
-      },
-      emailAddresses: {
-        type: "array",
-        required: false,
-        description: "[{value, type?}]",
-      },
-      addresses: {
-        type: "array",
-        required: false,
-        description: "[{formattedValue?, streetAddress?, city?, region?, postalCode?, country?, type?}]",
-      },
-      organizations: {
-        type: "array",
-        required: false,
-        description: "[{name, title?, department?, type?}]",
-      },
-      relations: {
-        type: "array",
-        required: false,
-        description: "[{person, type?}]",
-      },
-      urls: { type: "array", required: false },
-      events: {
-        type: "array",
-        required: false,
-        description:
-          "[{date, type?}] — date can be ISO string or {year, month, day}",
-      },
-      birthday: {
-        type: "string",
-        required: false,
-        description: "ISO date string or {year, month, day}",
-      },
-      biography: { type: "string", required: false },
-      userDefined: {
-        type: "array",
-        required: false,
-        description: "[{key, value}] — custom key/value pairs",
-      },
-      groups: {
-        type: "array",
-        required: false,
-        description: "Group IDs or full contactGroups/… resource names",
-      },
-    },
+    inputSchema: contactSchemas.create,
     async execute(input, ctx) {
       const p = (input ?? {}) as unknown as ContactInput;
       const { body } = buildPersonBody(p);
@@ -473,19 +571,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   rl.registerAction("contact.get", {
     access: "read",
     description: "Get a contact by ID",
-    inputSchema: {
-      contactId: {
-        type: "string",
-        required: true,
-        description: "Bare ID or full people/… resource name",
-      },
-      fields: {
-        type: "string",
-        required: false,
-        description:
-          "'*' (all), comma-separated string, or array of People-API field names (default: names, emailAddresses, phoneNumbers)",
-      },
-    },
+    inputSchema: contactSchemas.get,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const resource = normalizeContactResource(p.contactId as string);
@@ -504,23 +590,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "List contacts (people/me/connections) or search them. When `query` is set, hits people:searchContacts; otherwise returns the user's connections.",
-    inputSchema: {
-      query: {
-        type: "string",
-        required: false,
-        description: "If set, uses people:searchContacts instead of connections.list",
-      },
-      fields: { type: "string", required: false },
-      sortOrder: {
-        type: "string",
-        required: false,
-        description:
-          "LAST_MODIFIED_ASCENDING | LAST_MODIFIED_DESCENDING | FIRST_NAME_ASCENDING | LAST_NAME_ASCENDING (connections.list only)",
-      },
-      returnAll: { type: "boolean", required: false },
-      maxResults: { type: "number", required: false },
-      pageToken: { type: "string", required: false },
-    },
+    inputSchema: contactSchemas.list,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const useSearch = typeof p.query === "string" && p.query.length > 0;
@@ -586,37 +656,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Update a contact. Only supplied fields are sent; etag is resolved automatically if not provided.",
-    inputSchema: {
-      contactId: { type: "string", required: true },
-      etag: {
-        type: "string",
-        required: false,
-        description:
-          "Optimistic-concurrency tag. If omitted, the plugin fetches the latest etag first.",
-      },
-      fields: {
-        type: "string",
-        required: false,
-        description: "personFields projection on the response (same semantics as contact.get)",
-      },
-      // Writable fields
-      givenName: { type: "string", required: false },
-      familyName: { type: "string", required: false },
-      middleName: { type: "string", required: false },
-      honorificPrefix: { type: "string", required: false },
-      honorificSuffix: { type: "string", required: false },
-      phoneNumbers: { type: "array", required: false },
-      emailAddresses: { type: "array", required: false },
-      addresses: { type: "array", required: false },
-      organizations: { type: "array", required: false },
-      relations: { type: "array", required: false },
-      urls: { type: "array", required: false },
-      events: { type: "array", required: false },
-      birthday: { type: "string", required: false },
-      biography: { type: "string", required: false },
-      userDefined: { type: "array", required: false },
-      groups: { type: "array", required: false },
-    },
+    inputSchema: contactSchemas.update,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const resource = normalizeContactResource(p.contactId as string);
@@ -658,7 +698,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   rl.registerAction("contact.delete", {
     access: "write",
     description: "Delete a contact",
-    inputSchema: { contactId: { type: "string", required: true } },
+    inputSchema: contactSchemas.delete,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const resource = normalizeContactResource(p.contactId as string);
@@ -672,12 +712,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   rl.registerAction("group.list", {
     access: "read",
     description: "List contact groups (including system groups like 'myContacts' and 'starred')",
-    inputSchema: {
-      returnAll: { type: "boolean", required: false },
-      maxResults: { type: "number", required: false },
-      pageToken: { type: "string", required: false },
-      syncToken: { type: "string", required: false },
-    },
+    inputSchema: groupSchemas.list,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
@@ -695,14 +730,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   rl.registerAction("group.get", {
     access: "read",
     description: "Get a contact group by ID",
-    inputSchema: {
-      groupId: { type: "string", required: true },
-      maxMembers: {
-        type: "number",
-        required: false,
-        description: "Include up to N member resourceNames in the response",
-      },
-    },
+    inputSchema: groupSchemas.get,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const resource = normalizeGroupResource(p.groupId as string);
@@ -715,14 +743,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   rl.registerAction("group.create", {
     access: "write",
     description: "Create a contact group",
-    inputSchema: {
-      name: { type: "string", required: true },
-      clientData: {
-        type: "array",
-        required: false,
-        description: "[{key, value}] — app-private metadata",
-      },
-    },
+    inputSchema: groupSchemas.create,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = {
@@ -739,12 +760,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Update a contact group. Pass a fresh `etag` or let the plugin resolve it automatically.",
-    inputSchema: {
-      groupId: { type: "string", required: true },
-      name: { type: "string", required: false },
-      clientData: { type: "array", required: false },
-      etag: { type: "string", required: false },
-    },
+    inputSchema: groupSchemas.update,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const resource = normalizeGroupResource(p.groupId as string);
@@ -779,10 +795,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Delete a contact group. Pass `deleteContacts=true` to also delete every contact in the group.",
-    inputSchema: {
-      groupId: { type: "string", required: true },
-      deleteContacts: { type: "boolean", required: false },
-    },
+    inputSchema: groupSchemas.delete,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const resource = normalizeGroupResource(p.groupId as string);

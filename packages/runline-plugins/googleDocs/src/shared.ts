@@ -1,5 +1,7 @@
 import type { ActionContext } from "runline";
+import * as t from "typebox";
 import { googleAccessToken } from "../../_shared/googleAuth.js";
+import { RawGoogleObject } from "../../_shared/googleSchemas.js";
 
 export type Ctx = ActionContext;
 
@@ -22,6 +24,67 @@ export const SCOPES = [
 
 export const DOCS_BASE = "https://docs.googleapis.com/v1";
 export const DRIVE_BASE = "https://www.googleapis.com/drive/v3";
+
+export const STRICT_OBJECT = { additionalProperties: false } as const;
+export const DocumentInput = {
+  document: t.String({ minLength: 1, description: "Document ID or URL" }),
+};
+export const SegmentInput = {
+  segmentId: t.Optional(
+    t.String({ description: 'Segment ID, or "body" for the main body' }),
+  ),
+  tabId: t.Optional(t.String({ minLength: 1 })),
+};
+export const RangeInput = {
+  startIndex: t.Integer({ minimum: 0 }),
+  endIndex: t.Integer({ minimum: 0 }),
+  ...SegmentInput,
+};
+export const TableLocationInput = {
+  tableStartIndex: t.Integer({ minimum: 0 }),
+  rowIndex: t.Integer({ minimum: 0 }),
+  columnIndex: t.Integer({ minimum: 0 }),
+  ...SegmentInput,
+};
+export const LocationInput = {
+  locationKind: t.Optional(
+    t.Union([t.Literal("location"), t.Literal("endOfSegmentLocation")]),
+  ),
+  index: t.Optional(t.Integer({ minimum: 0 })),
+  ...SegmentInput,
+};
+export const LOCATION_REQUIREMENT = [
+  {
+    required: ["index"],
+    not: {
+      required: ["locationKind"],
+      properties: { locationKind: { const: "endOfSegmentLocation" } },
+    },
+  },
+  {
+    required: ["locationKind"],
+    properties: { locationKind: { const: "endOfSegmentLocation" } },
+    not: { required: ["index"] },
+  },
+] as const;
+export const HexColor = t.String({
+  pattern: "^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+});
+export const PositivePoints = t.Number({ minimum: 0 });
+export const WriteControl = t.Object(
+  {
+    requiredRevisionId: t.Optional(t.String({ minLength: 1 })),
+    targetRevisionId: t.Optional(t.String({ minLength: 1 })),
+  },
+  {
+    additionalProperties: false,
+    oneOf: [
+      { required: ["requiredRevisionId"] },
+      { required: ["targetRevisionId"] },
+    ],
+  },
+);
+export { RawGoogleObject };
 
 export async function accessToken(ctx: Ctx): Promise<string> {
   return googleAccessToken(ctx, "googleDocs", SCOPES);

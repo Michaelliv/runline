@@ -30,7 +30,16 @@
 
 import rrulePkg from "rrule";
 import type { ActionContext, RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { googleAccessToken } from "../../_shared/googleAuth.js";
+import {
+  Id,
+  NonEmptyString,
+  NonEmptyStringArray,
+  PositiveInteger,
+  StringOrStringArray,
+  stringEnum,
+} from "../../_shared/googleSchemas.js";
 
 // `rrule` ships as CJS; named imports fail under Node ESM.
 const { RRule } = rrulePkg as unknown as { RRule: typeof import("rrule").RRule };
@@ -317,8 +326,9 @@ function applyEventFields(body: EventBody, p: Record<string, unknown>): void {
   if (typeof p.guestsCanSeeOtherGuests === "boolean")
     body.guestsCanSeeOtherGuests = p.guestsCanSeeOtherGuests;
 
-  const attendees = splitAttendees(p.attendees);
-  if (attendees) body.attendees = attendees;
+  if (p.attendees !== undefined) {
+    body.attendees = splitAttendees(p.attendees) ?? [];
+  }
 
   if (p.reminders !== undefined || p.useDefaultReminders !== undefined) {
     const useDefault = p.useDefaultReminders !== false && !Array.isArray(p.reminders);
@@ -341,6 +351,318 @@ function applyEventFields(body: EventBody, p: Record<string, unknown>): void {
 // ─── Plugin ──────────────────────────────────────────────────────
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
+
+const strictObject = <T extends t.TProperties>(properties: T, options = {}) =>
+  t.Object(properties, { ...options, additionalProperties: false });
+const optionalString = (description?: string) =>
+  t.Optional(t.String(description ? { description } : {}));
+const optionalBoolean = t.Optional(t.Boolean());
+const optionalPositiveInteger = t.Optional(PositiveInteger);
+const calendarId = NonEmptyString;
+const accessRole = stringEnum([
+  "freeBusyReader",
+  "reader",
+  "writer",
+  "owner",
+] as const);
+const sendUpdates = stringEnum(["all", "externalOnly", "none"] as const);
+const reminder = strictObject({
+  method: stringEnum(["email", "popup"] as const),
+  minutes: t.Integer({ minimum: 0 }),
+});
+const reminders = t.Array(reminder);
+const attendees = StringOrStringArray;
+const recurrenceFields = {
+  rrule: t.Optional(NonEmptyString),
+  repeatFrequency: t.Optional(
+    stringEnum(["daily", "weekly", "monthly", "yearly"] as const),
+  ),
+  repeatHowManyTimes: t.Optional(PositiveInteger),
+  repeatUntil: t.Optional(NonEmptyString),
+};
+const recurrenceConstraints = [
+  { not: { required: ["repeatHowManyTimes", "repeatUntil"] } },
+  { not: { required: ["rrule", "repeatFrequency"] } },
+  { not: { required: ["rrule", "repeatHowManyTimes"] } },
+  { not: { required: ["rrule", "repeatUntil"] } },
+  {
+    anyOf: [
+      {
+        not: {
+          anyOf: [
+            { required: ["repeatHowManyTimes"] },
+            { required: ["repeatUntil"] },
+          ],
+        },
+      },
+      { required: ["repeatFrequency"] },
+    ],
+  },
+] as const;
+const eventMutableFields = {
+  summary: optionalString(),
+  description: optionalString(),
+  location: optionalString(),
+  colorId: optionalString(),
+  transparency: t.Optional(stringEnum(["opaque", "transparent"] as const)),
+  visibility: t.Optional(
+    stringEnum(["default", "public", "private", "confidential"] as const),
+  ),
+  guestsCanInviteOthers: optionalBoolean,
+  guestsCanModify: optionalBoolean,
+  guestsCanSeeOtherGuests: optionalBoolean,
+  attendees: t.Optional(attendees),
+  reminders: t.Optional(reminders),
+  useDefaultReminders: optionalBoolean,
+};
+const eventListFields = {
+  q: optionalString(),
+  timeMin: optionalString("ISO datetime"),
+  timeMax: optionalString("ISO datetime"),
+  updatedMin: optionalString("ISO datetime"),
+  timeZone: optionalString(),
+  iCalUID: optionalString(),
+  orderBy: t.Optional(stringEnum(["startTime", "updated"] as const)),
+  singleEvents: optionalBoolean,
+  showDeleted: optionalBoolean,
+  showHiddenInvitations: optionalBoolean,
+  maxAttendees: optionalPositiveInteger,
+  maxResults: optionalPositiveInteger,
+  pageToken: optionalString(),
+  returnAll: optionalBoolean,
+  fields: optionalString(),
+  nextOccurrence: optionalBoolean,
+};
+
+const calendarSchemas = {
+  list: strictObject({
+    returnAll: optionalBoolean,
+    maxResults: optionalPositiveInteger,
+    pageToken: optionalString(),
+    showHidden: optionalBoolean,
+    showDeleted: optionalBoolean,
+    minAccessRole: t.Optional(accessRole),
+  }),
+  get: strictObject({ calendarId }),
+  availability: strictObject(
+    {
+      calendarId: t.Optional(calendarId),
+      calendarIds: t.Optional(NonEmptyStringArray),
+      timeMin: NonEmptyString,
+      timeMax: NonEmptyString,
+      timeZone: optionalString(),
+      outputFormat: t.Optional(
+        stringEnum(["availability", "bookedSlots", "raw"] as const),
+      ),
+    },
+    {
+      oneOf: [
+        {
+          required: ["calendarId"],
+          not: { required: ["calendarIds"] },
+        },
+        {
+          required: ["calendarIds"],
+          not: { required: ["calendarId"] },
+        },
+      ],
+    },
+  ),
+  listColors: strictObject({}),
+};
+
+const eventSchemas = {
+  create: strictObject(
+    {
+      calendarId,
+      ...eventMutableFields,
+      start: NonEmptyString,
+      end: NonEmptyString,
+      allDay: optionalBoolean,
+      timeZone: optionalString(),
+      id: optionalString("Custom event ID"),
+      ...recurrenceFields,
+      conferenceSolution: t.Optional(
+        stringEnum([
+          "eventHangout",
+          "eventNamedHangout",
+          "hangoutsMeet",
+        ] as const),
+      ),
+      sendUpdates: t.Optional(sendUpdates),
+      maxAttendees: optionalPositiveInteger,
+    },
+    { allOf: recurrenceConstraints },
+  ),
+  get: strictObject({
+    calendarId,
+    eventId: Id,
+    timeZone: optionalString(),
+    maxAttendees: optionalPositiveInteger,
+    nextOccurrence: optionalBoolean,
+  }),
+  list: strictObject({ calendarId, ...eventListFields }),
+  listInstances: strictObject({
+    calendarId,
+    eventId: Id,
+    timeMin: optionalString(),
+    timeMax: optionalString(),
+    timeZone: optionalString(),
+    showDeleted: optionalBoolean,
+    maxResults: optionalPositiveInteger,
+    pageToken: optionalString(),
+    returnAll: optionalBoolean,
+  }),
+  update: strictObject(
+    {
+      calendarId,
+      eventId: Id,
+      modifyTarget: t.Optional(stringEnum(["instance", "series"] as const)),
+      ...eventMutableFields,
+      start: optionalString(),
+      end: optionalString(),
+      allDay: optionalBoolean,
+      timeZone: optionalString(),
+      ...recurrenceFields,
+      sendUpdates: t.Optional(sendUpdates),
+      maxAttendees: optionalPositiveInteger,
+      sendNotifications: optionalBoolean,
+    },
+    {
+      allOf: [
+        ...recurrenceConstraints,
+        {
+          anyOf: [
+            {
+              not: {
+                anyOf: [{ required: ["start"] }, { required: ["end"] }],
+              },
+            },
+            { required: ["start", "end"] },
+          ],
+        },
+        {
+          not: {
+            required: ["allDay"],
+            not: { required: ["start"] },
+          },
+        },
+        {
+          not: {
+            required: ["timeZone"],
+            not: { required: ["start"] },
+          },
+        },
+      ],
+      anyOf: [
+        ...Object.keys(eventMutableFields).map((key) => ({ required: [key] })),
+        { required: ["start"] },
+        { required: ["rrule"] },
+        { required: ["repeatFrequency"] },
+      ],
+    },
+  ),
+  delete: strictObject({
+    calendarId,
+    eventId: Id,
+    sendUpdates: t.Optional(sendUpdates),
+  }),
+  move: strictObject({
+    calendarId,
+    eventId: Id,
+    destinationCalendarId: calendarId,
+    sendUpdates: t.Optional(sendUpdates),
+  }),
+};
+
+const freeBusySchema = strictObject({
+  calendarIds: NonEmptyStringArray,
+  timeMin: NonEmptyString,
+  timeMax: NonEmptyString,
+  timeZone: optionalString(),
+  groupExpansionMax: optionalPositiveInteger,
+  calendarExpansionMax: optionalPositiveInteger,
+});
+
+const calendarListSchemas = {
+  list: strictObject({
+    minAccessRole: t.Optional(accessRole),
+    showDeleted: optionalBoolean,
+    showHidden: optionalBoolean,
+    returnAll: optionalBoolean,
+  }),
+  insert: strictObject({
+    calendarId,
+    colorRgbFormat: optionalBoolean,
+    defaultReminders: t.Optional(reminders),
+    summaryOverride: optionalString(),
+  }),
+  patch: strictObject(
+    {
+      calendarId,
+      colorId: optionalString(),
+      backgroundColor: optionalString(),
+      foregroundColor: optionalString(),
+      summaryOverride: optionalString(),
+      selected: optionalBoolean,
+      hidden: optionalBoolean,
+      defaultReminders: t.Optional(reminders),
+    },
+    {
+      anyOf: [
+        { required: ["colorId"] },
+        { required: ["backgroundColor"] },
+        { required: ["foregroundColor"] },
+        { required: ["summaryOverride"] },
+        { required: ["selected"] },
+        { required: ["hidden"] },
+        { required: ["defaultReminders"] },
+      ],
+    },
+  ),
+  delete: strictObject({ calendarId }),
+};
+
+const aclRole = stringEnum([
+  "none",
+  "freeBusyReader",
+  "reader",
+  "writer",
+  "owner",
+] as const);
+const aclSchemas = {
+  list: strictObject({ calendarId, returnAll: optionalBoolean }),
+  insert: strictObject(
+    {
+      calendarId,
+      role: aclRole,
+      scopeType: stringEnum(["default", "user", "group", "domain"] as const),
+      scopeValue: optionalString(),
+      sendNotifications: optionalBoolean,
+    },
+    {
+      anyOf: [
+        {
+          properties: { scopeType: { const: "default" } },
+          not: { required: ["scopeValue"] },
+        },
+        {
+          properties: {
+            scopeType: { enum: ["user", "group", "domain"] },
+          },
+          required: ["scopeValue"],
+        },
+      ],
+    },
+  ),
+  update: strictObject({ calendarId, ruleId: Id, role: aclRole }),
+  delete: strictObject({ calendarId, ruleId: Id }),
+};
+
+const settingsSchemas = {
+  list: strictObject({ returnAll: optionalBoolean }),
+  get: strictObject({ setting: NonEmptyString }),
+};
 
 export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.setName("googleCalendar");
@@ -438,18 +760,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("calendar.list", {
     access: "read",
     description: "List calendars the authenticated user has access to",
-    inputSchema: {
-      returnAll: { type: "boolean", required: false },
-      maxResults: { type: "number", required: false },
-      pageToken: { type: "string", required: false },
-      showHidden: { type: "boolean", required: false },
-      showDeleted: { type: "boolean", required: false },
-      minAccessRole: {
-        type: "string",
-        required: false,
-        description: "freeBusyReader | reader | writer | owner",
-      },
-    },
+    inputSchema: calendarSchemas.list,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
@@ -466,13 +777,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("calendar.get", {
     access: "read",
     description: "Get a calendar's metadata (including conference solutions)",
-    inputSchema: {
-      calendarId: {
-        type: "string",
-        required: true,
-        description: 'Calendar ID (email) or "primary"',
-      },
-    },
+    inputSchema: calendarSchemas.get,
     async execute(input, ctx) {
       const { calendarId } = input as { calendarId: string };
       return calRequest(
@@ -487,34 +792,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "Check free/busy information for one or more calendars over a time range",
-    inputSchema: {
-      calendarId: {
-        type: "string",
-        required: false,
-        description: 'Single calendar ID (email) or "primary"',
-      },
-      calendarIds: {
-        type: "array",
-        required: false,
-        description: "Multiple calendar IDs (takes precedence over calendarId)",
-      },
-      timeMin: {
-        type: "string",
-        required: true,
-        description: "ISO datetime — start of the interval",
-      },
-      timeMax: {
-        type: "string",
-        required: true,
-        description: "ISO datetime — end of the interval",
-      },
-      timeZone: { type: "string", required: false },
-      outputFormat: {
-        type: "string",
-        required: false,
-        description: "availability | bookedSlots | raw (default: raw)",
-      },
-    },
+    inputSchema: calendarSchemas.availability,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const ids: string[] = Array.isArray(p.calendarIds)
@@ -562,6 +840,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("calendar.listColors", {
     access: "read",
     description: "List event and calendar color palettes available in Google Calendar",
+    inputSchema: calendarSchemas.listColors,
     async execute(_input, ctx) {
       return calRequest(ctx, "GET", "/colors");
     },
@@ -572,61 +851,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("event.create", {
     access: "write",
     description: "Create a calendar event",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      summary: { type: "string", required: false },
-      description: { type: "string", required: false },
-      location: { type: "string", required: false },
-      start: {
-        type: "string",
-        required: true,
-        description: "ISO datetime (or YYYY-MM-DD when allDay)",
-      },
-      end: { type: "string", required: true },
-      allDay: { type: "boolean", required: false },
-      timeZone: { type: "string", required: false },
-      attendees: {
-        type: "array",
-        required: false,
-        description: "Array of email addresses, or a comma-separated string",
-      },
-      colorId: { type: "string", required: false },
-      id: { type: "string", required: false, description: "Custom event ID" },
-      transparency: {
-        type: "string",
-        required: false,
-        description: 'Show me as: "opaque" (busy) | "transparent" (free)',
-      },
-      visibility: { type: "string", required: false },
-      guestsCanInviteOthers: { type: "boolean", required: false },
-      guestsCanModify: { type: "boolean", required: false },
-      guestsCanSeeOtherGuests: { type: "boolean", required: false },
-      reminders: {
-        type: "array",
-        required: false,
-        description: '[{method: "email"|"popup", minutes: number}]',
-      },
-      useDefaultReminders: { type: "boolean", required: false },
-      rrule: { type: "string", required: false, description: "e.g. FREQ=WEEKLY;COUNT=5" },
-      repeatFrequency: {
-        type: "string",
-        required: false,
-        description: "daily | weekly | monthly | yearly",
-      },
-      repeatHowManyTimes: { type: "number", required: false },
-      repeatUntil: { type: "string", required: false, description: "ISO datetime" },
-      conferenceSolution: {
-        type: "string",
-        required: false,
-        description: "eventHangout | eventNamedHangout | hangoutsMeet",
-      },
-      sendUpdates: {
-        type: "string",
-        required: false,
-        description: "all | externalOnly | none",
-      },
-      maxAttendees: { type: "number", required: false },
-    },
+    inputSchema: eventSchemas.create,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: EventBody = {};
@@ -660,17 +885,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("event.get", {
     access: "read",
     description: "Get a single event",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      eventId: { type: "string", required: true },
-      timeZone: { type: "string", required: false },
-      maxAttendees: { type: "number", required: false },
-      nextOccurrence: {
-        type: "boolean",
-        required: false,
-        description: "Attach nextOccurrence for recurring events (default: true)",
-      },
-    },
+    inputSchema: eventSchemas.get,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
@@ -692,34 +907,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "List events in a calendar. Set `singleEvents=true` to expand recurring events into instances.",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      q: { type: "string", required: false, description: "Free-text query" },
-      timeMin: { type: "string", required: false, description: "ISO datetime" },
-      timeMax: { type: "string", required: false },
-      updatedMin: { type: "string", required: false },
-      timeZone: { type: "string", required: false },
-      iCalUID: { type: "string", required: false },
-      orderBy: {
-        type: "string",
-        required: false,
-        description: "startTime (requires singleEvents=true) | updated",
-      },
-      singleEvents: { type: "boolean", required: false },
-      showDeleted: { type: "boolean", required: false },
-      showHiddenInvitations: { type: "boolean", required: false },
-      maxAttendees: { type: "number", required: false },
-      maxResults: { type: "number", required: false },
-      pageToken: { type: "string", required: false },
-      returnAll: { type: "boolean", required: false },
-      fields: { type: "string", required: false },
-      nextOccurrence: {
-        type: "boolean",
-        required: false,
-        description:
-          "Attach nextOccurrence to recurring events (default: true; ignored when singleEvents=true)",
-      },
-    },
+    inputSchema: eventSchemas.list,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
@@ -760,17 +948,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("event.listInstances", {
     access: "read",
     description: "List instances of a recurring event",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      eventId: { type: "string", required: true },
-      timeMin: { type: "string", required: false },
-      timeMax: { type: "string", required: false },
-      timeZone: { type: "string", required: false },
-      showDeleted: { type: "boolean", required: false },
-      maxResults: { type: "number", required: false },
-      pageToken: { type: "string", required: false },
-      returnAll: { type: "boolean", required: false },
-    },
+    inputSchema: eventSchemas.listInstances,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
@@ -792,38 +970,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Patch an event (only supplied fields are changed). Set modifyTarget='series' to edit the entire recurrence instead of a single instance.",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      eventId: { type: "string", required: true },
-      modifyTarget: {
-        type: "string",
-        required: false,
-        description: "instance (default) | series",
-      },
-      summary: { type: "string", required: false },
-      description: { type: "string", required: false },
-      location: { type: "string", required: false },
-      start: { type: "string", required: false },
-      end: { type: "string", required: false },
-      allDay: { type: "boolean", required: false },
-      timeZone: { type: "string", required: false },
-      attendees: { type: "array", required: false },
-      colorId: { type: "string", required: false },
-      transparency: { type: "string", required: false },
-      visibility: { type: "string", required: false },
-      guestsCanInviteOthers: { type: "boolean", required: false },
-      guestsCanModify: { type: "boolean", required: false },
-      guestsCanSeeOtherGuests: { type: "boolean", required: false },
-      reminders: { type: "array", required: false },
-      useDefaultReminders: { type: "boolean", required: false },
-      rrule: { type: "string", required: false },
-      repeatFrequency: { type: "string", required: false },
-      repeatHowManyTimes: { type: "number", required: false },
-      repeatUntil: { type: "string", required: false },
-      sendUpdates: { type: "string", required: false },
-      maxAttendees: { type: "number", required: false },
-      sendNotifications: { type: "boolean", required: false },
-    },
+    inputSchema: eventSchemas.update,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       let eventId = p.eventId as string;
@@ -882,11 +1029,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("event.delete", {
     access: "write",
     description: "Delete an event",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      eventId: { type: "string", required: true },
-      sendUpdates: { type: "string", required: false },
-    },
+    inputSchema: eventSchemas.delete,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
@@ -904,12 +1047,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("event.move", {
     access: "write",
     description: "Move an event from one calendar to another",
-    inputSchema: {
-      calendarId: { type: "string", required: true, description: "Source calendar" },
-      eventId: { type: "string", required: true },
-      destinationCalendarId: { type: "string", required: true },
-      sendUpdates: { type: "string", required: false },
-    },
+    inputSchema: eventSchemas.move,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {
@@ -932,14 +1070,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "Query free/busy windows across one or more calendars in a time range. Returns an array of busy intervals per calendar id, plus any errors.",
-    inputSchema: {
-      calendarIds: { type: "array", required: true, description: "Calendar ids to query (use 'primary' for the user's own)." },
-      timeMin: { type: "string", required: true, description: "RFC 3339 lower bound." },
-      timeMax: { type: "string", required: true, description: "RFC 3339 upper bound." },
-      timeZone: { type: "string", required: false },
-      groupExpansionMax: { type: "number", required: false },
-      calendarExpansionMax: { type: "number", required: false },
-    },
+    inputSchema: freeBusySchema,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body = {
@@ -959,12 +1090,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("calendarList.list", {
     access: "read",
     description: "List calendars on the user's calendar list (the user's left sidebar).",
-    inputSchema: {
-      minAccessRole: { type: "string", required: false, description: "freeBusyReader | reader | writer | owner" },
-      showDeleted: { type: "boolean", required: false },
-      showHidden: { type: "boolean", required: false },
-      returnAll: { type: "boolean", required: false, default: true },
-    },
+    inputSchema: calendarListSchemas.list,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs = {
@@ -982,12 +1108,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("calendarList.insert", {
     access: "write",
     description: "Add a calendar (by id) to the user's calendar list.",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      colorRgbFormat: { type: "boolean", required: false },
-      defaultReminders: { type: "array", required: false },
-      summaryOverride: { type: "string", required: false },
-    },
+    inputSchema: calendarListSchemas.insert,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = { id: p.calendarId };
@@ -1000,16 +1121,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("calendarList.patch", {
     access: "write",
     description: "Patch a calendar entry on the user's calendar list (colors, summary override, reminders, selected).",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      colorId: { type: "string", required: false },
-      backgroundColor: { type: "string", required: false },
-      foregroundColor: { type: "string", required: false },
-      summaryOverride: { type: "string", required: false },
-      selected: { type: "boolean", required: false },
-      hidden: { type: "boolean", required: false },
-      defaultReminders: { type: "array", required: false },
-    },
+    inputSchema: calendarListSchemas.patch,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = {};
@@ -1028,7 +1140,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("calendarList.delete", {
     access: "write",
     description: "Remove a calendar from the user's calendar list (does not delete the underlying calendar).",
-    inputSchema: { calendarId: { type: "string", required: true } },
+    inputSchema: calendarListSchemas.delete,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       await calRequest(ctx, "DELETE", `/users/me/calendarList/${encodeCalendarId(p.calendarId as string)}`);
@@ -1041,10 +1153,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("acl.list", {
     access: "read",
     description: "List ACL rules on a calendar.",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      returnAll: { type: "boolean", required: false, default: true },
-    },
+    inputSchema: aclSchemas.list,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const path = `/calendars/${encodeCalendarId(p.calendarId as string)}/acl`;
@@ -1057,13 +1166,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("acl.insert", {
     access: "write",
     description: "Add an ACL rule to a calendar. Roles: 'none' | 'freeBusyReader' | 'reader' | 'writer' | 'owner'.",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      role: { type: "string", required: true },
-      scopeType: { type: "string", required: true, description: "'default' | 'user' | 'group' | 'domain'" },
-      scopeValue: { type: "string", required: false, description: "Email / domain depending on scopeType." },
-      sendNotifications: { type: "boolean", required: false },
-    },
+    inputSchema: aclSchemas.insert,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body = { role: p.role, scope: { type: p.scopeType, value: p.scopeValue } };
@@ -1079,11 +1182,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("acl.update", {
     access: "write",
     description: "Patch an ACL rule's role.",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      ruleId: { type: "string", required: true },
-      role: { type: "string", required: true },
-    },
+    inputSchema: aclSchemas.update,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       return calRequest(
@@ -1097,10 +1196,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("acl.delete", {
     access: "write",
     description: "Remove an ACL rule.",
-    inputSchema: {
-      calendarId: { type: "string", required: true },
-      ruleId: { type: "string", required: true },
-    },
+    inputSchema: aclSchemas.delete,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       await calRequest(
@@ -1116,7 +1212,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("settings.list", {
     access: "read",
     description: "List the user's calendar settings (timezone, week start, working location, etc.).",
-    inputSchema: { returnAll: { type: "boolean", required: false, default: true } },
+    inputSchema: settingsSchemas.list,
     async execute(_input, ctx) {
       return paginateAll(ctx, "/users/me/settings", "items", { maxResults: 100 });
     },
@@ -1125,7 +1221,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.registerAction("settings.get", {
     access: "read",
     description: "Get a single setting by key (e.g. 'timezone', 'weekStart', 'locale').",
-    inputSchema: { setting: { type: "string", required: true } },
+    inputSchema: settingsSchemas.get,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       return calRequest(ctx, "GET", `/users/me/settings/${encodeURIComponent(p.setting as string)}`);

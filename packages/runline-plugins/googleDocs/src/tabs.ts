@@ -1,5 +1,12 @@
 import type { RunlinePluginAPI } from "runline";
-import { compact, extractDocumentId, runBatchUpdate } from "./shared.js";
+import * as t from "typebox";
+import {
+  compact,
+  DocumentInput,
+  extractDocumentId,
+  runBatchUpdate,
+  STRICT_OBJECT,
+} from "./shared.js";
 
 function tabProperties(p: Record<string, unknown>): Record<string, unknown> {
   return compact({
@@ -15,12 +22,15 @@ export function registerTabActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Add a Google Docs document tab, optionally at an index or under a parent tab.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      title: { type: "string", required: false },
-      index: { type: "number", required: false },
-      parentTabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        title: t.Optional(t.String({ minLength: 1 })),
+        index: t.Optional(t.Integer({ minimum: 0 })),
+        parentTabId: t.Optional(t.String({ minLength: 1 })),
+      },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -34,10 +44,10 @@ export function registerTabActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Delete a Google Docs document tab by tab ID. Child tabs are deleted too.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tabId: { type: "string", required: true },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, tabId: t.String({ minLength: 1 }) },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -51,19 +61,24 @@ export function registerTabActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Update Google Docs tab properties such as title, index, or parent tab.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      tabId: { type: "string", required: true },
-      title: { type: "string", required: false },
-      index: { type: "number", required: false },
-      parentTabId: { type: "string", required: false },
-      fields: {
-        type: "string",
-        required: false,
-        description:
-          "Field mask. Defaults to fields implied by supplied properties.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        tabId: t.String({ minLength: 1 }),
+        title: t.Optional(t.String({ minLength: 1 })),
+        index: t.Optional(t.Integer({ minimum: 0 })),
+        parentTabId: t.Optional(t.String({ minLength: 1 })),
+        fields: t.Optional(t.String({ minLength: 1 })),
       },
-    },
+      {
+        ...STRICT_OBJECT,
+        anyOf: [
+          { required: ["title"] },
+          { required: ["index"] },
+          { required: ["parentTabId"] },
+        ],
+      },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);

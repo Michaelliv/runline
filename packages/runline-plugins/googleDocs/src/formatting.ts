@@ -1,43 +1,71 @@
 import type { RunlinePluginAPI } from "runline";
-import { compact, extractDocumentId, runBatchUpdate } from "./shared.js";
+import * as t from "typebox";
+import {
+  compact,
+  DocumentInput,
+  extractDocumentId,
+  PositivePoints,
+  RangeInput,
+  RawGoogleObject,
+  runBatchUpdate,
+  STRICT_OBJECT,
+} from "./shared.js";
 
 export function registerFormattingActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.updateParagraphStyle", {
     access: "write",
     description:
       "Apply paragraph styling (alignment, named style, indents, spacing, direction) to the paragraphs intersecting the range.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      startIndex: { type: "number", required: true },
-      endIndex: { type: "number", required: true },
-      alignment: {
-        type: "string",
-        required: false,
-        description: "START | CENTER | END | JUSTIFIED",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...RangeInput,
+        alignment: t.Optional(
+          t.Union([
+            t.Literal("START"),
+            t.Literal("CENTER"),
+            t.Literal("END"),
+            t.Literal("JUSTIFIED"),
+          ]),
+        ),
+        namedStyleType: t.Optional(
+          t.Union([
+            t.Literal("NORMAL_TEXT"),
+            t.Literal("TITLE"),
+            t.Literal("SUBTITLE"),
+            t.Literal("HEADING_1"),
+            t.Literal("HEADING_2"),
+            t.Literal("HEADING_3"),
+            t.Literal("HEADING_4"),
+            t.Literal("HEADING_5"),
+            t.Literal("HEADING_6"),
+          ]),
+        ),
+        direction: t.Optional(
+          t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
+        ),
+        indentFirstLinePt: t.Optional(PositivePoints),
+        indentStartPt: t.Optional(PositivePoints),
+        indentEndPt: t.Optional(PositivePoints),
+        spaceAbovePt: t.Optional(PositivePoints),
+        spaceBelowPt: t.Optional(PositivePoints),
+        lineSpacing: t.Optional(t.Number({ minimum: 0 })),
       },
-      namedStyleType: {
-        type: "string",
-        required: false,
-        description: "NORMAL_TEXT | TITLE | SUBTITLE | HEADING_1 .. HEADING_6",
+      {
+        ...STRICT_OBJECT,
+        anyOf: [
+          { required: ["alignment"] },
+          { required: ["namedStyleType"] },
+          { required: ["direction"] },
+          { required: ["indentFirstLinePt"] },
+          { required: ["indentStartPt"] },
+          { required: ["indentEndPt"] },
+          { required: ["spaceAbovePt"] },
+          { required: ["spaceBelowPt"] },
+          { required: ["lineSpacing"] },
+        ],
       },
-      direction: {
-        type: "string",
-        required: false,
-        description: "LEFT_TO_RIGHT | RIGHT_TO_LEFT",
-      },
-      indentFirstLinePt: { type: "number", required: false },
-      indentStartPt: { type: "number", required: false },
-      indentEndPt: { type: "number", required: false },
-      spaceAbovePt: { type: "number", required: false },
-      spaceBelowPt: { type: "number", required: false },
-      lineSpacing: {
-        type: "number",
-        required: false,
-        description: "Percentage; 100 = single, 150 = 1.5x.",
-      },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -106,21 +134,15 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Update a named style such as NORMAL_TEXT, TITLE, or HEADING_1 using a Docs API NamedStyle object.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      namedStyle: {
-        type: "object",
-        required: true,
-        description: "Docs API NamedStyle object. Must include namedStyleType.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        namedStyle: RawGoogleObject,
+        fields: t.String({ minLength: 1 }),
+        tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      fields: {
-        type: "string",
-        required: true,
-        description:
-          "Field mask such as textStyle.bold or paragraphStyle.alignment.",
-      },
-      tabId: { type: "string", required: false },
-    },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);

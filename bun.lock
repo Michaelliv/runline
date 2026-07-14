@@ -55,6 +55,7 @@
       "name": "runline-plugins",
       "version": "0.1.0",
       "dependencies": {
+        "rrule": "^2.8.1",
         "typebox": "^1.1.35",
       },
       "devDependencies": {

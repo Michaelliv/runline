@@ -1,11 +1,75 @@
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import {
   buildLocation,
   compact,
+  DocumentInput,
   extractDocumentId,
+  HexColor,
   hexToRgbF,
+  LOCATION_REQUIREMENT,
+  LocationInput,
+  PositivePoints,
+  RangeInput,
   runBatchUpdate,
+  STRICT_OBJECT,
 } from "./shared.js";
+
+const PersonProperties = t.Object(
+  { email: t.String({ minLength: 1 }) },
+  STRICT_OBJECT,
+);
+const RichLinkProperties = t.Object(
+  {
+    uri: t.String({ minLength: 1 }),
+    mimeType: t.Optional(t.String({ minLength: 1 })),
+    title: t.Optional(t.String({ minLength: 1 })),
+  },
+  STRICT_OBJECT,
+);
+const DateElementProperties = t.Object(
+  {
+    timestamp: t.Optional(t.String({ minLength: 1 })),
+    timeZoneId: t.Optional(t.String({ minLength: 1 })),
+    locale: t.Optional(t.String({ minLength: 1 })),
+    dateFormat: t.Optional(
+      t.Union([
+        t.Literal("DATE_FORMAT_UNSPECIFIED"),
+        t.Literal("DATE_FORMAT_MONTH_DAY_ABBREVIATED"),
+        t.Literal("DATE_FORMAT_MONTH_DAY_FULL"),
+        t.Literal("DATE_FORMAT_MONTH_DAY_YEAR_ABBREVIATED"),
+        t.Literal("DATE_FORMAT_ISO8601"),
+      ]),
+    ),
+    timeFormat: t.Optional(
+      t.Union([
+        t.Literal("TIME_FORMAT_UNSPECIFIED"),
+        t.Literal("TIME_FORMAT_DISABLED"),
+        t.Literal("TIME_FORMAT_HOUR_MINUTE"),
+        t.Literal("TIME_FORMAT_HOUR_MINUTE_TIMEZONE"),
+      ]),
+    ),
+  },
+  STRICT_OBJECT,
+);
+
+const BulletPreset = t.Union([
+  t.Literal("BULLET_DISC_CIRCLE_SQUARE"),
+  t.Literal("BULLET_DIAMONDX_ARROW3D_SQUARE"),
+  t.Literal("BULLET_CHECKBOX"),
+  t.Literal("BULLET_ARROW_DIAMOND_DISC"),
+  t.Literal("BULLET_STAR_CIRCLE_SQUARE"),
+  t.Literal("BULLET_ARROW3D_CIRCLE_SQUARE"),
+  t.Literal("BULLET_LEFTTRIANGLE_DIAMOND_DISC"),
+  t.Literal("BULLET_DIAMONDX_HOLLOWDIAMOND_SQUARE"),
+  t.Literal("BULLET_DIAMOND_CIRCLE_SQUARE"),
+  t.Literal("NUMBERED_DECIMAL_ALPHA_ROMAN"),
+  t.Literal("NUMBERED_DECIMAL_ALPHA_ROMAN_PARENS"),
+  t.Literal("NUMBERED_DECIMAL_NESTED"),
+  t.Literal("NUMBERED_UPPERALPHA_ALPHA_ROMAN"),
+  t.Literal("NUMBERED_UPPERROMAN_UPPERALPHA_DECIMAL"),
+  t.Literal("NUMBERED_ZERODECIMAL_ALPHA_ROMAN"),
+]);
 
 function range(p: Record<string, unknown>): Record<string, unknown> {
   return compact({
@@ -21,27 +85,10 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Insert text at a specific index, or at the end of a segment (body/header/footer/footnote).",
-    inputSchema: {
-      document: { type: "string", required: true },
-      text: { type: "string", required: true },
-      locationKind: {
-        type: "string",
-        required: false,
-        description:
-          "location (default; requires index) | endOfSegmentLocation",
-      },
-      index: {
-        type: "number",
-        required: false,
-        description: "Required for locationKind=location",
-      },
-      segmentId: {
-        type: "string",
-        required: false,
-        description: 'Segment ID, or "body" / empty for the main body',
-      },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, text: t.String(), ...LocationInput },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -63,18 +110,19 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Replace every occurrence of a text string throughout the document.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      findText: { type: "string", required: true },
-      replaceText: { type: "string", required: true },
-      matchCase: { type: "boolean", required: false },
-      searchByRegex: { type: "boolean", required: false },
-      tabIds: {
-        type: "array",
-        required: false,
-        description: "Optional tab IDs for tabsCriteria.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        findText: t.String({ minLength: 1 }),
+        replaceText: t.String(),
+        matchCase: t.Optional(t.Boolean()),
+        searchByRegex: t.Optional(t.Boolean()),
+        tabIds: t.Optional(
+          t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
+        ),
       },
-    },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -97,13 +145,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteContentRange", {
     access: "write",
     description: "Delete text between two indices in a segment.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      startIndex: { type: "number", required: true },
-      endIndex: { type: "number", required: true },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object({ ...DocumentInput, ...RangeInput }, STRICT_OBJECT),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -117,14 +159,10 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Apply a bullet preset to paragraphs spanning a range. Presets: BULLET_DISC_CIRCLE_SQUARE, BULLET_DIAMONDX_ARROW3D_SQUARE, BULLET_CHECKBOX, NUMBERED_DECIMAL_ALPHA_ROMAN, NUMBERED_DECIMAL_NESTED, etc.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      bulletPreset: { type: "string", required: true },
-      startIndex: { type: "number", required: true },
-      endIndex: { type: "number", required: true },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object(
+      { ...DocumentInput, bulletPreset: BulletPreset, ...RangeInput },
+      STRICT_OBJECT,
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -140,13 +178,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteParagraphBullets", {
     access: "write",
     description: "Remove bullets from paragraphs in a range.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      startIndex: { type: "number", required: true },
-      endIndex: { type: "number", required: true },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+    inputSchema: t.Object({ ...DocumentInput, ...RangeInput }, STRICT_OBJECT),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -160,23 +192,14 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Insert a smart chip person mention at a location or at the end of a segment.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      personProperties: {
-        type: "object",
-        required: true,
-        description: "Docs API PersonProperties object.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        personProperties: PersonProperties,
+        ...LocationInput,
       },
-      locationKind: {
-        type: "string",
-        required: false,
-        description:
-          "location (default; requires index) | endOfSegmentLocation",
-      },
-      index: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -200,23 +223,14 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Insert a rich link smart chip at a location or at the end of a segment.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      richLinkProperties: {
-        type: "object",
-        required: true,
-        description: "Docs API RichLinkProperties object.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        richLinkProperties: RichLinkProperties,
+        ...LocationInput,
       },
-      locationKind: {
-        type: "string",
-        required: false,
-        description:
-          "location (default; requires index) | endOfSegmentLocation",
-      },
-      index: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -240,23 +254,14 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Insert a date smart chip at a location or at the end of a segment.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      dateElementProperties: {
-        type: "object",
-        required: false,
-        description: "Optional Docs API DateElementProperties object.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        dateElementProperties: t.Optional(DateElementProperties),
+        ...LocationInput,
       },
-      locationKind: {
-        type: "string",
-        required: false,
-        description:
-          "location (default; requires index) | endOfSegmentLocation",
-      },
-      index: { type: "number", required: false },
-      segmentId: { type: "string", required: false },
-      tabId: { type: "string", required: false },
-    },
+      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
@@ -281,39 +286,36 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.updateTextStyle", {
     access: "write",
     description:
-      "Apply text styling (bold, italic, underline, color, fontSize, fontFamily, link) to a range. Pass `fields` listing which TextStyle properties were set.",
-    inputSchema: {
-      document: { type: "string", required: true },
-      startIndex: { type: "number", required: true },
-      endIndex: { type: "number", required: true },
-      bold: { type: "boolean", required: false },
-      italic: { type: "boolean", required: false },
-      underline: { type: "boolean", required: false },
-      strikethrough: { type: "boolean", required: false },
-      fontSizePt: {
-        type: "number",
-        required: false,
-        description: "Font size in points.",
+      "Apply text styling (bold, italic, underline, color, font size, font family, or link) to a range.",
+    inputSchema: t.Object(
+      {
+        ...DocumentInput,
+        ...RangeInput,
+        bold: t.Optional(t.Boolean()),
+        italic: t.Optional(t.Boolean()),
+        underline: t.Optional(t.Boolean()),
+        strikethrough: t.Optional(t.Boolean()),
+        fontSizePt: t.Optional(PositivePoints),
+        fontFamily: t.Optional(t.String({ minLength: 1 })),
+        foregroundColorHex: t.Optional(HexColor),
+        backgroundColorHex: t.Optional(HexColor),
+        link: t.Optional(t.String({ minLength: 1 })),
       },
-      fontFamily: { type: "string", required: false },
-      foregroundColorHex: {
-        type: "string",
-        required: false,
-        description: "Hex color, e.g. #1A73E8",
+      {
+        ...STRICT_OBJECT,
+        anyOf: [
+          { required: ["bold"] },
+          { required: ["italic"] },
+          { required: ["underline"] },
+          { required: ["strikethrough"] },
+          { required: ["fontSizePt"] },
+          { required: ["fontFamily"] },
+          { required: ["foregroundColorHex"] },
+          { required: ["backgroundColorHex"] },
+          { required: ["link"] },
+        ],
       },
-      backgroundColorHex: { type: "string", required: false },
-      link: {
-        type: "string",
-        required: false,
-        description: "URL for the linked range.",
-      },
-      segmentId: {
-        type: "string",
-        required: false,
-        description: "Header/footer/footnote id; omit for the body.",
-      },
-      tabId: { type: "string", required: false },
-    },
+    ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const documentId = extractDocumentId(p.document as string);
