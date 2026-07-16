@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Markdown, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -23,15 +24,21 @@ function filterByAllowlist<T extends { name?: string; plugin?: string }>(
 const runlineCache = new Map<string, Promise<Runline>>();
 
 async function getRunline(cwd: string): Promise<Runline> {
-  let pending = runlineCache.get(cwd);
+  const runlineDir = findRunlineDir(cwd);
+  if (!runlineDir) {
+    throw new Error("No .runline/ found — run `runline init` first");
+  }
+
+  const projectDir = path.dirname(runlineDir);
+  let pending = runlineCache.get(projectDir);
   if (!pending) {
-    pending = Runline.fromProject(cwd).then((rl) => {
-      if (!rl) throw new Error("No .runline/ found — run `runline init` first");
+    pending = Runline.fromProject(projectDir).then((rl) => {
+      if (!rl) throw new Error("Failed to load the resolved .runline/ project");
       return rl;
     });
     // Drop failed loads so the next call retries instead of caching the error.
-    pending.catch(() => runlineCache.delete(cwd));
-    runlineCache.set(cwd, pending);
+    pending.catch(() => runlineCache.delete(projectDir));
+    runlineCache.set(projectDir, pending);
   }
   return pending;
 }

@@ -180,10 +180,7 @@ describe("shiftLabs plugin", () => {
     const action = getAction(makeShiftLabs(), "issue.create");
 
     mockShift((input, init) => {
-      assert.equal(
-        String(input),
-        "https://d1ood6y5zobtne.cloudfront.net/v1/issues",
-      );
+      assert.equal(String(input), "https://cloud.shift-labs.ai/v1/issues");
       assert.equal(init?.method, "POST");
       const headers = new Headers(init?.headers);
       assert.equal(headers.get("authorization"), "Bearer shift_test");
@@ -457,7 +454,7 @@ describe("shiftLabs plugin", () => {
     mockShift((input, init) => {
       assert.equal(
         String(input),
-        "https://d1ood6y5zobtne.cloudfront.net/v1/issues/issue_1/comments",
+        "https://cloud.shift-labs.ai/v1/issues/issue_1/comments",
       );
       assert.equal(init?.method, "POST");
       assert.deepEqual(JSON.parse(String(init?.body)), { body: "Looking" });
@@ -474,10 +471,7 @@ describe("shiftLabs plugin", () => {
     const action = getAction(makeShiftLabs(), "page.create");
 
     mockShift((input, init) => {
-      assert.equal(
-        String(input),
-        "https://d1ood6y5zobtne.cloudfront.net/v1/pages",
-      );
+      assert.equal(String(input), "https://cloud.shift-labs.ai/v1/pages");
       assert.equal(init?.method, "POST");
       assert.deepEqual(JSON.parse(String(init?.body)), {
         type: "hosted_html",
@@ -508,7 +502,7 @@ describe("shiftLabs plugin", () => {
     mockShift((input, init) => {
       assert.equal(
         String(input),
-        "https://d1ood6y5zobtne.cloudfront.net/v1/pages/page_1/publish",
+        "https://cloud.shift-labs.ai/v1/pages/page_1/publish",
       );
       assert.equal(init?.method, "POST");
       return { page: { id: "page_1", status: "published" } };
@@ -638,7 +632,7 @@ describe("shiftLabs plugin", () => {
     mockShift((input, init) => {
       assert.equal(
         String(input),
-        "https://d1ood6y5zobtne.cloudfront.net/v1/services/transcription/jobs/job_1/artifacts",
+        "https://cloud.shift-labs.ai/v1/services/transcription/jobs/job_1/artifacts",
       );
       assert.equal(init?.method, undefined);
       return { artifacts: [{ id: "artifact_1", format: "txt" }] };
@@ -760,7 +754,7 @@ describe("shiftLabs plugin", () => {
     mockShift((input, init) => {
       assert.equal(
         String(input),
-        "https://d1ood6y5zobtne.cloudfront.net/v1/pages/page_1",
+        "https://cloud.shift-labs.ai/v1/pages/page_1",
       );
       assert.equal(init?.method, undefined);
       return {
@@ -769,7 +763,7 @@ describe("shiftLabs plugin", () => {
     });
 
     assert.deepEqual(await action.execute({ pageId: "page_1" }, ctx()), {
-      url: "https://d1ood6y5zobtne.cloudfront.net/pages/org_from_api/investor-update",
+      url: "https://cloud.shift-labs.ai/pages/org_from_api/investor-update",
     });
   });
 });
