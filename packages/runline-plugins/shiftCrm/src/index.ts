@@ -19,8 +19,8 @@ export default function shiftCrm(rl: RunlinePluginAPI) {
     t.Object({
       apiKey: t.String({
         description:
-          "Shift cloud bearer credential. CRM data routes require a user-scoped token whose user holds an active CRM access grant; service API keys are rejected.",
-        env: "SHIFT_LABS_API_KEY",
+          "User-subject Shift CRM API key minted by an operator via `bun run crm:access key`. It authenticates as its bound user, whose active CRM access grant authorizes data access. Regular Shift cloud service API keys (SHIFT_LABS_API_KEY) cannot reach CRM data.",
+        env: "SHIFT_CRM_API_KEY",
       }),
     }),
   );
