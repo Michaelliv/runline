@@ -934,7 +934,8 @@ export default function gmail(rl: RunlinePluginAPI) {
 
   rl.registerAction("message.send", {
     access: "write",
-    description: "Send an email",
+    description:
+      "Send an email. For formatted or RTL (Hebrew/Arabic) bodies prefer the `jsx` field (React Email, renders client-safe HTML + text fallback) over hand-written `html`.",
     inputSchema: t.Object(
       {
         to: NonEmptyString,
@@ -976,7 +977,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.reply", {
     access: "write",
     description:
-      "Reply to a message, preserving threadId and In-Reply-To/References headers",
+      "Reply to a message, preserving threadId and In-Reply-To/References headers. Formatted bodies: prefer `jsx` over `html`.",
     inputSchema: t.Object({ messageId: Id, ...ReplyFields }, ReplyOptions),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -1237,7 +1238,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.reply", {
     access: "write",
     description:
-      "Reply to the last message in a thread (convenience wrapper over message.reply)",
+      "Reply to the last message in a thread (convenience wrapper over message.reply). Formatted bodies: prefer `jsx` over `html`.",
     inputSchema: t.Object({ id: Id, ...ReplyFields }, ReplyOptions),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -1260,7 +1261,8 @@ export default function gmail(rl: RunlinePluginAPI) {
 
   rl.registerAction("draft.create", {
     access: "write",
-    description: "Create a draft",
+    description:
+      "Create a draft. Formatted bodies: prefer `jsx` over `html` (React Email).",
     inputSchema: t.Object(
       {
         to: t.Optional(t.String()),
