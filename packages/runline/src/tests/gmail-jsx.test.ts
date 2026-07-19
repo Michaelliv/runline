@@ -7,9 +7,15 @@ import gmail from "../../../runline-plugins/gmail/src/index.js";
 import { Runline } from "../sdk.js";
 
 const gmailActions = Runline.create({ plugins: [gmail] }).actions();
-const sendSchema = gmailActions.find((e) => e.action === "message.send")
-  ?.inputSchema as TSchema;
-assert.ok(sendSchema, "missing input schema for gmail.message.send");
+
+function schemaFor(action: string): TSchema {
+  const schema = gmailActions.find((e) => e.action === action)
+    ?.inputSchema as TSchema;
+  assert.ok(schema, `missing input schema for gmail.${action}`);
+  return schema;
+}
+
+const sendSchema = schemaFor("message.send");
 
 const HEBREW_JSX = `<Html dir="rtl" lang="he">
   <Container>
@@ -39,6 +45,44 @@ describe("gmail message.send jsx schema", () => {
 
   it("rejects whitespace-only jsx as the sole body", () => {
     assert.ok(!Check(sendSchema, { to: "a@b.com", subject: "s", jsx: "  " }));
+  });
+});
+
+describe("gmail jsx across reply and draft actions", () => {
+  it("message.reply and thread.reply accept a jsx-only body", () => {
+    assert.ok(
+      Check(schemaFor("message.reply"), { messageId: "m1", jsx: "<Html />" }),
+    );
+    assert.ok(Check(schemaFor("thread.reply"), { id: "t1", jsx: "<Html />" }));
+  });
+
+  it("reply actions reject jsx together with html", () => {
+    assert.ok(
+      !Check(schemaFor("message.reply"), {
+        messageId: "m1",
+        jsx: "<Html />",
+        html: "<p>x</p>",
+      }),
+    );
+  });
+
+  it("reply actions still reject both reply-scope flags", () => {
+    assert.ok(
+      !Check(schemaFor("message.reply"), {
+        messageId: "m1",
+        jsx: "<Html />",
+        replyToSenderOnly: true,
+        replyToRecipientsOnly: true,
+      }),
+    );
+  });
+
+  it("draft.create accepts jsx and rejects jsx together with html", () => {
+    const draft = schemaFor("draft.create");
+    assert.ok(Check(draft, { to: "a@b.com", jsx: "<Html />" }));
+    assert.ok(
+      !Check(draft, { to: "a@b.com", jsx: "<Html />", html: "<p>x</p>" }),
+    );
   });
 });
 
