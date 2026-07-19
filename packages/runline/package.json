@@ -1,6 +1,6 @@
 {
   "name": "runline",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "Code mode for agents — turn any API or command into a callable action",
   "type": "module",
   "main": "dist/index.js",
@@ -66,8 +66,8 @@
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.1.0",
     "playwright": "^1.57.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "sucrase": "^3.35.1"
   },
   "peerDependenciesMeta": {

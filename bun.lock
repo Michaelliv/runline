@@ -12,7 +12,7 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.15.1",
+      "version": "0.16.1",
       "dependencies": {
         "runline": "^0.11.2",
       },
@@ -24,7 +24,7 @@
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.15.1",
+      "version": "0.16.1",
       "bin": {
         "runline": "./dist/main.js",
       },
@@ -48,8 +48,8 @@
         "@react-email/components": "^1.0.12",
         "@react-email/render": "^2.1.0",
         "playwright": "^1.57.0",
-        "react": "^19.2.7",
-        "react-dom": "^19.2.7",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
         "sucrase": "^3.35.1",
       },
       "optionalPeers": [
