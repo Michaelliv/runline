@@ -390,12 +390,13 @@ function normalizeAddressList(input: string | undefined): string | undefined {
     .join(", ");
 }
 
-// ─── Reply helpers ───────────────────────────────────────────────
+// ─── Body resolution ─────────────────────────────────────────────
 
 /**
- * Resolve the outgoing body: `jsx` renders to html with a generated
- * plain-text alternative; an explicit `text` wins over the generated
- * fallback so every jsx email still ships multipart/alternative.
+ * Resolve the outgoing body for send/reply/draft: `jsx` renders to
+ * html with a generated plain-text alternative; an explicit `text`
+ * wins over the generated fallback so every jsx email still ships
+ * multipart/alternative.
  * Composing inputs carry no `html` field — jsx is the only HTML path
  * (raw HTML embeds go through dangerouslySetInnerHTML inside jsx).
  */
@@ -417,6 +418,8 @@ async function resolveBody(
   }
   return { text, html };
 }
+
+// ─── Reply helpers ───────────────────────────────────────────────
 
 interface GmailHeader {
   name: string;
@@ -636,6 +639,10 @@ async function replyToMessage(
     );
   }
 
+  // Render before any network round-trip so malformed jsx fails
+  // without spending Gmail API calls.
+  const { text, html } = await resolveBody(p);
+
   const original = (await gmailRequest(
     ctx,
     "GET",
@@ -683,7 +690,6 @@ async function replyToMessage(
     )
     .join(", ");
 
-  const { text, html } = await resolveBody(p);
   const email: EmailInput = {
     to,
     cc: normalizeAddressList(p.cc as string | undefined),
