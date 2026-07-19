@@ -83,7 +83,13 @@ describe("self-prefixed action names: load-time warning", () => {
     } finally {
       warn.restore();
     }
-    assert.match(warn.lines.join("\n"), /registered action "ping"/);
+    const output = warn.lines.join("\n");
+    assert.match(output, /registered action "ping"/);
+    assert.match(output, /callable as "ping\.ping"/);
+    // No slice-derived rename exists here; the advice must not
+    // suggest the name the action already has.
+    assert.match(output, /does not repeat the plugin name/);
+    assert.doesNotMatch(output, /Rename the action to/);
   });
 
   it("does not warn for ordinary relative action names", () => {
@@ -137,6 +143,22 @@ describe("self-prefixed action names: call-time hint", () => {
     const result = await engine.execute("return await salesforce.nope({})");
     assert.match(result.error ?? "", /Unknown action: salesforce\.nope/);
     assert.doesNotMatch(result.error ?? "", /Did you mean/);
+  });
+
+  it("hints on a dot-less miss when the action name equals the plugin name", async () => {
+    const registry = new PluginRegistry();
+    registry.register({
+      name: "ping",
+      version: "1.0.0",
+      actions: [{ name: "ping", execute: () => "pong" }],
+    });
+    const engine = new ExecutionEngine(registry, {
+      ...DEFAULT_CONFIG,
+      timeoutMs: 5000,
+    });
+    const result = await engine.execute("return await ping({})");
+    assert.match(result.error ?? "", /Unknown action: ping/);
+    assert.match(result.error ?? "", /Did you mean "ping\.ping"\?/);
   });
 
   it("the double-prefixed path itself still resolves and executes", async () => {

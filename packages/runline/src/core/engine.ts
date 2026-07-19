@@ -256,9 +256,10 @@ export class ExecutionEngine {
    * teach the caller — agents read error messages and self-correct.
    */
   private selfPrefixHint(path: string): string {
+    // A dot-less miss can still be the exact-name case: plugin "ping"
+    // registering action "ping" makes the callable path "ping.ping".
     const dot = path.indexOf(".");
-    if (dot < 0) return "";
-    const pluginName = path.slice(0, dot);
+    const pluginName = dot < 0 ? path : path.slice(0, dot);
     const doubled = `${pluginName}.${path}`;
     if (!this.registry.resolveAction(doubled)) return "";
     return (
