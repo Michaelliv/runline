@@ -106,6 +106,29 @@ export function isPluginFunction(val: unknown): val is PluginFunction {
   return typeof val === "function";
 }
 
+/**
+ * Action names are plugin-relative: plugin "salesforce" registering
+ * "salesforce.status" is callable as "salesforce.salesforce.status",
+ * which is almost never what the author meant. Warn at resolve time —
+ * the earliest point where both the final plugin name and the full
+ * action list are known (setName may be called after registerAction,
+ * and object exports never go through createPluginAPI).
+ */
+function warnSelfPrefixedActions(plugin: PluginDef): void {
+  for (const action of plugin.actions) {
+    if (
+      action.name === plugin.name ||
+      action.name.startsWith(`${plugin.name}.`)
+    ) {
+      console.warn(
+        `[runline] Plugin "${plugin.name}" registered action "${action.name}", which repeats the plugin name. ` +
+          `Action names are plugin-relative, so this action is callable as "${plugin.name}.${action.name}" — ` +
+          `not "${action.name}". Rename the action to "${action.name.slice(plugin.name.length + 1) || action.name}".`,
+      );
+    }
+  }
+}
+
 export function resolvePluginExport(
   exported: PluginFunction | PluginDef,
   pluginId: string,
@@ -113,10 +136,14 @@ export function resolvePluginExport(
   if (isPluginFunction(exported)) {
     const { api, resolve } = createPluginAPI(pluginId);
     exported(api);
-    return resolve();
+    const plugin = resolve();
+    warnSelfPrefixedActions(plugin);
+    return plugin;
   }
   if (exported && typeof exported === "object" && "actions" in exported) {
-    return exported as PluginDef;
+    const plugin = exported as PluginDef;
+    warnSelfPrefixedActions(plugin);
+    return plugin;
   }
   throw new Error(
     `Invalid plugin export from "${pluginId}": expected a function or { name, actions } object`,

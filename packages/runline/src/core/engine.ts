@@ -218,7 +218,7 @@ export class ExecutionEngine {
   private async invokeAction(path: string, args: unknown): Promise<unknown> {
     const resolved = this.registry.resolveAction(path);
     if (!resolved) {
-      throw new Error(`Unknown action: ${path}`);
+      throw new Error(`Unknown action: ${path}${this.selfPrefixHint(path)}`);
     }
 
     const { plugin, action } = resolved;
@@ -246,6 +246,26 @@ export class ExecutionEngine {
     }
 
     return action.execute(args, ctx);
+  }
+
+  /**
+   * A miss on "salesforce.status" is often a plugin that registered
+   * its action name with the plugin prefix ("salesforce.status" inside
+   * plugin "salesforce"), making the real path
+   * "salesforce.salesforce.status". Detect exactly that shape and
+   * teach the caller — agents read error messages and self-correct.
+   */
+  private selfPrefixHint(path: string): string {
+    const dot = path.indexOf(".");
+    if (dot < 0) return "";
+    const pluginName = path.slice(0, dot);
+    const doubled = `${pluginName}.${path}`;
+    if (!this.registry.resolveAction(doubled)) return "";
+    return (
+      `. Did you mean "${doubled}"? Plugin "${pluginName}" registered its ` +
+      `action name with the plugin prefix ("${path}"), so the full callable ` +
+      `path is "${doubled}".`
+    );
   }
 
   private resolveConnection(plugin: PluginDef): ConnectionConfig {
