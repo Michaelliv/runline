@@ -32,14 +32,9 @@ describe("gmail message.send jsx schema", () => {
     );
   });
 
-  it("rejects jsx together with html", () => {
+  it("rejects the removed html field", () => {
     assert.ok(
-      !Check(sendSchema, {
-        to: "a@b.com",
-        subject: "s",
-        jsx: "<Html />",
-        html: "<p>x</p>",
-      }),
+      !Check(sendSchema, { to: "a@b.com", subject: "s", html: "<p>x</p>" }),
     );
   });
 
@@ -56,11 +51,10 @@ describe("gmail jsx across reply and draft actions", () => {
     assert.ok(Check(schemaFor("thread.reply"), { id: "t1", jsx: "<Html />" }));
   });
 
-  it("reply actions reject jsx together with html", () => {
+  it("reply actions reject the removed html field", () => {
     assert.ok(
       !Check(schemaFor("message.reply"), {
         messageId: "m1",
-        jsx: "<Html />",
         html: "<p>x</p>",
       }),
     );
@@ -77,12 +71,10 @@ describe("gmail jsx across reply and draft actions", () => {
     );
   });
 
-  it("draft.create accepts jsx and rejects jsx together with html", () => {
+  it("draft.create accepts jsx and rejects the removed html field", () => {
     const draft = schemaFor("draft.create");
     assert.ok(Check(draft, { to: "a@b.com", jsx: "<Html />" }));
-    assert.ok(
-      !Check(draft, { to: "a@b.com", jsx: "<Html />", html: "<p>x</p>" }),
-    );
+    assert.ok(!Check(draft, { to: "a@b.com", html: "<p>x</p>" }));
   });
 });
 
@@ -96,6 +88,16 @@ describe("renderEmailJsx", () => {
     assert.match(html, /שלום דנה/);
     assert.match(text, /שלום דנה/);
     assert.match(text, /https:\/\/example\.com\/confirm/);
+  });
+
+  it("supports the documented raw-HTML escape hatch", async () => {
+    // Pins the exact shape promised in the `jsx` field description —
+    // a div is required because react-email's Body owns its children.
+    const raw = '<p dir="rtl">שלום</p>';
+    const { html } = await renderEmailJsx(
+      `<Html><Body><div dangerouslySetInnerHTML={{ __html: ${JSON.stringify(raw)} }} /></Body></Html>`,
+    );
+    assert.ok(html.includes(raw));
   });
 
   it("always produces a non-empty text fallback", async () => {

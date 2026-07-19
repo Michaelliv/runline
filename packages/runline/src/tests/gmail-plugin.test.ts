@@ -218,7 +218,7 @@ describe("gmail plugin TypeBox schemas", () => {
     }
   });
 
-  it("accepts text, HTML, and attachment-only messages", () => {
+  it("accepts text, jsx, and attachment-only messages", () => {
     assert.equal(
       accepts("message.send", {
         to: "recipient@example.com",
@@ -230,8 +230,8 @@ describe("gmail plugin TypeBox schemas", () => {
     assert.equal(
       accepts("message.send", {
         to: "recipient@example.com",
-        subject: "HTML",
-        html: "<p>hello</p>",
+        subject: "JSX",
+        jsx: "<Html />",
       }),
       true,
     );
@@ -272,8 +272,8 @@ describe("gmail plugin TypeBox schemas", () => {
     assert.equal(accepts("message.send", { ...base, content: "hello" }), false);
     assert.equal(accepts("message.send", { ...base, text: "" }), false);
     assert.equal(accepts("message.send", { ...base, text: "   " }), false);
-    assert.equal(accepts("message.send", { ...base, html: "" }), false);
-    assert.equal(accepts("message.send", { ...base, html: "\n\t" }), false);
+    // html was removed in favor of jsx; the strict schema rejects it.
+    assert.equal(accepts("message.send", { ...base, html: "<p>x</p>" }), false);
     assert.equal(accepts("message.send", { ...base, attachments: [] }), false);
   });
 
@@ -326,7 +326,7 @@ describe("gmail plugin TypeBox schemas", () => {
     ] as const) {
       const base = { [idField]: "id-1" };
       assert.equal(accepts(action, { ...base, text: "reply" }), true);
-      assert.equal(accepts(action, { ...base, html: "<p>reply</p>" }), true);
+      assert.equal(accepts(action, { ...base, jsx: "<Html />" }), true);
       assert.equal(
         accepts(action, {
           ...base,
