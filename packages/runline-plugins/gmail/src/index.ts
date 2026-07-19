@@ -23,6 +23,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { renderEmailJsx } from "../../_shared/emailJsx.js";
 import { googleAccessToken } from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
@@ -728,6 +729,10 @@ const HasMessageContent = {
       properties: { html: { type: "string", minLength: 1, pattern: "\\S" } },
     },
     {
+      required: ["jsx"],
+      properties: { jsx: { type: "string", minLength: 1, pattern: "\\S" } },
+    },
+    {
       required: ["attachments"],
       properties: { attachments: { type: "array", minItems: 1 } },
     },
@@ -894,6 +899,12 @@ export default function gmail(rl: RunlinePluginAPI) {
         subject: t.String(),
         text: t.Optional(t.String({ description: "Plain body" })),
         html: t.Optional(t.String({ description: "HTML body" })),
+        jsx: t.Optional(
+          t.String({
+            description:
+              'React Email JSX expression rendered server-side into client-safe HTML with an auto-generated plain-text alternative. Preferred over `html` for formatted emails — handles cross-client rendering (iOS Mail, Gmail, Outlook). For Hebrew/Arabic set dir on the root: `<Html dir="rtl" lang="he"><Container><Heading>שלום</Heading><Text>גוף ההודעה</Text><Button href="...">אישור</Button></Container></Html>`. Mutually exclusive with `html`.',
+          }),
+        ),
         cc: t.Optional(t.String()),
         bcc: t.Optional(t.String()),
         replyTo: t.Optional(t.String()),
@@ -903,10 +914,25 @@ export default function gmail(rl: RunlinePluginAPI) {
         threadId: t.Optional(Id),
         attachments: t.Optional(Attachments),
       },
-      { ...strict, ...HasMessageContent },
+      { ...strict, ...HasMessageContent, not: { required: ["jsx", "html"] } },
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
+      let text = p.text as string | undefined;
+      let html = p.html as string | undefined;
+      if (typeof p.jsx === "string" && p.jsx.trim()) {
+        let rendered: Awaited<ReturnType<typeof renderEmailJsx>>;
+        try {
+          rendered = await renderEmailJsx(p.jsx);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new Error(`gmail: ${msg}`);
+        }
+        html = rendered.html;
+        // An explicit text body wins — the generated one is a fallback
+        // so every jsx email ships multipart/alternative.
+        text ??= rendered.text;
+      }
       const email: EmailInput = {
         to: normalizeAddressList(p.to as string)!,
         cc: normalizeAddressList(p.cc as string | undefined),
@@ -914,8 +940,8 @@ export default function gmail(rl: RunlinePluginAPI) {
         replyTo: normalizeAddressList(p.replyTo as string | undefined),
         from: p.from as string | undefined,
         subject: (p.subject as string) ?? "",
-        text: p.text as string | undefined,
-        html: p.html as string | undefined,
+        text,
+        html,
         attachments: p.attachments as EmailInput["attachments"],
       };
       const body: Record<string, unknown> = { raw: encodeEmail(email) };
