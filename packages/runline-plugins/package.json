@@ -8,6 +8,11 @@
     "build": "tsc --noCheck"
   },
   "devDependencies": {
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "sucrase": "^3.35.1",
     "typescript": "^5.8.0"
   },
   "peerDependencies": {

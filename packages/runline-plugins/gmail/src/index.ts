@@ -23,6 +23,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { renderEmailJsx } from "../../_shared/emailJsx.js";
 import { googleAccessToken } from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
@@ -389,6 +390,35 @@ function normalizeAddressList(input: string | undefined): string | undefined {
     .join(", ");
 }
 
+// ─── Body resolution ─────────────────────────────────────────────
+
+/**
+ * Resolve the outgoing body for send/reply/draft: `jsx` renders to
+ * html with a generated plain-text alternative; an explicit `text`
+ * wins over the generated fallback so every jsx email still ships
+ * multipart/alternative.
+ * Composing inputs carry no `html` field — jsx is the only HTML path
+ * (raw HTML embeds go through dangerouslySetInnerHTML inside jsx).
+ */
+async function resolveBody(
+  p: Record<string, unknown>,
+): Promise<{ text?: string; html?: string }> {
+  let text = p.text as string | undefined;
+  let html: string | undefined;
+  if (typeof p.jsx === "string" && p.jsx.trim()) {
+    let rendered: { html: string; text: string };
+    try {
+      rendered = await renderEmailJsx(p.jsx);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`gmail: ${msg}`);
+    }
+    html = rendered.html;
+    text ??= rendered.text;
+  }
+  return { text, html };
+}
+
 // ─── Reply helpers ───────────────────────────────────────────────
 
 interface GmailHeader {
@@ -609,6 +639,10 @@ async function replyToMessage(
     );
   }
 
+  // Render before any network round-trip so malformed jsx fails
+  // without spending Gmail API calls.
+  const { text, html } = await resolveBody(p);
+
   const original = (await gmailRequest(
     ctx,
     "GET",
@@ -663,8 +697,8 @@ async function replyToMessage(
     subject: subject.toLowerCase().startsWith("re:")
       ? subject
       : `Re: ${subject}`,
-    text: p.text as string | undefined,
-    html: p.html as string | undefined,
+    text,
+    html,
     inReplyTo: messageIdHeader,
     references: messageIdHeader,
     attachments: p.attachments as EmailInput["attachments"],
@@ -717,6 +751,13 @@ const Attachment = t.Object(
 );
 const Attachments = t.Array(Attachment);
 
+const Jsx = t.Optional(
+  t.String({
+    description:
+      'React Email JSX expression rendered server-side into client-safe HTML with an auto-generated plain-text alternative — handles cross-client rendering (iOS Mail, Gmail, Outlook). For Hebrew/Arabic set dir on the root: `<Html dir="rtl" lang="he"><Container><Heading>שלום</Heading><Text>גוף ההודעה</Text><Button href="...">אישור</Button></Container></Html>`. To embed pre-rendered HTML from elsewhere: `<Html><Body><div dangerouslySetInnerHTML={{ __html: theHtml }} /></Body></Html>`.',
+  }),
+);
+
 const HasMessageContent = {
   anyOf: [
     {
@@ -724,8 +765,8 @@ const HasMessageContent = {
       properties: { text: { type: "string", minLength: 1, pattern: "\\S" } },
     },
     {
-      required: ["html"],
-      properties: { html: { type: "string", minLength: 1, pattern: "\\S" } },
+      required: ["jsx"],
+      properties: { jsx: { type: "string", minLength: 1, pattern: "\\S" } },
     },
     {
       required: ["attachments"],
@@ -736,7 +777,7 @@ const HasMessageContent = {
 
 const ReplyFields = {
   text: t.Optional(t.String()),
-  html: t.Optional(t.String()),
+  jsx: Jsx,
   cc: t.Optional(t.String()),
   bcc: t.Optional(t.String()),
   replyToSenderOnly: t.Optional(t.Boolean()),
@@ -887,13 +928,14 @@ export default function gmail(rl: RunlinePluginAPI) {
 
   rl.registerAction("message.send", {
     access: "write",
-    description: "Send an email",
+    description:
+      "Send an email. `text` for plain bodies; `jsx` (React Email) for formatted or RTL (Hebrew/Arabic) bodies — renders client-safe HTML with a text fallback.",
     inputSchema: t.Object(
       {
         to: NonEmptyString,
         subject: t.String(),
         text: t.Optional(t.String({ description: "Plain body" })),
-        html: t.Optional(t.String({ description: "HTML body" })),
+        jsx: Jsx,
         cc: t.Optional(t.String()),
         bcc: t.Optional(t.String()),
         replyTo: t.Optional(t.String()),
@@ -907,6 +949,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
+      const { text, html } = await resolveBody(p);
       const email: EmailInput = {
         to: normalizeAddressList(p.to as string)!,
         cc: normalizeAddressList(p.cc as string | undefined),
@@ -914,8 +957,8 @@ export default function gmail(rl: RunlinePluginAPI) {
         replyTo: normalizeAddressList(p.replyTo as string | undefined),
         from: p.from as string | undefined,
         subject: (p.subject as string) ?? "",
-        text: p.text as string | undefined,
-        html: p.html as string | undefined,
+        text,
+        html,
         attachments: p.attachments as EmailInput["attachments"],
       };
       const body: Record<string, unknown> = { raw: encodeEmail(email) };
@@ -927,7 +970,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.reply", {
     access: "write",
     description:
-      "Reply to a message, preserving threadId and In-Reply-To/References headers",
+      "Reply to a message, preserving threadId and In-Reply-To/References headers. `text` for plain bodies; `jsx` (React Email) for formatted ones.",
     inputSchema: t.Object({ messageId: Id, ...ReplyFields }, ReplyOptions),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -1188,7 +1231,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.reply", {
     access: "write",
     description:
-      "Reply to the last message in a thread (convenience wrapper over message.reply)",
+      "Reply to the last message in a thread (convenience wrapper over message.reply). `text` for plain bodies; `jsx` (React Email) for formatted ones.",
     inputSchema: t.Object({ id: Id, ...ReplyFields }, ReplyOptions),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
@@ -1211,13 +1254,14 @@ export default function gmail(rl: RunlinePluginAPI) {
 
   rl.registerAction("draft.create", {
     access: "write",
-    description: "Create a draft",
+    description:
+      "Create a draft. `text` for plain bodies; `jsx` (React Email) for formatted ones.",
     inputSchema: t.Object(
       {
         to: t.Optional(t.String()),
         subject: t.Optional(t.String()),
         text: t.Optional(t.String()),
-        html: t.Optional(t.String()),
+        jsx: Jsx,
         cc: t.Optional(t.String()),
         bcc: t.Optional(t.String()),
         replyTo: t.Optional(t.String()),
@@ -1237,6 +1281,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       const from =
         (p.from as string | undefined) ?? (p.fromAlias as string | undefined);
+      const { text, html } = await resolveBody(p);
       const email: EmailInput = {
         to: normalizeAddressList(p.to as string | undefined) ?? "",
         cc: normalizeAddressList(p.cc as string | undefined),
@@ -1244,8 +1289,8 @@ export default function gmail(rl: RunlinePluginAPI) {
         replyTo: normalizeAddressList(p.replyTo as string | undefined),
         from,
         subject: (p.subject as string) ?? "",
-        text: p.text as string | undefined,
-        html: p.html as string | undefined,
+        text,
+        html,
         attachments: p.attachments as EmailInput["attachments"],
       };
 
