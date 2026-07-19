@@ -63,10 +63,30 @@
     "typescript": "^5.8.0"
   },
   "peerDependencies": {
-    "playwright": "^1.57.0"
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "playwright": "^1.57.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "sucrase": "^3.35.1"
   },
   "peerDependenciesMeta": {
+    "@react-email/components": {
+      "optional": true
+    },
+    "@react-email/render": {
+      "optional": true
+    },
     "playwright": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "sucrase": {
       "optional": true
     }
   },

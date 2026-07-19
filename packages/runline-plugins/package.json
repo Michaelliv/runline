@@ -8,18 +8,18 @@
     "build": "tsc --noCheck"
   },
   "devDependencies": {
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "sucrase": "^3.35.1",
     "typescript": "^5.8.0"
   },
   "peerDependencies": {
     "runline": "*"
   },
   "dependencies": {
-    "@react-email/components": "^1.0.12",
-    "@react-email/render": "^2.1.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
     "rrule": "^2.8.1",
-    "sucrase": "^3.35.1",
     "typebox": "^1.1.35"
   }
 }

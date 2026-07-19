@@ -8,8 +8,11 @@
  * write JSX fluently. Evaluating agent-supplied JSX adds no new risk
  * class — runline's executor is already a coding surface.
  *
- * All heavy dependencies (react, sucrase, react-email) load lazily on
- * first use so plugins that never render JSX pay nothing at startup.
+ * All heavy dependencies (react, sucrase, react-email) are optional
+ * peers of runline — like playwright for browser actions — loaded
+ * lazily on first use. Hosts that never render JSX pay nothing;
+ * hosts without the packages get an install hint instead of a
+ * module-resolution stack trace.
  */
 
 type Rendered = { html: string; text: string };
@@ -24,6 +27,11 @@ type ReactEmailModules = {
   transform: typeof import("sucrase").transform;
 };
 
+const PEER_INSTALL_HINT =
+  "jsx email bodies require optional peer packages. Install them in the host project: " +
+  "react react-dom @react-email/components @react-email/render sucrase. " +
+  "Alternatively pass `html` or `text` instead of `jsx`.";
+
 let modulesPromise: Promise<ReactEmailModules> | undefined;
 
 async function loadModules(): Promise<ReactEmailModules> {
@@ -32,12 +40,21 @@ async function loadModules(): Promise<ReactEmailModules> {
     import("@react-email/components"),
     import("@react-email/render"),
     import("sucrase"),
-  ]).then(([react, components, renderMod, sucrase]) => ({
-    React: react.default ?? react,
-    components: components as unknown as Record<string, unknown>,
-    render: renderMod.render,
-    transform: sucrase.transform,
-  }));
+  ]).then(
+    ([react, components, renderMod, sucrase]) => ({
+      React: react.default ?? react,
+      components: components as unknown as Record<string, unknown>,
+      render: renderMod.render,
+      transform: sucrase.transform,
+    }),
+    (err) => {
+      // Don't cache the failure — the host can install the peers and
+      // retry without restarting the process.
+      modulesPromise = undefined;
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`${PEER_INSTALL_HINT} (${msg})`);
+    },
+  );
   return modulesPromise;
 }
 
@@ -68,9 +85,10 @@ export async function renderEmailJsx(jsx: string): Promise<Rendered> {
   let compiled: string;
   try {
     // Wrap as an expression statement so a bare `<Html>…</Html>` is a
-    // valid program for sucrase; the parentheses also reject
-    // statement-level code (const/if/etc.), keeping the surface to a
-    // single JSX expression.
+    // valid program for sucrase. The parentheses nudge the surface
+    // toward a single expression (statement forms like `const x = 1`
+    // fail to parse) — a shape hint, not a boundary: the executor is
+    // already a coding surface, so escaping it grants nothing.
     compiled = transform(`__element = (${source});`, {
       transforms: ["jsx"],
       production: true,

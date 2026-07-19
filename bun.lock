@@ -45,25 +45,35 @@
         "typescript": "^5.8.0",
       },
       "peerDependencies": {
+        "@react-email/components": "^1.0.12",
+        "@react-email/render": "^2.1.0",
         "playwright": "^1.57.0",
+        "react": "^19.2.7",
+        "react-dom": "^19.2.7",
+        "sucrase": "^3.35.1",
       },
       "optionalPeers": [
+        "@react-email/components",
+        "@react-email/render",
         "playwright",
+        "react",
+        "react-dom",
+        "sucrase",
       ],
     },
     "packages/runline-plugins": {
       "name": "runline-plugins",
       "version": "0.1.0",
       "dependencies": {
+        "rrule": "^2.8.1",
+        "typebox": "^1.1.35",
+      },
+      "devDependencies": {
         "@react-email/components": "^1.0.12",
         "@react-email/render": "^2.1.0",
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
-        "rrule": "^2.8.1",
         "sucrase": "^3.35.1",
-        "typebox": "^1.1.35",
-      },
-      "devDependencies": {
         "typescript": "^5.8.0",
       },
       "peerDependencies": {

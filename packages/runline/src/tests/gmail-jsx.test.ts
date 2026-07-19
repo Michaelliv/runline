@@ -54,9 +54,7 @@ describe("renderEmailJsx", () => {
     assert.match(text, /https:\/\/example\.com\/confirm/);
   });
 
-  it("explicit text is preserved; generated text is only a fallback", async () => {
-    // Covered at the plugin level: execute uses `text ??= rendered.text`.
-    // Here assert the renderer always produces a non-empty fallback.
+  it("always produces a non-empty text fallback", async () => {
     const { text } = await renderEmailJsx("<Text>hello</Text>");
     assert.equal(text.trim(), "hello");
   });
