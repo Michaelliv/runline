@@ -16,6 +16,22 @@ import {
   mergeIssueScopeFilter,
 } from "./shared.js";
 
+/**
+ * Linear's IssueUpdateInput accepts explicit null for clearable relations
+ * (e.g. cycleId: null removes the issue from its cycle). Omitted = leave
+ * unchanged, null = clear — the schema must express both.
+ */
+function clearable(
+  schema: Parameters<typeof t.Union>[0][number],
+  description: string,
+) {
+  return t.Optional(
+    t.Union([schema, t.Null()], {
+      description: `${description}. Pass null to clear`,
+    }),
+  );
+}
+
 export function registerIssueActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.create", {
     access: "write",
@@ -163,15 +179,18 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "List issues. Pass `filter` for state/label/project/etc. Default hides archived.",
-    inputSchema: t.Object({
-      ...LIST_INPUT_SCHEMA,
-      teamId: t.Optional(
-        t.String({ description: "Convenience: filter by team" }),
-      ),
-      assigneeId: t.Optional(
-        t.String({ description: "Convenience: filter by assignee" }),
-      ),
-    }),
+    inputSchema: t.Object(
+      {
+        ...LIST_INPUT_SCHEMA,
+        teamId: t.Optional(
+          t.String({ description: "Convenience: filter by team" }),
+        ),
+        assigneeId: t.Optional(
+          t.String({ description: "Convenience: filter by assignee" }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input, ctx) {
       const opts = (input ?? {}) as ListOpts & {
         teamId?: string;
@@ -211,10 +230,9 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       description: t.Optional(
         t.String({ description: "The issue description in markdown format" }),
       ),
-      assigneeId: t.Optional(
-        t.String({
-          description: "The identifier of the user to assign the issue to",
-        }),
+      assigneeId: clearable(
+        t.String(),
+        "The identifier of the user to assign the issue to",
       ),
       stateId: t.Optional(
         t.String({ description: "The team workflow state of the issue" }),
@@ -243,22 +261,18 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
             "The identifiers of issue labels to be removed from this issue",
         }),
       ),
-      projectId: t.Optional(
-        t.String({ description: "The project associated with the issue" }),
+      projectId: clearable(
+        t.String(),
+        "The project associated with the issue",
       ),
-      projectMilestoneId: t.Optional(
-        t.String({
-          description: "The project milestone associated with the issue",
-        }),
+      projectMilestoneId: clearable(
+        t.String(),
+        "The project milestone associated with the issue",
       ),
-      cycleId: t.Optional(
-        t.String({ description: "The cycle associated with the issue" }),
-      ),
-      parentId: t.Optional(
-        t.String({
-          description:
-            "The identifier of the parent issue. UUID or issue identifier (e.g., 'LIN-123')",
-        }),
+      cycleId: clearable(t.String(), "The cycle associated with the issue"),
+      parentId: clearable(
+        t.String(),
+        "The identifier of the parent issue. UUID or issue identifier (e.g., 'LIN-123')",
       ),
       teamId: t.Optional(
         t.String({
@@ -266,16 +280,13 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
             "The identifier of the team associated with the issue (move issue to a different team)",
         }),
       ),
-      estimate: t.Optional(
-        t.Number({
-          description: "The estimated complexity of the issue (Int)",
-        }),
+      estimate: clearable(
+        t.Number(),
+        "The estimated complexity of the issue (Int)",
       ),
-      dueDate: t.Optional(
-        t.String({
-          description:
-            "The date at which the issue is due (TimelessDate, YYYY-MM-DD)",
-        }),
+      dueDate: clearable(
+        t.String(),
+        "The date at which the issue is due (TimelessDate, YYYY-MM-DD)",
       ),
       subscriberIds: t.Optional(
         t.Array(t.Unknown(), {
@@ -295,11 +306,9 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
             "The position of the issue in its parent's sub-issue list (Float)",
         }),
       ),
-      snoozedUntilAt: t.Optional(
-        t.String({
-          description:
-            "The time until which the issue will be snoozed in Triage view (DateTime)",
-        }),
+      snoozedUntilAt: clearable(
+        t.String(),
+        "The time until which the issue will be snoozed in Triage view (DateTime)",
       ),
       releaseIds: t.Optional(
         t.Array(t.Unknown(), {

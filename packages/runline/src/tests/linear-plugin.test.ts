@@ -903,6 +903,134 @@ describe("linear plugin scoped issue access", () => {
   });
 });
 
+// SHFT-883: Linear's issueUpdate accepts null for clearable relations
+// (cycleId: null removes the issue from its cycle), but the action schema
+// only allowed strings — so "unset" was inexpressible via the API. The
+// schema must distinguish omitted (leave unchanged) from null (clear) and
+// pass null through to the mutation untouched.
+describe("linear issue.update nullable clearable fields", () => {
+  const CLEARABLE_FIELDS = [
+    "assigneeId",
+    "projectId",
+    "projectMilestoneId",
+    "cycleId",
+    "parentId",
+    "estimate",
+    "dueDate",
+    "snoozedUntilAt",
+  ] as const;
+
+  it("accepts null for every clearable field", () => {
+    const action = getAction(makeLinear(), "issue.update");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    for (const field of CLEARABLE_FIELDS) {
+      const validation = validateTypedInput(action.inputSchema, {
+        issueId: "SHFT-1",
+        [field]: null,
+      });
+      assert.equal(
+        validation.ok,
+        true,
+        `${field}: null must validate, got: ${validation.errors.join("; ")}`,
+      );
+    }
+  });
+
+  it("still rejects null for non-clearable fields", () => {
+    const action = getAction(makeLinear(), "issue.update");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    for (const field of ["title", "stateId", "teamId"] as const) {
+      const validation = validateTypedInput(action.inputSchema, {
+        issueId: "SHFT-1",
+        [field]: null,
+      });
+      assert.equal(validation.ok, false, `${field}: null must be rejected`);
+    }
+  });
+
+  it("passes cycleId: null through to issueUpdate to clear the cycle", async () => {
+    const action = getAction(makeLinear(), "issue.update");
+
+    mockLinear((body) => {
+      assert.match(body.query, /issueUpdate\(id: \$id, input: \$input\)/);
+      assert.deepEqual(body.variables, {
+        id: "SHFT-1",
+        input: { cycleId: null },
+      });
+      return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
+    });
+
+    const result = await action.execute(
+      { issueId: "SHFT-1", cycleId: null },
+      ctx(),
+    );
+    assert.deepEqual(result, { id: "issue-1" });
+  });
+
+  it("omitted fields stay omitted — null is not injected", async () => {
+    const action = getAction(makeLinear(), "issue.update");
+
+    mockLinear((body) => {
+      assert.deepEqual(body.variables, {
+        id: "SHFT-1",
+        input: { title: "Only title" },
+      });
+      return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
+    });
+
+    await action.execute({ issueId: "SHFT-1", title: "Only title" }, ctx());
+  });
+});
+
+// SHFT-883 paper cuts: issue.list silently dropped unknown keys (so
+// `first: 100` validated, was discarded, and the default 50 looked like a
+// clamp), and its projection never hydrated `cycle`, making cycle
+// membership invisible from list output.
+describe("linear issue.list pagination and cycle hydration", () => {
+  it("rejects unknown keys like `first` instead of silently dropping them", () => {
+    const action = getAction(makeLinear(), "issue.list");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    const validation = validateTypedInput(action.inputSchema, { first: 100 });
+    assert.equal(validation.ok, false);
+  });
+
+  it("documents pagination on the limit input", () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const description = String(
+      action.inputSchema?.properties?.limit?.description ?? "",
+    );
+    assert.match(description, /pageInfo/);
+  });
+
+  it("hydrates cycle in the list projection", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+
+    mockLinear((body) => {
+      assert.match(body.query, /cycle \{ id number name \}/);
+      return {
+        issues: {
+          nodes: [
+            {
+              id: "issue-1",
+              cycle: { id: "cycle-1", number: 14, name: "Honda" },
+            },
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      };
+    });
+
+    const result = (await action.execute({}, ctx())) as {
+      nodes: Array<{ cycle: unknown }>;
+    };
+    assert.deepEqual(result.nodes[0].cycle, {
+      id: "cycle-1",
+      number: 14,
+      name: "Honda",
+    });
+  });
+});
+
 // The bug: comment.list accepted only { limit }, and its schema was not
 // strict — so comment.list({ issueId }) passed validation, had issueId
 // silently dropped, and returned workspace-wide comments that look like an

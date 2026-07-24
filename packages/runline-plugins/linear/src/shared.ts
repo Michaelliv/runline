@@ -165,7 +165,7 @@ export const ISSUE_FIELDS = `id identifier title description url priority estima
   projectMilestone { id name } parent { id identifier }
   labels { nodes { id name color } }
   createdAt updatedAt completedAt canceledAt archivedAt`;
-export const ISSUE_LITE = `id identifier title url priority state { id name type } assignee { id name } team { key } updatedAt`;
+export const ISSUE_LITE = `id identifier title url priority state { id name type } assignee { id name } team { key } cycle { id number name } updatedAt`;
 export const COMMENT_FIELDS = `id body url issue { id identifier } user { id name } parent { id } createdAt updatedAt editedAt resolvedAt`;
 export const STATE_FIELDS = `id name type color position description team { id key }`;
 export const LABEL_FIELDS = `id name color description isGroup parent { id name } team { id key } createdAt`;
@@ -252,7 +252,10 @@ export function buildConnArgs(
 
 export const LIST_INPUT_SCHEMA = {
   limit: t.Optional(
-    t.Number({ description: "Max results (default 50, max 250)" }),
+    t.Number({
+      description:
+        "Max results per page (default 50, max 250). For more, paginate with `after` = pageInfo.endCursor",
+    }),
   ),
   filter: t.Optional(
     t.Object(
