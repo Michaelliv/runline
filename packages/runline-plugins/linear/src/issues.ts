@@ -261,10 +261,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
             "The identifiers of issue labels to be removed from this issue",
         }),
       ),
-      projectId: clearable(
-        t.String(),
-        "The project associated with the issue",
-      ),
+      projectId: clearable(t.String(), "The project associated with the issue"),
       projectMilestoneId: clearable(
         t.String(),
         "The project milestone associated with the issue",
