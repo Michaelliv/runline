@@ -21,7 +21,7 @@ Discovery happens **inside the sandbox**, not as a separate tool. The agent uses
 ```js
 actions.list()                  // every "plugin.action" path
 actions.list("github")          // filter to one plugin
-actions.find("create issue")    // ranked fuzzy search (MiniSearch)
+actions.find("create issue")    // ranked fuzzy search (ferrosearch)
 actions.describe("github.issue.create")
 // → { path, plugin, action, access, description, signature, inputs }
 actions.check("github.issue.create", { owner: "a" })

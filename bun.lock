@@ -12,7 +12,7 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.16.1",
+      "version": "0.18.0",
       "dependencies": {
         "runline": "^0.11.2",
       },
@@ -24,11 +24,12 @@
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.16.1",
+      "version": "0.18.0",
       "bin": {
         "runline": "./dist/main.js",
       },
       "dependencies": {
+        "@shift-labs/ferrosearch": "^0.1.0",
         "chalk": "^5.6.2",
         "commander": "^14.0.3",
         "jiti": "^2.7.0",
@@ -41,7 +42,6 @@
         "@types/bun": "^1.2.17",
         "@types/node": "^25.5.0",
         "@types/proper-lockfile": "^4.1.4",
-        "minisearch": "^7.2.0",
         "typescript": "^5.8.0",
       },
       "peerDependencies": {
@@ -279,6 +279,20 @@
     "@react-email/text": ["@react-email/text@0.1.6", "", { "peerDependencies": { "react": "^18.0 || ^19.0 || ^19.0.0-rc" } }, "sha512-TYqkioRS45wTR5il3dYk/SbUjjEdhSwh9BtRNB99qNH1pXAwA45H7rAuxehiu8iJQJH0IyIr+6n62gBz9ezmsw=="],
 
     "@selderee/plugin-htmlparser2": ["@selderee/plugin-htmlparser2@0.11.0", "", { "dependencies": { "domhandler": "^5.0.3", "selderee": "^0.11.0" } }, "sha512-P33hHGdldxGabLFjPPpaTxVolMrzrcegejx+0GxjrIb9Zv48D8yAIA/QTDR2dFl7Uz7urX8aX6+5bCZslr+gWQ=="],
+
+    "@shift-labs/ferrosearch": ["@shift-labs/ferrosearch@0.1.0", "", { "optionalDependencies": { "@shift-labs/ferrosearch-darwin-arm64": "0.1.0", "@shift-labs/ferrosearch-darwin-x64": "0.1.0", "@shift-labs/ferrosearch-linux-arm64-gnu": "0.1.0", "@shift-labs/ferrosearch-linux-arm64-musl": "0.1.0", "@shift-labs/ferrosearch-linux-x64-gnu": "0.1.0", "@shift-labs/ferrosearch-linux-x64-musl": "0.1.0" } }, "sha512-uFsf2AOtiUvymIB65jZO6J8gnZuBCNhO1UnKw+LyyazelWPfLLD2eA0GKKm3Wrmls8HeYkNOVGYJ5yYSVxACvg=="],
+
+    "@shift-labs/ferrosearch-darwin-arm64": ["@shift-labs/ferrosearch-darwin-arm64@0.1.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-172hjeRGo/6Us0bQLbDD+ada30chWa5SOk5y2tYAB4jSc5MYknZho+S5oPeKw9r+M/bw6IBDxoC8CdlspOHc6g=="],
+
+    "@shift-labs/ferrosearch-darwin-x64": ["@shift-labs/ferrosearch-darwin-x64@0.1.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-OggzzfxC9LSNqpr4QQtIJJy2RAOoG0Ou1sJXzAtU9wyKzTV4VrlwIiEHB2Cp18a74iyO8L8up91INtScUFlKVA=="],
+
+    "@shift-labs/ferrosearch-linux-arm64-gnu": ["@shift-labs/ferrosearch-linux-arm64-gnu@0.1.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-yIGW3KxIFpwvoQIhmGS/oaMWB7/d7987E9QhIETJYPfnKDvGU3jvz6PjlPqvNV9juwQBFuP1lq20QbganXB4SQ=="],
+
+    "@shift-labs/ferrosearch-linux-arm64-musl": ["@shift-labs/ferrosearch-linux-arm64-musl@0.1.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-MV7MMboFuPDqvBSoZnSr7JPKObNQMkhuNh4W4Apdmuz9orPC1VIjkvqFtQZ7W/ABKFrRUkSHeNlxcflCq6W/dA=="],
+
+    "@shift-labs/ferrosearch-linux-x64-gnu": ["@shift-labs/ferrosearch-linux-x64-gnu@0.1.0", "", { "os": "linux", "cpu": "x64" }, "sha512-AsKkRx7maamHg1mle/LBefe1pWxbJJvib76dSY5iZ2eAoeWPmuk47pmpBQNws9nrzVDszu6AjfqZNVNsi5sJXg=="],
+
+    "@shift-labs/ferrosearch-linux-x64-musl": ["@shift-labs/ferrosearch-linux-x64-musl@0.1.0", "", { "os": "linux", "cpu": "x64" }, "sha512-ZHdpyKO/G2onxdYMay4YMMx1+of6L1qDgCpJ6ztUbqwZG3wXVTfgG8YDE9oBqSIIOEyym1zCwrUmQriQSTTr0A=="],
 
     "@silvia-odwyer/photon-node": ["@silvia-odwyer/photon-node@0.3.4", "", {}, "sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA=="],
 
@@ -569,8 +583,6 @@
     "minimatch": ["minimatch@10.2.5", "", { "dependencies": { "brace-expansion": "^5.0.5" } }, "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg=="],
 
     "minipass": ["minipass@7.1.3", "", {}, "sha512-tEBHqDnIoM/1rXME1zgka9g6Q2lcoCkxHLuc7ODJ5BxbP5d4c2Z5cGgtXAku59200Cx7diuHTOYfSBD8n6mm8A=="],
-
-    "minisearch": ["minisearch@7.2.0", "", {}, "sha512-dqT2XBYUOZOiC5t2HRnwADjhNS2cecp9u+TJRiJ1Qp/f5qjkeT5APcGPjHw+bz89Ms8Jp+cG4AlE+QZ/QnDglg=="],
 
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
 

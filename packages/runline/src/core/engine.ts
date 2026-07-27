@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
 import { applyEnvOverrides, updateConnectionConfig } from "../config/loader.js";
 import type { RunlineConfig } from "../config/types.js";
@@ -512,16 +512,13 @@ function formatError(cause: unknown): string {
   return String(cause);
 }
 
-// MiniSearch UMD bundle, vendored at the package root and inlined into the
-// worker source. Inside the worker it is evaluated in a local scope with a
-// fresh `module`/`exports` pair so the UMD takes its CommonJS branch.
-//
-// `../../vendor/...` resolves identically from src/core/engine.ts (dev) and
-// dist/core/engine.js (published) because tsc preserves the `core/` subdir.
-// See vendor/README.md for the upgrade procedure.
-const minisearchSource = readFileSync(
-  new URL("../../vendor/minisearch.umd.js", import.meta.url),
-  "utf8",
+// ferrosearch is a Rust native addon, so unlike the old minisearch UMD it
+// cannot be inlined into the worker source as text. Resolve its entry point
+// host-side and require it by absolute path inside the worker: eval'd worker
+// code gets a cwd-relative `require`, so a bare specifier would resolve
+// against the caller's cwd instead of runline's own node_modules.
+const ferrosearchPath = createRequire(import.meta.url).resolve(
+  "@shift-labs/ferrosearch",
 );
 
 interface HelpEntry {
@@ -577,7 +574,7 @@ function buildWorkerSource(
     "console",
     "fetch",
     "require",
-    "MiniSearch",
+    "FerroSearch",
   ];
 
   const wrapped = `"use strict";
@@ -668,14 +665,11 @@ const __fmtErr = (e) => {
 // structured-clone-safe and preserves JSON value semantics.
 const __toJson = (v) => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 
-// Inlined MiniSearch UMD, evaluated with a local module/exports so the UMD
-// takes its CommonJS branch regardless of the worker's module scope.
-const MiniSearch = (function () {
-  const module = { exports: {} };
-  const exports = module.exports;
-  ${minisearchSource}
-  return module.exports;
-})();
+// ferrosearch native addon, resolved to an absolute path by the host. Its
+// index memory lives outside the V8 heap, which is the point — minisearch's
+// JS index counted against maxOldGenerationSizeMb and grew worker RSS — but
+// also means an index built by agent code is invisible to that limit.
+const { FerroSearch } = require(${JSON.stringify(ferrosearchPath)});
 
 const __help = ${JSON.stringify(helpData)};
 
@@ -709,7 +703,7 @@ const __formatSignature = (plugin, entry) => {
   return plugin + '.' + entry.action + (fields ? '({ ' + fields + ' })' : '()');
 };
 
-// Build a MiniSearch index over every action path. Indexed at worker
+// Build a FerroSearch index over every action path. Indexed at worker
 // startup, queried by actions.find().
 const __search = (() => {
   const docs = [];
@@ -723,7 +717,7 @@ const __search = (() => {
       description: entry.description || '',
     });
   }
-  const ms = new MiniSearch({
+  const index = new FerroSearch({
     fields: ['path', 'plugin', 'action', 'description'],
     storeFields: ['path', 'description'],
     searchOptions: {
@@ -732,8 +726,8 @@ const __search = (() => {
       boost: { path: 3, action: 2, plugin: 2 },
     },
   });
-  ms.addAll(docs);
-  return ms;
+  index.addAll(docs);
+  return index;
 })();
 
 const __actionsApi = {
@@ -959,7 +953,7 @@ const __injectValues = __injectNames.map((n) => {
     case "console": return console;
     case "fetch": return fetch;
     case "require": return __bodyRequire;
-    case "MiniSearch": return MiniSearch;
+    case "FerroSearch": return FerroSearch;
     default: return __makeProxy([n]);
   }
 });
