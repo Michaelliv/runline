@@ -4,8 +4,8 @@ import { extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
-  type Ctx,
   enumSchema,
+  organizationId,
   pathSegment,
   request,
   TRANSCRIPT_FORMAT,
@@ -35,16 +35,6 @@ const MAX_MEDIA_BYTES = 5 * 1024 * 1024 * 1024;
 const MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024;
 const STRICT_OBJECT = { additionalProperties: false } as const;
 const Id = t.String({ minLength: 1, pattern: "\\S" });
-
-function organizationId(ctx: Ctx): string {
-  const value = ctx.connection.config.organizationId;
-  if (typeof value !== "string" || !value) {
-    throw new Error(
-      "SHIFT_LABS_ORG_ID is not set. Transcription actions need the organization ID that owns the API key.",
-    );
-  }
-  return value;
-}
 
 function mediaTypeFor(path: string): string {
   const mediaType = MEDIA_TYPES[extname(path).slice(1).toLowerCase()];

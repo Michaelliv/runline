@@ -2,6 +2,7 @@ import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { registerIssueViewActions } from "./issue-views.js";
 import { registerIssueActions } from "./issues.js";
+import { registerObjectActions } from "./objects.js";
 import { registerPageActions } from "./pages.js";
 import { registerProjectActions } from "./projects.js";
 import { registerTranscriptionActions } from "./transcription.js";
@@ -18,7 +19,7 @@ export default function shiftLabs(rl: RunlinePluginAPI) {
       organizationId: t.Optional(
         t.String({
           description:
-            "Shift Labs organization ID (required for transcription actions)",
+            "Shift Labs organization ID (required for transcription and object actions)",
           env: "SHIFT_LABS_ORG_ID",
         }),
       ),
@@ -30,4 +31,5 @@ export default function shiftLabs(rl: RunlinePluginAPI) {
   registerIssueViewActions(rl);
   registerPageActions(rl);
   registerTranscriptionActions(rl);
+  registerObjectActions(rl);
 }
