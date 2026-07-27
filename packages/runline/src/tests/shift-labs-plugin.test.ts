@@ -536,8 +536,8 @@ describe("shiftLabs plugin", () => {
       const url = String(input);
       calls.push(`${init?.method ?? "GET"} ${url}`);
       if (url.endsWith("/v1/services/transcription/assets")) {
+        // The API key is the tenant authority; no organizationId is sent.
         assert.deepEqual(JSON.parse(String(init?.body)), {
-          organizationId: "org_1",
           contentType: "audio/mpeg",
           sizeBytes: 11,
         });
@@ -566,7 +566,6 @@ describe("shiftLabs plugin", () => {
       }
       if (url.endsWith("/v1/services/transcription/jobs")) {
         assert.deepEqual(JSON.parse(String(init?.body)), {
-          organizationId: "org_1",
           assetId: "asset_1",
           language: "he",
           diarize: true,
@@ -580,29 +579,17 @@ describe("shiftLabs plugin", () => {
     assert.deepEqual(
       await action.execute(
         { path: media, language: "he", diarize: true, name: "Standup" },
-        ctx({ organizationId: "org_1" }),
+        ctx(),
       ),
       { id: "job_1", status: "queued" },
     );
     assert.equal(calls.length, 4);
   });
 
-  it("requires the organization ID for transcription actions", async () => {
-    const action = getAction(makeShiftLabs(), "transcription.transcribe");
-    await assert.rejects(
-      () => action.execute({ path: "/tmp/a.mp3" }, ctx()),
-      /SHIFT_LABS_ORG_ID/,
-    );
-  });
-
   it("rejects unsupported media extensions before any network call", async () => {
     const action = getAction(makeShiftLabs(), "transcription.transcribe");
     await assert.rejects(
-      () =>
-        action.execute(
-          { path: "/tmp/document.pdf" },
-          ctx({ organizationId: "org_1" }),
-        ),
+      () => action.execute({ path: "/tmp/document.pdf" }, ctx()),
       /Unsupported media extension/,
     );
   });
@@ -623,12 +610,11 @@ describe("shiftLabs plugin", () => {
     }) as typeof fetch;
 
     await assert.rejects(
-      () => action.execute({ path: empty }, ctx({ organizationId: "org_1" })),
+      () => action.execute({ path: empty }, ctx()),
       /Media file is empty/,
     );
     await assert.rejects(
-      () =>
-        action.execute({ path: oversized }, ctx({ organizationId: "org_1" })),
+      () => action.execute({ path: oversized }, ctx()),
       /service limit/,
     );
     assert.equal(fetchCalls, 0);
@@ -677,13 +663,10 @@ describe("shiftLabs plugin", () => {
       throw new Error(`unexpected request: ${url}`);
     }) as typeof fetch;
 
-    assert.deepEqual(
-      await action.execute(
-        { jobId: "job_1" },
-        ctx({ organizationId: "org_1" }),
-      ),
-      { format: "txt", content: "Speaker 1: hello world\n" },
-    );
+    assert.deepEqual(await action.execute({ jobId: "job_1" }, ctx()), {
+      format: "txt",
+      content: "Speaker 1: hello world\n",
+    });
   });
 
   it("returns download grants without fetching oversized transcripts", async () => {
