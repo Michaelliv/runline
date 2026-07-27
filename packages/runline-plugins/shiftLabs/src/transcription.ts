@@ -4,7 +4,6 @@ import { extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
-  type Ctx,
   enumSchema,
   pathSegment,
   request,
@@ -35,16 +34,6 @@ const MAX_MEDIA_BYTES = 5 * 1024 * 1024 * 1024;
 const MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024;
 const STRICT_OBJECT = { additionalProperties: false } as const;
 const Id = t.String({ minLength: 1, pattern: "\\S" });
-
-function organizationId(ctx: Ctx): string {
-  const value = ctx.connection.config.organizationId;
-  if (typeof value !== "string" || !value) {
-    throw new Error(
-      "SHIFT_LABS_ORG_ID is not set. Transcription actions need the organization ID that owns the API key.",
-    );
-  }
-  return value;
-}
 
 function mediaTypeFor(path: string): string {
   const mediaType = MEDIA_TYPES[extname(path).slice(1).toLowerCase()];
@@ -124,7 +113,6 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
         name?: string;
         waitSeconds?: number;
       };
-      const org = organizationId(ctx);
       const contentType = mediaTypeFor(fields.path);
       const file = await stat(fields.path);
       if (!file.isFile()) throw new Error(`${fields.path} is not a file`);
@@ -145,8 +133,8 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
         };
       }>(ctx, "/v1/services/transcription/assets", {
         method: "POST",
+        // The API key is the tenant authority; no organizationId is sent.
         body: JSON.stringify({
-          organizationId: org,
           contentType,
           sizeBytes: file.size,
         }),
@@ -177,7 +165,6 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
         {
           method: "POST",
           body: JSON.stringify({
-            organizationId: org,
             assetId: created.asset.id,
             language: fields.language,
             diarize: fields.diarize,
@@ -204,7 +191,7 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
     async execute(_input, ctx) {
       const body = await request<{ jobs: unknown[] }>(
         ctx,
-        `/v1/services/transcription/jobs?organizationId=${pathSegment(organizationId(ctx))}`,
+        "/v1/services/transcription/jobs",
       );
       return body.jobs;
     },
