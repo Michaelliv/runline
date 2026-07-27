@@ -18,6 +18,7 @@ const LINEAR_ACTIONS = [
   "comment.get",
   "comment.list",
   "comment.update",
+  "cycle.archive",
   "cycle.create",
   "cycle.get",
   "cycle.list",
@@ -73,6 +74,7 @@ const LINEAR_ACTIONS = [
   "state.list",
   "state.update",
   "team.create",
+  "team.cyclesDeleteAll",
   "team.get",
   "team.list",
   "team.members",
@@ -263,6 +265,66 @@ describe("linear plugin comment actions", () => {
     const result = await action.execute({ id: "comment-1" }, ctx());
 
     assert.deepEqual(result, { success: true });
+  });
+});
+
+describe("linear plugin cycle actions", () => {
+  it("cycle.archive calls Linear's cycleArchive mutation", async () => {
+    const action = getAction(makeLinear(), "cycle.archive");
+
+    mockLinear((body) => {
+      assert.match(body.query, /cycleArchive\(id: \$id\)/);
+      assert.deepEqual(body.variables, { id: "cycle-1" });
+      return { cycleArchive: { success: true } };
+    });
+
+    const result = await action.execute({ id: "cycle-1" }, ctx());
+
+    assert.deepEqual(result, { success: true });
+  });
+
+  it("cycle.archive requires the cycle id", () => {
+    const action = getAction(makeLinear(), "cycle.archive");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    assert.equal(
+      validateTypedInput(action.inputSchema, {}).ok,
+      false,
+      "archiving without an id must be rejected",
+    );
+    assert.equal(validateTypedInput(action.inputSchema, { id: "c1" }).ok, true);
+  });
+
+  it("team.cyclesDeleteAll passes the TEAM id to teamCyclesDelete", async () => {
+    // Linear's teamCyclesDelete takes a team id and wipes every cycle that
+    // team has. The action must not be reachable under a name or parameter
+    // that reads as a single-cycle delete.
+    const action = getAction(makeLinear(), "team.cyclesDeleteAll");
+
+    mockLinear((body) => {
+      assert.match(body.query, /teamCyclesDelete\(id: \$id\)/);
+      assert.deepEqual(body.variables, { id: "team-1" });
+      return { teamCyclesDelete: { success: true } };
+    });
+
+    const result = await action.execute({ teamId: "team-1" }, ctx());
+
+    assert.deepEqual(result, { success: true });
+  });
+
+  it("the destructive team-wide delete is not exposed as cycle.delete", () => {
+    const plugin = makeLinear();
+    const names = plugin.actions.map((a) => a.name);
+    assert.ok(
+      !names.includes("cycle.delete"),
+      "cycle.delete would read as removing one cycle while deleting a team's entire cycle history",
+    );
+    const action = getAction(plugin, "team.cyclesDeleteAll");
+    assert.match(String(action.description), /^DESTRUCTIVE:/);
+    assert.ok(
+      isTypedInputSchema(action.inputSchema) &&
+        "teamId" in (action.inputSchema.properties ?? {}),
+      "the parameter must be named teamId so the blast radius is obvious",
+    );
   });
 });
 
