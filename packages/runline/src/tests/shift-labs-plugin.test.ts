@@ -770,8 +770,8 @@ describe("shiftLabs plugin", () => {
       const url = String(input);
       calls.push(`${init?.method ?? "GET"} ${url}`);
       if (url.endsWith("/v1/services/objects/objects")) {
+        // The API key is the tenant authority; no organizationId is sent.
         assert.deepEqual(JSON.parse(String(init?.body)), {
-          organizationId: "org_1",
           contentType: "image/jpeg",
           sizeBytes: 11,
           filename: "delivery-note.jpg",
@@ -803,21 +803,10 @@ describe("shiftLabs plugin", () => {
     }) as typeof fetch;
 
     assert.deepEqual(
-      await action.execute(
-        { path: file, sessionId: "sess_1" },
-        ctx({ organizationId: "org_1" }),
-      ),
+      await action.execute({ path: file, sessionId: "sess_1" }, ctx()),
       { id: "object_1", status: "ready", checksum: "etag-1" },
     );
     assert.equal(calls.length, 3);
-  });
-
-  it("requires the organization ID for object uploads", async () => {
-    const action = getAction(makeShiftLabs(), "object.upload");
-    await assert.rejects(
-      () => action.execute({ path: "/tmp/a.jpg" }, ctx()),
-      /SHIFT_LABS_ORG_ID/,
-    );
   });
 
   it("rejects empty objects before any network call", async () => {
@@ -833,7 +822,7 @@ describe("shiftLabs plugin", () => {
     }) as typeof fetch;
 
     await assert.rejects(
-      () => action.execute({ path: empty }, ctx({ organizationId: "org_1" })),
+      () => action.execute({ path: empty }, ctx()),
       /File is empty/,
     );
     assert.equal(fetchCalls, 0);

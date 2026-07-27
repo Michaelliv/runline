@@ -1,4 +1,4 @@
-import { baseUrl, type Ctx, pathSegment } from "../../_shared/shiftCloud.js";
+import { baseUrl, pathSegment } from "../../_shared/shiftCloud.js";
 
 export {
   baseUrl,
@@ -138,17 +138,6 @@ export interface ShiftIssueDependency {
   createdByType: ShiftIssueActorType;
   createdById?: string;
   createdAt: string;
-}
-
-/** Organization scope for service actions (transcription, objects). */
-export function organizationId(ctx: Ctx): string {
-  const value = ctx.connection.config.organizationId;
-  if (typeof value !== "string" || !value) {
-    throw new Error(
-      "SHIFT_LABS_ORG_ID is not set. This action needs the organization ID that owns the API key.",
-    );
-  }
-  return value;
 }
 
 export function pageRenderUrl(organizationId: string, slug: string): string {

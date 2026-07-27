@@ -19,7 +19,7 @@ export default function shiftLabs(rl: RunlinePluginAPI) {
       organizationId: t.Optional(
         t.String({
           description:
-            "Shift Labs organization ID (required for transcription and object actions)",
+            "Shift Labs organization ID (required for transcription actions)",
           env: "SHIFT_LABS_ORG_ID",
         }),
       ),

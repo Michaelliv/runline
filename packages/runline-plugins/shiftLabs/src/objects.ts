@@ -3,12 +3,7 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import {
-  enumSchema,
-  organizationId,
-  pathSegment,
-  request,
-} from "./shared.js";
+import { enumSchema, pathSegment, request } from "./shared.js";
 
 const OBJECTS_BASE = "/v1/services/objects";
 
@@ -162,7 +157,6 @@ export function registerObjectActions(rl: RunlinePluginAPI) {
         sessionId?: string;
         artifactId?: string;
       };
-      const org = organizationId(ctx);
       const contentType = mediaTypeFor(fields.path, fields.contentType);
       const file = await stat(fields.path);
       if (!file.isFile()) throw new Error(`${fields.path} is not a file`);
@@ -183,8 +177,8 @@ export function registerObjectActions(rl: RunlinePluginAPI) {
         };
       }>(ctx, `${OBJECTS_BASE}/objects`, {
         method: "POST",
+        // The API key is the tenant authority; no organizationId is sent.
         body: JSON.stringify({
-          organizationId: org,
           contentType,
           sizeBytes: file.size,
           filename: fields.filename ?? basename(fields.path),
