@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Worker } from "node:worker_threads";
 import { applyEnvOverrides, updateConnectionConfig } from "../config/loader.js";
@@ -27,16 +28,86 @@ export interface EngineOptions {
   memoryLimitBytes?: number;
 }
 
-// Messages worker → host
+// Messages worker → host. Every message carries the `runId` it belongs to so
+// a straggler from a finished run can never be attributed to the next one on
+// a reused worker.
+//
+// The id is an unguessable token, not a counter. A body can reach
+// `require("node:worker_threads").parentPort` — the worker is an ergonomic
+// surface, not a security sandbox — so with a predictable id it could forge a
+// `done` for the *next* run and hand it a fabricated result. It cannot read
+// the current id either: bodies are compiled with `new Function`, whose scope
+// is the worker's global object, not the module scope holding `__runId`.
 type WorkerMessage =
-  | { t: "log"; level: string; line: string }
-  | { t: "invoke"; id: number; path: string; args: unknown }
-  | { t: "done"; ok: boolean; result?: unknown; error?: string };
+  | { t: "log"; runId: string; level: string; line: string }
+  | { t: "invoke"; runId: string; id: number; path: string; args: unknown }
+  | {
+      t: "done";
+      runId: string;
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+      /** Worker left timers behind — it must not be reused. */
+      dirty?: boolean;
+    };
 
-// Messages host → worker (action invocation replies)
-type InvokeReply =
-  | { t: "result"; id: number; ok: true; value: unknown }
-  | { t: "result"; id: number; ok: false; error: string };
+// Messages host → worker
+type HostMessage =
+  | { t: "run"; runId: string; body: string }
+  | { t: "result"; runId: string; id: number; ok: true; value: unknown }
+  | { t: "result"; runId: string; id: number; ok: false; error: string };
+
+/**
+ * How many bodies one worker may run before it is retired.
+ *
+ * This is a memory dial, not a safety dial. Every recycle spawns a thread
+ * whose arena the runtime never returns (~190KB), so the cap sets a floor on
+ * the residual leak: measured over 100k executions, 50 costs 3.85 KB/run and
+ * never plateaus, while an unbounded worker settles at 0.06 KB/run.
+ *
+ * It is not what keeps runs isolated. A body that leaves a timer, an
+ * undeletable global, or a touched intrinsic retires its worker immediately
+ * (see `dirty` in the worker source), so contamination never survives the run
+ * that caused it. The cap only bounds hazards the detector cannot see, which
+ * after descriptor-level intrinsic checking is a narrow set: prototype-chain
+ * surgery and mutation of objects reachable but not enumerated.
+ *
+ * 500 keeps that backstop while cutting the residual leak ~10x.
+ */
+const DEFAULT_MAX_RUNS_PER_WORKER = 500;
+
+interface PooledWorker {
+  worker: Worker;
+  /**
+   * Everything baked into this worker at construction: the plugin surface in
+   * its source and the resourceLimits it was given. A run whose shape differs
+   * must not be handed this worker.
+   */
+  shape: string;
+  runs: number;
+  busy: boolean;
+}
+
+/**
+ * Identity of a worker's immutable configuration.
+ *
+ * Must be a real digest, not a length or a count: a collision hands a run a
+ * worker whose action surface or memory ceiling is not the one it asked for.
+ */
+function workerShape(
+  pluginNames: string[],
+  helpData: Record<string, HelpEntry[]>,
+  memoryLimitMb: number,
+): string {
+  const surface = JSON.stringify([pluginNames, helpData]);
+  // FNV-1a: no dependency, stable across processes, ample for a cache key.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < surface.length; i++) {
+    hash ^= surface.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${hash.toString(36)}:${surface.length}:${memoryLimitMb}`;
+}
 
 /**
  * Whether to arm the host-side RSS watchdog for a worker run.
@@ -66,16 +137,92 @@ const RSS_WATCHDOG_SLACK_BYTES = 128 * 1024 * 1024;
  * - timeout: worker.terminate() — interrupts even `while(true){}`
  * - memory: resourceLimits.maxOldGenerationSizeMb (node) + an RSS-delta
  *   watchdog fallback; both surface as a clean "Memory limit exceeded" error
- * - crash containment: a dead worker never takes the host process down, and
- *   each execute() gets a fresh worker, so the engine stays usable
+ * - crash containment: a dead worker never takes the host process down
+ *
+ * ## Why the worker is pooled
+ *
+ * Spawning a worker per execution leaks ~175KB of RSS per call under bun
+ * (~55KB under node): the runtime does not return a dead thread's arena to
+ * the OS, and there is no handle to free from JS — awaiting `terminate()`,
+ * dropping listeners, and letting the worker exit naturally all still leak.
+ * The only lever is to stop creating threads, so one worker serves many runs
+ * (measured 187KB/run -> 4KB/run).
+ *
+ * Reuse is given up the moment it could be unsafe. A worker is retired on
+ * timeout, crash, memory kill, plugin-surface change, leftover timers, or
+ * after `maxRunsPerWorker` bodies. A run that arrives while the pooled worker
+ * is busy gets its own throwaway worker, so concurrency semantics are
+ * unchanged.
  */
 export class ExecutionEngine {
   private registry: PluginRegistry;
   private config: RunlineConfig;
+  private pooled: PooledWorker | null = null;
+  private readonly maxRunsPerWorker: number;
 
   constructor(registry: PluginRegistry, config: RunlineConfig) {
     this.registry = registry;
     this.config = config;
+    this.maxRunsPerWorker =
+      config.maxRunsPerWorker ?? DEFAULT_MAX_RUNS_PER_WORKER;
+  }
+
+  /** Retire the pooled worker, if any. Safe to call repeatedly. */
+  dispose(): void {
+    const entry = this.pooled;
+    if (!entry) return;
+    this.pooled = null;
+    destroyWorker(entry.worker);
+  }
+
+  /**
+   * Hand back a worker to run one body in.
+   *
+   * Prefers the pooled worker when it is idle and shaped correctly. Anything
+   * else — wrong shape, quota spent, or already busy — gets a fresh worker.
+   * A worker created because the pool was occupied stays private to that run
+   * (`pooled` is false) and is destroyed when the run ends, so overlapping
+   * callers keep the parallelism they had before pooling existed.
+   */
+  private acquire(
+    shape: string,
+    build: () => Worker,
+  ): { entry: PooledWorker; pooled: boolean } {
+    const idle = this.pooled && !this.pooled.busy ? this.pooled : null;
+    if (idle && (idle.shape !== shape || idle.runs >= this.maxRunsPerWorker)) {
+      this.dispose();
+    } else if (idle) {
+      return { entry: idle, pooled: true };
+    }
+
+    const entry: PooledWorker = {
+      worker: build(),
+      shape,
+      runs: 0,
+      busy: false,
+    };
+    // An idle pooled worker must not hold the host's event loop open, or a
+    // one-shot CLI would never exit. The per-run timeout timer keeps the loop
+    // alive for the duration of an actual run.
+    entry.worker.unref?.();
+    if (!this.pooled) {
+      this.pooled = entry;
+      return { entry, pooled: true };
+    }
+    return { entry, pooled: false };
+  }
+
+  /**
+   * Finish with a worker. `retire` means the worker is no longer trustworthy
+   * — anything other than a clean completion. Private (non-pooled) workers
+   * are always destroyed.
+   */
+  private release(entry: PooledWorker, pooled: boolean, retire: boolean): void {
+    entry.busy = false;
+    if (!pooled || retire) {
+      if (this.pooled === entry) this.pooled = null;
+      destroyWorker(entry.worker);
+    }
   }
 
   async execute(code: string, options?: EngineOptions): Promise<ExecuteResult> {
@@ -85,44 +232,62 @@ export class ExecutionEngine {
     const logs: string[] = [];
 
     const plugins = this.registry.listPlugins();
-    const source = buildWorkerSource(
-      code,
-      plugins.map((p) => p.name),
-      buildHelpData(plugins),
+    const pluginNames = plugins.map((p) => p.name);
+    const helpData = buildHelpData(plugins);
+    const memoryLimitMb = Math.max(
+      8,
+      Math.floor(memoryLimitBytes / (1024 * 1024)),
     );
+    // resourceLimits are fixed at construction, so a run asking for a
+    // different ceiling must not inherit an existing worker's.
+    const shape = workerShape(pluginNames, helpData, memoryLimitMb);
+    const body = buildRunBody(code);
+
+    let acquired: { entry: PooledWorker; pooled: boolean };
+    try {
+      acquired = this.acquire(
+        shape,
+        () =>
+          new Worker(buildWorkerSource(pluginNames, helpData), {
+            eval: true,
+            resourceLimits: { maxOldGenerationSizeMb: memoryLimitMb },
+          }),
+      );
+    } catch (err) {
+      return { result: null, error: formatError(err), logs };
+    }
+    const { entry, pooled } = acquired;
 
     return new Promise<ExecuteResult>((resolve) => {
-      const memoryLimitMb = Math.max(
-        8,
-        Math.floor(memoryLimitBytes / (1024 * 1024)),
-      );
-      let worker: Worker;
-      try {
-        worker = new Worker(source, {
-          eval: true,
-          resourceLimits: { maxOldGenerationSizeMb: memoryLimitMb },
-        });
-      } catch (err) {
-        resolve({ result: null, error: formatError(err), logs });
-        return;
-      }
+      const worker = entry.worker;
+      const runId = newRunId();
+      entry.busy = true;
+      entry.runs++;
 
       let settled = false;
-      const finish = (r: ExecuteResult) => {
+      const finish = (r: ExecuteResult, retire: boolean) => {
         if (settled) return;
         settled = true;
         clearTimeout(timeoutTimer);
         clearInterval(rssTimer);
-        void worker.terminate();
+        worker.off("message", onMessage);
+        worker.off("error", onError);
+        worker.off("exit", onExit);
+        this.release(entry, pooled, retire);
         resolve(r);
       };
 
+      // A spinning body blocks the worker's event loop, so it can never be
+      // asked to stop — terminate is the only remedy and the worker is gone.
       const timeoutTimer = setTimeout(() => {
-        finish({
-          result: null,
-          error: `Execution timed out after ${timeoutMs}ms`,
-          logs,
-        });
+        finish(
+          {
+            result: null,
+            error: `Execution timed out after ${timeoutMs}ms`,
+            logs,
+          },
+          true,
+        );
       }, timeoutMs);
 
       let rssTimer: ReturnType<typeof setInterval> | undefined;
@@ -131,11 +296,14 @@ export class ExecutionEngine {
         rssTimer = setInterval(() => {
           const delta = process.memoryUsage().rss - baselineRss;
           if (delta > memoryLimitBytes + RSS_WATCHDOG_SLACK_BYTES) {
-            finish({
-              result: null,
-              error: `Memory limit exceeded (${memoryLimitMb}MB)`,
-              logs,
-            });
+            finish(
+              {
+                result: null,
+                error: `Memory limit exceeded (${memoryLimitMb}MB)`,
+                logs,
+              },
+              true,
+            );
           }
         }, 100);
         rssTimer.unref?.();
@@ -144,7 +312,7 @@ export class ExecutionEngine {
       // A reply can race the worker's death; losing it is fine — the run is
       // over either way — but it must never surface as an unhandled
       // rejection in the host.
-      const reply = (message: InvokeReply) => {
+      const reply = (message: HostMessage) => {
         if (settled) return;
         try {
           worker.postMessage(message);
@@ -153,8 +321,10 @@ export class ExecutionEngine {
         }
       };
 
-      worker.on("message", (msg: WorkerMessage) => {
+      const onMessage = (msg: WorkerMessage) => {
         if (settled) return;
+        // Straggler from an earlier body on this same worker.
+        if (msg.runId !== runId) return;
         if (msg.t === "log") {
           logs.push(`[${msg.level}] ${msg.line}`);
         } else if (msg.t === "invoke") {
@@ -166,6 +336,7 @@ export class ExecutionEngine {
               } catch (err) {
                 reply({
                   t: "result",
+                  runId,
                   id: msg.id,
                   ok: false,
                   error: `Action result not JSON-serializable: ${
@@ -174,11 +345,18 @@ export class ExecutionEngine {
                 });
                 return;
               }
-              reply({ t: "result", id: msg.id, ok: true, value: serialized });
+              reply({
+                t: "result",
+                runId,
+                id: msg.id,
+                ok: true,
+                value: serialized,
+              });
             },
             (err) => {
               reply({
                 t: "result",
+                runId,
                 id: msg.id,
                 ok: false,
                 error: err instanceof Error ? err.message : String(err),
@@ -186,32 +364,47 @@ export class ExecutionEngine {
             },
           );
         } else if (msg.t === "done") {
+          // A body that left timers running keeps consuming the worker's
+          // event loop and can post into later runs: never reuse it.
           finish(
             msg.ok
               ? { result: msg.result, logs }
               : { result: null, error: msg.error ?? "Unknown error", logs },
+            msg.dirty === true,
           );
         }
-      });
+      };
 
-      worker.on("error", (err: NodeJS.ErrnoException) => {
-        finish({
-          result: null,
-          error:
-            err.code === "ERR_WORKER_OUT_OF_MEMORY"
-              ? `Memory limit exceeded (${memoryLimitMb}MB)`
-              : formatError(err),
-          logs,
-        });
-      });
+      const onError = (err: NodeJS.ErrnoException) => {
+        finish(
+          {
+            result: null,
+            error:
+              err.code === "ERR_WORKER_OUT_OF_MEMORY"
+                ? `Memory limit exceeded (${memoryLimitMb}MB)`
+                : formatError(err),
+            logs,
+          },
+          true,
+        );
+      };
 
-      worker.on("exit", (exitCode) => {
-        finish({
-          result: null,
-          error: `Worker exited unexpectedly (code ${exitCode})`,
-          logs,
-        });
-      });
+      const onExit = (exitCode: number) => {
+        finish(
+          {
+            result: null,
+            error: `Worker exited unexpectedly (code ${exitCode})`,
+            logs,
+          },
+          true,
+        );
+      };
+
+      worker.on("message", onMessage);
+      worker.on("error", onError);
+      worker.on("exit", onExit);
+
+      reply({ t: "run", runId, body });
     });
   }
 
@@ -280,7 +473,21 @@ export class ExecutionEngine {
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────
+// ── Helpers ──────────────────────────────
+
+/**
+ * Drop every listener before terminating: a worker being torn down can still
+ * emit `exit`, and a stale handler would resolve a run that already settled.
+ */
+function destroyWorker(worker: Worker): void {
+  worker.removeAllListeners();
+  void worker.terminate();
+}
+
+/** Unguessable per-run token. See the WorkerMessage comment for why. */
+function newRunId(): string {
+  return randomUUID();
+}
 
 /**
  * JSON round-trip to (a) guarantee structured-clone compatibility and
@@ -337,19 +544,41 @@ function buildHelpData(plugins: PluginDef[]): Record<string, HelpEntry[]> {
   return data;
 }
 
-function buildWorkerSource(
-  code: string,
-  pluginNames: string[] = [],
-  helpData: Record<string, HelpEntry[]> = {},
-): string {
+/**
+ * Normalize a caller's code into a function body. Kept host-side so the
+ * worker source carries no user code and can therefore be reused.
+ *
+ * Exported for tests: this is the one place the "bare expression vs arrow
+ * function" calling convention is decided.
+ */
+export function buildRunBody(code: string): string {
   const trimmed = code.trim();
   const looksLikeArrow =
     (trimmed.startsWith("async") || trimmed.startsWith("(")) &&
     trimmed.includes("=>");
 
-  const body = looksLikeArrow
+  return looksLikeArrow
     ? `const __fn = (${trimmed});\nif (typeof __fn !== 'function') throw new Error('Code must evaluate to a function');\nreturn await __fn();`
     : code;
+}
+
+function buildWorkerSource(
+  pluginNames: string[] = [],
+  helpData: Record<string, HelpEntry[]> = {},
+): string {
+  // Injected into every body's scope. `require` is here because bodies are
+  // compiled with `new Function`, whose scope is the worker's *global* object
+  // — not the module scope that used to hold the inlined body. Without it,
+  // pooling would silently revoke a documented capability ("agent code gets
+  // the full host JS runtime") as a side effect of a memory fix.
+  const injectNames = [
+    ...pluginNames,
+    "actions",
+    "console",
+    "fetch",
+    "require",
+    "MiniSearch",
+  ];
 
   const wrapped = `"use strict";
 const { parentPort: __port } = require("node:worker_threads");
@@ -361,29 +590,62 @@ process.exit = (code) => {
   throw new Error('process.exit(' + (code ?? 0) + ') is not available in the runline sandbox; return a value instead');
 };
 
+// ── run state ──
+// This worker outlives any single body, so everything the host correlates
+// on is scoped to __runId, an unguessable token supplied by the host.
+let __runId = null;
+
+// ── timer tracking ──
+// A body that leaves a timer behind keeps consuming this worker's event
+// loop and can fire into a later run. Count outstanding handles so the host
+// can retire the worker instead of reusing it.
+let __liveTimers = 0;
+const __realSetTimeout = setTimeout;
+const __realSetInterval = setInterval;
+const __realClearTimeout = clearTimeout;
+const __realClearInterval = clearInterval;
+const __timerHandles = new Set();
+globalThis.setTimeout = function (fn, ms, ...rest) {
+  let h;
+  const wrapped = (...a) => {
+    if (__timerHandles.delete(h)) __liveTimers--;
+    return fn(...a);
+  };
+  h = __realSetTimeout(wrapped, ms, ...rest);
+  __timerHandles.add(h);
+  __liveTimers++;
+  return h;
+};
+globalThis.setInterval = function (fn, ms, ...rest) {
+  const h = __realSetInterval(fn, ms, ...rest);
+  __timerHandles.add(h);
+  __liveTimers++;
+  return h;
+};
+globalThis.clearTimeout = function (h) {
+  if (__timerHandles.delete(h)) __liveTimers--;
+  return __realClearTimeout(h);
+};
+globalThis.clearInterval = function (h) {
+  if (__timerHandles.delete(h)) __liveTimers--;
+  return __realClearInterval(h);
+};
+
 // ── host bridge ──
 let __seq = 0;
 const __pending = new Map();
-__port.on("message", (m) => {
-  if (!m || m.t !== "result") return;
-  const p = __pending.get(m.id);
-  if (!p) return;
-  __pending.delete(m.id);
-  if (m.ok) p.resolve(m.value);
-  else p.reject(new Error(m.error));
-});
 const __invoke = (path, args) => new Promise((resolve, reject) => {
   const id = ++__seq;
   __pending.set(id, { resolve, reject });
   try {
-    __port.postMessage({ t: "invoke", id, path, args });
+    __port.postMessage({ t: "invoke", runId: __runId, id, path, args });
   } catch (e) {
     __pending.delete(id);
     reject(e);
   }
 });
 const __log = (level, line) => {
-  try { __port.postMessage({ t: "log", level, line }); } catch {}
+  try { __port.postMessage({ t: "log", runId: __runId, level, line }); } catch {}
 };
 
 const __fmt = (v) => {
@@ -567,20 +829,192 @@ const console = {
 
 const fetch = () => { throw new Error('fetch is disabled in runline sandbox'); };
 
-(async () => {
-${body}
-})().then(
-  (v) => {
+// Stable identity for this worker instance. Set before the baseline snapshot
+// so the scrub never removes it. Thread ids are recycled by the runtime and
+// cannot be used to tell one worker from the next; this can.
+globalThis.__runlineWorkerId =
+  Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+// ── cross-run contamination ──
+//
+// Two shapes, one policy: anything a body leaves behind that the next body
+// could observe makes this worker untrustworthy. Removable state is removed;
+// unremovable state retires the worker. Nothing is left for the next run to
+// trip over.
+
+// 1. Own properties added to globalThis. Removable — delete them.
+const __baselineGlobals = new Set(Object.getOwnPropertyNames(globalThis));
+
+// 2. Mutations to shared intrinsics (Array.prototype.push = ..., a new own
+//    property on Object, etc). NOT removable: restoring an arbitrary mutation
+//    would mean snapshotting every descriptor of every intrinsic. Instead
+//    fingerprint their own-property names and compare — a change means the
+//    body reshaped something shared and the worker must not be reused.
+const __intrinsics = [
+  Object, Object.prototype, Array, Array.prototype, Function.prototype,
+  String.prototype, Number.prototype, Boolean.prototype, Promise,
+  Promise.prototype, Map.prototype, Set.prototype, Date.prototype,
+  RegExp.prototype, Error.prototype, JSON, Math, Reflect,
+];
+// Snapshot of every intrinsic's own data properties, by reference. Taken
+// once; compared after each run. Catches BOTH shapes of tampering:
+//   - additions/removals  (the own-name set changes)
+//   - replacements        (Array.prototype.push = fn — same name, new value)
+// A name-only fingerprint misses the second, which is the more likely
+// monkey-patch. Descriptors are read rather than the properties themselves so
+// accessor getters are never invoked here.
+const __snapshot = [];
+for (const target of __intrinsics) {
+  let names;
+  try { names = Object.getOwnPropertyNames(target); } catch { continue; }
+  for (const n of names) {
+    let d;
+    try { d = Object.getOwnPropertyDescriptor(target, n); } catch { continue; }
+    if (!d) continue;
+    // Accessors are recorded by their get/set identity, data props by value.
+    __snapshot.push([target, n, "value" in d ? d.value : d.get, names.length]);
+  }
+}
+
+const __intrinsicsIntact = () => {
+  for (let i = 0; i < __snapshot.length; i++) {
+    const [target, name, expected] = __snapshot[i];
+    let d;
+    try { d = Object.getOwnPropertyDescriptor(target, name); } catch { return false; }
+    if (!d) return false;
+    if (("value" in d ? d.value : d.get) !== expected) return false;
+  }
+  // Additions are caught by the own-name count, which is recorded per target
+  // alongside each of its entries.
+  for (let i = 0; i < __snapshot.length; i++) {
+    const [target, , , count] = __snapshot[i];
+    let names;
+    try { names = Object.getOwnPropertyNames(target); } catch { return false; }
+    if (names.length !== count) return false;
+  }
+  return true;
+};
+
+/**
+ * Returns true when this worker is still safe to reuse. Removes what it can;
+ * reports what it cannot.
+ */
+const __scrubGlobals = () => {
+  let clean = true;
+
+  // Assigning parentPort.onmessage is a setter-based route to the host
+  // channel; restore it and distrust the worker. See __bodyRequire.
+  if (__port.onmessage !== __baselineOnMessage) {
+    __port.onmessage = __baselineOnMessage;
+    clean = false;
+  }
+  for (const k of Object.getOwnPropertyNames(globalThis)) {
+    if (__baselineGlobals.has(k)) continue;
     try {
-      __port.postMessage({ t: "done", ok: true, result: __toJson(v) });
-    } catch (e) {
-      __port.postMessage({ t: "done", ok: false, error: __fmtErr(e) });
+      delete globalThis[k];
+    } catch {
+      clean = false;
     }
-  },
-  (e) => {
-    __port.postMessage({ t: "done", ok: false, error: __fmtErr(e) });
-  },
-);
+    // A non-configurable property survives a silent delete: verify, don't
+    // assume the absence of a throw means success.
+    if (Object.prototype.hasOwnProperty.call(globalThis, k)) clean = false;
+  }
+  if (!__intrinsicsIntact()) clean = false;
+  return clean;
+};
+
+// The host channel is the one capability a body must not hold.
+//
+// A body can require("node:worker_threads"). Before pooling that was
+// harmless: anything it attached died with the worker after a single run.
+// Under reuse a surviving listener sees the {t:"run", runId} of EVERY later
+// body and can post a forged "done" for it, handing that run attacker-chosen
+// output. Randomising the run id does not help — the listener is simply told
+// what it is.
+//
+// Bun's MessagePort exposes no listenerCount/removeAllListeners, so listeners
+// cannot be enumerated and stripped after the fact. Instead the route in is
+// closed: the require handed to bodies returns a worker_threads module with
+// the port fields blanked. Every other module, and everything else about this
+// one, is untouched.
+const __bodyRequire = (id) => {
+  const mod = require(id);
+  if (id === "worker_threads" || id === "node:worker_threads") {
+    return Object.freeze({
+      ...mod,
+      parentPort: null,
+      receiveMessageOnPort: undefined,
+    });
+  }
+  return mod;
+};
+
+// Names injected into every body's scope. Passing them as parameters gives
+// each run a fresh function scope, so top-level declarations in user code
+// cannot collide across runs.
+const __injectNames = ${JSON.stringify(injectNames)};
+const __injectValues = __injectNames.map((n) => {
+  switch (n) {
+    case "actions": return actions;
+    case "console": return console;
+    case "fetch": return fetch;
+    case "require": return __bodyRequire;
+    case "MiniSearch": return MiniSearch;
+    default: return __makeProxy([n]);
+  }
+});
+
+// One body, start to finish. Never throws: every outcome is a "done".
+const __baselineOnMessage = __port.onmessage;
+
+const __run = async (runId, body) => {
+  __runId = runId;
+  __pending.clear();
+  let msg;
+  try {
+    const fn = new Function(
+      ...__injectNames,
+      '"use strict"; return (async () => {\\n' + body + '\\n})();',
+    );
+    const v = await fn(...__injectValues);
+    msg = { t: "done", runId, ok: true, result: __toJson(v) };
+  } catch (e) {
+    msg = { t: "done", runId, ok: false, error: __fmtErr(e) };
+  }
+  // Scrub before reporting so the host's reuse decision and the worker's
+  // actual state agree. Dirty means "do not reuse me": a leftover timer, a
+  // global that would not delete, or a mutated shared intrinsic.
+  const __clean = __scrubGlobals();
+  msg.dirty = __liveTimers > 0 || !__clean;
+  try {
+    __port.postMessage(msg);
+  } catch (e) {
+    __port.postMessage({
+      t: "done",
+      runId,
+      ok: false,
+      error: __fmtErr(e),
+      dirty: true,
+    });
+  }
+};
+
+function __hostMessageHandler(m) {
+  if (!m) return;
+  if (m.t === "run") {
+    void __run(m.runId, m.body);
+    return;
+  }
+  if (m.t !== "result") return;
+  // Replies for a superseded run are dropped: its promises are gone.
+  if (m.runId !== __runId) return;
+  const p = __pending.get(m.id);
+  if (!p) return;
+  __pending.delete(m.id);
+  if (m.ok) p.resolve(m.value);
+  else p.reject(new Error(m.error));
+}
+__port.on("message", __hostMessageHandler);
 `;
 
   return wrapped;
