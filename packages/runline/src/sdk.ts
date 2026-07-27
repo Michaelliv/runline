@@ -19,6 +19,11 @@ export interface RunlineOptions {
   connections?: ConnectionConfig[];
   timeoutMs?: number;
   memoryLimitBytes?: number;
+  /**
+   * Bodies one pooled worker may run before it is retired. See
+   * `ExecutionEngine` — this bounds cross-run contamination, not memory.
+   */
+  maxRunsPerWorker?: number;
 }
 
 export interface RunlineExecuteOptions {
@@ -29,6 +34,12 @@ export interface RunlineExecuteOptions {
 export class Runline {
   private _registry: PluginRegistry;
   private _config: RunlineConfig;
+  /**
+   * One engine per Runline instance, so its pooled worker survives across
+   * `execute()` calls. Constructing an engine per call would spawn (and
+   * leak) a fresh worker every time — the exact bug pooling exists to fix.
+   */
+  private _engine: ExecutionEngine | null = null;
 
   private constructor(options: RunlineOptions) {
     this._registry = new PluginRegistry();
@@ -43,20 +54,39 @@ export class Runline {
       timeoutMs: options.timeoutMs ?? DEFAULT_CONFIG.timeoutMs,
       memoryLimitBytes:
         options.memoryLimitBytes ?? DEFAULT_CONFIG.memoryLimitBytes,
+      ...(options.maxRunsPerWorker !== undefined
+        ? { maxRunsPerWorker: options.maxRunsPerWorker }
+        : {}),
     };
+  }
+
+  private engine(): ExecutionEngine {
+    if (!this._engine) {
+      this._engine = new ExecutionEngine(this._registry, this._config);
+    }
+    return this._engine;
+  }
+
+  /**
+   * Retire the pooled worker. Idempotent. Callers holding a long-lived
+   * Runline should call this on shutdown; an idle pooled worker is unref'd
+   * so it will not by itself keep a process alive.
+   */
+  dispose(): void {
+    this._engine?.dispose();
+    this._engine = null;
   }
 
   static create(options: RunlineOptions = {}): Runline {
     return new Runline(options);
   }
 
-  /** Execute JavaScript code in the QuickJS runtime. */
+  /** Execute JavaScript code in a pooled worker. */
   async execute(
     code: string,
     options?: RunlineExecuteOptions,
   ): Promise<ExecuteResult> {
-    const engine = new ExecutionEngine(this._registry, this._config);
-    return engine.execute(code, options);
+    return this.engine().execute(code, options);
   }
 
   /** Register an additional plugin after creation. */
@@ -72,6 +102,9 @@ export class Runline {
         connections: [...this._config.connections, ...connections],
       };
     }
+    // The pooled worker baked in the old plugin surface and the engine holds
+    // the old config object: both are stale now.
+    this.dispose();
   }
 
   /** List all available actions across all plugins. */
