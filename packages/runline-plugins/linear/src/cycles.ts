@@ -100,4 +100,55 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
       return (data.cycleUpdate as Record<string, unknown>)?.cycle;
     },
   });
+  // Archive is the only way to remove a single cycle: Linear has no
+  // per-cycle delete mutation. Issues are unlinked from the cycle first,
+  // they are not archived with it.
+  rl.registerAction("cycle.archive", {
+    access: "write",
+    description:
+      "Archive one cycle. Issues assigned to it are unlinked from the cycle first, not archived. This is the per-cycle removal; Linear has no single-cycle delete.",
+    inputSchema: t.Object({
+      id: t.String({ description: "The identifier of the cycle to archive" }),
+    }),
+    async execute(input, ctx) {
+      requireUnscoped(ctx, "cycles.*");
+      const { id } = input as { id: string };
+      const data = await gql(
+        key(ctx),
+        `mutation($id: String!) { cycleArchive(id: $id) { success } }`,
+        { id },
+      );
+      return data.cycleArchive;
+    },
+  });
+
+  // Deliberately NOT named cycle.delete.
+  //
+  // Linear's teamCyclesDelete takes a *team* id and wipes every cycle that
+  // team has, disabling the cycles feature entirely. Exposing it as
+  // `cycle.delete({ id })` would read as "delete this one cycle" and let an
+  // agent destroy a team's whole cycle history by analogy with every other
+  // `*.delete` action in this plugin. The name and the parameter both say
+  // team, and the description leads with the blast radius.
+  rl.registerAction("team.cyclesDeleteAll", {
+    access: "write",
+    description:
+      "DESTRUCTIVE: delete ALL cycle data for a team and disable the cycles feature. Removes every cycle and its issue associations, not just one. To remove a single cycle use cycle.archive.",
+    inputSchema: t.Object({
+      teamId: t.String({
+        description:
+          "The identifier of the TEAM whose cycles will all be deleted",
+      }),
+    }),
+    async execute(input, ctx) {
+      requireUnscoped(ctx, "cycles.*");
+      const { teamId } = input as { teamId: string };
+      const data = await gql(
+        key(ctx),
+        `mutation($id: String!) { teamCyclesDelete(id: $id) { success } }`,
+        { id: teamId },
+      );
+      return data.teamCyclesDelete;
+    },
+  });
 }
