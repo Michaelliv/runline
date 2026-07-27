@@ -319,6 +319,35 @@ describe("actions.check", () => {
   });
 });
 
+describe("FerroSearch sandbox global", () => {
+  it("agent code can build and query its own index", async () => {
+    const result = await run<string[]>(`
+      const index = new FerroSearch({ fields: ["title"], storeFields: ["title"] });
+      index.addAll([
+        { id: 1, title: "quarterly revenue report" },
+        { id: 2, title: "weekly standup notes" },
+      ]);
+      return index.search("revenu", { prefix: true, fuzzy: 0.2 }).map(r => r.title);
+    `);
+    assert.deepEqual(result, ["quarterly revenue report"]);
+  });
+
+  it("survives worker reuse alongside actions.find", async () => {
+    const engine = createEngine();
+    const first = await engine.execute(
+      'return new FerroSearch({ fields: ["a"] }) instanceof FerroSearch',
+    );
+    const second = await engine.execute('return actions.find("create issue")');
+    assert.equal(first.error, undefined, first.error);
+    assert.equal(first.result, true);
+    assert.equal(second.error, undefined, second.error);
+    assert.equal(
+      (second.result as Array<{ path: string }>)[0].path,
+      "github.issue.create",
+    );
+  });
+});
+
 describe("actions proxy fallback", () => {
   it("still calls actions.<plugin>.<action>(...) like before", async () => {
     const result = await run<unknown>(
