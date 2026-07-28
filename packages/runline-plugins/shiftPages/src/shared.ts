@@ -13,6 +13,11 @@ export {
 } from "../../_shared/shiftCloud.js";
 
 export const PAGE_STATUS = ["draft", "published", "archived"] as const;
+export const PAGE_TYPE = [
+  "hosted_html",
+  "protected_origin",
+  "vex_artifact",
+] as const;
 export const PAGE_VISIBILITY = ["org", "invited"] as const;
 
 export function pageRenderUrl(organizationId: string, slug: string): string {

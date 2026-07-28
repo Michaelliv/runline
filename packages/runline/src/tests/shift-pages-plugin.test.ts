@@ -18,6 +18,7 @@ const SHIFT_PAGES_ACTIONS = [
   "page.share",
   "page.shares",
   "page.update",
+  "page.vexArtifacts",
 ] as const;
 
 afterEach(() => {
@@ -94,11 +95,23 @@ describe("shiftPages plugin", () => {
     );
     assert.equal(
       Check(getAction(plugin, "page.share").inputSchema as never, {
-        pageId: "page_1",
+        id: "page_1",
         email: "not-an-email",
       }),
       false,
     );
+    // Path parameters are named id everywhere, never pageId.
+    for (const name of ["page.share", "page.shares", "page.renderUrl"]) {
+      const properties = Object.keys(
+        (
+          getAction(plugin, name).inputSchema as {
+            properties?: Record<string, unknown>;
+          }
+        ).properties ?? {},
+      );
+      assert.equal(properties.includes("pageId"), false, name);
+      assert.equal(properties.includes("id"), true, name);
+    }
     // page.update tolerates a bare id (no minProperties floor).
     assert.equal(
       Check(getAction(plugin, "page.update").inputSchema as never, {
@@ -171,8 +184,131 @@ describe("shiftPages plugin", () => {
       };
     });
 
-    assert.deepEqual(await action.execute({ pageId: "page_1" }, ctx()), {
+    assert.deepEqual(await action.execute({ id: "page_1" }, ctx()), {
       url: "https://cloud.shift-labs.ai/pages/org_from_api/investor-update",
     });
+  });
+
+  it("lists the vex artifacts of a managed deployment", async () => {
+    const action = getAction(makeShiftPages(), "page.vexArtifacts");
+    const artifacts = [
+      {
+        id: "artifact_1",
+        workspaceId: "ws_1",
+        workspaceName: "zion",
+        title: "Program Board",
+        version: 2,
+        enabled: true,
+      },
+    ];
+
+    mockShift((input, init) => {
+      const url = new URL(String(input));
+      assert.equal(url.pathname, "/v1/pages/vex-artifacts");
+      assert.equal(url.searchParams.get("deploymentId"), "deployment_1");
+      assert.equal(init?.method, undefined);
+      return { artifacts };
+    });
+
+    assert.deepEqual(
+      await action.execute({ deploymentId: "deployment_1" }, ctx()),
+      artifacts,
+    );
+  });
+
+  it("creates vex artifact pages that reference a deployment", async () => {
+    const action = getAction(makeShiftPages(), "page.create");
+
+    mockShift((input, init) => {
+      assert.equal(String(input), "https://cloud.shift-labs.ai/v1/pages");
+      assert.deepEqual(JSON.parse(String(init?.body)), {
+        type: "vex_artifact",
+        visibility: "org",
+        slug: "program-board",
+        title: "Program Board",
+        deploymentId: "deployment_1",
+        artifactId: "artifact_1",
+      });
+      return { page: { id: "page_1", type: "vex_artifact" } };
+    });
+
+    assert.deepEqual(
+      await action.execute(
+        {
+          slug: "program-board",
+          title: "Program Board",
+          type: "vex_artifact",
+          deploymentId: "deployment_1",
+          artifactId: "artifact_1",
+        },
+        ctx(),
+      ),
+      { id: "page_1", type: "vex_artifact" },
+    );
+  });
+
+  it("enforces one content field per page type before calling the API", async () => {
+    const action = getAction(makeShiftPages(), "page.create");
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      throw new Error("fetch should not run");
+    }) as typeof fetch;
+
+    const base = { slug: "page", title: "Page" };
+    for (const [input, expected] of [
+      [
+        { ...base, type: "vex_artifact", deploymentId: "d_1" },
+        /require both deploymentId and artifactId/,
+      ],
+      [
+        {
+          ...base,
+          type: "vex_artifact",
+          deploymentId: "d_1",
+          artifactId: "a_1",
+          html: "<h1>no</h1>",
+        },
+        /Only hosted_html pages may carry html/,
+      ],
+      [
+        { ...base, deploymentId: "d_1" },
+        /Only vex_artifact pages may reference a deployment or artifact/,
+      ],
+      [
+        { ...base, originUrl: "https://reports.example.com" },
+        /Only protected_origin pages may set an originUrl/,
+      ],
+      [
+        { ...base, type: "protected_origin" },
+        /protected_origin pages require an originUrl/,
+      ],
+    ] as const) {
+      await assert.rejects(() => action.execute(input, ctx()), expected);
+    }
+    assert.equal(fetchCalls, 0);
+  });
+
+  it("requires https origins for protected_origin pages", () => {
+    const schema = getAction(makeShiftPages(), "page.create")
+      .inputSchema as never;
+    assert.equal(
+      Check(schema, {
+        slug: "reports",
+        title: "Reports",
+        type: "protected_origin",
+        originUrl: "http://reports.example.com",
+      }),
+      false,
+    );
+    assert.equal(
+      Check(schema, {
+        slug: "reports",
+        title: "Reports",
+        type: "protected_origin",
+        originUrl: "https://reports.example.com",
+      }),
+      true,
+    );
   });
 });

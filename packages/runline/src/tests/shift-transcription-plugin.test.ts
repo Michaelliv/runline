@@ -115,17 +115,40 @@ describe("shiftTranscription plugin", () => {
       false,
     );
 
+    assert.equal(
+      Check(transcribe.inputSchema as never, {
+        path: "/tmp/audio.mp3",
+        metadata: { meeting: "standup", attendees: 4 },
+      }),
+      true,
+    );
+
     const transcript = getAction(plugin, "transcription.transcript");
     assert.ok(transcript.inputSchema);
     assert.equal(
       Check(transcript.inputSchema as never, {
-        jobId: "job_1",
+        id: "job_1",
         format: "json",
         downloadOnly: true,
       }),
       true,
     );
-    assert.equal(Check(transcript.inputSchema as never, { jobId: " " }), false);
+    assert.equal(Check(transcript.inputSchema as never, { id: " " }), false);
+    // Path parameters are named id everywhere, never jobId.
+    for (const name of [
+      "transcription.transcript",
+      "transcription.artifact.list",
+    ]) {
+      const properties = Object.keys(
+        (
+          getAction(plugin, name).inputSchema as {
+            properties?: Record<string, unknown>;
+          }
+        ).properties ?? {},
+      );
+      assert.equal(properties.includes("jobId"), false, name);
+      assert.equal(properties.includes("id"), true, name);
+    }
   });
 
   it("transcribes a local file end to end: asset, upload, complete, job", async () => {
@@ -179,6 +202,7 @@ describe("shiftTranscription plugin", () => {
           language: "he",
           diarize: true,
           name: "Standup",
+          metadata: { meeting: "standup" },
         });
         return Response.json({ id: "job_1", status: "queued" });
       }
@@ -187,7 +211,13 @@ describe("shiftTranscription plugin", () => {
 
     assert.deepEqual(
       await action.execute(
-        { path: media, language: "he", diarize: true, name: "Standup" },
+        {
+          path: media,
+          language: "he",
+          diarize: true,
+          name: "Standup",
+          metadata: { meeting: "standup" },
+        },
         ctx(),
       ),
       { id: "job_1", status: "queued" },
@@ -250,7 +280,7 @@ describe("shiftTranscription plugin", () => {
       return { artifacts: [{ id: "artifact_1", format: "txt" }] };
     });
 
-    assert.deepEqual(await action.execute({ jobId: "job_1" }, ctx()), [
+    assert.deepEqual(await action.execute({ id: "job_1" }, ctx()), [
       { id: "artifact_1", format: "txt" },
     ]);
   });
@@ -284,7 +314,7 @@ describe("shiftTranscription plugin", () => {
       throw new Error(`unexpected request: ${url}`);
     }) as typeof fetch;
 
-    assert.deepEqual(await action.execute({ jobId: "job_1" }, ctx()), {
+    assert.deepEqual(await action.execute({ id: "job_1" }, ctx()), {
       format: "txt",
       content: "Speaker 1: hello world\n",
     });
@@ -318,7 +348,7 @@ describe("shiftTranscription plugin", () => {
     }) as typeof fetch;
 
     assert.deepEqual(
-      await action.execute({ jobId: "job_1", format: "json" }, ctx()),
+      await action.execute({ id: "job_1", format: "json" }, ctx()),
       {
         format: "json",
         artifact: {
@@ -360,7 +390,7 @@ describe("shiftTranscription plugin", () => {
       throw new Error(`unexpected request: ${url}`);
     }) as typeof fetch;
 
-    assert.deepEqual(await action.execute({ jobId: "job_1" }, ctx()), {
+    assert.deepEqual(await action.execute({ id: "job_1" }, ctx()), {
       format: "txt",
       ...grant,
     });

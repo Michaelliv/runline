@@ -52,6 +52,12 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
             description: "Label shown in Shift Cloud",
           }),
         ),
+        metadata: t.Optional(
+          t.Record(t.String(), t.Unknown(), {
+            description:
+              "Small caller-defined metadata object stored on the job",
+          }),
+        ),
         waitSeconds: t.Optional(
           t.Number({
             minimum: 0,
@@ -69,6 +75,7 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
         language?: string;
         diarize?: boolean;
         name?: string;
+        metadata?: Record<string, unknown>;
         waitSeconds?: number;
       };
       const contentType = requireMediaType(
@@ -117,6 +124,7 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
             language: fields.language,
             diarize: fields.diarize,
             name: fields.name,
+            metadata: fields.metadata,
           }),
         },
       );
@@ -173,12 +181,12 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
   rl.registerAction("transcription.artifact.list", {
     access: "read",
     description: "List the available transcript artifacts for a job.",
-    inputSchema: t.Object({ jobId: Id }, STRICT_OBJECT),
+    inputSchema: t.Object({ id: Id }, STRICT_OBJECT),
     async execute(input, ctx) {
-      const { jobId } = input as { jobId: string };
+      const { id } = input as { id: string };
       const body = await request<{ artifacts: unknown[] }>(
         ctx,
-        `/v1/services/transcription/jobs/${pathSegment(jobId)}/artifacts`,
+        `/v1/services/transcription/jobs/${pathSegment(id)}/artifacts`,
       );
       return body.artifacts;
     },
@@ -192,7 +200,7 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
       "downloadOnly=true to return the short-lived signed download grant.",
     inputSchema: t.Object(
       {
-        jobId: Id,
+        id: Id,
         format: t.Optional(
           enumSchema("Transcript format", [...TRANSCRIPT_FORMAT]),
         ),
@@ -204,7 +212,7 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const fields = input as {
-        jobId: string;
+        id: string;
         format?: string;
         downloadOnly?: boolean;
       };
@@ -214,7 +222,7 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
         download: { method: "GET"; url: string; expiresAt: string };
       }>(
         ctx,
-        `/v1/services/transcription/jobs/${pathSegment(fields.jobId)}/artifacts/${pathSegment(format)}/download`,
+        `/v1/services/transcription/jobs/${pathSegment(fields.id)}/artifacts/${pathSegment(format)}/download`,
         { method: "POST" },
       );
       if (

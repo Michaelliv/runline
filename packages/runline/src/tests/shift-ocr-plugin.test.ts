@@ -164,6 +164,32 @@ describe("shiftOcr plugin", () => {
     );
   });
 
+  it("forwards provider and model overrides, omitting them when unset", async () => {
+    const action = getAction(makeShiftOcr(), "ocr.extract");
+    const bodies: Array<Record<string, unknown>> = [];
+
+    mockShift((_input, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return { pagesProcessed: 1 };
+    });
+
+    await action.execute(
+      {
+        url: "https://cdn.invalid/label.jpg",
+        provider: "mistral-ocr",
+        model: "mistral-ocr-latest",
+      },
+      ctx(),
+    );
+    await action.execute({ url: "https://cdn.invalid/label.jpg" }, ctx());
+
+    assert.equal(bodies[0]?.provider, "mistral-ocr");
+    assert.equal(bodies[0]?.model, "mistral-ocr-latest");
+    // Unset overrides stay off the wire so the service picks its default.
+    assert.equal("provider" in (bodies[1] ?? {}), false);
+    assert.equal("model" in (bodies[1] ?? {}), false);
+  });
+
   it("infers PDFs from URL extensions and honors kind overrides", async () => {
     const action = getAction(makeShiftOcr(), "ocr.extract");
     const documents: unknown[] = [];

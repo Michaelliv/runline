@@ -8,15 +8,21 @@ import type { ActionContext, PluginDef } from "../plugin/types.js";
 const originalFetch = globalThis.fetch;
 
 const SHIFT_WORK_ACTIONS = [
+  "issue.close",
   "issue.comment",
   "issue.create",
   "issue.dependency.add",
   "issue.dependency.list",
   "issue.dependency.listPage",
   "issue.dependency.remove",
+  "issue.event.list",
+  "issue.event.listPage",
   "issue.get",
   "issue.list",
   "issue.listPage",
+  "issue.reopen",
+  "issue.report",
+  "issue.resolve",
   "issue.update",
   "issueView.create",
   "issueView.delete",
@@ -95,15 +101,153 @@ describe("shiftWork plugin", () => {
     }
   });
 
-  it("does not expose issue.report or issue lifecycle transitions in v1", () => {
-    const names = new Set(makeShiftWork().actions.map((a) => a.name));
-    for (const name of [
-      "issue.report",
-      "issue.resolve",
-      "issue.close",
-      "issue.reopen",
-    ]) {
-      assert.equal(names.has(name), false);
+  it("drives issue lifecycle transitions through their own endpoints", async () => {
+    const plugin = makeShiftWork();
+    const calls: Array<{ url: string; method?: string; body: unknown }> = [];
+
+    mockShift((input, init) => {
+      calls.push({
+        url: String(input),
+        method: init?.method,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      return { issue: { id: "issue_1" } };
+    });
+
+    for (const [name, input] of [
+      ["issue.resolve", { id: "issue_1", comment: "Shipped" }],
+      ["issue.reopen", { id: "issue_1" }],
+      ["issue.close", { id: "issue_1" }],
+    ] as const) {
+      assert.deepEqual(await getAction(plugin, name).execute(input, ctx()), {
+        id: "issue_1",
+      });
+    }
+
+    assert.deepEqual(calls, [
+      {
+        url: "https://cloud.shift-labs.ai/v1/issues/issue_1/resolve",
+        method: "POST",
+        body: { comment: "Shipped" },
+      },
+      {
+        url: "https://cloud.shift-labs.ai/v1/issues/issue_1/reopen",
+        method: "POST",
+        body: undefined,
+      },
+      {
+        url: "https://cloud.shift-labs.ai/v1/issues/issue_1/close",
+        method: "POST",
+        body: undefined,
+      },
+    ]);
+  });
+
+  it("reports issues on the deduplicating /report route", async () => {
+    const action = getAction(makeShiftWork(), "issue.report");
+
+    mockShift((input, init) => {
+      assert.equal(
+        String(input),
+        "https://cloud.shift-labs.ai/v1/issues/report",
+      );
+      assert.equal(init?.method, "POST");
+      assert.deepEqual(JSON.parse(String(init?.body)), {
+        title: "Sync failed",
+        fingerprint: "sync:timeout",
+      });
+      return { issue: { id: "issue_1", number: 7 } };
+    });
+
+    assert.deepEqual(
+      await action.execute(
+        { title: "Sync failed", fingerprint: "sync:timeout" },
+        ctx(),
+      ),
+      { id: "issue_1", number: 7 },
+    );
+  });
+
+  it("shares one field contract between issue.create and issue.report", async () => {
+    const plugin = makeShiftWork();
+    const create = getAction(plugin, "issue.create").inputSchema;
+    const report = getAction(plugin, "issue.report").inputSchema;
+    assert.deepEqual(report, create);
+
+    let fetchCalls = 0;
+    globalThis.fetch = (async () => {
+      fetchCalls += 1;
+      throw new Error("fetch should not run");
+    }) as typeof fetch;
+
+    // report inherits create's pre-flight invariants.
+    await assert.rejects(
+      () =>
+        getAction(plugin, "issue.report").execute(
+          { title: "Nested", parentIssueId: "parent_1" },
+          ctx(),
+        ),
+      /projectId is required/,
+    );
+    await assert.rejects(
+      () =>
+        getAction(plugin, "issue.report").execute(
+          {
+            title: "Backwards",
+            startAt: "2026-07-15T00:00:00.000Z",
+            dueAt: "2026-07-14T00:00:00.000Z",
+          },
+          ctx(),
+        ),
+      /dueAt must not precede startAt/,
+    );
+    assert.equal(fetchCalls, 0);
+  });
+
+  it("pages the issue event timeline", async () => {
+    const plugin = makeShiftWork();
+    const list = getAction(plugin, "issue.event.list");
+    const page = getAction(plugin, "issue.event.listPage");
+    const events = [{ id: "event_1", type: "status_changed" }];
+
+    mockShift((input) => {
+      const url = new URL(String(input));
+      assert.equal(url.pathname, "/v1/issues/issue_1/events");
+      assert.equal(url.searchParams.get("limit"), "25");
+      return { events, nextCursor: "next_1" };
+    });
+
+    // list unwraps to the array; listPage keeps the cursor envelope.
+    assert.deepEqual(
+      await list.execute({ id: "issue_1", limit: 25 }, ctx()),
+      events,
+    );
+    assert.deepEqual(await page.execute({ id: "issue_1", limit: 25 }, ctx()), {
+      events,
+      nextCursor: "next_1",
+    });
+
+    assert.equal(Check(page.inputSchema as never, { id: "issue_1" }), true);
+    assert.equal(Check(page.inputSchema as never, { id: "" }), false);
+    assert.equal(
+      Check(page.inputSchema as never, { id: "issue_1", cursor: "" }),
+      false,
+    );
+  });
+
+  it("names every path parameter id", () => {
+    for (const action of makeShiftWork().actions) {
+      const properties = Object.keys(
+        (action.inputSchema as { properties?: Record<string, unknown> })
+          .properties ?? {},
+      );
+      for (const legacy of ["issueId", "projectId_", "viewId"]) {
+        assert.equal(
+          properties.includes(legacy),
+          false,
+          `${action.name} still takes ${legacy}`,
+        );
+      }
     }
   });
 

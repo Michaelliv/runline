@@ -169,6 +169,23 @@ export default function shiftOcr(rl: RunlinePluginAPI) {
               "Inferred from the extension otherwise.",
           }),
         ),
+        provider: t.Optional(
+          t.String({
+            minLength: 1,
+            pattern: "\\S",
+            description:
+              "Provider ID from ocr.providers. Defaults to the first " +
+              "catalog provider.",
+          }),
+        ),
+        model: t.Optional(
+          t.String({
+            minLength: 1,
+            pattern: "\\S",
+            description:
+              "Model override. Defaults to the provider's defaultModel.",
+          }),
+        ),
         pages: t.Optional(
           t.String({
             minLength: 1,
@@ -206,6 +223,8 @@ export default function shiftOcr(rl: RunlinePluginAPI) {
         url?: string;
         objectId?: string;
         kind?: "image" | "document";
+        provider?: string;
+        model?: string;
         pages?: string;
         schema?: Record<string, unknown>;
         schemaName?: string;
@@ -230,6 +249,8 @@ export default function shiftOcr(rl: RunlinePluginAPI) {
         method: "POST",
         body: JSON.stringify({
           document,
+          ...(fields.provider ? { provider: fields.provider } : {}),
+          ...(fields.model ? { model: fields.model } : {}),
           ...(fields.pages ? { pages: fields.pages } : {}),
           ...(fields.schema
             ? {

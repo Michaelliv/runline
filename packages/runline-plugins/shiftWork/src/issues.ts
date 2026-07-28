@@ -19,6 +19,40 @@ import {
   withQuery,
 } from "./shared.js";
 
+const issueFields = {
+  title: t.String({
+    minLength: 1,
+    maxLength: 160,
+    pattern: "\\S",
+    description: "Issue title",
+  }),
+  description: t.Optional(
+    t.String({ maxLength: 20_000, description: "Issue description" }),
+  ),
+  projectId: t.Optional(idSchema("Project ID")),
+  parentIssueId: t.Optional(idSchema("Parent Issue ID")),
+  sortOrder: t.Optional(t.Integer({ minimum: 0 })),
+  status: t.Optional(enumSchema("Issue status", ISSUE_STATUS)),
+  priority: t.Optional(enumSchema("Issue priority", ISSUE_PRIORITY)),
+  assigneeUserId: t.Optional(idSchema("Assignee user ID")),
+  startAt: t.Optional(timestampSchema("ISO-8601 start timestamp")),
+  dueAt: t.Optional(timestampSchema("ISO-8601 due timestamp")),
+  deploymentId: t.Optional(idSchema("Deployment ID")),
+  workspaceId: t.Optional(idSchema("Workspace ID")),
+  sessionId: t.Optional(idSchema("Session ID")),
+  traceId: t.Optional(idSchema("Trace ID")),
+  fingerprint: t.Optional(
+    t.String({ minLength: 1, maxLength: 512, pattern: "\\S" }),
+  ),
+  labels: t.Optional(
+    t.Array(t.String({ minLength: 1, maxLength: 64, pattern: "\\S" })),
+  ),
+  metadata: t.Optional(
+    t.Record(t.String(), t.Unknown(), { description: "Issue metadata" }),
+  ),
+  source: t.Optional(enumSchema("Issue source", ISSUE_SOURCE)),
+};
+
 const issueListFields = {
   status: t.Optional(enumSchema("Issue status", ISSUE_STATUS)),
   projectId: t.Optional(idSchema("Project ID")),
@@ -26,6 +60,18 @@ const issueListFields = {
   assigneeUserId: t.Optional(idSchema("Assignee user ID")),
   source: t.Optional(enumSchema("Issue source", ISSUE_SOURCE)),
   includeArchived: t.Optional(t.Boolean()),
+  cursor: t.Optional(cursorSchema()),
+  limit: t.Optional(
+    t.Integer({
+      minimum: 1,
+      maximum: 100,
+      description: "Max results, default 50",
+    }),
+  ),
+};
+
+const eventListFields = {
+  id: idSchema("Issue ID"),
   cursor: t.Optional(cursorSchema()),
   limit: t.Optional(
     t.Integer({
@@ -81,59 +127,33 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Create an Issue. Leave projectId empty for inbox work; parentIssueId requires a Project.",
-    inputSchema: t.Object(
-      {
-        title: t.String({
-          minLength: 1,
-          maxLength: 160,
-          pattern: "\\S",
-          description: "Issue title",
-        }),
-        description: t.Optional(
-          t.String({ maxLength: 20_000, description: "Issue description" }),
-        ),
-        projectId: t.Optional(idSchema("Project ID")),
-        parentIssueId: t.Optional(idSchema("Parent Issue ID")),
-        sortOrder: t.Optional(t.Integer({ minimum: 0 })),
-        status: t.Optional(enumSchema("Issue status", ISSUE_STATUS)),
-        priority: t.Optional(enumSchema("Issue priority", ISSUE_PRIORITY)),
-        source: t.Optional(enumSchema("Issue source", ISSUE_SOURCE)),
-        assigneeUserId: t.Optional(idSchema("Assignee user ID")),
-        startAt: t.Optional(timestampSchema("ISO-8601 start timestamp")),
-        dueAt: t.Optional(timestampSchema("ISO-8601 due timestamp")),
-        deploymentId: t.Optional(idSchema("Deployment ID")),
-        workspaceId: t.Optional(idSchema("Workspace ID")),
-        sessionId: t.Optional(idSchema("Session ID")),
-        traceId: t.Optional(idSchema("Trace ID")),
-        fingerprint: t.Optional(
-          t.String({ minLength: 1, maxLength: 512, pattern: "\\S" }),
-        ),
-        labels: t.Optional(
-          t.Array(t.String({ minLength: 1, maxLength: 64, pattern: "\\S" })),
-        ),
-        metadata: t.Optional(
-          t.Record(t.String(), t.Unknown(), { description: "Issue metadata" }),
-        ),
-      },
-      STRICT_OBJECT,
-    ),
+    inputSchema: t.Object(issueFields, STRICT_OBJECT),
     async execute(input, ctx) {
       const fields = input as Record<string, unknown>;
-      if (
-        fields.parentIssueId !== undefined &&
-        fields.projectId === undefined
-      ) {
-        throw new Error("projectId is required when parentIssueId is set");
-      }
-      assertDateOrder(
-        fields.startAt,
-        fields.dueAt,
-        "Issue dueAt must not precede startAt",
-      );
+      assertIssueShape(fields);
       const body = await request<{ issue: ShiftIssue }>(ctx, "/v1/issues", {
         method: "POST",
         body: JSON.stringify(fields),
       });
+      return body.issue;
+    },
+  });
+
+  rl.registerAction("issue.report", {
+    access: "write",
+    description:
+      "Report an Issue the way an agent should: source defaults to agent, " +
+      "and a repeated fingerprint folds into the existing Issue as a " +
+      "reported_again event instead of creating a duplicate.",
+    inputSchema: t.Object(issueFields, STRICT_OBJECT),
+    async execute(input, ctx) {
+      const fields = input as Record<string, unknown>;
+      assertIssueShape(fields);
+      const body = await request<{ issue: ShiftIssue }>(
+        ctx,
+        "/v1/issues/report",
+        { method: "POST", body: JSON.stringify(fields) },
+      );
       return body.issue;
     },
   });
@@ -214,6 +234,111 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         { method: "POST", body: JSON.stringify({ body }) },
       );
       return response.event;
+    },
+  });
+
+  rl.registerAction("issue.resolve", {
+    access: "write",
+    description:
+      "Resolve an Issue, optionally with a closing comment recorded on the " +
+      "event timeline.",
+    inputSchema: t.Object(
+      {
+        id: idSchema("Issue ID"),
+        comment: t.Optional(
+          t.String({
+            minLength: 1,
+            maxLength: 20_000,
+            pattern: "\\S",
+            description: "Resolution comment",
+          }),
+        ),
+      },
+      STRICT_OBJECT,
+    ),
+    async execute(input, ctx) {
+      const { id, ...fields } = input as { id: string; comment?: string };
+      const body = await request<{ issue: ShiftIssue }>(
+        ctx,
+        `/v1/issues/${pathSegment(id)}/resolve`,
+        { method: "POST", body: JSON.stringify(fields) },
+      );
+      return body.issue;
+    },
+  });
+
+  rl.registerAction("issue.reopen", {
+    access: "write",
+    description: "Reopen a resolved or closed Issue.",
+    inputSchema: t.Object({ id: idSchema("Issue ID") }, STRICT_OBJECT),
+    async execute(input, ctx) {
+      const { id } = input as { id: string };
+      const body = await request<{ issue: ShiftIssue }>(
+        ctx,
+        `/v1/issues/${pathSegment(id)}/reopen`,
+        { method: "POST" },
+      );
+      return body.issue;
+    },
+  });
+
+  rl.registerAction("issue.close", {
+    access: "write",
+    description:
+      "Close an Issue without resolving it — the outcome for work that is " +
+      "abandoned rather than finished.",
+    inputSchema: t.Object({ id: idSchema("Issue ID") }, STRICT_OBJECT),
+    async execute(input, ctx) {
+      const { id } = input as { id: string };
+      const body = await request<{ issue: ShiftIssue }>(
+        ctx,
+        `/v1/issues/${pathSegment(id)}/close`,
+        { method: "POST" },
+      );
+      return body.issue;
+    },
+  });
+
+  rl.registerAction("issue.event.list", {
+    access: "read",
+    description:
+      "List the first page of an Issue's event timeline: status changes, " +
+      "comments, assignment and dependency history, newest first.",
+    inputSchema: t.Object(eventListFields, STRICT_OBJECT),
+    async execute(input, ctx) {
+      const { id, ...pagination } = input as {
+        id: string;
+        cursor?: string;
+        limit?: number;
+      };
+      const body = await request<{ events: ShiftIssueEvent[] }>(
+        ctx,
+        withQuery(
+          `/v1/issues/${pathSegment(id)}/events`,
+          listParams(pagination),
+        ),
+      );
+      return body.events;
+    },
+  });
+
+  rl.registerAction("issue.event.listPage", {
+    access: "read",
+    description: "List a cursor-paginated page of an Issue's event timeline.",
+    inputSchema: t.Object(eventListFields, STRICT_OBJECT),
+    async execute(input, ctx) {
+      const { id, ...pagination } = input as {
+        id: string;
+        cursor?: string;
+        limit?: number;
+      };
+      return request<{ events: ShiftIssueEvent[]; nextCursor?: string }>(
+        ctx,
+        withQuery(
+          `/v1/issues/${pathSegment(id)}/events`,
+          listParams(pagination),
+        ),
+      );
     },
   });
 
@@ -302,24 +427,36 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     description: "Remove an Issue dependency link.",
     inputSchema: t.Object(
       {
-        issueId: idSchema("Issue ID"),
+        id: idSchema("Issue ID"),
         dependencyId: idSchema("Dependency ID"),
       },
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const { issueId, dependencyId } = input as {
-        issueId: string;
+      const { id, dependencyId } = input as {
+        id: string;
         dependencyId: string;
       };
       await request<void>(
         ctx,
-        `/v1/issues/${pathSegment(issueId)}/dependencies/${pathSegment(dependencyId)}`,
+        `/v1/issues/${pathSegment(id)}/dependencies/${pathSegment(dependencyId)}`,
         { method: "DELETE" },
       );
       return { removed: true };
     },
   });
+}
+
+/** Shape rules the API enforces server-side, caught before the round-trip. */
+function assertIssueShape(fields: Record<string, unknown>): void {
+  if (fields.parentIssueId !== undefined && fields.projectId === undefined) {
+    throw new Error("projectId is required when parentIssueId is set");
+  }
+  assertDateOrder(
+    fields.startAt,
+    fields.dueAt,
+    "Issue dueAt must not precede startAt",
+  );
 }
 
 function assertDateOrder(start: unknown, end: unknown, message: string): void {
