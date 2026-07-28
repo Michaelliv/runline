@@ -1,13 +1,24 @@
-import { readFile, stat } from "node:fs/promises";
-import { extname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { type Ctx, request, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
+import {
+  putThroughGrant,
+  SIGNED_UPLOAD_MAX_BYTES,
+  type SignedUploadGrant,
+  statUploadFile,
+} from "../../_shared/shiftUpload.js";
 
 /**
  * Shift OCR — text and structured-field extraction from images and
  * PDFs through the Shift cloud OCR service. The API key is the tenant
  * authority; no organization ID is ever sent (SHFT-852).
+ *
+ * Local files route by size: small ones inline as base64 data URLs
+ * (one round-trip); larger ones ride the signed-grant arc into the
+ * organization's durable object bucket and extract by objectId
+ * (SHFT-924), so bytes go to S3, never through the API.
  */
 
 const IMAGE_TYPES: Record<string, string> = {
@@ -25,9 +36,10 @@ const DOCUMENT_TYPES: Record<string, string> = {
 
 /**
  * Raw-file ceiling for inlining as a base64 data URL. Base64 inflates
- * by 4/3, so 20 MiB raw stays well inside provider request limits.
+ * by 4/3, so 20 MiB raw stays well inside provider request limits;
+ * anything larger uploads to the object bucket instead.
  */
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_INLINE_BYTES = 20 * 1024 * 1024;
 
 interface OcrDocumentRef {
   type: "image" | "document";
@@ -35,7 +47,15 @@ interface OcrDocumentRef {
   name?: string;
 }
 
-async function documentFromPath(path: string): Promise<OcrDocumentRef> {
+interface OcrObjectRef {
+  type: "object";
+  objectId: string;
+}
+
+async function documentFromPath(
+  ctx: Ctx,
+  path: string,
+): Promise<OcrDocumentRef | OcrObjectRef> {
   const extension = extname(path).slice(1).toLowerCase();
   const imageType = IMAGE_TYPES[extension];
   const documentType = DOCUMENT_TYPES[extension];
@@ -47,19 +67,36 @@ async function documentFromPath(path: string): Promise<OcrDocumentRef> {
       ].join(", ")}`,
     );
   }
-  const file = await stat(path);
-  if (!file.isFile()) throw new Error(`${path} is not a file`);
-  if (file.size === 0) throw new Error("File is empty");
-  if (file.size > MAX_FILE_BYTES) {
-    throw new Error(
-      `File is ${file.size} bytes; inline OCR uploads are capped at ${MAX_FILE_BYTES} bytes. Host the file and pass url instead.`,
-    );
+  const mediaType = (imageType ?? documentType) as string;
+  const sizeBytes = await statUploadFile(path, SIGNED_UPLOAD_MAX_BYTES);
+
+  if (sizeBytes <= MAX_INLINE_BYTES) {
+    const url = `data:${mediaType};base64,${(await readFile(path)).toString("base64")}`;
+    return imageType
+      ? { type: "image", url }
+      : { type: "document", url, name: basename(path) };
   }
-  const mediaType = imageType ?? documentType;
-  const url = `data:${mediaType};base64,${(await readFile(path)).toString("base64")}`;
-  return imageType
-    ? { type: "image", url }
-    : { type: "document", url, name: path.replace(/.*\//, "") };
+
+  // Large file: into the durable bucket through a signed grant, then
+  // extract by reference — the object persists as provenance.
+  const created = await request<{
+    object: { id: string };
+    upload: SignedUploadGrant;
+  }>(ctx, "/v1/services/objects/objects", {
+    method: "POST",
+    body: JSON.stringify({
+      contentType: mediaType,
+      sizeBytes,
+      filename: basename(path),
+    }),
+  });
+  await putThroughGrant(created.upload, path, mediaType, sizeBytes);
+  await request(
+    ctx,
+    `/v1/services/objects/objects/${created.object.id}/complete`,
+    { method: "POST" },
+  );
+  return { type: "object", objectId: created.object.id };
 }
 
 function documentFromUrl(
@@ -97,9 +134,10 @@ export default function shiftOcr(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Extract markdown text — and optionally schema-constrained JSON — " +
-      "from an image or PDF. Pass a local file path (inlined as a data " +
-      "URL) or an https URL. Provide schema to get structured fields " +
-      "back instead of parsing the text yourself.",
+      "from an image or PDF. Pass a local file path (small files inline; " +
+      "large ones upload to the org's object bucket automatically), an " +
+      "https URL, or the objectId of a stored object. Provide schema to " +
+      "get structured fields back instead of parsing the text yourself.",
     inputSchema: t.Object(
       {
         path: t.Optional(
@@ -114,6 +152,14 @@ export default function shiftOcr(rl: RunlinePluginAPI) {
             minLength: 1,
             pattern: "\\S",
             description: "https or data URL of the image or PDF",
+          }),
+        ),
+        objectId: t.Optional(
+          t.String({
+            minLength: 1,
+            pattern: "\\S",
+            description:
+              "ID of a ready object in the organization's durable bucket",
           }),
         ),
         kind: t.Optional(
@@ -158,21 +204,27 @@ export default function shiftOcr(rl: RunlinePluginAPI) {
       const fields = input as {
         path?: string;
         url?: string;
+        objectId?: string;
         kind?: "image" | "document";
         pages?: string;
         schema?: Record<string, unknown>;
         schemaName?: string;
         prompt?: string;
       };
-      if (!fields.path === !fields.url) {
-        throw new Error("Provide exactly one of path or url");
+      const sources = [fields.path, fields.url, fields.objectId].filter(
+        (value) => value !== undefined,
+      );
+      if (sources.length !== 1) {
+        throw new Error("Provide exactly one of path, url, or objectId");
       }
       if (fields.prompt && !fields.schema) {
         throw new Error("prompt requires schema");
       }
-      const document = fields.path
-        ? await documentFromPath(fields.path)
-        : documentFromUrl(fields.url as string, fields.kind);
+      const document = fields.objectId
+        ? { type: "object", objectId: fields.objectId }
+        : fields.path
+          ? await documentFromPath(ctx as Ctx, fields.path)
+          : documentFromUrl(fields.url as string, fields.kind);
 
       return await request(ctx as Ctx, "/v1/services/ocr/extract", {
         method: "POST",

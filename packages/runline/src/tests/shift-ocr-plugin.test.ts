@@ -90,6 +90,8 @@ describe("shiftOcr plugin", () => {
 
     assert.equal(check({ path: "/tmp/label.jpg" }), true);
     assert.equal(check({ url: "https://cdn.invalid/scan.pdf" }), true);
+    assert.equal(check({ objectId: "obj_1" }), true);
+    assert.equal(check({ objectId: " " }), false);
     assert.equal(
       check({
         path: "/tmp/label.jpg",
@@ -198,12 +200,12 @@ describe("shiftOcr plugin", () => {
     const oversized = join(directory, "oversized.png");
     await writeFile(empty, "");
     await writeFile(oversized, "x");
-    await truncate(oversized, 20 * 1024 * 1024 + 1);
+    await truncate(oversized, 5 * 1024 * 1024 * 1024 + 1);
     const fetchCalls = refusingFetch();
 
     await assert.rejects(
       () => action.execute({}, ctx()),
-      /exactly one of path or url/,
+      /exactly one of path, url, or objectId/,
     );
     await assert.rejects(
       () =>
@@ -211,7 +213,11 @@ describe("shiftOcr plugin", () => {
           { path: "/tmp/a.jpg", url: "https://cdn.invalid/a.jpg" },
           ctx(),
         ),
-      /exactly one of path or url/,
+      /exactly one of path, url, or objectId/,
+    );
+    await assert.rejects(
+      () => action.execute({ path: "/tmp/a.jpg", objectId: "obj_1" }, ctx()),
+      /exactly one of path, url, or objectId/,
     );
     await assert.rejects(
       () =>
@@ -231,9 +237,81 @@ describe("shiftOcr plugin", () => {
     );
     await assert.rejects(
       () => action.execute({ path: oversized }, ctx()),
-      /capped at/,
+      /service limit/,
     );
     assert.equal(fetchCalls(), 0);
+  });
+
+  it("extracts stored objects by reference without touching bytes", async () => {
+    const action = getAction(makeShiftOcr(), "ocr.extract");
+
+    mockShift((input, init) => {
+      assert.equal(
+        String(input),
+        "https://cloud.shift-labs.ai/v1/services/ocr/extract",
+      );
+      assert.deepEqual(JSON.parse(String(init?.body)), {
+        document: { type: "object", objectId: "obj_9" },
+      });
+      return { pagesProcessed: 3 };
+    });
+
+    assert.deepEqual(await action.execute({ objectId: "obj_9" }, ctx()), {
+      pagesProcessed: 3,
+    });
+  });
+
+  it("routes large files through the object bucket: create, upload, complete, extract", async () => {
+    const action = getAction(makeShiftOcr(), "ocr.extract");
+    const directory = await mkdtemp(join(tmpdir(), "shift-ocr-plugin-"));
+    const large = join(directory, "blueprint.pdf");
+    await writeFile(large, "x");
+    const sizeBytes = 20 * 1024 * 1024 + 1;
+    await truncate(large, sizeBytes);
+
+    const calls: string[] = [];
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const url = String(input);
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith("/v1/services/objects/objects")) {
+        assert.deepEqual(JSON.parse(String(init?.body)), {
+          contentType: "application/pdf",
+          sizeBytes,
+          filename: "blueprint.pdf",
+        });
+        return Response.json({
+          object: { id: "obj_large" },
+          upload: {
+            method: "PUT",
+            url: "https://uploads.invalid/obj_large",
+            headers: { "content-type": "application/pdf" },
+            expiresAt: "2026-07-28T12:15:00.000Z",
+          },
+        });
+      }
+      if (url === "https://uploads.invalid/obj_large") {
+        assert.equal(init?.method, "PUT");
+        return new Response(null, { status: 200 });
+      }
+      if (url.endsWith("/objects/obj_large/complete")) {
+        return Response.json({ id: "obj_large", status: "ready" });
+      }
+      if (url.endsWith("/v1/services/ocr/extract")) {
+        assert.deepEqual(JSON.parse(String(init?.body)), {
+          document: { type: "object", objectId: "obj_large" },
+        });
+        return Response.json({ pagesProcessed: 42 });
+      }
+      throw new Error(`unexpected request: ${url}`);
+    }) as typeof fetch;
+
+    assert.deepEqual(await action.execute({ path: large }, ctx()), {
+      pagesProcessed: 42,
+    });
+    assert.equal(calls.length, 4);
   });
 
   it("lists OCR providers", async () => {
