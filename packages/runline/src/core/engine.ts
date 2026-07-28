@@ -33,9 +33,11 @@ export interface EngineOptions {
  *
  * Fired only around `action.execute()` — an unknown path or a failed
  * input validation throws before plugin code runs and is not an
- * invocation. `error` is the thrown value, unmodified, when execute
- * rejected; the hook sees it in the host process even though the
- * worker only ever receives the message string.
+ * invocation. `error` is present exactly when execute rejected: the
+ * thrown value as-is, except a nullish throw, which is substituted
+ * with an Error so failure is never mistaken for success. The hook
+ * sees it in the host process even though the worker only ever
+ * receives the message string.
  */
 export interface ActionInvocation {
   plugin: string;

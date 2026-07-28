@@ -41,9 +41,8 @@ const demo: PluginDef = {
     },
     {
       name: "boomUndefined",
-      // biome-ignore lint/suspicious/useAwait: the sync throw is the point
+      // biome-ignore lint/suspicious/useAwait: throws before it could await — a nullish throw is the case under test
       execute: async () => {
-        // eslint-disable-next-line no-throw-literal
         throw undefined;
       },
     },
@@ -122,6 +121,21 @@ describe("onAction", () => {
 
     expect(out.error).toBeUndefined();
     expect(out.result).toEqual({ echoed: {} });
+  });
+
+  test("fires per invocation, not per run", async () => {
+    // The reason this hook lives at the dispatch point instead of
+    // wrapping execute(): one body, several action calls, several
+    // events — in call order.
+    const seen: ActionInvocation[] = [];
+    const rl = harness((i) => seen.push(i));
+    const out = await rl.execute(
+      "await demo.ok({ a: 1 }); await demo.slow({}); return await demo.ok({ b: 2 });",
+    );
+    rl.dispose();
+
+    expect(out.error).toBeUndefined();
+    expect(seen.map((i) => i.action)).toEqual(["ok", "slow", "ok"]);
   });
 
   test("durationMs measures the execute, not the worker round-trip setup", async () => {
