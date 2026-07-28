@@ -19,7 +19,7 @@ runline exec 'return await brandfetch.brand.getColors({ domain: "nike.com" })'
 # => [{ hex: "#E5E5E5", type: "accent" }, { hex: "#111111", type: "dark" }, ...]
 ```
 
-All 203 built-in plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS runtime: each configured plugin is a top-level global, dot-chain into resource and action. Configure the built-in `node` plugin for host work like `node.fs.readFile`, `node.process.execFile`, `node.path.join`, `node.crypto.hash`, and `node.fetch`.
+All 204 built-in plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS runtime: each configured plugin is a top-level global, dot-chain into resource and action. Configure the built-in `node` plugin for host work like `node.fs.readFile`, `node.process.execFile`, `node.path.join`, `node.crypto.hash`, and `node.fetch`.
 
 ```js
 // agent writes this
@@ -35,7 +35,7 @@ return { company: company.name, issue: issue.number };
 
 ## Plugins
 
-203 built-in plugins covering popular SaaS, DevOps, productivity, image-generation APIs, and host Node capabilities. All ship with the package — no separate install needed.
+204 built-in plugins covering popular SaaS, DevOps, productivity, image-generation APIs, and host Node capabilities. All ship with the package — no separate install needed.
 
 Set the env var shown in the Auth column, add a connection, and go:
 
@@ -217,6 +217,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/servicenow.svg" width="16" height="16" style="vertical-align: middle"> **servicenow** | 40 | incident, user, userGroup, userRole, businessService, configurationItem, department, tableRecord | `SERVICENOW_SUBDOMAIN`, `SERVICENOW_USERNAME`, `SERVICENOW_PASSWORD` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/shiftCrm.svg" width="16" height="16" style="vertical-align: middle"> **shiftCrm** | 40 | access, account, person, pipeline, opportunity, activity, task, record, propertyDefinition, import | `SHIFT_CRM_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/shiftLabs.svg" width="16" height="16" style="vertical-align: middle"> **shiftLabs** | 47 | project, issue, issueView, page, transcription, object | `SHIFT_LABS_API_KEY` |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/shiftOcr.svg" width="16" height="16" style="vertical-align: middle"> **shiftOcr** | 2 | ocr | `SHIFT_LABS_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/shopify.svg" width="16" height="16" style="vertical-align: middle"> **shopify** | 10 | order, product | `SHOPIFY_SUBDOMAIN`, `SHOPIFY_ACCESS_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/signl4.png" width="16" height="16" style="vertical-align: middle"> **signl4** | 2 | alert | `SIGNL4_TEAM_SECRET` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/slack.svg" width="16" height="16" style="vertical-align: middle"> **slack** | 38 | message, channel, reaction, user, userGroup, file, star | `SLACK_ACCESS_TOKEN` |
@@ -496,7 +497,7 @@ Env vars override config values. Plugins declare env var names in their connecti
 
 ## Development
 
-Runline is a bun workspace monorepo: `packages/runline` (library + CLI), `packages/runline-plugins` (203 built-in plugins, bundled into runline's dist at build time), and `packages/pi-runline` (pi extension that exposes runline to agents).
+Runline is a bun workspace monorepo: `packages/runline` (library + CLI), `packages/runline-plugins` (204 built-in plugins, bundled into runline's dist at build time), and `packages/pi-runline` (pi extension that exposes runline to agents).
 
 ```bash
 bun install
