@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RunlineConfig } from "./config/types.js";
 import { DEFAULT_CONFIG } from "./config/types.js";
-import { type ExecuteResult, ExecutionEngine } from "./core/engine.js";
+import {
+  type ActionInvocation,
+  type ExecuteResult,
+  ExecutionEngine,
+} from "./core/engine.js";
 import type { PluginFunction } from "./plugin/api.js";
 import { resolvePluginExport } from "./plugin/api.js";
 import { discoverPlugins } from "./plugin/loader.js";
@@ -24,6 +28,15 @@ export interface RunlineOptions {
    * `ExecutionEngine` — this bounds cross-run contamination, not memory.
    */
   maxRunsPerWorker?: number;
+  /**
+   * Observer fired in the host process for every action invocation
+   * that enters a plugin's `execute()` — unknown paths and failed
+   * input validation never reach plugin code and are not reported.
+   * Exceptions thrown by the observer are swallowed: observability
+   * never breaks a run. Not part of `RunlineConfig` on purpose —
+   * config round-trips through JSON (`fromProject`), functions do not.
+   */
+  onAction?: (info: ActionInvocation) => void;
 }
 
 export interface RunlineExecuteOptions {
@@ -41,8 +54,11 @@ export class Runline {
    */
   private _engine: ExecutionEngine | null = null;
 
+  private readonly _onAction: ((info: ActionInvocation) => void) | undefined;
+
   private constructor(options: RunlineOptions) {
     this._registry = new PluginRegistry();
+    this._onAction = options.onAction;
 
     for (const pluginOrFn of options.plugins ?? []) {
       const plugin = resolvePluginExport(pluginOrFn, "unknown");
@@ -62,7 +78,9 @@ export class Runline {
 
   private engine(): ExecutionEngine {
     if (!this._engine) {
-      this._engine = new ExecutionEngine(this._registry, this._config);
+      this._engine = new ExecutionEngine(this._registry, this._config, {
+        onAction: this._onAction,
+      });
     }
     return this._engine;
   }

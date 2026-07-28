@@ -28,6 +28,32 @@ export interface EngineOptions {
   memoryLimitBytes?: number;
 }
 
+/**
+ * One resolved action call, observed at the engine's dispatch point.
+ *
+ * Fired only around `action.execute()` — an unknown path or a failed
+ * input validation throws before plugin code runs and is not an
+ * invocation. `error` is the thrown value, unmodified, when execute
+ * rejected; the hook sees it in the host process even though the
+ * worker only ever receives the message string.
+ */
+export interface ActionInvocation {
+  plugin: string;
+  action: string;
+  /** The full callable path, "plugin.action". */
+  path: string;
+  durationMs: number;
+  error?: unknown;
+}
+
+export interface EngineHooks {
+  /**
+   * Observer for every action invocation. Must not throw — but if it
+   * does, the engine swallows it: observability never breaks a run.
+   */
+  onAction?: (info: ActionInvocation) => void;
+}
+
 // Messages worker → host. Every message carries the `runId` it belongs to so
 // a straggler from a finished run can never be attributed to the next one on
 // a reused worker.
@@ -157,12 +183,18 @@ const RSS_WATCHDOG_SLACK_BYTES = 128 * 1024 * 1024;
 export class ExecutionEngine {
   private registry: PluginRegistry;
   private config: RunlineConfig;
+  private hooks: EngineHooks;
   private pooled: PooledWorker | null = null;
   private readonly maxRunsPerWorker: number;
 
-  constructor(registry: PluginRegistry, config: RunlineConfig) {
+  constructor(
+    registry: PluginRegistry,
+    config: RunlineConfig,
+    hooks: EngineHooks = {},
+  ) {
     this.registry = registry;
     this.config = config;
+    this.hooks = hooks;
     this.maxRunsPerWorker =
       config.maxRunsPerWorker ?? DEFAULT_MAX_RUNS_PER_WORKER;
   }
@@ -438,7 +470,40 @@ export class ExecutionEngine {
       }
     }
 
-    return action.execute(args, ctx);
+    const started = performance.now();
+    try {
+      const value = await action.execute(args, ctx);
+      this.fireOnAction(plugin.name, action.name, path, started, false);
+      return value;
+    } catch (err) {
+      // `failed` is a flag, not `error !== undefined` — a plugin that
+      // does `throw undefined` still failed.
+      this.fireOnAction(plugin.name, action.name, path, started, true, err);
+      throw err;
+    }
+  }
+
+  private fireOnAction(
+    pluginName: string,
+    actionName: string,
+    path: string,
+    started: number,
+    failed: boolean,
+    error?: unknown,
+  ): void {
+    const onAction = this.hooks.onAction;
+    if (!onAction) return;
+    try {
+      onAction({
+        plugin: pluginName,
+        action: actionName,
+        path,
+        durationMs: performance.now() - started,
+        ...(failed ? { error: error ?? new Error("Unknown error") } : {}),
+      });
+    } catch {
+      // Observability never breaks a run.
+    }
   }
 
   /**

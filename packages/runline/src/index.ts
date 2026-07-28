@@ -9,7 +9,12 @@ export {
 } from "./config/loader.js";
 export type { RunlineConfig } from "./config/types.js";
 export { DEFAULT_CONFIG } from "./config/types.js";
-export type { EngineOptions, ExecuteResult } from "./core/engine.js";
+export type {
+  ActionInvocation,
+  EngineHooks,
+  EngineOptions,
+  ExecuteResult,
+} from "./core/engine.js";
 export { ExecutionEngine } from "./core/engine.js";
 export type {
   BuildAuthUrlOptions,
