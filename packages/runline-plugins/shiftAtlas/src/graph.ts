@@ -206,13 +206,20 @@ export function registerGraphActions(rl: RunlinePluginAPI) {
   /* Mutations — each mirrors one service input schema.             */
   /* -------------------------------------------------------------- */
 
+  /**
+   * Sub-resource creates carry one routing key (journeyId, stageId,
+   * taskId) that belongs in the path, not the body. It is named as the
+   * key to omit — rather than allowlisting body fields — so a field
+   * added to the schema later flows through by default instead of
+   * being silently dropped.
+   */
   function create(
     action: string,
     entity: string,
     path: (input: Record<string, unknown>) => string,
     description: string,
     fields: Fields,
-    bodyKeys?: string[],
+    routingKey?: string,
   ) {
     rl.registerAction(action, {
       access: "write",
@@ -220,9 +227,8 @@ export function registerGraphActions(rl: RunlinePluginAPI) {
       inputSchema: t.Object(fields, STRICT_OBJECT),
       async execute(input, ctx) {
         const all = input as Record<string, unknown>;
-        const body = bodyKeys
-          ? Object.fromEntries(bodyKeys.map((key) => [key, all[key]]))
-          : all;
+        const body = { ...all };
+        if (routingKey) delete body[routingKey];
         const response = await request<Record<string, unknown>>(
           ctx,
           path(all),
@@ -374,7 +380,7 @@ export function registerGraphActions(rl: RunlinePluginAPI) {
       intent: t.Optional(longText("What this stage exists to ensure")),
       position: t.Optional(position),
     },
-    ["name", "intent", "position"],
+    "journeyId",
   );
   update("stage.update", "stage", "stages", "Update a stage.", {
     name: t.Optional(name("Stage name")),
@@ -408,7 +414,7 @@ export function registerGraphActions(rl: RunlinePluginAPI) {
       intendedMode: enumSchema("Intended mode", GRAPH_TASK_MODE),
       actorId: t.Optional(idSchema("Owner actor ID")),
     },
-    ["description", "position", "intendedMode", "actorId"],
+    "stageId",
   );
   update(
     "task.update",
@@ -438,7 +444,7 @@ export function registerGraphActions(rl: RunlinePluginAPI) {
       actorId: idSchema("Actor ID"),
       role: t.Optional(enumSchema("Assignment role", GRAPH_ASSIGNMENT_ROLE)),
     },
-    ["actorId", "role"],
+    "taskId",
   );
   remove(
     "assignment.delete",
@@ -480,7 +486,7 @@ export function registerGraphActions(rl: RunlinePluginAPI) {
       reference: t.Optional(referenceField),
       url: t.Optional(urlField),
     },
-    ["executor", "label", "status", "deploymentId", "reference", "url"],
+    "taskId",
   );
   update(
     "binding.update",
@@ -515,7 +521,7 @@ export function registerGraphActions(rl: RunlinePluginAPI) {
       url: t.Optional(urlField),
       artifactRef: t.Optional(referenceField),
     },
-    ["title", "kind", "url", "artifactRef"],
+    "taskId",
   );
   update(
     "evidence.update",
