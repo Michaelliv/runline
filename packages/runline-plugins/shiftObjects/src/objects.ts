@@ -3,7 +3,7 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { enumSchema, pathSegment, request } from "./shared.js";
+import { enumSchema, pathSegment, request } from "../../_shared/shiftCloud.js";
 
 const OBJECTS_BASE = "/v1/services/objects";
 
