@@ -3,6 +3,7 @@ import * as t from "typebox";
 import {
   enumSchema,
   idSchema,
+  listParams,
   PAGE_STATUS,
   PAGE_VISIBILITY,
   pageRenderUrl,
@@ -10,6 +11,7 @@ import {
   request,
   STRICT_OBJECT,
   timestampSchema,
+  withQuery,
 } from "./shared.js";
 
 export interface ShiftPage {
@@ -69,13 +71,9 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const fields = (input ?? {}) as Record<string, unknown>;
-      const params = new URLSearchParams();
-      if (fields.status) params.set("status", String(fields.status));
-      if (fields.limit) params.set("limit", String(fields.limit));
       const body = await request<{ pages: ShiftPage[] }>(
         ctx,
-        `/v1/pages?${params}`,
+        withQuery("/v1/pages", listParams(input)),
       );
       return body.pages;
     },

@@ -4,6 +4,7 @@ import {
   cursorSchema,
   enumSchema,
   idSchema,
+  listParams,
   PROJECT_STATUS,
   pathSegment,
   request,
@@ -21,16 +22,6 @@ const projectListFields = {
   cursor: t.Optional(cursorSchema()),
   limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
 };
-
-function listParams(input: unknown): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(
-    (input ?? {}) as Record<string, unknown>,
-  )) {
-    if (value !== undefined) params.set(key, String(value));
-  }
-  return params;
-}
 
 export function registerProjectActions(rl: RunlinePluginAPI) {
   rl.registerAction("project.list", {

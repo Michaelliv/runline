@@ -3,7 +3,13 @@ import { readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { enumSchema, pathSegment, request } from "../../_shared/shiftCloud.js";
+import {
+  enumSchema,
+  listParams,
+  pathSegment,
+  request,
+  withQuery,
+} from "../../_shared/shiftCloud.js";
 
 const OBJECTS_BASE = "/v1/services/objects";
 
@@ -226,16 +232,9 @@ export function registerObjectActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const params = new URLSearchParams();
-      for (const [key, value] of Object.entries(
-        input as Record<string, unknown>,
-      )) {
-        if (value !== undefined) params.set(key, String(value));
-      }
-      const query = params.toString();
       const body = await request<{ objects: StoredObject[] }>(
         ctx,
-        `${OBJECTS_BASE}/objects${query ? `?${query}` : ""}`,
+        withQuery(`${OBJECTS_BASE}/objects`, listParams(input)),
       );
       return body.objects;
     },

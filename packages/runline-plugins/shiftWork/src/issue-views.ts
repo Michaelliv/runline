@@ -10,6 +10,7 @@ import {
   ISSUE_VIEW_SORT,
   ISSUE_VIEW_VISIBILITY,
   idSchema,
+  listParams,
   pathSegment,
   request,
   type ShiftIssue,
@@ -17,6 +18,7 @@ import {
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
+  withQuery,
 } from "./shared.js";
 
 const viewFields = {
@@ -253,21 +255,6 @@ export function registerIssueViewActions(rl: RunlinePluginAPI) {
       return { deleted: true };
     },
   });
-}
-
-function listParams(input: unknown): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(
-    (input ?? {}) as Record<string, unknown>,
-  )) {
-    if (value !== undefined) params.set(key, String(value));
-  }
-  return params;
-}
-
-function withQuery(path: string, params: URLSearchParams): string {
-  const query = params.toString();
-  return query ? `${path}?${query}` : path;
 }
 
 function assertDateOrder(startAfter: unknown, dueBefore: unknown): void {

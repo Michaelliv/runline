@@ -7,6 +7,7 @@ import {
   ISSUE_SOURCE,
   ISSUE_STATUS,
   idSchema,
+  listParams,
   pathSegment,
   request,
   type ShiftIssue,
@@ -15,6 +16,7 @@ import {
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
+  withQuery,
 } from "./shared.js";
 
 const issueListFields = {
@@ -34,21 +36,6 @@ const issueListFields = {
   ),
 };
 
-function issueListParams(input: unknown): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(
-    (input ?? {}) as Record<string, unknown>,
-  )) {
-    if (value !== undefined) params.set(key, String(value));
-  }
-  return params;
-}
-
-function withQuery(path: string, params: URLSearchParams): string {
-  const query = params.toString();
-  return query ? `${path}?${query}` : path;
-}
-
 export function registerIssueActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.list", {
     access: "read",
@@ -58,7 +45,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ issues: ShiftIssue[] }>(
         ctx,
-        `/v1/issues?${issueListParams(input)}`,
+        `/v1/issues?${listParams(input)}`,
       );
       return body.issues;
     },
@@ -71,7 +58,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ issues: ShiftIssue[]; nextCursor?: string }>(
         ctx,
-        `/v1/issues?${issueListParams(input)}`,
+        `/v1/issues?${listParams(input)}`,
       );
     },
   });
@@ -246,7 +233,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         ctx,
         withQuery(
           `/v1/issues/${pathSegment(id)}/dependencies`,
-          issueListParams(pagination),
+          listParams(pagination),
         ),
       );
       return body.dependencies;
@@ -277,7 +264,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         ctx,
         withQuery(
           `/v1/issues/${pathSegment(id)}/dependencies`,
-          issueListParams(pagination),
+          listParams(pagination),
         ),
       );
     },
