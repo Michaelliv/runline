@@ -1,8 +1,13 @@
-import { openAsBlob } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
-import { extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import {
+  AUDIO_VIDEO_MEDIA_TYPES,
+  putThroughGrant,
+  requireMediaType,
+  SIGNED_UPLOAD_MAX_BYTES,
+  type SignedUploadGrant,
+  statUploadFile,
+} from "../../_shared/shiftUpload.js";
 import {
   enumSchema,
   pathSegment,
@@ -11,57 +16,10 @@ import {
   TRANSCRIPTION_LANGUAGE,
 } from "./shared.js";
 
-const MEDIA_TYPES: Record<string, string> = {
-  aac: "audio/aac",
-  flac: "audio/flac",
-  m4a: "audio/m4a",
-  mov: "video/quicktime",
-  mp3: "audio/mpeg",
-  mp4: "video/mp4",
-  mpeg: "video/mpeg",
-  mpg: "video/mpeg",
-  oga: "audio/ogg",
-  ogg: "audio/ogg",
-  opus: "audio/ogg",
-  wav: "audio/wav",
-  wave: "audio/wav",
-  webm: "video/webm",
-};
-
-/** Mirrors the public service contract's 5 GiB source-object ceiling. */
-const MAX_MEDIA_BYTES = 5 * 1024 * 1024 * 1024;
 /** Transcript previews returned into the sandbox are capped, not truncated silently. */
 const MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024;
 const STRICT_OBJECT = { additionalProperties: false } as const;
 const Id = t.String({ minLength: 1, pattern: "\\S" });
-
-function mediaTypeFor(path: string): string {
-  const mediaType = MEDIA_TYPES[extname(path).slice(1).toLowerCase()];
-  if (!mediaType) {
-    throw new Error(
-      `Unsupported media extension for ${path}. Supported: ${Object.keys(MEDIA_TYPES).join(", ")}`,
-    );
-  }
-  return mediaType;
-}
-
-async function fileBody(
-  path: string,
-  sizeBytes: number,
-): Promise<Blob | Buffer> {
-  try {
-    return await openAsBlob(path);
-  } catch {
-    // Runtimes without fs.openAsBlob fall back to buffering; refuse to
-    // buffer files that would strain the host process.
-    if (sizeBytes > 512 * 1024 * 1024) {
-      throw new Error(
-        "This runtime cannot stream uploads and the file is too large to buffer.",
-      );
-    }
-    return await readFile(path);
-  }
-}
 
 export function registerTranscriptionActions(rl: RunlinePluginAPI) {
   rl.registerAction("transcription.transcribe", {
@@ -113,45 +71,35 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
         name?: string;
         waitSeconds?: number;
       };
-      const contentType = mediaTypeFor(fields.path);
-      const file = await stat(fields.path);
-      if (!file.isFile()) throw new Error(`${fields.path} is not a file`);
-      if (file.size === 0) throw new Error("Media file is empty");
-      if (file.size > MAX_MEDIA_BYTES) {
-        throw new Error(
-          `Media file is larger than the ${MAX_MEDIA_BYTES}-byte service limit`,
-        );
-      }
+      const contentType = requireMediaType(
+        fields.path,
+        AUDIO_VIDEO_MEDIA_TYPES,
+      );
+      const sizeBytes = await statUploadFile(
+        fields.path,
+        SIGNED_UPLOAD_MAX_BYTES,
+        "Media file",
+      );
 
       const created = await request<{
         asset: { id: string };
-        upload: {
-          method: "PUT";
-          url: string;
-          headers: Record<string, string>;
-          expiresAt: string;
-        };
+        upload: SignedUploadGrant;
       }>(ctx, "/v1/services/transcription/assets", {
         method: "POST",
         // The API key is the tenant authority; no organizationId is sent.
         body: JSON.stringify({
           contentType,
-          sizeBytes: file.size,
+          sizeBytes,
         }),
       });
 
-      const uploadHeaders = new Headers(created.upload.headers);
-      if (!uploadHeaders.has("content-type")) {
-        uploadHeaders.set("content-type", contentType);
-      }
-      const upload = await fetch(created.upload.url, {
-        method: created.upload.method,
-        headers: uploadHeaders,
-        body: await fileBody(fields.path, file.size),
-      });
-      if (!upload.ok) {
-        throw new Error(`Media upload failed: HTTP ${upload.status}`);
-      }
+      await putThroughGrant(
+        created.upload,
+        fields.path,
+        contentType,
+        sizeBytes,
+        "Media upload",
+      );
 
       await request(
         ctx,

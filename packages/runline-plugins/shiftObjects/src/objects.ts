@@ -1,6 +1,5 @@
-import { openAsBlob } from "node:fs";
-import { readFile, stat, writeFile } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { writeFile } from "node:fs/promises";
+import { basename } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
@@ -10,6 +9,14 @@ import {
   request,
   withQuery,
 } from "../../_shared/shiftCloud.js";
+import {
+  GENERAL_MEDIA_TYPES,
+  mediaTypeFromPath,
+  putThroughGrant,
+  SIGNED_UPLOAD_MAX_BYTES,
+  type SignedUploadGrant,
+  statUploadFile,
+} from "../../_shared/shiftUpload.js";
 
 const OBJECTS_BASE = "/v1/services/objects";
 
@@ -21,31 +28,8 @@ export const OBJECT_LINK_TARGET = [
   "db_record",
 ] as const;
 
-/** Mirrors the public service contract's 5 GiB object ceiling. */
-const MAX_OBJECT_BYTES = 5 * 1024 * 1024 * 1024;
 const STRICT_OBJECT = { additionalProperties: false } as const;
 const Id = t.String({ minLength: 1, pattern: "\\S" });
-
-const MEDIA_TYPES: Record<string, string> = {
-  csv: "text/csv",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  gif: "image/gif",
-  html: "text/html",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  json: "application/json",
-  md: "text/markdown",
-  mp3: "audio/mpeg",
-  mp4: "video/mp4",
-  pdf: "application/pdf",
-  png: "image/png",
-  txt: "text/plain",
-  wav: "audio/wav",
-  webp: "image/webp",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  zip: "application/zip",
-};
 
 interface StoredObject {
   id: string;
@@ -54,32 +38,6 @@ interface StoredObject {
   contentType: string;
   sizeBytes: number;
   [key: string]: unknown;
-}
-
-function mediaTypeFor(path: string, override?: string): string {
-  if (override) return override;
-  return (
-    MEDIA_TYPES[extname(path).slice(1).toLowerCase()] ??
-    "application/octet-stream"
-  );
-}
-
-async function fileBody(
-  path: string,
-  sizeBytes: number,
-): Promise<Blob | Buffer> {
-  try {
-    return await openAsBlob(path);
-  } catch {
-    // Runtimes without fs.openAsBlob fall back to buffering; refuse to
-    // buffer files that would strain the host process.
-    if (sizeBytes > 512 * 1024 * 1024) {
-      throw new Error(
-        "This runtime cannot stream uploads and the file is too large to buffer.",
-      );
-    }
-    return await readFile(path);
-  }
 }
 
 function linkSchema() {
@@ -163,30 +121,24 @@ export function registerObjectActions(rl: RunlinePluginAPI) {
         sessionId?: string;
         artifactId?: string;
       };
-      const contentType = mediaTypeFor(fields.path, fields.contentType);
-      const file = await stat(fields.path);
-      if (!file.isFile()) throw new Error(`${fields.path} is not a file`);
-      if (file.size === 0) throw new Error("File is empty");
-      if (file.size > MAX_OBJECT_BYTES) {
-        throw new Error(
-          `File is larger than the ${MAX_OBJECT_BYTES}-byte service limit`,
-        );
-      }
+      const contentType =
+        fields.contentType ??
+        mediaTypeFromPath(fields.path, GENERAL_MEDIA_TYPES) ??
+        "application/octet-stream";
+      const sizeBytes = await statUploadFile(
+        fields.path,
+        SIGNED_UPLOAD_MAX_BYTES,
+      );
 
       const created = await request<{
         object: StoredObject;
-        upload: {
-          method: "PUT";
-          url: string;
-          headers: Record<string, string>;
-          expiresAt: string;
-        };
+        upload: SignedUploadGrant;
       }>(ctx, `${OBJECTS_BASE}/objects`, {
         method: "POST",
         // The API key is the tenant authority; no organizationId is sent.
         body: JSON.stringify({
           contentType,
-          sizeBytes: file.size,
+          sizeBytes,
           filename: fields.filename ?? basename(fields.path),
           workspaceId: fields.workspaceId,
           sessionId: fields.sessionId,
@@ -195,18 +147,13 @@ export function registerObjectActions(rl: RunlinePluginAPI) {
         }),
       });
 
-      const uploadHeaders = new Headers(created.upload.headers);
-      if (!uploadHeaders.has("content-type")) {
-        uploadHeaders.set("content-type", contentType);
-      }
-      const upload = await fetch(created.upload.url, {
-        method: created.upload.method,
-        headers: uploadHeaders,
-        body: await fileBody(fields.path, file.size),
-      });
-      if (!upload.ok) {
-        throw new Error(`Object upload failed: HTTP ${upload.status}`);
-      }
+      await putThroughGrant(
+        created.upload,
+        fields.path,
+        contentType,
+        sizeBytes,
+        "Object upload",
+      );
 
       return request<StoredObject>(
         ctx,
