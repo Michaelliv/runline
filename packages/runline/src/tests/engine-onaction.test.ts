@@ -80,10 +80,10 @@ describe("onAction", () => {
       action: "ok",
       path: "demo.ok",
     });
-    expect(seen[0]!.error).toBeUndefined();
-    expect(seen[1]!.action).toBe("boom");
-    expect(seen[1]!.error).toBeInstanceOf(Error);
-    expect(String(seen[1]!.error)).toContain("upstream 500");
+    expect(seen[0]?.error).toBeUndefined();
+    expect(seen[1]?.action).toBe("boom");
+    expect(seen[1]?.error).toBeInstanceOf(Error);
+    expect(String(seen[1]?.error)).toContain("upstream 500");
   });
 
   test("throw undefined still reports as a failure", async () => {
@@ -93,8 +93,8 @@ describe("onAction", () => {
     rl.dispose();
 
     expect(seen).toHaveLength(1);
-    expect("error" in seen[0]!).toBe(true);
-    expect(seen[0]!.error).toBeInstanceOf(Error);
+    expect(seen[0]).toHaveProperty("error");
+    expect(seen[0]?.error).toBeInstanceOf(Error);
   });
 
   test("does not fire for unknown actions or failed validation", async () => {
@@ -144,7 +144,7 @@ describe("onAction", () => {
     await rl.execute("return await demo.slow({});");
     rl.dispose();
 
-    expect(seen[0]!.durationMs).toBeGreaterThanOrEqual(20);
-    expect(seen[0]!.durationMs).toBeLessThan(4000);
+    expect(seen[0]?.durationMs).toBeGreaterThanOrEqual(20);
+    expect(seen[0]?.durationMs).toBeLessThan(4000);
   });
 });
