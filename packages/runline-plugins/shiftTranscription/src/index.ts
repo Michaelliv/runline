@@ -11,7 +11,7 @@ import { registerTranscriptionActions } from "./transcription.js";
  */
 export default function shiftTranscription(rl: RunlinePluginAPI) {
   rl.setName("shiftTranscription");
-  rl.setVersion("0.1.0");
+  rl.setVersion("0.2.0");
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({

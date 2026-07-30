@@ -178,6 +178,24 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
     },
   });
 
+  rl.registerAction("transcription.job.delete", {
+    access: "write",
+    description:
+      "Permanently delete a finished (succeeded, failed, or canceled) " +
+      "transcription job, its transcript artifacts, and its uploaded " +
+      "source media when no other job shares it. Cancel live jobs first. " +
+      "This cannot be undone.",
+    inputSchema: t.Object({ id: Id }, STRICT_OBJECT),
+    async execute(input, ctx) {
+      const { id } = input as { id: string };
+      return request(
+        ctx,
+        `/v1/services/transcription/jobs/${pathSegment(id)}`,
+        { method: "DELETE" },
+      );
+    },
+  });
+
   rl.registerAction("transcription.artifact.list", {
     access: "read",
     description: "List the available transcript artifacts for a job.",
