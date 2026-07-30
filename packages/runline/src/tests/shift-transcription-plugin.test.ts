@@ -13,6 +13,7 @@ const originalFetch = globalThis.fetch;
 const SHIFT_TRANSCRIPTION_ACTIONS = [
   "transcription.artifact.list",
   "transcription.job.cancel",
+  "transcription.job.delete",
   "transcription.job.get",
   "transcription.job.list",
   "transcription.transcribe",
@@ -263,6 +264,27 @@ describe("shiftTranscription plugin", () => {
       /service limit/,
     );
     assert.equal(fetchCalls, 0);
+  });
+
+  it("deletes finished jobs through the public service route", async () => {
+    const action = getAction(
+      makeShiftTranscription(),
+      "transcription.job.delete",
+    );
+
+    mockShift((input, init) => {
+      assert.equal(
+        String(input),
+        "https://cloud.shift-labs.ai/v1/services/transcription/jobs/job_1",
+      );
+      assert.equal(init?.method, "DELETE");
+      return { id: "job_1", status: "succeeded" };
+    });
+
+    assert.deepEqual(await action.execute({ id: "job_1" }, ctx()), {
+      id: "job_1",
+      status: "succeeded",
+    });
   });
 
   it("lists artifact metadata from the public service route", async () => {
