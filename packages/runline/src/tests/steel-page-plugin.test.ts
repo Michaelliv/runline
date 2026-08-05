@@ -44,7 +44,26 @@ const PAGE = `<!doctype html><html><body>
   </script>
 </body></html>`;
 
-describe("steel page tools", () => {
+/**
+ * A missing browser binary is an environment gap, not a failing test, so
+ * the suite skips rather than reporting fourteen confusing failures. CI
+ * installs chromium, so there it always runs.
+ */
+const browserAvailable = await chromium
+  .launch()
+  .then(async (instance) => {
+    await instance.close();
+    return true;
+  })
+  .catch(() => false);
+
+if (!browserAvailable) {
+  console.warn(
+    "steel page tools: skipping — no chromium. Run `bunx playwright install chromium`.",
+  );
+}
+
+(browserAvailable ? describe : describe.skip)("steel page tools", () => {
   let browser: Browser;
   let cdp: CdpConnection;
   let page: CdpPage;

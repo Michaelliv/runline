@@ -15,6 +15,9 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      # The Steel page tools are tested against a real browser over real
+      # CDP; a mocked protocol would only ever agree with itself.
+      - run: bunx playwright install --with-deps chromium
       - run: bun --filter runline build
       - run: bun --filter runline test
       # Lint/format across the whole monorepo — catches issues in
