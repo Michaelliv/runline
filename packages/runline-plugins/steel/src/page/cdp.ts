@@ -309,6 +309,8 @@ export async function attachToTarget(
   await page.send("Page.enable");
   await page.send("Runtime.enable");
   await page.send("DOM.enable");
+  // Needed before cookies can be written on the target.
+  await page.send("Network.enable");
   await page.installOnNewDocuments();
   await page.installBridge();
   return page;

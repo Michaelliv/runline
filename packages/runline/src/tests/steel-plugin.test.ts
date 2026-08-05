@@ -38,6 +38,7 @@ const STEEL_ACTIONS = [
   "page.screenshot",
   "page.scroll",
   "page.selectOption",
+  "page.setCookies",
   "page.targets",
   "page.type",
   "page.waitFor",

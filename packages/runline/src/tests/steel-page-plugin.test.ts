@@ -95,6 +95,7 @@ describe("steel page tools", () => {
       "page.getValue",
       "page.pressKey",
       "page.selectOption",
+      "page.setCookies",
       "page.hover",
       "page.drag",
       "page.scroll",
@@ -258,6 +259,18 @@ describe("steel page tools", () => {
     const shot = await driver.screenshot({});
     assert.equal(shot.mimeType, "image/jpeg");
     assert.ok(shot.data.length > 100);
+  });
+
+  it("writes cookies the server then sees", async () => {
+    await page.send("Network.setCookies", {
+      cookies: [
+        { name: "auth", value: "tok-1", domain: "example.test", path: "/" },
+      ],
+    });
+    const { cookies } = (await page.send("Network.getCookies", {
+      urls: ["https://example.test/"],
+    })) as { cookies: Array<{ name: string; value: string }> };
+    assert.equal(cookies.find((c) => c.name === "auth")?.value, "tok-1");
   });
 
   it("reinstalls the bridge after the page world is destroyed", async () => {

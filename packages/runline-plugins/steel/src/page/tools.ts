@@ -600,6 +600,79 @@ export function registerPageActions(rl: RunlinePluginAPI) {
     },
   });
 
+  rl.registerAction("page.setCookies", {
+    access: "write",
+    description:
+      "Set cookies on the session's browser, then optionally navigate. This is the way to drive an app you are already authenticated to: obtain a session cookie out of band and inject it here, rather than automating a login form. Cookies apply to the whole browser, so set them before navigating to the protected page.",
+    inputSchema: t.Object({
+      sessionId,
+      cookies: t.Array(
+        t.Object({
+          name: t.String(),
+          value: t.String(),
+          domain: t.Optional(
+            t.String({ description: "Cookie domain, e.g. example.com." }),
+          ),
+          url: t.Optional(
+            t.String({
+              description:
+                "URL the cookie belongs to; used when domain is omitted.",
+            }),
+          ),
+          path: t.Optional(t.String({ description: "Defaults to /." })),
+          secure: t.Optional(t.Boolean()),
+          httpOnly: t.Optional(t.Boolean()),
+          sameSite: t.Optional(
+            t.Union([t.Literal("Strict"), t.Literal("Lax"), t.Literal("None")]),
+          ),
+          expires: t.Optional(
+            t.Number({ description: "Expiry as a Unix timestamp in seconds." }),
+          ),
+        }),
+        { minItems: 1 },
+      ),
+      url: t.Optional(
+        t.String({
+          description:
+            "Navigate here after setting the cookies and return the page snapshot.",
+        }),
+      ),
+      targetId: t.Optional(t.String()),
+    }),
+    async execute(input, ctx) {
+      const args = input as Record<string, unknown>;
+      const cookies = (args.cookies as Array<Record<string, unknown>>).map(
+        (cookie) => {
+          if (!cookie.domain && !cookie.url) {
+            throw new CdpError(
+              "invalid_arguments",
+              `Cookie ${String(cookie.name)} needs a domain or a url`,
+              false,
+            );
+          }
+          return compactRecord(cookie);
+        },
+      );
+      return withSession(ctx, args, async (session) => {
+        await session.page.send("Network.setCookies", { cookies });
+        if (typeof args.url !== "string" || !args.url) {
+          return {
+            status: `Set ${cookies.length} cookie${cookies.length === 1 ? "" : "s"}.`,
+            count: cookies.length,
+          };
+        }
+        await session.page.send("Page.navigate", {
+          url: navigableUrl(args.url),
+        });
+        await waitForLoad(session);
+        return await capture(
+          session,
+          `Set ${cookies.length} cookie${cookies.length === 1 ? "" : "s"} and navigated.`,
+        );
+      });
+    },
+  });
+
   rl.registerAction("page.screenshot", {
     access: "write",
     description:
