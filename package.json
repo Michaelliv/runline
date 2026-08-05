@@ -9,7 +9,8 @@
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test",
     "check": "bunx @biomejs/biome check .",
-    "format": "bunx @biomejs/biome format --write ."
+    "format": "bunx @biomejs/biome format --write .",
+    "build:steel-page-bundle": "bun run scripts/build-steel-page-bundle.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",

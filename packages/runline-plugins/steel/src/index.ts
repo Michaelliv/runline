@@ -5,6 +5,7 @@ import { registerCaptchaActions } from "./captchas.js";
 import { registerCredentialActions } from "./credentials.js";
 import { registerExtensionActions } from "./extensions.js";
 import { registerFileActions } from "./files.js";
+import { registerPageActions } from "./page/tools.js";
 import { registerProfileActions } from "./profiles.js";
 import { registerSessionActions } from "./sessions.js";
 
@@ -20,6 +21,7 @@ export default function steel(rl: RunlinePluginAPI) {
 
   registerSessionActions(rl);
   registerBrowserActions(rl);
+  registerPageActions(rl);
   registerFileActions(rl);
   registerCredentialActions(rl);
   registerProfileActions(rl);

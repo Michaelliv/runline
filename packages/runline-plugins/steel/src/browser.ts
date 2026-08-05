@@ -26,59 +26,6 @@ async function screenshot(input: unknown, ctx: Parameters<NonNullable<Parameters
   return api(ctx, "/v1/screenshot", { method: "POST", body: compactRecord(input as Record<string, unknown>) });
 }
 
-type PendingCdp = { resolve: (value: unknown) => void; reject: (error: Error) => void };
-
-async function connectMiniCdp(cdpUrl: string) {
-  const ws = new WebSocket(cdpUrl);
-  let nextId = 0;
-  const pending = new Map<number, PendingCdp>();
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("CDP websocket connection timed out")), 30000);
-    ws.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
-    ws.addEventListener("error", () => { clearTimeout(timer); reject(new Error("CDP websocket connection failed")); }, { once: true });
-  });
-  ws.addEventListener("message", (event) => {
-    let message: Record<string, unknown>;
-    try { message = JSON.parse(String(event.data)); } catch { return; }
-    if (typeof message.id !== "number") return;
-    const wait = pending.get(message.id);
-    if (!wait) return;
-    pending.delete(message.id);
-    if (message.error) wait.reject(new Error(JSON.stringify(message.error)));
-    else wait.resolve(message.result);
-  });
-  const send = (method: string, params: Record<string, unknown> = {}, sessionId?: string) => new Promise<unknown>((resolve, reject) => {
-    const id = ++nextId;
-    pending.set(id, { resolve, reject });
-    ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
-    setTimeout(() => {
-      if (pending.delete(id)) reject(new Error(`CDP ${method} timed out`));
-    }, 30000);
-  });
-  const targets = await send("Target.getTargets") as { targetInfos?: Array<{ targetId: string; type: string }> };
-  const target = targets.targetInfos?.find((info) => info.type === "page") ?? targets.targetInfos?.[0];
-  if (!target) throw new Error("Steel CDP session has no browser target");
-  const attached = await send("Target.attachToTarget", { targetId: target.targetId, flatten: true }) as { sessionId: string };
-  const sid = attached.sessionId;
-  const evaluate = async (expression: string) => {
-    const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sid) as { result?: { value?: unknown } };
-    return result.result?.value;
-  };
-  const page = {
-    async goto(url: string, _options?: unknown) {
-      await send("Page.navigate", { url }, sid);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      return null;
-    },
-    title: () => evaluate("document.title"),
-    url: () => evaluate("location.href"),
-    text: () => evaluate("document.body?.innerText ?? ''"),
-    html: () => evaluate("document.documentElement?.outerHTML ?? ''"),
-    evaluate: (expression: string) => evaluate(`(${expression})()`),
-  };
-  return { page, browser: { close: () => ws.close() }, context: {}, close: () => ws.close() };
-}
-
 export function registerBrowserActions(rl: RunlinePluginAPI) {
   rl.registerAction("scrape", {
     access: "write",
@@ -138,7 +85,7 @@ export function registerBrowserActions(rl: RunlinePluginAPI) {
 
   rl.registerAction("browser.run", {
     access: "write",
-    description: "Create a Steel session, connect with Playwright over CDP, run an async JavaScript script, then release by default. The script receives { page, browser, context, session }. Requires the host app to have playwright installed.",
+    description: "Create a Steel session, connect with real Playwright over CDP, run an async JavaScript script, then release by default. The script receives the genuine Playwright { page, browser, context } plus session. Requires the host app to have playwright installed — this action fails rather than degrading if it is missing. For automation that works without a Playwright install, prefer the page.* actions, which drive the page semantically over CDP.",
     inputSchema: t.Object({
       script: t.String({ description: "Async JavaScript body. Example: await page.goto('https://example.com'); return { title: await page.title() };" }),
       release: t.Optional(t.Boolean({ description: "Release the Steel session after the script finishes (default true)" })),
@@ -150,26 +97,22 @@ export function registerBrowserActions(rl: RunlinePluginAPI) {
       try {
         playwright = await import("playwright");
       } catch (_error) {
-        throw new Error("steel.browser.run requires the host project to install playwright. Install playwright or use session.create + session.cdpUrl instead.");
+        throw new Error(
+          "steel.browser.run needs playwright installed in the host project. " +
+            "Install it, or use the steel.page.* actions, which need nothing installed.",
+        );
       }
 
       const session = await api(ctx, "/v1/sessions", { method: "POST", body: compactRecord(sessionOptions) }) as Record<string, unknown>;
       const cdpUrl = `wss://connect.steel.dev?apiKey=${encodeURIComponent(apiKey(ctx))}&sessionId=${encodeURIComponent(String(session.id))}`;
-      let browser: { close: () => Promise<void> | void } | undefined;
+      let browser: Awaited<ReturnType<typeof playwright.chromium.connectOverCDP>> | undefined;
       try {
-        let context: unknown;
-        let page: unknown;
-        try {
-          const playwrightBrowser = await playwright.chromium.connectOverCDP(cdpUrl, { timeout: 30000 });
-          browser = playwrightBrowser;
-          context = playwrightBrowser.contexts()[0] ?? await playwrightBrowser.newContext();
-          page = context.pages()[0] ?? await context.newPage();
-        } catch {
-          const mini = await connectMiniCdp(cdpUrl);
-          browser = mini.browser;
-          context = mini.context;
-          page = mini.page;
-        }
+        // No fallback shim on purpose. A hand-rolled lookalike that
+        // answers to the same names but implements a fraction of the API
+        // does not fail — it returns wrong results, which is worse.
+        browser = await playwright.chromium.connectOverCDP(cdpUrl, { timeout: 30000 });
+        const context = browser.contexts()[0] ?? await browser.newContext();
+        const page = context.pages()[0] ?? await context.newPage();
         const fn = new Function("page", "browser", "context", "session", `return (async () => {\n${script}\n})();`);
         const result = await fn(page, browser, context, session);
         return { session, result };
