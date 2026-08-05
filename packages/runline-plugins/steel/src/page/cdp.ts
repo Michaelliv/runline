@@ -42,6 +42,8 @@ type Pending = {
 export type CdpEventHandler = (
   method: string,
   params: Record<string, unknown>,
+  /** Attached target the event came from; absent for browser-level events. */
+  sessionId?: string,
 ) => void;
 
 export interface CdpConnection {
@@ -131,8 +133,17 @@ export async function connectCdp(url: string): Promise<CdpConnection> {
       return;
     }
     if (typeof message.method === "string") {
+      // The originating target is on the envelope, not in params. Dropping
+      // it here would make every per-page subscription see every page's
+      // events.
+      const from =
+        typeof message.sessionId === "string" ? message.sessionId : undefined;
       for (const handler of handlers) {
-        handler(message.method, (message.params ?? {}) as Record<string, unknown>);
+        handler(
+          message.method,
+          (message.params ?? {}) as Record<string, unknown>,
+          from,
+        );
       }
     }
   });
@@ -201,8 +212,8 @@ export class CdpPage {
 
   /** Subscribe to this page's protocol events; returns an unsubscribe. */
   onEvent(handler: (method: string, params: Record<string, unknown>) => void) {
-    return this.cdp.on((method, params) => {
-      if (params.sessionId && params.sessionId !== this.sessionId) return;
+    return this.cdp.on((method, params, from) => {
+      if (from !== undefined && from !== this.sessionId) return;
       handler(method, params);
     });
   }
@@ -285,10 +296,10 @@ export class CdpPage {
   }
 }
 
-/** Attach to the session's page target, preferring the active one. */
+/** Attach to the session's first page target. */
 export async function attachToPage(cdp: CdpConnection): Promise<CdpPage> {
   const { targetInfos } = (await cdp.send("Target.getTargets")) as {
-    targetInfos?: Array<{ targetId: string; type: string; attached?: boolean }>;
+    targetInfos?: Array<{ targetId: string; type: string }>;
   };
   const pages = (targetInfos ?? []).filter((info) => info.type === "page");
   const target = pages[0];

@@ -32,7 +32,7 @@ type Prepared = { editable: boolean; locatorToken: string };
 const PAGE = `<!doctype html><html><body>
   <h1>Sign in</h1>
   <button id="go">Continue</button>
-  <input id="name" value="mick">
+  <input id="name" value="initial">
   <input id="pw" type="password" value="hunter2">
   <select id="pick"><option value="a">Alpha</option><option value="b">Beta</option></select>
   <div id="log"></div>
@@ -253,6 +253,37 @@ describe("steel page tools", () => {
     });
     assert.equal(outcome.matched, true);
     assert.equal(outcome.timedOut, false);
+  });
+
+  it("refuses an unknown modifier instead of silently dropping all of them", async () => {
+    // A bad name used to fold into the bitmask as undefined, making the
+    // whole mask NaN, which CDP reads as no modifiers at all.
+    const ref = await refFor('button "Continue"');
+    const prepared = await page.bridge<Prepared>({
+      action: "prepare_target",
+      target: ref,
+    });
+    await assert.rejects(
+      () => driver.click(prepared, { modifiers: ["Command"] as never }),
+      /Unknown modifier Command/,
+    );
+    await assert.rejects(() => driver.press("Cmd+Enter"), /Unknown modifier/);
+  });
+
+  it("reports a vanished select as a stale ref, not a page error", async () => {
+    const prepared = await page.bridge<Prepared>({
+      action: "prepare_target",
+      target: "#pick",
+    });
+    await page.evaluate("document.getElementById('pick').remove()");
+    await assert.rejects(
+      () => driver.select(prepared, ["a"]),
+      /left the page between preparing and acting/,
+    );
+    // Put it back for any later test that reads the tree.
+    await page.evaluate(
+      "document.body.insertAdjacentHTML('beforeend', '<select id=pick><option value=a>Alpha</option></select>')",
+    );
   });
 
   it("captures a screenshot as base64 jpeg", async () => {

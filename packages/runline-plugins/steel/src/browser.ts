@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { SESSION_OPTIONS_SCHEMA, api, apiKey, compactRecord } from "./shared.js";
+import { SESSION_OPTIONS_SCHEMA, api, cdpUrl, compactRecord } from "./shared.js";
 
 const SCRAPE_SCHEMA = {
   url: t.String({ description: "URL to scrape" }),
@@ -104,13 +104,13 @@ export function registerBrowserActions(rl: RunlinePluginAPI) {
       }
 
       const session = await api(ctx, "/v1/sessions", { method: "POST", body: compactRecord(sessionOptions) }) as Record<string, unknown>;
-      const cdpUrl = `wss://connect.steel.dev?apiKey=${encodeURIComponent(apiKey(ctx))}&sessionId=${encodeURIComponent(String(session.id))}`;
+      const endpoint = cdpUrl(ctx, String(session.id));
       let browser: Awaited<ReturnType<typeof playwright.chromium.connectOverCDP>> | undefined;
       try {
         // No fallback shim on purpose. A hand-rolled lookalike that
         // answers to the same names but implements a fraction of the API
         // does not fail — it returns wrong results, which is worse.
-        browser = await playwright.chromium.connectOverCDP(cdpUrl, { timeout: 30000 });
+        browser = await playwright.chromium.connectOverCDP(endpoint, { timeout: 30000 });
         const context = browser.contexts()[0] ?? await browser.newContext();
         const page = context.pages()[0] ?? await context.newPage();
         const fn = new Function("page", "browser", "context", "session", `return (async () => {\n${script}\n})();`);

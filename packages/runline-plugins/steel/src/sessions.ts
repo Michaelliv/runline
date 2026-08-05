@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { LIST_INPUT_SCHEMA, SESSION_OPTIONS_SCHEMA, api, apiKey, compactRecord } from "./shared.js";
+import { LIST_INPUT_SCHEMA, SESSION_OPTIONS_SCHEMA, api, cdpUrl, compactRecord } from "./shared.js";
 
 export function registerSessionActions(rl: RunlinePluginAPI) {
   rl.registerAction("session.create", {
@@ -130,12 +130,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }), websocketUrl: t.Optional(t.String({ description: "Optional websocketUrl returned by session.create. If omitted, uses wss://connect.steel.dev with sessionId." })) }),
     async execute(input, ctx) {
       const { id, websocketUrl } = input as { id: string; websocketUrl?: string };
-      const key = encodeURIComponent(apiKey(ctx));
-      if (websocketUrl) {
-        const sep = websocketUrl.includes("?") ? "&" : "?";
-        return { cdpUrl: `${websocketUrl}${sep}apiKey=${key}` };
-      }
-      return { cdpUrl: `wss://connect.steel.dev?apiKey=${key}&sessionId=${encodeURIComponent(id)}` };
+      return { cdpUrl: cdpUrl(ctx, id, websocketUrl) };
     },
   });
 }

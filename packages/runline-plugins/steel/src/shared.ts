@@ -53,6 +53,19 @@ export async function api(ctx: Ctx, path: string, options: RequestOptions = {}):
   return text;
 }
 
+/**
+ * The CDP endpoint for a session. One definition: this URL carries the
+ * API key, so a second hand-written copy is a second place to leak it or
+ * to forget encoding.
+ */
+export function cdpUrl(ctx: Ctx, sessionId: string, websocketUrl?: string): string {
+  const key = encodeURIComponent(apiKey(ctx));
+  if (websocketUrl) {
+    return `${websocketUrl}${websocketUrl.includes("?") ? "&" : "?"}apiKey=${key}`;
+  }
+  return `wss://connect.steel.dev?apiKey=${key}&sessionId=${encodeURIComponent(sessionId)}`;
+}
+
 export function compactRecord(input: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined && value !== null));
 }

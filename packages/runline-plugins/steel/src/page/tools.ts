@@ -17,13 +17,14 @@
  * `{ matched, timedOut, elapsedMs }`, so "the text never appeared" is a
  * result the agent can branch on rather than an exception it must parse.
  *
- * Every action is stateless: it connects, acts, and disconnects. Refs
- * survive because they live in the page's own world, not in this process.
+ * Actions hold no state of their own. Refs live in the page's world, not
+ * in this process, which is what lets connections be pooled and dropped
+ * freely: losing one costs latency, never correctness.
  */
 
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { api, apiKey, compactRecord, type Ctx } from "../shared.js";
+import { cdpUrl, compactRecord, type Ctx } from "../shared.js";
 import {
   attachToPage,
   attachToTarget,
@@ -53,6 +54,12 @@ const element = t.Optional(
 const sessionId = t.String({
   description: "Steel session ID from session.create.",
 });
+const targetId = t.Optional(
+  t.String({
+    description:
+      "Page target id from page.targets; defaults to the session's first page.",
+  }),
+);
 
 // ── Connection ───────────────────────────────────────────────
 
@@ -63,13 +70,11 @@ type Session = {
   close(): void;
 };
 
-async function open(ctx: Ctx, id: string, targetId?: string): Promise<Session> {
-  const cdp = await connectCdp(
-    `wss://connect.steel.dev?apiKey=${encodeURIComponent(apiKey(ctx))}&sessionId=${encodeURIComponent(id)}`,
-  );
+async function open(ctx: Ctx, id: string, target?: string): Promise<Session> {
+  const cdp = await connectCdp(cdpUrl(ctx, id));
   try {
-    const page = targetId
-      ? await attachToTarget(cdp, targetId)
+    const page = target
+      ? await attachToTarget(cdp, target)
       : await attachToPage(cdp);
     const driver = new CdpDriver(page);
     return {
@@ -104,6 +109,11 @@ type Pooled = { session: Session; timer: ReturnType<typeof setTimeout> };
 
 const pool = new Map<string, Pooled>();
 
+/** One connection per session and page; both address a distinct browser. */
+function poolKey(id: string, target?: string): string {
+  return `${id}::${target ?? ""}`;
+}
+
 function evict(key: string): void {
   const pooled = pool.get(key);
   if (!pooled) return;
@@ -124,25 +134,30 @@ function keepWarm(key: string, session: Session): void {
 async function acquire(
   ctx: Ctx,
   id: string,
-  targetId?: string,
+  target?: string,
 ): Promise<{ session: Session; key: string }> {
-  const key = `${id}::${targetId ?? ""}`;
+  const key = poolKey(id, target);
   const pooled = pool.get(key);
   if (pooled?.session.cdp.alive) {
     keepWarm(key, pooled.session);
     return { session: pooled.session, key };
   }
   if (pooled) evict(key);
-  const session = await open(ctx, id, targetId);
+  const session = await open(ctx, id, target);
   keepWarm(key, session);
   return { session, key };
 }
 
 /**
  * Run against a live session, reusing a pooled connection when there is
- * one. A connection that died between calls is retried once on a fresh
- * one, so a reaped socket surfaces as latency rather than an error the
- * caller has to understand.
+ * one.
+ *
+ * A connection found dead *before* anything ran is replaced silently —
+ * that is a reaped idle socket, not a failure the caller should have to
+ * understand. A connection that dies *during* the action is not retried:
+ * the action may already have typed, clicked or navigated, and replaying
+ * it could do that twice. Latency is worth hiding; a duplicated side
+ * effect is not.
  */
 async function withSession<T>(
   ctx: Ctx,
@@ -150,19 +165,10 @@ async function withSession<T>(
   run: (session: Session) => Promise<T>,
 ): Promise<T> {
   const id = String(input.sessionId);
-  const targetId =
+  const target =
     typeof input.targetId === "string" ? input.targetId : undefined;
-  const { session, key } = await acquire(ctx, id, targetId);
-  try {
-    return await run(session);
-  } catch (error) {
-    if (!session.cdp.alive) {
-      evict(key);
-      const retry = await acquire(ctx, id, targetId);
-      return await run(retry.session);
-    }
-    throw error;
-  }
+  const { session } = await acquire(ctx, id, target);
+  return await run(session);
 }
 
 /** Close every pooled connection; exported for host shutdown and tests. */
@@ -285,9 +291,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
             "Include viewport-relative element bounding boxes in the snapshot.",
         }),
       ),
-      targetId: t.Optional(
-        t.String({ description: "Page target id from page.targets." }),
-      ),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -322,7 +326,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
           ]),
         ),
       ),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -369,7 +373,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
           description: "Type character-by-character for pages with key handlers.",
         }),
       ),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -413,7 +417,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       sessionId,
       target,
       element,
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -435,7 +439,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({
       sessionId,
       key: t.String({ description: "Key or chord, e.g. Enter or Control+A." }),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -455,7 +459,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       target,
       element,
       values: t.Array(t.String(), { minItems: 1 }),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -481,7 +485,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       sessionId,
       target,
       element,
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -502,7 +506,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       startElement: element,
       endTarget: target,
       endElement: element,
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -531,7 +535,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       ),
       target: t.Optional(target),
       element,
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -567,7 +571,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
           description: "Timeout or fixed wait in seconds; defaults to 5.",
         }),
       ),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -595,14 +599,13 @@ export function registerPageActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({
       sessionId,
       url: t.String({ description: "URL to open." }),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
       const url = navigableUrl(String(args.url));
       return withSession(ctx, args, async (session) => {
-        await session.page.send("Page.navigate", { url });
-        await waitForLoad(session);
+        await navigateAndWait(session, url);
         return await capture(session, "Navigation completed.");
       });
     },
@@ -624,9 +627,9 @@ export function registerPageActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
-      const cdp = await connectCdp(
-        `wss://connect.steel.dev?apiKey=${encodeURIComponent(apiKey(ctx))}&sessionId=${encodeURIComponent(String(args.sessionId))}`,
-      );
+      // Browser-level, not page-level: this is the one action that is not
+      // scoped to a single target, so it uses its own short-lived socket.
+      const cdp = await connectCdp(cdpUrl(ctx, String(args.sessionId)));
       try {
         if (args.action === "new") {
           const created = (await cdp.send("Target.createTarget", {
@@ -650,7 +653,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
           await cdp.send("Target.closeTarget", { targetId: args.targetId });
           // A pooled connection to a closed target would keep answering
           // on a dead CDP session rather than reconnecting.
-          evict(`${String(args.sessionId)}::${args.targetId}`);
+          evict(poolKey(String(args.sessionId), args.targetId));
           return {
             status: `Closed page ${args.targetId}.`,
             targets: await listTargets(cdp),
@@ -705,7 +708,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
             "Navigate here after setting the cookies and return the page snapshot.",
         }),
       ),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -729,10 +732,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
             count: cookies.length,
           };
         }
-        await session.page.send("Page.navigate", {
-          url: navigableUrl(args.url),
-        });
-        await waitForLoad(session);
+        await navigateAndWait(session, navigableUrl(args.url));
         return await capture(
           session,
           `Set ${cookies.length} cookie${cookies.length === 1 ? "" : "s"} and navigated.`,
@@ -748,7 +748,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({
       sessionId,
       fullPage: t.Optional(t.Boolean()),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -770,7 +770,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       promptText: t.Optional(
         t.String({ description: "Text to enter when accepting a prompt." }),
       ),
-      targetId: t.Optional(t.String()),
+      targetId,
     }),
     async execute(input, ctx) {
       const args = input as Record<string, unknown>;
@@ -808,12 +808,23 @@ async function listTargets(cdp: CdpConnection) {
     }));
 }
 
-/** Wait for the page to finish loading, bounded so a hung load still returns. */
-async function waitForLoad(session: Session): Promise<void> {
-  await new Promise<void>((resolve) => {
+/**
+ * Navigate and wait for the load to finish, bounded so a hung page still
+ * returns a snapshot of whatever rendered.
+ *
+ * Subscribing before issuing the navigation is the whole point: the load
+ * event can arrive while `Page.navigate` is still in flight, and a
+ * listener attached afterwards would miss it and wait out the full
+ * timeout on a page that had already finished.
+ */
+async function navigateAndWait(session: Session, url: string): Promise<void> {
+  const loaded = new Promise<void>((resolve) => {
     const timer = setTimeout(finish, 15_000);
     const off = session.page.onEvent((method) => {
-      if (method === "Page.loadEventFired" || method === "Page.frameStoppedLoading") {
+      if (
+        method === "Page.loadEventFired" ||
+        method === "Page.frameStoppedLoading"
+      ) {
         finish();
       }
     });
@@ -823,5 +834,7 @@ async function waitForLoad(session: Session): Promise<void> {
       resolve();
     }
   });
+  await session.page.send("Page.navigate", { url });
+  await loaded;
   await session.driver.settle();
 }

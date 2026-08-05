@@ -30,17 +30,45 @@ export type BrowserDialog = {
   defaultValue: string;
 };
 
-const MODIFIER_BITS = { Alt: 1, Control: 2, Meta: 4, Shift: 8 } as const;
+const MODIFIER_BITS: Record<string, number> = {
+  Alt: 1,
+  Control: 2,
+  Meta: 4,
+  Shift: 8,
+};
 
-/** CDP wants a bitmask; the tools speak in names. */
-function modifierMask(modifiers: ClickOptions["modifiers"] = []): number {
-  return modifiers.reduce((mask, name) => mask | MODIFIER_BITS[name], 0);
+/**
+ * CDP wants a bitmask; the tools speak in names. Unknown names are
+ * refused rather than folded in as `undefined`, which would turn the
+ * whole mask into NaN and silently strip every modifier.
+ */
+function modifierMask(modifiers: readonly string[] = []): number {
+  let mask = 0;
+  for (const name of modifiers) {
+    const bit = MODIFIER_BITS[name];
+    if (bit === undefined) {
+      throw new CdpError(
+        "invalid_arguments",
+        `Unknown modifier ${name}; expected Alt, Control, Meta, or Shift`,
+        false,
+      );
+    }
+    mask |= bit;
+  }
+  return mask;
 }
 
 type Point = { x: number; y: number };
 
+/** A page expression selecting the element the bridge stamped for us. */
+function elementExpression(locatorToken: string): string {
+  return `document.querySelector(${JSON.stringify(
+    `[${TARGET_ATTRIBUTE}=${JSON.stringify(locatorToken)}]`,
+  )})`;
+}
+
 export class CdpDriver {
-  private dialogs: BrowserDialog | null = null;
+  private openDialog: BrowserDialog | null = null;
   private readonly detachDialogs: () => void;
 
   constructor(private readonly page: CdpPage) {
@@ -49,18 +77,18 @@ export class CdpDriver {
     // rather than as a timeout.
     this.detachDialogs = page.onEvent((method, params) => {
       if (method === "Page.javascriptDialogOpening") {
-        this.dialogs = {
+        this.openDialog = {
           type: String(params.type ?? "dialog"),
           message: String(params.message ?? ""),
           defaultValue: String(params.defaultPrompt ?? ""),
         };
       }
-      if (method === "Page.javascriptDialogClosed") this.dialogs = null;
+      if (method === "Page.javascriptDialogClosed") this.openDialog = null;
     });
   }
 
   dialog(): BrowserDialog | null {
-    return this.dialogs;
+    return this.openDialog;
   }
 
   dispose(): void {
@@ -71,7 +99,7 @@ export class CdpDriver {
     accept: boolean;
     promptText?: string;
   }): Promise<void> {
-    if (!this.dialogs) {
+    if (!this.openDialog) {
       throw new CdpError("no_dialog", "No dialog is currently open", false);
     }
     await this.page.send("Page.handleJavaScriptDialog", {
@@ -80,7 +108,7 @@ export class CdpDriver {
         ? {}
         : { promptText: options.promptText }),
     });
-    this.dialogs = null;
+    this.openDialog = null;
   }
 
   /**
@@ -92,9 +120,7 @@ export class CdpDriver {
     const box = await this.page.evaluate<
       { x: number; y: number } | { error: string }
     >(`(() => {
-      const el = document.querySelector('[${TARGET_ATTRIBUTE}=' + ${JSON.stringify(
-        JSON.stringify(target.locatorToken),
-      )} + ']');
+      const el = ${elementExpression(target.locatorToken)};
       if (!el) return { error: 'detached' };
       el.scrollIntoView({ block: 'center', inline: 'center' });
       const r = el.getBoundingClientRect();
@@ -227,9 +253,7 @@ export class CdpDriver {
   async press(key: string): Promise<void> {
     const parts = key.split("+");
     const main = parts[parts.length - 1] ?? key;
-    const modifiers = modifierMask(
-      parts.slice(0, -1) as ClickOptions["modifiers"],
-    );
+    const modifiers = modifierMask(parts.slice(0, -1));
     const descriptor = keyDescriptor(main);
     await this.page.send("Input.dispatchKeyEvent", {
       type: descriptor.text ? "keyDown" : "rawKeyDown",
@@ -244,17 +268,21 @@ export class CdpDriver {
   }
 
   async select(target: PreparedTarget, values: string[]): Promise<void> {
-    const token = JSON.stringify(target.locatorToken);
-    await this.page.evaluate(`(() => {
-      const el = document.querySelector('[${TARGET_ATTRIBUTE}=' + ${JSON.stringify(
-        token,
-      )} + ']');
-      if (!el) throw new Error('Select element is no longer attached');
+    const ok = await this.page.evaluate<boolean>(`(() => {
+      const el = ${elementExpression(target.locatorToken)};
+      if (!el) return false;
       const wanted = new Set(${JSON.stringify(values)});
       for (const option of el.options) option.selected = wanted.has(option.value);
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
     })()`);
+    if (!ok) {
+      throw new CdpError(
+        "stale_ref",
+        "The select element left the page between preparing and acting on it. Capture a fresh snapshot and retry.",
+      );
+    }
   }
 
   async screenshot(options: { fullPage?: boolean }): Promise<{
@@ -275,7 +303,7 @@ export class CdpDriver {
   /** Let the page react to the action before it is snapshotted. */
   async settle(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 120));
-    if (this.dialogs) return;
+    if (this.openDialog) return;
     await this.page
       .evaluate(
         `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))`,
@@ -287,28 +315,29 @@ export class CdpDriver {
   }
 }
 
+const NAMED_KEYS: Record<string, { code: string; keyCode: number }> = {
+  Enter: { code: "Enter", keyCode: 13 },
+  Tab: { code: "Tab", keyCode: 9 },
+  Escape: { code: "Escape", keyCode: 27 },
+  Backspace: { code: "Backspace", keyCode: 8 },
+  Delete: { code: "Delete", keyCode: 46 },
+  ArrowUp: { code: "ArrowUp", keyCode: 38 },
+  ArrowDown: { code: "ArrowDown", keyCode: 40 },
+  ArrowLeft: { code: "ArrowLeft", keyCode: 37 },
+  ArrowRight: { code: "ArrowRight", keyCode: 39 },
+  Home: { code: "Home", keyCode: 36 },
+  End: { code: "End", keyCode: 35 },
+  PageUp: { code: "PageUp", keyCode: 33 },
+  PageDown: { code: "PageDown", keyCode: 34 },
+  Space: { code: "Space", keyCode: 32 },
+};
+
 /**
  * CDP needs `key`/`code`/`windowsVirtualKeyCode` for non-printable keys;
  * printable ones also need `text` or they arrive as bare keydowns.
  */
 function keyDescriptor(key: string): Record<string, unknown> {
-  const named: Record<string, { code: string; keyCode: number }> = {
-    Enter: { code: "Enter", keyCode: 13 },
-    Tab: { code: "Tab", keyCode: 9 },
-    Escape: { code: "Escape", keyCode: 27 },
-    Backspace: { code: "Backspace", keyCode: 8 },
-    Delete: { code: "Delete", keyCode: 46 },
-    ArrowUp: { code: "ArrowUp", keyCode: 38 },
-    ArrowDown: { code: "ArrowDown", keyCode: 40 },
-    ArrowLeft: { code: "ArrowLeft", keyCode: 37 },
-    ArrowRight: { code: "ArrowRight", keyCode: 39 },
-    Home: { code: "Home", keyCode: 36 },
-    End: { code: "End", keyCode: 35 },
-    PageUp: { code: "PageUp", keyCode: 33 },
-    PageDown: { code: "PageDown", keyCode: 34 },
-    Space: { code: "Space", keyCode: 32 },
-  };
-  const match = named[key];
+  const match = NAMED_KEYS[key];
   if (match) {
     return {
       key: key === "Space" ? " " : key,
