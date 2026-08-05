@@ -87,22 +87,87 @@ async function open(ctx: Ctx, id: string, targetId?: string): Promise<Session> {
   }
 }
 
-/** Run against a live session, always releasing the socket. */
+/**
+ * Connections are pooled per session because the handshake dominates the
+ * work: a websocket, a target attach, four domain enables and the bridge
+ * install cost far more than the action itself. Reconnecting for every
+ * verb measured ~3s per call against a real session.
+ *
+ * The pool is keyed by session and target, closes on idle so a long-lived
+ * host does not hold sockets open, and is transparent to correctness —
+ * refs live in the page, so a dropped connection costs latency, never
+ * state.
+ */
+const IDLE_MS = 60_000;
+
+type Pooled = { session: Session; timer: ReturnType<typeof setTimeout> };
+
+const pool = new Map<string, Pooled>();
+
+function evict(key: string): void {
+  const pooled = pool.get(key);
+  if (!pooled) return;
+  pool.delete(key);
+  clearTimeout(pooled.timer);
+  pooled.session.close();
+}
+
+function keepWarm(key: string, session: Session): void {
+  const existing = pool.get(key);
+  if (existing) clearTimeout(existing.timer);
+  const timer = setTimeout(() => evict(key), IDLE_MS);
+  // Do not hold the process open just to keep a browser socket warm.
+  (timer as { unref?: () => void }).unref?.();
+  pool.set(key, { session, timer });
+}
+
+async function acquire(
+  ctx: Ctx,
+  id: string,
+  targetId?: string,
+): Promise<{ session: Session; key: string }> {
+  const key = `${id}::${targetId ?? ""}`;
+  const pooled = pool.get(key);
+  if (pooled?.session.cdp.alive) {
+    keepWarm(key, pooled.session);
+    return { session: pooled.session, key };
+  }
+  if (pooled) evict(key);
+  const session = await open(ctx, id, targetId);
+  keepWarm(key, session);
+  return { session, key };
+}
+
+/**
+ * Run against a live session, reusing a pooled connection when there is
+ * one. A connection that died between calls is retried once on a fresh
+ * one, so a reaped socket surfaces as latency rather than an error the
+ * caller has to understand.
+ */
 async function withSession<T>(
   ctx: Ctx,
   input: Record<string, unknown>,
   run: (session: Session) => Promise<T>,
 ): Promise<T> {
-  const session = await open(
-    ctx,
-    String(input.sessionId),
-    typeof input.targetId === "string" ? input.targetId : undefined,
-  );
+  const id = String(input.sessionId);
+  const targetId =
+    typeof input.targetId === "string" ? input.targetId : undefined;
+  const { session, key } = await acquire(ctx, id, targetId);
   try {
     return await run(session);
-  } finally {
-    session.close();
+  } catch (error) {
+    if (!session.cdp.alive) {
+      evict(key);
+      const retry = await acquire(ctx, id, targetId);
+      return await run(retry.session);
+    }
+    throw error;
   }
+}
+
+/** Close every pooled connection; exported for host shutdown and tests. */
+export function closePagePool(): void {
+  for (const key of [...pool.keys()]) evict(key);
 }
 
 // ── Results ──────────────────────────────────────────────────
@@ -583,6 +648,9 @@ export function registerPageActions(rl: RunlinePluginAPI) {
             );
           }
           await cdp.send("Target.closeTarget", { targetId: args.targetId });
+          // A pooled connection to a closed target would keep answering
+          // on a dead CDP session rather than reconnecting.
+          evict(`${String(args.sessionId)}::${args.targetId}`);
           return {
             status: `Closed page ${args.targetId}.`,
             targets: await listTargets(cdp),

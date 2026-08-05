@@ -51,6 +51,8 @@ export interface CdpConnection {
     sessionId?: string,
   ): Promise<Record<string, unknown>>;
   on(handler: CdpEventHandler): () => void;
+  /** False once the socket has closed or failed; a pooled connection checks this. */
+  readonly alive: boolean;
   close(): void;
 }
 
@@ -136,6 +138,9 @@ export async function connectCdp(url: string): Promise<CdpConnection> {
   });
 
   return {
+    get alive() {
+      return closed === null;
+    },
     send(method, params = {}, sessionId) {
       if (closed) return Promise.reject(closed);
       return new Promise<Record<string, unknown>>((resolve, reject) => {
@@ -312,6 +317,8 @@ export async function attachToTarget(
   // Needed before cookies can be written on the target.
   await page.send("Network.enable");
   await page.installOnNewDocuments();
-  await page.installBridge();
+  // The bridge is installed lazily by the first `bridge()` call, which
+  // already probes for it and self-heals. Installing here as well would
+  // re-evaluate the whole bundle on every attach for no benefit.
   return page;
 }
