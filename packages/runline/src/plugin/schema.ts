@@ -14,6 +14,7 @@ interface SchemaMetadata {
   items?: SchemaMetadata;
   required?: string[];
   anyOf?: SchemaMetadata[];
+  oneOf?: SchemaMetadata[];
   enum?: unknown[];
   const?: unknown;
   description?: string;
@@ -22,9 +23,10 @@ interface SchemaMetadata {
 }
 
 /**
- * How far `describe` will follow a schema into itself. Nesting past this
- * is vanishingly rare, and a self-referential schema would otherwise
- * recurse until the stack gave out.
+ * How deep `describe` will follow a schema. Nesting past this is
+ * vanishingly rare, and a self-referential schema would otherwise
+ * recurse until the stack gave out. A field cut off here says so, so
+ * that "no properties" and "stopped looking" stay distinguishable.
  */
 const MAX_DESCRIBE_DEPTH = 5;
 
@@ -111,13 +113,15 @@ function describeProperties(
 }
 
 /**
- * Describe one input, following arrays into their item shape and objects
- * into their properties.
+ * Describe one input, following arrays into their item shape, objects
+ * into their properties, and unions into each branch.
  *
  * A parameter typed only as "array" tells an agent nothing about what to
  * put in it, so the shape has to be guessed and the first call is a coin
- * flip. Reporting the nested shape is the difference between describe
- * being documentation and being a type name.
+ * flip. "object | object" is the same dead end wearing a union: two
+ * shapes are on offer and neither is shown. Reporting the nested shape
+ * is the difference between describe being documentation and being a
+ * type name.
  */
 function describeField(
   field: SchemaMetadata,
@@ -132,15 +136,55 @@ function describeField(
     enum: enumValues(field),
     const: field.const,
   };
-  if (depth >= MAX_DESCRIBE_DEPTH) return described;
+
+  const branches = unionBranches(field);
+  if (depth >= MAX_DESCRIBE_DEPTH) {
+    // Only claim truncation where something was actually left unread.
+    if (field.items || field.properties || branches) described.truncated = true;
+    return described;
+  }
 
   if (field.items) {
+    // An array element is not "required"; the flag has no meaning here.
     described.items = describeField(field.items, false, depth + 1);
   }
   if (field.properties) {
     described.properties = describeProperties(field, depth + 1);
   }
+  if (branches) {
+    described.variants = branches.map((branch) =>
+      describeField(branch, false, depth + 1),
+    );
+  }
   return described;
+}
+
+/**
+ * The branches of a union worth describing individually.
+ *
+ * Two unions need no expansion. A union of literals is already fully
+ * described by `enum`, and a union of bare scalars is already fully
+ * described by `displayType` — `string | null` is Linear's clearable
+ * pattern and repeating it as two empty branches only buries the unions
+ * that do carry shape.
+ */
+function unionBranches(field: SchemaMetadata): SchemaMetadata[] | undefined {
+  const branches = field.anyOf ?? field.oneOf;
+  if (!branches?.length) return undefined;
+  if (enumValues(field)) return undefined;
+  return branches.some(hasShape) ? branches : undefined;
+}
+
+/** Whether a schema says more than its type name does. */
+function hasShape(schema: SchemaMetadata): boolean {
+  return Boolean(
+    schema.properties ||
+      schema.items ||
+      schema.anyOf ||
+      schema.oneOf ||
+      schema.enum?.length ||
+      schema.description,
+  );
 }
 
 export function validateLegacyInput(
@@ -255,15 +299,17 @@ function validationResult(input: {
 }
 
 function displayType(schema: SchemaMetadata): string {
-  if (schema.anyOf?.length) return schema.anyOf.map(displayType).join(" | ");
+  const branches = schema.anyOf ?? schema.oneOf;
+  if (branches?.length) return branches.map(displayType).join(" | ");
   if (schema.enum?.length) return schema.enum.map(String).join(" | ");
   if (schema.const !== undefined) return JSON.stringify(schema.const);
   return schema.type ?? "unknown";
 }
 
 function baseType(schema: SchemaMetadata): string {
-  if (schema.anyOf?.length) {
-    const types = [...new Set(schema.anyOf.map(baseType))];
+  const branches = schema.anyOf ?? schema.oneOf;
+  if (branches?.length) {
+    const types = [...new Set(branches.map(baseType))];
     return types.length === 1 ? types[0] : types.join(" | ");
   }
   if (schema.type) return schema.type;
@@ -273,11 +319,9 @@ function baseType(schema: SchemaMetadata): string {
 
 function enumValues(schema: SchemaMetadata): unknown[] | undefined {
   if (schema.enum?.length) return schema.enum;
-  if (
-    schema.anyOf?.length &&
-    schema.anyOf.every((s) => s.const !== undefined)
-  ) {
-    return schema.anyOf.map((s) => s.const);
+  const branches = schema.anyOf ?? schema.oneOf;
+  if (branches?.length && branches.every((s) => s.const !== undefined)) {
+    return branches.map((s) => s.const);
   }
   return undefined;
 }

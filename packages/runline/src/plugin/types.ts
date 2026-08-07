@@ -33,6 +33,10 @@ export interface HelpInput {
   items?: HelpInput;
   /** Nested field shapes, for object inputs. */
   properties?: Record<string, HelpInput>;
+  /** Alternative shapes, for a union of objects rather than of literals. */
+  variants?: HelpInput[];
+  /** Set when nesting ran past the describe depth limit and was not read. */
+  truncated?: boolean;
 }
 
 export type ActionAccess = "read" | "write";

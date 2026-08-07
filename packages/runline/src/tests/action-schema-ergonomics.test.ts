@@ -62,6 +62,89 @@ describe("action schema ergonomics", () => {
       assert.equal(tags.items?.properties, undefined);
     });
 
+    it("describes each branch of a union of object shapes", () => {
+      // A union reported as "object | object" is the same dead end as a
+      // bare "array": two shapes are on offer and neither is shown.
+      const schema = t.Object({
+        target: t.Union([
+          t.Object({ kind: t.Literal("ref"), ref: t.String() }),
+          t.Object({ kind: t.Literal("css"), selector: t.String() }),
+        ]),
+      });
+
+      const variants = helpInputs(schema).target.variants;
+      assert.equal(variants?.length, 2);
+      assert.deepEqual(Object.keys(variants?.[0].properties ?? {}).sort(), [
+        "kind",
+        "ref",
+      ]);
+      assert.deepEqual(Object.keys(variants?.[1].properties ?? {}).sort(), [
+        "kind",
+        "selector",
+      ]);
+    });
+
+    it("describes oneOf branches too, which plugins also use", () => {
+      const described = helpInputs({
+        type: "object",
+        properties: {
+          span: {
+            oneOf: [
+              { type: "object", properties: { all: { type: "boolean" } } },
+              { type: "object", properties: { from: { type: "string" } } },
+            ],
+          },
+        },
+      } as never);
+      assert.equal(described.span.variants?.length, 2);
+    });
+
+    it("leaves a nullable scalar alone — the display type already says it", () => {
+      // `string | null` is Linear's clearable-field pattern, used on
+      // roughly ten inputs. Listing two shapeless branches for it is
+      // noise that buries the unions that do carry shape.
+      const schema = t.Object({
+        assigneeId: t.Optional(t.Union([t.String(), t.Null()])),
+      });
+      const described = helpInputs(schema).assigneeId;
+      assert.equal(described.displayType, "string | null");
+      assert.equal(described.variants, undefined);
+    });
+
+    it("keeps variants when a branch carries shape the display type cannot", () => {
+      const schema = t.Object({
+        attendees: t.Union([t.String(), t.Array(t.String())]),
+      });
+      const described = helpInputs(schema).attendees;
+      assert.equal(described.variants?.length, 2);
+      assert.equal(described.variants?.[1].items?.type, "string");
+    });
+
+    it("leaves a plain enum union as an enum, not a pile of variants", () => {
+      // t.Union of literals is already fully described by `enum`; adding
+      // a variant per literal would be noise.
+      const schema = t.Object({
+        state: t.Union([t.Literal("open"), t.Literal("done")]),
+      });
+      const state = helpInputs(schema).state;
+      assert.deepEqual(state.enum, ["open", "done"]);
+      assert.equal(state.variants, undefined);
+    });
+
+    it("says so when it stops descending, rather than looking empty", () => {
+      // An object reported with no properties must not be ambiguous
+      // between "has none" and "I stopped looking".
+      let deep: unknown = t.Object({ leaf: t.String() });
+      for (let i = 0; i < 7; i++) deep = t.Object({ next: deep as never });
+
+      let node = helpInputs(t.Object({ root: deep as never })).root;
+      while (node.properties?.next) node = node.properties.next;
+      assert.equal(node.truncated, true, "the cut-off node must admit it");
+
+      const shallow = helpInputs(t.Object({ empty: t.Object({}) })).empty;
+      assert.equal(shallow.truncated, undefined);
+    });
+
     it("stops descending rather than recursing forever", () => {
       // Self-referential schemas exist in the wild; describe must not
       // hang or blow the stack on one.
