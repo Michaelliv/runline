@@ -4,9 +4,14 @@ import * as t from "typebox";
 import { helpInputs, validateTypedInput } from "../plugin/schema.js";
 
 /**
- * Three ways an agent's *first* call to an unfamiliar action fails even
- * after consulting `actions.describe`. Each one costs a failed call and a
- * retry, and none of them is the agent's fault.
+ * Two ways an agent's *first* call to an unfamiliar action fails even
+ * after consulting `actions.describe`: the parameter's shape was not in
+ * the answer, or the call took no arguments and was refused for it. Each
+ * costs a failed call and a retry, and neither is the agent's fault.
+ *
+ * A third — id parameters that disagree with what sibling actions emit —
+ * is tracked separately, since fixing it coherently is a breaking rename
+ * across ten plugins.
  */
 describe("action schema ergonomics", () => {
   describe("describe exposes nested shapes", () => {
@@ -147,7 +152,9 @@ describe("action schema ergonomics", () => {
 
     it("stops descending rather than recursing forever", () => {
       // Self-referential schemas exist in the wild; describe must not
-      // hang or blow the stack on one.
+      // hang or blow the stack on one. Reaching the assertions at all is
+      // most of the proof, so they check where it stopped, not just that
+      // something came back.
       const node: Record<string, unknown> = {
         type: "object",
         properties: { name: { type: "string" } },
@@ -160,7 +167,19 @@ describe("action schema ergonomics", () => {
         type: "object",
         properties: { tree: node },
       } as never);
-      assert.ok(described.tree);
+
+      // Follow the cycle down and confirm it was cut off, not abandoned.
+      // The cut lands on the array whose items went unread, not on the
+      // object above it.
+      let cursor = described.tree;
+      let hops = 0;
+      while (cursor.properties?.children?.items) {
+        cursor = cursor.properties.children.items;
+        hops++;
+      }
+      assert.ok(hops > 0, "must descend at least one level into the cycle");
+      assert.ok(hops < 10, "must not follow the cycle indefinitely");
+      assert.equal(cursor.properties?.children?.truncated, true);
     });
   });
 

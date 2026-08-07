@@ -30,6 +30,16 @@ interface SchemaMetadata {
  */
 const MAX_DESCRIBE_DEPTH = 5;
 
+/**
+ * The alternatives of a union, however the schema spells it. TypeBox
+ * emits `anyOf`; hand-written schemas in the plugins use `oneOf`. Every
+ * reader here has to treat them the same, so they are unified once.
+ */
+function branchesOf(schema: SchemaMetadata): SchemaMetadata[] | undefined {
+  const branches = schema.anyOf ?? schema.oneOf;
+  return branches?.length ? branches : undefined;
+}
+
 export interface ValidationResult {
   ok: boolean;
   missing: string[];
@@ -43,7 +53,9 @@ export function isTypedInputSchema(
 ): schema is TypedInputSchema {
   if (!schema || typeof schema !== "object") return false;
   const candidate = schema as SchemaMetadata;
-  return typeof candidate.type === "string" || Array.isArray(candidate.anyOf);
+  // A bare union is a typed schema too. Missing that here would classify
+  // it as legacy and iterate its JSON Schema keywords as field names.
+  return typeof candidate.type === "string" || Boolean(branchesOf(candidate));
 }
 
 export function legacyFields(
@@ -169,8 +181,8 @@ function describeField(
  * that do carry shape.
  */
 function unionBranches(field: SchemaMetadata): SchemaMetadata[] | undefined {
-  const branches = field.anyOf ?? field.oneOf;
-  if (!branches?.length) return undefined;
+  const branches = branchesOf(field);
+  if (!branches) return undefined;
   if (enumValues(field)) return undefined;
   return branches.some(hasShape) ? branches : undefined;
 }
@@ -180,8 +192,7 @@ function hasShape(schema: SchemaMetadata): boolean {
   return Boolean(
     schema.properties ||
       schema.items ||
-      schema.anyOf ||
-      schema.oneOf ||
+      branchesOf(schema) ||
       schema.enum?.length ||
       schema.description,
   );
@@ -299,16 +310,16 @@ function validationResult(input: {
 }
 
 function displayType(schema: SchemaMetadata): string {
-  const branches = schema.anyOf ?? schema.oneOf;
-  if (branches?.length) return branches.map(displayType).join(" | ");
+  const branches = branchesOf(schema);
+  if (branches) return branches.map(displayType).join(" | ");
   if (schema.enum?.length) return schema.enum.map(String).join(" | ");
   if (schema.const !== undefined) return JSON.stringify(schema.const);
   return schema.type ?? "unknown";
 }
 
 function baseType(schema: SchemaMetadata): string {
-  const branches = schema.anyOf ?? schema.oneOf;
-  if (branches?.length) {
+  const branches = branchesOf(schema);
+  if (branches) {
     const types = [...new Set(branches.map(baseType))];
     return types.length === 1 ? types[0] : types.join(" | ");
   }
@@ -319,8 +330,8 @@ function baseType(schema: SchemaMetadata): string {
 
 function enumValues(schema: SchemaMetadata): unknown[] | undefined {
   if (schema.enum?.length) return schema.enum;
-  const branches = schema.anyOf ?? schema.oneOf;
-  if (branches?.length && branches.every((s) => s.const !== undefined)) {
+  const branches = branchesOf(schema);
+  if (branches?.every((s) => s.const !== undefined)) {
     return branches.map((s) => s.const);
   }
   return undefined;

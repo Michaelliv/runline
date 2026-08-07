@@ -33,7 +33,10 @@ export interface HelpInput {
   items?: HelpInput;
   /** Nested field shapes, for object inputs. */
   properties?: Record<string, HelpInput>;
-  /** Alternative shapes, for a union of objects rather than of literals. */
+  /**
+   * Branches of a union, where at least one carries shape the display
+   * type cannot express. Absent for unions of literals or bare scalars.
+   */
   variants?: HelpInput[];
   /** Set when nesting ran past the describe depth limit and was not read. */
   truncated?: boolean;
