@@ -150,7 +150,7 @@ describe("action schema ergonomics", () => {
       assert.equal(shallow.truncated, undefined);
     });
 
-    it("stops descending rather than recursing forever", () => {
+    it("survives a schema that refers to itself", () => {
       // Self-referential schemas exist in the wild; describe must not
       // hang or blow the stack on one. Reaching the assertions at all is
       // most of the proof, so they check where it stopped, not just that

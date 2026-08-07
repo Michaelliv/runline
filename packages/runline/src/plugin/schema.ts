@@ -30,16 +30,6 @@ interface SchemaMetadata {
  */
 const MAX_DESCRIBE_DEPTH = 5;
 
-/**
- * The alternatives of a union, however the schema spells it. TypeBox
- * emits `anyOf`; hand-written schemas in the plugins use `oneOf`. Every
- * reader here has to treat them the same, so they are unified once.
- */
-function branchesOf(schema: SchemaMetadata): SchemaMetadata[] | undefined {
-  const branches = schema.anyOf ?? schema.oneOf;
-  return branches?.length ? branches : undefined;
-}
-
 export interface ValidationResult {
   ok: boolean;
   missing: string[];
@@ -307,6 +297,17 @@ function validationResult(input: {
     typeErrors,
     errors,
   };
+}
+
+/**
+ * The alternatives of a union, however the schema spells it. TypeBox
+ * emits `anyOf`; hand-written schemas in the plugins use `oneOf`. Every
+ * reader here has to treat them the same, so they are unified once, and
+ * an empty branch list is reported as no union at all.
+ */
+function branchesOf(schema: SchemaMetadata): SchemaMetadata[] | undefined {
+  const branches = schema.anyOf ?? schema.oneOf;
+  return branches?.length ? branches : undefined;
 }
 
 function displayType(schema: SchemaMetadata): string {

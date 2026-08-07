@@ -71,6 +71,16 @@ function makeTestPlugin() {
     },
   });
 
+  api.registerAction("noInputs", {
+    description: "Typed action that takes nothing",
+    inputSchema: TObject({}, { additionalProperties: false }),
+    execute(input) {
+      // Reports what actually arrived, so a bare call can be told apart
+      // from one that reached the action as undefined.
+      return { type: typeof input, isNull: input === null };
+    },
+  });
+
   api.registerAction("fail", {
     description: "Always throws",
     execute() {
@@ -199,6 +209,24 @@ describe("ExecutionEngine", () => {
     assert.match(result.error, /\/enabled must be boolean/);
     assert.match(result.error, /\/label must not have more than 5 characters/);
     assert.match(result.error, /\/amount must be <= 10/);
+  });
+
+  it("accepts a typed zero-input action called with no arguments", async () => {
+    // The natural way to call an action that takes nothing. It used to
+    // fail validation, because `undefined` is not an object.
+    const engine = createEngine();
+    const result = await engine.execute("return await math.noInputs()");
+    assert.equal(result.error, undefined);
+    assert.deepEqual(result.result, { type: "object", isNull: false });
+  });
+
+  it("still rejects a zero-input action given actual arguments", async () => {
+    const engine = createEngine();
+    const result = await engine.execute(
+      "return await math.noInputs({ unexpected: true })",
+    );
+    assert.ok(result.error);
+    assert.match(result.error, /Invalid input for math\.noInputs/);
   });
 
   it("does not confuse a legacy field named type for a TypeBox schema", async () => {
