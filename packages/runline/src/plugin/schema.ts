@@ -11,6 +11,7 @@ import type {
 interface SchemaMetadata {
   type?: string;
   properties?: Record<string, SchemaMetadata>;
+  items?: SchemaMetadata;
   required?: string[];
   anyOf?: SchemaMetadata[];
   enum?: unknown[];
@@ -19,6 +20,13 @@ interface SchemaMetadata {
   default?: unknown;
   env?: string;
 }
+
+/**
+ * How far `describe` will follow a schema into itself. Nesting past this
+ * is vanishingly rare, and a self-referential schema would otherwise
+ * recurse until the stack gave out.
+ */
+const MAX_DESCRIBE_DEPTH = 5;
 
 export interface ValidationResult {
   ok: boolean;
@@ -86,20 +94,53 @@ export function helpInputs(
 
   const metadata = schema as SchemaMetadata;
   if (metadata.type !== "object") return {};
-  const required = new Set(metadata.required ?? []);
+  return describeProperties(metadata, 0);
+}
+
+function describeProperties(
+  schema: SchemaMetadata,
+  depth: number,
+): Record<string, HelpInput> {
+  const required = new Set(schema.required ?? []);
   return Object.fromEntries(
-    Object.entries(metadata.properties ?? {}).map(([key, field]) => [
+    Object.entries(schema.properties ?? {}).map(([key, field]) => [
       key,
-      {
-        type: baseType(field),
-        displayType: displayType(field),
-        required: required.has(key),
-        description: field.description,
-        enum: enumValues(field),
-        const: field.const,
-      },
+      describeField(field, required.has(key), depth),
     ]),
   );
+}
+
+/**
+ * Describe one input, following arrays into their item shape and objects
+ * into their properties.
+ *
+ * A parameter typed only as "array" tells an agent nothing about what to
+ * put in it, so the shape has to be guessed and the first call is a coin
+ * flip. Reporting the nested shape is the difference between describe
+ * being documentation and being a type name.
+ */
+function describeField(
+  field: SchemaMetadata,
+  required: boolean,
+  depth: number,
+): HelpInput {
+  const described: HelpInput = {
+    type: baseType(field),
+    displayType: displayType(field),
+    required,
+    description: field.description,
+    enum: enumValues(field),
+    const: field.const,
+  };
+  if (depth >= MAX_DESCRIBE_DEPTH) return described;
+
+  if (field.items) {
+    described.items = describeField(field.items, false, depth + 1);
+  }
+  if (field.properties) {
+    described.properties = describeProperties(field, depth + 1);
+  }
+  return described;
 }
 
 export function validateLegacyInput(
@@ -136,10 +177,26 @@ export function validateLegacyInput(
   return validationResult({ missing, unknown, typeErrors });
 }
 
+/**
+ * A call written with no arguments is a call with an empty argument set.
+ *
+ * `linear.user.me()` is the most natural way to invoke an action that
+ * takes nothing, and validating `undefined` against an object schema
+ * rejected it every time. It also made a genuinely missing input report
+ * "must be object" instead of naming the field.
+ *
+ * Only `undefined` is normalized: an explicit `null` or `42` is an
+ * argument, and a wrong one.
+ */
+export function normalizeActionInput(input: unknown): unknown {
+  return input === undefined ? {} : input;
+}
+
 export function validateTypedInput(
   schema: TypedInputSchema,
-  input: unknown,
+  rawInput: unknown,
 ): ValidationResult {
+  const input = normalizeActionInput(rawInput);
   if (Check(schema, input)) return validationResult({});
 
   return validationResult({

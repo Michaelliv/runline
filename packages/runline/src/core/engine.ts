@@ -8,6 +8,7 @@ import {
   formatValidationError,
   helpInputs,
   isTypedInputSchema,
+  normalizeActionInput,
   validateTypedInput,
 } from "../plugin/schema.js";
 import type {
@@ -442,7 +443,10 @@ export class ExecutionEngine {
     });
   }
 
-  private async invokeAction(path: string, args: unknown): Promise<unknown> {
+  private async invokeAction(path: string, rawArgs: unknown): Promise<unknown> {
+    // A call written with no arguments reaches the action as `{}`, not
+    // `undefined`, so plugins can read `input.foo` without guarding.
+    const args = normalizeActionInput(rawArgs);
     const resolved = this.registry.resolveAction(path);
     if (!resolved) {
       throw new Error(`Unknown action: ${path}${this.selfPrefixHint(path)}`);

@@ -29,6 +29,10 @@ export interface HelpInput {
   description?: string;
   enum?: unknown[];
   const?: unknown;
+  /** Element shape, for array inputs. */
+  items?: HelpInput;
+  /** Nested field shapes, for object inputs. */
+  properties?: Record<string, HelpInput>;
 }
 
 export type ActionAccess = "read" | "write";
