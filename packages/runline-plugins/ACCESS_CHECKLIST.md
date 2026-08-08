@@ -211,7 +211,7 @@ Status values: `pending`, `in-progress`, `done`.
 | `vero` | done | Annotated 8 runtime actions: 8 write (user create/alias/unsubscribe/resubscribe/delete/addTags/removeTags and event track). All actions mutate user state or track events in Vero. |
 | `vonage` | done | Annotated 1 action: 1 write (`sms.send`) because it sends SMS messages through Vonage and may trigger a delivery callback webhook. |
 | `wekan` | done | Annotated 24 actions: 11 read (board/list/card/cardComment/checklist/checklistItem get/list actions) and 13 write (create/update/delete actions). |
-| `wolt` | done | Annotated 12 actions: 9 read (`search`, `nearby`, `venue`, `menu`, `item`, `estimate`, `whoami`, `addresses`, `order_status`) and 3 write (`connect` owner login/token rotation, `order_create`, `order_cancel`). `order_create`/`order_cancel` spend/stop real money and are gated behind `allowOrdering` + `confirm:true`. |
+| `wolt` | done | Annotated 13 actions: 9 read (`search`, `nearby`, `venue`, `menu`, `item`, `estimate`, `whoami`, `addresses`, `order_status`) and 4 write (`connect` owner login/token rotation, `refresh` keepalive token rotation, `order_create`, `order_cancel`). `order_create`/`order_cancel` spend/stop real money and are gated behind `allowOrdering` + `confirm:true`. |
 | `woocommerce` | done | Annotated 15 helper-expanded CRUD actions across 3 resources: 6 read (get/list) and 9 write (create/update/delete). |
 | `wordpress` | done | Annotated 15 runtime actions: 6 read (post/page/user get/list) and 9 write (post/page/user create/update/delete). |
 | `xai` | done | Annotated 1 action: 1 write (`image.create`) because it triggers external image generation and writes generated image files to disk. |

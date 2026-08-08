@@ -15,6 +15,10 @@ import { randomUUID } from "node:crypto";
  *
  * Session (refresh token, rotating) + device ids + saved-card id are persisted via `ctx.updateConnection`.
  * Prices are integer MINOR UNITS (agorot in ISR): 1800 === ₪18.00. Single-tenant: one account per connection.
+ *
+ * KEEPALIVE: on a successful `connect` the result carries a `keepalive` hint. The onboarding agent should
+ * create a recurring schedule whose prompt is just `call wolt.refresh()` (every ~12h) so the rotating
+ * refresh token never lapses. Wolt's refresh needs no live access token, so a slow cadence is enough.
  */
 
 const R = "restaurant-api.wolt.com";
@@ -311,10 +315,10 @@ async function ensureIdentity(ctx: ActionContext): Promise<Cfg> {
   return cfgOf(ctx);
 }
 
-async function accessToken(ctx: ActionContext): Promise<string> {
+async function accessToken(ctx: ActionContext, force = false): Promise<string> {
   const cfg = await ensureIdentity(ctx);
   if (!cfg.refreshToken) throw new Error("wolt: no refresh token — connect an account first (connect action).");
-  if (cfg.accessToken && cfg.accessTokenExpiresAt && Date.now() < cfg.accessTokenExpiresAt - 60_000) return cfg.accessToken;
+  if (!force && cfg.accessToken && cfg.accessTokenExpiresAt && Date.now() < cfg.accessTokenExpiresAt - 60_000) return cfg.accessToken;
   const resp = await http(AUTH, "/v1/wauth2/access_token", {
     method: "POST",
     web: false,
@@ -404,6 +408,9 @@ async function finishConnect(ctx: ActionContext, resp: any) {
     addresses: (who as any).address_count ?? null,
     payment_method: card ? "saved card found" : "none found — add a card in the Wolt app to place orders",
     ready_to_order: !!card,
+    // Onboarding agent: create a keepalive schedule so the rotating refresh token never lapses.
+    // Wolt's refresh is self-sufficient (no live access token needed), so a slow cadence is plenty.
+    keepalive: { every: "12h", prompt: "call wolt.refresh()" },
   };
 }
 
@@ -985,6 +992,18 @@ export default function wolt(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return cmdConnect(ctx, (input ?? {}) as Record<string, unknown>);
+    },
+  });
+
+  rl.registerAction("refresh", {
+    access: "write",
+    description:
+      "Keepalive: force a token refresh so the rotating session never lapses. After connect(), the onboarding agent should create a recurring schedule that runs the one-line prompt 'call wolt.refresh()' every ~12h (Wolt's refresh needs no live access token, so a slow cadence is plenty). Returns the new access-token expiry.",
+    inputSchema: {},
+    async execute(_input, ctx) {
+      await accessToken(ctx, true);
+      const cfg = cfgOf(ctx);
+      return { refreshed: true, access_expires_at: cfg.accessTokenExpiresAt ? new Date(cfg.accessTokenExpiresAt).toISOString() : null };
     },
   });
 
