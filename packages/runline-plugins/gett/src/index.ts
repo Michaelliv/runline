@@ -19,6 +19,12 @@ import { randomUUID } from "node:crypto";
  * `confirm: true`; without `confirm` it returns a priced PREVIEW + `requiresConfirmation`
  * for a human confirmation gate. Reads (`find_place`, `price`, `ride_status`,
  * `nearby_drivers`, `whoami`) are free.
+ *
+ * KEEPALIVE: Gett's access token lives only ~15 min and its refresh grant needs a still-valid access
+ * token, so the session only survives if refreshed WITHIN that window. On a successful `connect` the
+ * status carries a `keepalive` hint; the onboarding agent should create a recurring schedule whose
+ * prompt is just `call gett.refresh()` every ~10 min. A single missed window locks the account out
+ * and requires an SMS re-login (`connect`).
  */
 
 const HOST = "b2cgateway.gett.com";
@@ -96,14 +102,14 @@ async function ensureDevice(ctx: ActionContext): Promise<Cfg> {
 }
 
 // ---------- auth ----------
-async function accessToken(ctx: ActionContext): Promise<string> {
+async function accessToken(ctx: ActionContext, force = false): Promise<string> {
   const cfg = cfgOf(ctx);
   if (!cfg.refreshToken)
     throw new Error(
       "gett: not connected — run connect({ phone }) -> connect({ code }) -> connect({ card }) (owner login)",
     );
   if (!cfg.phone) throw new Error("gett: no phone configured");
-  if (cfg.accessToken && cfg.accessTokenExpiresAt && Date.now() < cfg.accessTokenExpiresAt - 60_000)
+  if (!force && cfg.accessToken && cfg.accessTokenExpiresAt && Date.now() < cfg.accessTokenExpiresAt - 60_000)
     return cfg.accessToken;
   // /auth/token renews the access token from the refresh token. The app calls this with its
   // current (still-valid) access token as Bearer and renews proactively; once the access token
@@ -261,6 +267,10 @@ async function connectStatus(ctx: ActionContext) {
     creditCard: cfg.creditCardId || null,
     pendingMfa: !!cfg.pendingTempCode,
     missing: need,
+    // Onboarding agent: create a keepalive schedule so the session never lapses. Gett's access token
+    // lives only ~15 min and its refresh needs a still-valid access token, so the cadence MUST be
+    // under 15 min — a single missed window locks the account out and requires an SMS re-login.
+    keepalive: cfg.refreshToken ? { every: "10m", prompt: "call gett.refresh()" } : null,
   };
 }
 
@@ -539,6 +549,18 @@ export default function gett(rl: RunlinePluginAPI) {
       if (p.code != null && p.code !== "") return connectCode(ctx, String(p.code));
       if (p.phone != null && p.phone !== "") return connectChallenge(ctx, String(p.phone));
       return connectStatus(ctx);
+    },
+  });
+
+  rl.registerAction("refresh", {
+    access: "write",
+    description:
+      "Keepalive: force a token refresh so the session never lapses. Gett's access token lives only ~15 min and its refresh needs a still-valid access token, so the onboarding agent MUST schedule the one-line prompt 'call gett.refresh()' every ~10 min (a missed window forces an SMS re-login via connect). Returns the new access-token expiry.",
+    inputSchema: {},
+    async execute(_input, ctx) {
+      await accessToken(ctx, true);
+      const cfg = cfgOf(ctx);
+      return { refreshed: true, access_expires_at: cfg.accessTokenExpiresAt ? new Date(cfg.accessTokenExpiresAt).toISOString() : null };
     },
   });
 
