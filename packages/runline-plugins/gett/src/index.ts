@@ -54,6 +54,19 @@ type Cfg = {
 const cfgOf = (ctx: ActionContext): Cfg => (ctx.connection.config || {}) as Cfg;
 const num = (v: unknown, d: number): number => (v == null || v === "" ? d : Number(v));
 
+// Normalize a phone to Gett's expected international digits (E.164 without '+'),
+// so a number spoken/typed the local Israeli way still routes the SMS. Gett pairs
+// the path number with country_phone_prefix:972, so a national "0526471797" (or
+// "052-647-1797") must become "972526471797" — otherwise the challenge returns
+// success but the SMS is silently dropped. Idempotent; leaves a valid intl number.
+function normPhone(p: string): string {
+  let d = String(p).replace(/[^\d]/g, "");
+  if (d.startsWith("00")) d = d.slice(2); // 00 = intl exit code
+  if (d.startsWith("972")) return d; // already international
+  if (d.startsWith("0")) return "972" + d.slice(1); // national 0XXXXXXXXX
+  return "972" + d; // bare local, no leading 0 (e.g. 526471797)
+}
+
 // ---------- HTTP ----------
 async function http(
   ctx: ActionContext,
@@ -147,7 +160,7 @@ async function connectChallenge(ctx: ActionContext, phone?: string) {
   await ensureDevice(ctx);
   let cfg = cfgOf(ctx);
   if (phone) {
-    await ctx.updateConnection({ phone: String(phone).replace(/[^0-9]/g, "") });
+    await ctx.updateConnection({ phone: normPhone(String(phone)) });
     cfg = cfgOf(ctx);
   }
   if (!cfg.phone) throw new Error("gett connect: { phone } required (e.g. 972500000000)");
@@ -522,7 +535,7 @@ export default function gett(rl: RunlinePluginAPI) {
   rl.setVersion("0.1.0");
 
   rl.setConnectionSchema({
-    phone: { type: "string", required: false, description: "Account phone in international digits (e.g. 972500000000).", env: "GETT_PHONE" },
+    phone: { type: "string", required: false, description: "Account phone; international or local Israeli digits both work (e.g. 972526471797, 0526471797, or 052-647-1797 — all normalized to 972…).", env: "GETT_PHONE" },
     refreshToken: { type: "string", required: false, description: "Refresh JWT from an owner login; mints access tokens. Set by connect().", env: "GETT_REFRESH_TOKEN" },
     creditCardId: { type: "string", required: false, description: "Saved card id charged for rides. Auto-discovered on connect.", env: "GETT_CREDIT_CARD_ID" },
     deviceId: { type: "string", required: false, description: "x-device-id for the device session (generated if absent).", env: "GETT_DEVICE_ID" },
@@ -537,7 +550,7 @@ export default function gett(rl: RunlinePluginAPI) {
     description:
       "Owner login for the Gett account (phone + SMS OTP + card-digits MFA), headless after a one-time relay. Call with { phone } to send the SMS; then { code } with the SMS code; then { card } with the last 4 digits of the saved card. A trusted device skips the card step. { status: true } reports what the session still needs. After this the refresh token drives every read/booking with no further login.",
     inputSchema: {
-      phone: { type: "string", required: false, description: "Account phone, international digits. Sends the SMS OTP." },
+      phone: { type: "string", required: false, description: "Account phone; international or local Israeli digits both work (972526471797 / 0526471797 / 052-647-1797). Sends the SMS OTP." },
       code: { type: "string", required: false, description: "The SMS one-time code the owner received." },
       card: { type: "string", required: false, description: "Last 4 digits of the saved card (the MFA second factor)." },
       status: { type: "boolean", required: false, description: "Just report connection status / what's missing." },
