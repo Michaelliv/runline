@@ -350,9 +350,15 @@ function woltSessionId(cfg: Cfg): string {
   // one stable id links email_login -> validate-number -> start-phone-auth -> the OTP grant.
   return cfg.woltSessionId || randomUUID();
 }
+// Normalize a phone to E.164 for Wolt, so a number given the local Israeli way
+// still routes. Handles intl "+972…"/"00972…", national "0526471797", and bare
+// local "526471797" alike. Idempotent.
 function normPhone(p: string): string {
-  const d = String(p).replace(/[^\d]/g, "");
-  return "+" + (d.startsWith("972") ? d : "972" + d.replace(/^0/, ""));
+  let d = String(p).replace(/[^\d]/g, "");
+  if (d.startsWith("00")) d = d.slice(2); // 00 = intl exit code
+  if (d.startsWith("972")) return "+" + d; // already international
+  if (d.startsWith("0")) return "+972" + d.slice(1); // national 0XXXXXXXXX
+  return "+972" + d; // bare local, no leading 0
 }
 function extractLinkToken(link: string): string {
   let str = String(link).trim();
