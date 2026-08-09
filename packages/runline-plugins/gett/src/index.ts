@@ -175,6 +175,25 @@ async function connectChallenge(ctx: ActionContext, phone?: string) {
     gaid: "",
   };
   const r = await http(ctx, `/gl/api/v2/phone/${cfg.phone}/auth/otp/challenge`, { method: "POST", body });
+  // Gett answers 200 even when it refuses to send (rate-limit/block); the verdict is in
+  // the body's rc/status, not the HTTP code. Success is rc:0 / status:"success". Surface a
+  // block instead of falsely reporting the SMS went out, so the caller waits rather than
+  // asking for a code that never arrives.
+  if ((r.rc != null && r.rc !== 0) || (r.status && r.status !== "success")) {
+    const mins = r.blocked_until != null ? Number(r.blocked_until) : null;
+    return {
+      step: r.status === "blocked" ? "blocked" : "error",
+      phone: cfg.phone,
+      status: r.status ?? null,
+      rc: r.rc ?? null,
+      retry_after_minutes: mins,
+      error: r.error || "Gett refused the OTP challenge and did NOT send an SMS.",
+      note:
+        r.status === "blocked"
+          ? `Too many attempts — Gett blocked new codes${mins != null ? ` for ~${mins} min` : ""}. Wait, then run connect({ phone }) again.`
+          : "No SMS was sent. Check the phone digits, then retry connect({ phone }).",
+    };
+  }
   return { step: "otp_sent", phone: cfg.phone, code_length: r.confirmation_code_length ?? 6, next: "connect({ code })" };
 }
 
