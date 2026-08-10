@@ -285,6 +285,16 @@ export class ExecutionEngine {
         () =>
           new Worker(buildWorkerSource(pluginNames, helpData), {
             eval: true,
+            // Empty by construction: without an `env` option the worker
+            // inherits a copy of the host's entire environment, and
+            // Runline lives inside credential-bearing hosts (vex's
+            // server process, the pi agent process). Bodies hold a real
+            // `require` and a live `process`, so an inherited env is one
+            // line of agent code away from every host secret. Nothing
+            // in the worker needs an environment: actions execute
+            // host-side, connection configs are hydrated host-side, and
+            // ferrosearch is required by absolute path.
+            env: {},
             resourceLimits: { maxOldGenerationSizeMb: memoryLimitMb },
           }),
       );
