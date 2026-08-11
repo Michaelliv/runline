@@ -20,11 +20,11 @@ import { randomUUID } from "node:crypto";
  * for a human confirmation gate. Reads (`find_place`, `price`, `ride_status`,
  * `nearby_drivers`, `whoami`) are free.
  *
- * KEEPALIVE: Gett's access token lives only ~15 min and its refresh grant needs a still-valid access
- * token, so the session only survives if refreshed WITHIN that window. On a successful `connect` the
- * status carries a `keepalive` hint; the onboarding agent should create a recurring schedule whose
- * prompt is just `call gett.refresh()` every ~10 min. A single missed window locks the account out
- * and requires an SMS re-login (`connect`).
+ * REFRESH: the session is long-lived and unattended — NO keepalive schedule is needed. The GL refresh
+ * token lasts ~90 days and the refresh grant does NOT require a live access token (Gett accepts a bearer
+ * expired by days). Every `/auth/token` call MUST carry the `?lc=en` query param — without it the server
+ * returns a bare 400 (empty body); that missing param, not the ~15-min access-token TTL, was the real
+ * lockout (proven end-to-end 2026-08-11). `refresh` just mints a fresh access token on demand.
  */
 
 const HOST = "b2cgateway.gett.com";
@@ -124,12 +124,13 @@ async function accessToken(ctx: ActionContext, force = false): Promise<string> {
   if (!cfg.phone) throw new Error("gett: no phone configured");
   if (!force && cfg.accessToken && cfg.accessTokenExpiresAt && Date.now() < cfg.accessTokenExpiresAt - 60_000)
     return cfg.accessToken;
-  // /auth/token renews the access token from the refresh token. The app calls this with its
-  // current (still-valid) access token as Bearer and renews proactively; once the access token
-  // is fully dead Gett rejects the refresh with a bare 400 and a fresh owner login is required.
+  // /auth/token renews the access token from the refresh token. The `?lc=en` query param is REQUIRED:
+  // the app sends it on every /auth/token and the server 400s (empty body) without it. Access-token TTL
+  // is irrelevant to the grant (a bearer expired by days still refreshes); a genuine 400 here means the
+  // refresh token itself is dead and a fresh owner login is required.
   let resp: any;
   try {
-    resp = await http(ctx, `/gl/api/v2/phone/${cfg.phone}/auth/token`, {
+    resp = await http(ctx, `/gl/api/v2/phone/${cfg.phone}/auth/token?lc=en`, {
       method: "POST",
       token: cfg.accessToken || cfg.refreshToken,
       body: { grant_type: "refresh_token", refresh_token: cfg.refreshToken },
@@ -245,9 +246,10 @@ async function finishTokens(ctx: ActionContext, toks: any) {
     accessTokenExpiresAt: Date.now() + (toks.expires_in ? toks.expires_in * 1000 : 3_600_000),
   });
   const cfg = cfgOf(ctx);
-  // IL -> GL conversion (first /auth/token, Bearer = the fresh access token)
+  // IL -> GL conversion (first /auth/token, Bearer = the fresh access token). `?lc=en` is REQUIRED here
+  // too — without the query param the conversion 400s even with a valid IL bearer.
   try {
-    const gl = await http(ctx, `/gl/api/v2/phone/${cfg.phone}/auth/token`, {
+    const gl = await http(ctx, `/gl/api/v2/phone/${cfg.phone}/auth/token?lc=en`, {
       method: "POST",
       token: cfg.accessToken,
       body: { grant_type: "refresh_token", refresh_token: cfg.refreshToken },
@@ -299,10 +301,9 @@ async function connectStatus(ctx: ActionContext) {
     creditCard: cfg.creditCardId || null,
     pendingMfa: !!cfg.pendingTempCode,
     missing: need,
-    // Onboarding agent: create a keepalive schedule so the session never lapses. Gett's access token
-    // lives only ~15 min and its refresh needs a still-valid access token, so the cadence MUST be
-    // under 15 min — a single missed window locks the account out and requires an SMS re-login.
-    keepalive: cfg.refreshToken ? { every: "10m", prompt: "call gett.refresh()" } : null,
+    // No keepalive schedule is needed: the GL refresh token is long-lived (~90d) and the refresh grant
+    // doesn't need a live access token, so a stored session survives unattended. `refresh` is on-demand.
+    keepalive: null,
   };
 }
 
@@ -587,7 +588,7 @@ export default function gett(rl: RunlinePluginAPI) {
   rl.registerAction("refresh", {
     access: "write",
     description:
-      "Keepalive: force a token refresh so the session never lapses. Gett's access token lives only ~15 min and its refresh needs a still-valid access token, so the onboarding agent MUST schedule the one-line prompt 'call gett.refresh()' every ~10 min (a missed window forces an SMS re-login via connect). Returns the new access-token expiry.",
+      "Mint a fresh access token on demand from the stored refresh token. NOT time-critical and NO keepalive schedule is needed — the refresh token is long-lived (~90 days) and survives unattended, so a session stays valid indefinitely after connect. Returns the new access-token expiry.",
     inputSchema: {},
     async execute(_input, ctx) {
       await accessToken(ctx, true);
