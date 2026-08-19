@@ -155,11 +155,10 @@ export function shouldArmRssWatchdog(
 }
 
 /**
- * Ceiling on a run's timeout. setTimeout stores its delay in an int32;
- * past ~24.8 days it overflows and fires immediately, turning an
- * oversized "run for a month" into "killed at 0ms". Clamping is the
- * whole fix: for any real body 24.8 days is forever, and the timer
- * stays armed as the one defense against a spinning body.
+ * Ceiling on an armed timeout: setTimeout stores its delay in an int32,
+ * so past ~24.8 days it overflows and fires at 0ms. Oversized values are
+ * rejected with an error that teaches the caller to pass 0 — the explicit
+ * "no timeout" — instead of overflowing into an instant kill.
  */
 export const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
@@ -272,13 +271,24 @@ export class ExecutionEngine {
   }
 
   async execute(code: string, options?: EngineOptions): Promise<ExecuteResult> {
-    const timeoutMs = Math.min(
-      options?.timeoutMs ?? this.config.timeoutMs,
-      MAX_TIMEOUT_MS,
-    );
+    const timeoutMs = options?.timeoutMs ?? this.config.timeoutMs;
     const memoryLimitBytes =
       options?.memoryLimitBytes ?? this.config.memoryLimitBytes;
     const logs: string[] = [];
+
+    if (
+      !Number.isFinite(timeoutMs) ||
+      timeoutMs < 0 ||
+      timeoutMs > MAX_TIMEOUT_MS
+    ) {
+      return {
+        result: null,
+        error:
+          `Invalid timeoutMs: ${timeoutMs}. ` +
+          `Pass 0 (no timeout) or 1..${MAX_TIMEOUT_MS} ms.`,
+        logs,
+      };
+    }
 
     const plugins = this.registry.listPlugins();
     const pluginNames = plugins.map((p) => p.name);
@@ -329,6 +339,7 @@ export class ExecutionEngine {
         settled = true;
         clearTimeout(timeoutTimer);
         clearInterval(rssTimer);
+        worker.unref?.();
         worker.off("message", onMessage);
         worker.off("error", onError);
         worker.off("exit", onExit);
@@ -336,18 +347,26 @@ export class ExecutionEngine {
         resolve(r);
       };
 
+      // The acquire-time unref must not let the host exit mid-run: hold
+      // the loop for the run's duration, whether or not a timer is armed.
+      worker.ref?.();
+
       // A spinning body blocks the worker's event loop, so it can never be
       // asked to stop — terminate is the only remedy and the worker is gone.
-      const timeoutTimer = setTimeout(() => {
-        finish(
-          {
-            result: null,
-            error: `Execution timed out after ${timeoutMs}ms`,
-            logs,
-          },
-          true,
-        );
-      }, timeoutMs);
+      // 0 means no timeout: the caller explicitly opted out of the backstop.
+      const timeoutTimer =
+        timeoutMs === 0
+          ? undefined
+          : setTimeout(() => {
+              finish(
+                {
+                  result: null,
+                  error: `Execution timed out after ${timeoutMs}ms`,
+                  logs,
+                },
+                true,
+              );
+            }, timeoutMs);
 
       let rssTimer: ReturnType<typeof setInterval> | undefined;
       if (shouldArmRssWatchdog()) {
