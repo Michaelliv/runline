@@ -27,6 +27,8 @@ export interface ExecuteResult {
 export interface EngineOptions {
   timeoutMs?: number;
   memoryLimitBytes?: number;
+  /** Delivered to every action's `ctx.context` for this run. */
+  context?: unknown;
 }
 
 /**
@@ -373,7 +375,7 @@ export class ExecutionEngine {
         if (msg.t === "log") {
           logs.push(`[${msg.level}] ${msg.line}`);
         } else if (msg.t === "invoke") {
-          this.invokeAction(msg.path, msg.args).then(
+          this.invokeAction(msg.path, msg.args, options?.context).then(
             (value) => {
               let serialized: unknown;
               try {
@@ -453,7 +455,11 @@ export class ExecutionEngine {
     });
   }
 
-  private async invokeAction(path: string, rawArgs: unknown): Promise<unknown> {
+  private async invokeAction(
+    path: string,
+    rawArgs: unknown,
+    context?: unknown,
+  ): Promise<unknown> {
     // A call written with no arguments reaches the action as `{}`, not
     // `undefined`, so plugins can read `input.foo` without guarding.
     const args = normalizeActionInput(rawArgs);
@@ -466,6 +472,7 @@ export class ExecutionEngine {
     const connection = this.resolveConnection(plugin);
     const ctx: ActionContext = {
       connection,
+      context,
       log: {
         info: (msg) => console.log(`[${plugin.name}] ${msg}`),
         warn: (msg) => console.warn(`[${plugin.name}] ${msg}`),

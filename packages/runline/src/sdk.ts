@@ -42,6 +42,8 @@ export interface RunlineOptions {
 export interface RunlineExecuteOptions {
   timeoutMs?: number;
   memoryLimitBytes?: number;
+  /** Delivered to every action's `ctx.context` for this run. */
+  context?: unknown;
 }
 
 export class Runline {

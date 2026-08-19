@@ -30,6 +30,9 @@ function makeProbePlugin() {
   api.setName("probe");
   api.setVersion("0.1.0");
 
+  // `?? null` in both probes: results cross a JSON round-trip that
+  // drops `undefined`, so absence is re-encoded as null to stay
+  // observable in assertions.
   api.registerAction("whoami", {
     description: "Returns the per-run context this call carried",
     execute(_input, ctx) {
@@ -60,17 +63,16 @@ function createEngine() {
 describe("per-execute context", () => {
   it("delivers the context to the action's ctx for that run", async () => {
     const engine = createEngine();
-    const result = await engine.execute(
-      "return await probe.whoami({})",
-      { context: { identity: { userId: "u1", sessionId: "s1" } } },
-    );
+    const result = await engine.execute("return await probe.whoami({})", {
+      context: { identity: { userId: "u1", sessionId: "s1" } },
+    });
     assert.equal(result.error, undefined);
     assert.deepEqual(result.result, {
       context: { identity: { userId: "u1", sessionId: "s1" } },
     });
   });
 
-  it("delivers undefined when no context was passed — backwards compatible", async () => {
+  it("delivers nothing when no context was passed — backwards compatible", async () => {
     const engine = createEngine();
     const result = await engine.execute("return await probe.whoami({})");
     assert.equal(result.error, undefined);

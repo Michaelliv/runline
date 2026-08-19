@@ -60,6 +60,13 @@ export interface ConnectionConfig {
 
 export interface ActionContext {
   connection: ConnectionConfig;
+  /**
+   * Opaque per-run value from the embedder's `execute()` options.
+   * Host-supplied and invisible to worker code, so actions may
+   * derive authority from it (e.g. per-call identity on a shared
+   * engine). Absent when the embedder passed none.
+   */
+  context?: unknown;
   log: {
     info(msg: string): void;
     warn(msg: string): void;
