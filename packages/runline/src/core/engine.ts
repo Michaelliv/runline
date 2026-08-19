@@ -154,6 +154,15 @@ export function shouldArmRssWatchdog(
   return Boolean(versions.bun);
 }
 
+/**
+ * Ceiling on a run's timeout. setTimeout stores its delay in an int32;
+ * past ~24.8 days it overflows and fires immediately, turning an
+ * oversized "run for a month" into "killed at 0ms". Clamping is the
+ * whole fix: for any real body 24.8 days is forever, and the timer
+ * stays armed as the one defense against a spinning body.
+ */
+export const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 // Extra slack on top of the configured memory limit for the RSS watchdog,
 // since whole-process RSS includes the host's own working set.
 const RSS_WATCHDOG_SLACK_BYTES = 128 * 1024 * 1024;
@@ -263,7 +272,10 @@ export class ExecutionEngine {
   }
 
   async execute(code: string, options?: EngineOptions): Promise<ExecuteResult> {
-    const timeoutMs = options?.timeoutMs ?? this.config.timeoutMs;
+    const timeoutMs = Math.min(
+      options?.timeoutMs ?? this.config.timeoutMs,
+      MAX_TIMEOUT_MS,
+    );
     const memoryLimitBytes =
       options?.memoryLimitBytes ?? this.config.memoryLimitBytes;
     const logs: string[] = [];
