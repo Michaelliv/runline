@@ -16,6 +16,7 @@ import type {
   ConnectionConfig,
   HelpInput,
   PluginDef,
+  TypedInputSchema,
 } from "../plugin/types.js";
 
 export interface ExecuteResult {
@@ -640,11 +641,30 @@ const ferrosearchPath = createRequire(import.meta.url).resolve(
   "@shift-labs/ferrosearch",
 );
 
+// typebox ships ESM only; require() of an .mjs works everywhere runline
+// runs (bun, and node since 22.12's require(esm)). Resolved host-side
+// for the same reason as ferrosearch: eval'd worker code gets a
+// cwd-relative require, so a bare specifier would resolve against the
+// caller's cwd instead of runline's own node_modules.
+const typeboxValuePath = createRequire(import.meta.url).resolve(
+  "typebox/value",
+);
+
 interface HelpEntry {
   action: string;
   access?: "read" | "write";
   description?: string;
   inputs: Record<string, HelpInput>;
+  /**
+   * The action's raw typed schema, when it has one. This is what
+   * `actions.check` validates against inside the worker — the same
+   * schema the host validates before execute, so preflight and
+   * execution cannot disagree (SHFT-1187). The flattened `inputs`
+   * cannot serve: it truncates deep nesting and carries no
+   * additional-properties rules. TypeBox schemas are plain JSON, so
+   * they survive the stringify into the worker source.
+   */
+  schema?: TypedInputSchema;
 }
 
 function buildHelpData(plugins: PluginDef[]): Record<string, HelpEntry[]> {
@@ -655,6 +675,7 @@ function buildHelpData(plugins: PluginDef[]): Record<string, HelpEntry[]> {
       access: a.access,
       description: a.description,
       inputs: helpInputs(a.inputSchema),
+      ...(isTypedInputSchema(a.inputSchema) ? { schema: a.inputSchema } : {}),
     }));
   }
   return data;
@@ -790,6 +811,9 @@ const __toJson = (v) => v === undefined ? undefined : JSON.parse(JSON.stringify(
 // also means an index built by agent code is invisible to that limit.
 const { FerroSearch } = require(${JSON.stringify(ferrosearchPath)});
 
+// The host's own validator, for actions.check on typed schemas.
+const { Check: __schemaCheck, Errors: __schemaErrors } = require(${JSON.stringify(typeboxValuePath)});
+
 const __help = ${JSON.stringify(helpData)};
 
 const __makeProxy = (path = []) => new Proxy(() => undefined, {
@@ -849,6 +873,82 @@ const __search = (() => {
   return index;
 })();
 
+// instancePath "/members/0/externalId" → ["members", "0", "externalId"],
+// with JSON-pointer escapes (~1 for /, ~0 for ~) undone per part.
+const __pointerParts = (instancePath) =>
+  String(instancePath || '').split('/').filter((p) => p.length)
+    .map((p) => p.replace(/~1/g, '/').replace(/~0/g, '~'));
+
+// ["members", "0", "externalId"] → "members[0].externalId"
+const __fieldPath = (instancePath, prop) => {
+  const parts = __pointerParts(instancePath);
+  if (prop !== undefined) parts.push(String(prop));
+  let out = '';
+  for (const part of parts) {
+    if (/^\\d+$/.test(part)) out += '[' + part + ']';
+    else out += out ? '.' + part : part;
+  }
+  return out;
+};
+
+const __valueAt = (root, instancePath) => {
+  let v = root;
+  for (const part of __pointerParts(instancePath)) {
+    if (v == null) return undefined;
+    v = v[part];
+  }
+  return v;
+};
+
+const __valueType = (v) => v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
+
+// Deep validation for typed schemas (SHFT-1187): the same Check/Errors
+// the host runs before execute, on the same schema, so the preflight
+// verdict and the execution verdict cannot diverge. The familiar
+// missing/unknown/typeErrors buckets are derived from the validator's
+// structured errors — keyword and params, never message parsing — and
+// the errors array carries each raw "<path> <message>" line exactly as
+// a rejected execution would report it. Grouping type errors by instance
+// path keeps a failed union one typeError instead of one per branch.
+const __checkTyped = (entry, provided, signature) => {
+  if (__schemaCheck(entry.schema, provided)) {
+    return { ok: true, missing: [], unknown: [], typeErrors: [], errors: [], signature };
+  }
+  const missing = [];
+  const unknown = [];
+  const errors = [];
+  const byPath = new Map();
+  for (const err of __schemaErrors(entry.schema, provided)) {
+    errors.push((err.instancePath || '/') + ' ' + err.message);
+    const params = err.params || {};
+    if (err.keyword === 'required') {
+      for (const prop of params.requiredProperties || []) missing.push(__fieldPath(err.instancePath, prop));
+    } else if (err.keyword === 'additionalProperties') {
+      for (const prop of params.additionalProperties || []) unknown.push(__fieldPath(err.instancePath, prop));
+    } else {
+      const group = byPath.get(err.instancePath) || [];
+      group.push(err);
+      byPath.set(err.instancePath, group);
+    }
+  }
+  const typeErrors = [];
+  for (const [instancePath, group] of byPath) {
+    const field = __fieldPath(instancePath) || '(input)';
+    const value = __valueAt(provided, instancePath);
+    const consts = group.filter((e) => e.keyword === 'const' && 'allowedValue' in (e.params || {}));
+    const typeErr = group.find((e) => e.keyword === 'type' && (e.params || {}).type);
+    if (consts.length) {
+      // A union of literals: the branches ARE the allowed values.
+      typeErrors.push({ field, expected: consts.map((e) => String(e.params.allowedValue)).join(' | '), actual: __fmt(value) });
+    } else if (typeErr) {
+      typeErrors.push({ field, expected: String(typeErr.params.type), actual: __valueType(value) });
+    } else {
+      typeErrors.push({ field, expected: group[0].message, actual: __fmt(value) });
+    }
+  }
+  return { ok: false, missing, unknown, typeErrors, errors, signature };
+};
+
 const __actionsApi = {
   list(plugin) {
     const paths = Object.keys(__index);
@@ -887,6 +987,13 @@ const __actionsApi = {
       const near = __actionsApi.find(path, 3).map((n) => n.path);
       return { ok: false, error: 'Unknown action: ' + path, suggestions: near };
     }
+    const signature = __formatSignature(hit.plugin, hit.entry);
+    if (hit.entry.schema) {
+      // Mirror the host's normalizeActionInput: a check with no args is
+      // a call with an empty argument set; anything else — null, a
+      // scalar — is validated as given, exactly as execute would.
+      return __checkTyped(hit.entry, args === undefined ? {} : args, signature);
+    }
     const inputs = hit.entry.inputs || {};
     const provided = args && typeof args === 'object' ? args : {};
     const missing = [];
@@ -915,7 +1022,8 @@ const __actionsApi = {
       missing,
       unknown,
       typeErrors,
-      signature: __formatSignature(hit.plugin, hit.entry),
+      errors: [],
+      signature,
     };
   },
 };

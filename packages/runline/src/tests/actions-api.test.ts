@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 import {
   Literal,
   Optional,
+  Array as TArray,
   Boolean as TBoolean,
   Object as TObject,
+  String as TString,
   Union,
 } from "typebox";
 import { DEFAULT_CONFIG } from "../config/types.js";
@@ -50,6 +52,26 @@ function makeGithub() {
       {
         mode: Union([Literal("safe"), Literal("loud")]),
         enabled: Optional(TBoolean()),
+      },
+      { additionalProperties: false },
+    ),
+    execute: async (input) => input,
+  });
+  // Mirrors the nested shape that exposed SHFT-1187 live
+  // (vex.sessions.remove): required fields and an additional-properties
+  // rule that exist only INSIDE the array items.
+  api.registerAction("collab.add", {
+    access: "write",
+    description: "Add collaborators",
+    inputSchema: TObject(
+      {
+        repo: TString(),
+        members: TArray(
+          TObject(
+            { externalId: TString(), label: Optional(TString()) },
+            { additionalProperties: false },
+          ),
+        ),
       },
       { additionalProperties: false },
     ),
@@ -101,6 +123,7 @@ describe("actions.list", () => {
     assert.deepEqual(
       [...result].sort(),
       [
+        "github.collab.add",
         "github.issue.create",
         "github.issue.list",
         "github.settings.update",
@@ -114,6 +137,7 @@ describe("actions.list", () => {
   it("filters by plugin prefix", async () => {
     const result = await run<string[]>('return actions.list("github")');
     assert.deepEqual([...result].sort(), [
+      "github.collab.add",
       "github.issue.create",
       "github.issue.list",
       "github.settings.update",
@@ -297,6 +321,86 @@ describe("actions.check", () => {
     ]);
   });
 
+  it("flags a nested array item missing its required field (SHFT-1187)", async () => {
+    // The live false positive: top-level fields all fine, the defect
+    // only inside members[0]. check must reject exactly what execute
+    // rejects, with the nested path named.
+    const result = await run<{
+      ok: boolean;
+      missing: string[];
+      unknown: string[];
+      errors: string[];
+    }>(
+      `return actions.check("github.collab.add", { repo: "r", members: [{ userId: "u1" }] })`,
+    );
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.missing, ["members[0].externalId"]);
+    assert.deepEqual(result.unknown, ["members[0].userId"]);
+    assert.ok(
+      result.errors.some((e) => e.includes("/members/0")),
+      JSON.stringify(result.errors),
+    );
+  });
+
+  it("ok=true for a valid nested payload", async () => {
+    const result = await run<{ ok: boolean }>(
+      `return actions.check("github.collab.add", { repo: "r", members: [{ externalId: "e", label: "L" }] })`,
+    );
+    assert.equal(result.ok, true);
+  });
+
+  it("reports a nested type error under its nested path", async () => {
+    const result = await run<{
+      ok: boolean;
+      typeErrors: Array<{ field: string; expected: string; actual: string }>;
+    }>(
+      `return actions.check("github.collab.add", { repo: "r", members: [{ externalId: "e", label: 7 }] })`,
+    );
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.typeErrors, [
+      { field: "members[0].label", expected: "string", actual: "number" },
+    ]);
+  });
+
+  it("rejects a non-object input the way execution does", async () => {
+    const result = await run<{
+      ok: boolean;
+      typeErrors: Array<{ field: string; expected: string; actual: string }>;
+    }>(`return actions.check("github.settings.update", null)`);
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.typeErrors, [
+      { field: "(input)", expected: "object", actual: "null" },
+    ]);
+  });
+
+  it("check's verdict agrees with execution on typed schemas", async () => {
+    // The preflight's whole purpose: ok=false must predict the exact
+    // rejection, and ok=true must predict acceptance. Both sides run
+    // the same validator on the same schema, so this can only break
+    // if the schema stops travelling to the worker.
+    const result = await run<{
+      check: { ok: boolean; errors: string[] };
+      executed: string;
+    }>(`
+      const payload = { repo: "r", members: [{ userId: "u" }] };
+      const check = actions.check("github.collab.add", payload);
+      let executed = "ran";
+      try { await actions.github.collab.add(payload); } catch (e) { executed = e.message; }
+      return { check, executed };
+    `);
+    assert.equal(result.check.ok, false);
+    assert.match(
+      result.executed,
+      /\/members\/0 must have required properties externalId/,
+    );
+    for (const line of result.check.errors) {
+      assert.ok(
+        result.executed.includes(line),
+        `check error "${line}" missing from execution error "${result.executed}"`,
+      );
+    }
+  });
+
   it("returns suggestions for unknown action", async () => {
     const result = await run<{
       ok: boolean;
@@ -363,6 +467,6 @@ describe("actions proxy fallback", () => {
     const result = await run<unknown>(
       `const list = actions.list("github"); const r = await github.issue.list({ owner: "a", repo: "b" }); return { count: list.length, r };`,
     );
-    assert.deepEqual(result, { count: 4, r: [] });
+    assert.deepEqual(result, { count: 5, r: [] });
   });
 });
