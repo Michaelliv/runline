@@ -1,7 +1,8 @@
 /**
  * OpenAI image generation for runline.
  *
- * Wraps the GPT Image / DALL-E line at /v1/images/generations. Generated
+ * Wraps the GPT Image / DALL-E line: `image.create` at
+ * /v1/images/generations, `image.edit` at /v1/images/edits. Generated
  * images are written to disk and the action returns their file `path`s
  * (plus the optional revised prompt) — never raw base64, which bloats the
  * agent context and is stripped before delivery. Hand each `path` to the
@@ -27,6 +28,20 @@ const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
 
 /** Newest GPT Image model; override per call or via the connection. */
 const DEFAULT_MODEL = "gpt-image-2";
+
+/**
+ * Model precedence, shared by create and edit: the call wins, then the
+ * connection's `defaultModel` (or OPENAI_IMAGE_MODEL), then the newest
+ * model.
+ */
+function resolveModel(
+  explicit: string | undefined,
+  config: Record<string, unknown>,
+): string {
+  return (
+    explicit ?? (config.defaultModel as string | undefined) ?? DEFAULT_MODEL
+  );
+}
 
 interface CreateInput {
   prompt: string;
@@ -69,7 +84,7 @@ export default function openai(rl: RunlinePluginAPI) {
       type: "string",
       required: false,
       description:
-        "Default image model when a call omits `model` (e.g. gpt-image-1 for the older line). Falls back to gpt-image-2.",
+        "Default image model when a call omits `model` — e.g. gpt-image-1 to pin the older line. Defaults to gpt-image-2.",
       env: "OPENAI_IMAGE_MODEL",
     },
   });
@@ -124,10 +139,7 @@ export default function openai(rl: RunlinePluginAPI) {
       }
 
       const apiKey = ctx.connection.config.apiKey as string;
-      const model =
-        p.model ??
-        (ctx.connection.config.defaultModel as string | undefined) ??
-        DEFAULT_MODEL;
+      const model = resolveModel(p.model, ctx.connection.config);
 
       const body: Record<string, unknown> = {
         model,
@@ -238,10 +250,7 @@ export default function openai(rl: RunlinePluginAPI) {
       }
 
       const apiKey = ctx.connection.config.apiKey as string;
-      const model =
-        p.model ??
-        (ctx.connection.config.defaultModel as string | undefined) ??
-        DEFAULT_MODEL;
+      const model = resolveModel(p.model, ctx.connection.config);
 
       const form = new FormData();
       form.append("model", model);
