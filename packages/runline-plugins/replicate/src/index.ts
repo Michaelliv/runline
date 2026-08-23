@@ -279,7 +279,8 @@ export default function replicate(rl: RunlinePluginAPI) {
       imagePath: {
         type: "string",
         required: true,
-        description: "Path to the source image file",
+        description:
+          "Path to the source image file (jpeg/png/gif/webp). Sent as a data URI — Replicate recommends hosted URLs for files over ~256 KB, so very large images may be rejected.",
       },
       saveDir: {
         type: "string",

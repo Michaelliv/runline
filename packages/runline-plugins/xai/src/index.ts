@@ -34,6 +34,7 @@ interface EditInput {
 
 interface XaiImage {
   b64_json: string;
+  mime_type?: string;
   revised_prompt?: string;
 }
 
@@ -107,7 +108,7 @@ export default function xai(rl: RunlinePluginAPI) {
       const data = (await res.json()) as { data?: XaiImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) => ({
-        ...writeImageFile({ base64: d.b64_json, mimeType: "image/jpeg", provider: "xai", index: i, saveDir: p.saveDir, stamp }),
+        ...writeImageFile({ base64: d.b64_json, mimeType: d.mime_type ?? "image/jpeg", provider: "xai", index: i, saveDir: p.saveDir, stamp }),
         ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
       }));
       return { provider: "xai", model: MODEL, images, note: SEND_FILE_NOTE };
@@ -176,7 +177,7 @@ export default function xai(rl: RunlinePluginAPI) {
       const data = (await res.json()) as { data?: XaiImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) => ({
-        ...writeImageFile({ base64: d.b64_json, mimeType: "image/jpeg", provider: "xai", index: i, saveDir: p.saveDir, stamp }),
+        ...writeImageFile({ base64: d.b64_json, mimeType: d.mime_type ?? "image/jpeg", provider: "xai", index: i, saveDir: p.saveDir, stamp }),
         ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
       }));
       return { provider: "xai", model, images, note: SEND_FILE_NOTE };

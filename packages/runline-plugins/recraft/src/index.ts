@@ -154,7 +154,7 @@ export default function recraft(rl: RunlinePluginAPI) {
       imagePath: {
         type: "string",
         required: true,
-        description: "Path to the source image file (PNG)",
+        description: "Path to the source image file (PNG, JPG, WEBP, or SVG; max 10 MB)",
       },
       strength: {
         type: "number",
@@ -170,7 +170,8 @@ export default function recraft(rl: RunlinePluginAPI) {
       model: {
         type: "string",
         required: false,
-        description: "recraftv3 (default) | recraftv3_vector",
+        description:
+          "Any Recraft V3 / V4 / V4.1 model, raster or vector (e.g. recraftv3, recraftv4_pro, recraftv4_1_vector). API default: recraftv4_1.",
       },
       style: {
         type: "string",
@@ -222,7 +223,8 @@ export default function recraft(rl: RunlinePluginAPI) {
       const images = (data.data ?? []).map((d, i) =>
         writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "recraft", index: i, saveDir: p.saveDir, stamp }),
       );
-      return { provider: "recraft", model: p.model ?? "recraftv3", images, note: SEND_FILE_NOTE };
+      // The imageToImage endpoint's own default model is recraftv4_1.
+      return { provider: "recraft", model: p.model ?? "recraftv4_1", images, note: SEND_FILE_NOTE };
     },
   });
 }
