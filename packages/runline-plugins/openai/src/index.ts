@@ -25,6 +25,9 @@ import {
 const ENDPOINT = "https://api.openai.com/v1/images/generations";
 const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
 
+/** Newest GPT Image model; override per call or via the connection. */
+const DEFAULT_MODEL = "gpt-image-2";
+
 interface CreateInput {
   prompt: string;
   model?: string;
@@ -66,7 +69,7 @@ export default function openai(rl: RunlinePluginAPI) {
       type: "string",
       required: false,
       description:
-        "Default image model when a call omits `model` (e.g. gpt-image-2). Falls back to gpt-image-1.",
+        "Default image model when a call omits `model` (e.g. gpt-image-1 for the older line). Falls back to gpt-image-2.",
       env: "OPENAI_IMAGE_MODEL",
     },
   });
@@ -124,7 +127,7 @@ export default function openai(rl: RunlinePluginAPI) {
       const model =
         p.model ??
         (ctx.connection.config.defaultModel as string | undefined) ??
-        "gpt-image-1";
+        DEFAULT_MODEL;
 
       const body: Record<string, unknown> = {
         model,
@@ -238,7 +241,7 @@ export default function openai(rl: RunlinePluginAPI) {
       const model =
         p.model ??
         (ctx.connection.config.defaultModel as string | undefined) ??
-        "gpt-image-1";
+        DEFAULT_MODEL;
 
       const form = new FormData();
       form.append("model", model);

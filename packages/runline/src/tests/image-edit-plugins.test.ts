@@ -101,10 +101,40 @@ describe("openai image.edit", () => {
     assert.equal(seen.url, "https://api.openai.com/v1/images/edits");
     assert.ok(seen.form instanceof FormData);
     assert.equal(seen.form?.get("prompt"), "make the sky red");
-    assert.equal(seen.form?.get("model"), "gpt-image-1");
+    assert.equal(seen.form?.get("model"), "gpt-image-2");
     const file = seen.form?.get("image[]");
     assert.ok(file instanceof Blob, "image[] should be a file part");
     assert.equal(result.images.length, 1);
+  });
+
+  it("prefers the per-call model, then the connection default", async () => {
+    const action = getAction(makePlugin("openai", openai), "image.edit");
+    const seen: string[] = [];
+    globalThis.fetch = (async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      seen.push(String((init?.body as FormData).get("model")));
+      return new Response(
+        JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }) as typeof fetch;
+
+    const base = { prompt: "x", imagePath: sourcePath, saveDir: dir };
+    await action.execute(
+      { ...base, model: "gpt-image-1-mini" },
+      ctx({ apiKey: "sk-test", defaultModel: "gpt-image-1" }),
+    );
+    await action.execute(
+      base,
+      ctx({ apiKey: "sk-test", defaultModel: "gpt-image-1" }),
+    );
+
+    assert.deepEqual(seen, ["gpt-image-1-mini", "gpt-image-1"]);
   });
 
   it("rejects when neither imagePath nor imagePaths is given", async () => {
@@ -113,6 +143,32 @@ describe("openai image.edit", () => {
       () => action.execute({ prompt: "x" }, ctx({ apiKey: "sk-test" })),
       /imagePath/,
     );
+  });
+});
+
+describe("openai image.create", () => {
+  it("defaults to gpt-image-2", async () => {
+    const action = getAction(makePlugin("openai", openai), "image.create");
+    let model: unknown;
+    globalThis.fetch = (async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      model = JSON.parse(String(init?.body)).model;
+      return new Response(
+        JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }) as typeof fetch;
+
+    await action.execute(
+      { prompt: "a red bicycle", saveDir: dir },
+      ctx({ apiKey: "sk-test" }),
+    );
+    assert.equal(model, "gpt-image-2");
   });
 });
 
