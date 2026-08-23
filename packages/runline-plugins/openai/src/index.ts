@@ -15,11 +15,12 @@
  *   // images[0].path -> "/tmp/openai-image-….png"
  */
 
-import { writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { RunlinePluginAPI } from "runline";
-import { readImageInput } from "../../_shared/imageFile.js";
+import {
+  readImageInput,
+  SEND_FILE_NOTE,
+  writeImageFile,
+} from "../../_shared/imageFile.js";
 
 const ENDPOINT = "https://api.openai.com/v1/images/generations";
 const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
@@ -154,25 +155,19 @@ export default function openai(rl: RunlinePluginAPI) {
       }
 
       const data = (await res.json()) as { data?: OpenAIImage[] };
-      const dir = (typeof p.saveDir === "string" && p.saveDir.trim()) || tmpdir();
       const stamp = Date.now();
-      const images = (data.data ?? []).map((d, i) => {
-        const bytes = Buffer.from(d.b64_json ?? "", "base64");
-        const path = join(dir, `openai-image-${stamp}-${i}.png`);
-        writeFileSync(path, bytes);
-        return {
-          path,
+      const images = (data.data ?? []).map((d, i) => ({
+        ...writeImageFile({
+          base64: d.b64_json,
           mimeType: "image/png",
-          byteLength: bytes.length,
-          ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
-        };
-      });
-      return {
-        provider: "openai",
-        model,
-        images,
-        note: "Image(s) written to disk. Deliver each to the user with send_file using its `path`.",
-      };
+          provider: "openai-image",
+          index: i,
+          saveDir: p.saveDir,
+          stamp,
+        }),
+        ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
+      }));
+      return { provider: "openai", model, images, note: SEND_FILE_NOTE };
     },
   });
 
@@ -266,25 +261,19 @@ export default function openai(rl: RunlinePluginAPI) {
       }
 
       const data = (await res.json()) as { data?: OpenAIImage[] };
-      const dir = (typeof p.saveDir === "string" && p.saveDir.trim()) || tmpdir();
       const stamp = Date.now();
-      const images = (data.data ?? []).map((d, i) => {
-        const bytes = Buffer.from(d.b64_json ?? "", "base64");
-        const path = join(dir, `openai-image-${stamp}-${i}.png`);
-        writeFileSync(path, bytes);
-        return {
-          path,
+      const images = (data.data ?? []).map((d, i) => ({
+        ...writeImageFile({
+          base64: d.b64_json,
           mimeType: "image/png",
-          byteLength: bytes.length,
-          ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
-        };
-      });
-      return {
-        provider: "openai",
-        model,
-        images,
-        note: "Image(s) written to disk. Deliver each to the user with send_file using its `path`.",
-      };
+          provider: "openai-image",
+          index: i,
+          saveDir: p.saveDir,
+          stamp,
+        }),
+        ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
+      }));
+      return { provider: "openai", model, images, note: SEND_FILE_NOTE };
     },
   });
 }

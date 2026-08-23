@@ -18,12 +18,14 @@
  * inline next to the instruction and writes the edited result to disk.
  */
 
-import { writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { readImageInput } from "../../_shared/imageFile.js";
+import {
+  readImageInput,
+  type SavedImage,
+  SEND_FILE_NOTE,
+  writeImageFile,
+} from "../../_shared/imageFile.js";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -47,6 +49,32 @@ interface GeminiPart {
 
 interface GeminiResponse {
   candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
+}
+
+/** Write every inline image part of a Gemini response to disk. */
+function saveInlineImages(
+  data: GeminiResponse,
+  saveDir: string | undefined,
+): SavedImage[] {
+  const stamp = Date.now();
+  const images: SavedImage[] = [];
+  for (const candidate of data.candidates ?? []) {
+    for (const part of candidate.content?.parts ?? []) {
+      if (part.inlineData?.data) {
+        images.push(
+          writeImageFile({
+            base64: part.inlineData.data,
+            mimeType: part.inlineData.mimeType ?? "image/png",
+            provider: "googleImage",
+            index: images.length,
+            saveDir,
+            stamp,
+          }),
+        );
+      }
+    }
+  }
+  return images;
 }
 
 export default function googleImage(rl: RunlinePluginAPI) {
@@ -112,27 +140,8 @@ export default function googleImage(rl: RunlinePluginAPI) {
       }
 
       const data = (await res.json()) as GeminiResponse;
-      const dir = (typeof p.saveDir === "string" && p.saveDir.trim()) || tmpdir();
-      const stamp = Date.now();
-      const images: Array<{ path: string; mimeType: string; byteLength: number }> = [];
-      for (const candidate of data.candidates ?? []) {
-        for (const part of candidate.content?.parts ?? []) {
-          if (part.inlineData?.data) {
-            const mimeType = part.inlineData.mimeType ?? "image/png";
-            const ext = mimeType.includes("jpeg") ? "jpg" : mimeType.split("/")[1] || "png";
-            const bytes = Buffer.from(part.inlineData.data, "base64");
-            const path = join(dir, `googleImage-${stamp}-${images.length}.${ext}`);
-            writeFileSync(path, bytes);
-            images.push({ path, mimeType, byteLength: bytes.length });
-          }
-        }
-      }
-      return {
-        provider: "googleImage",
-        model,
-        images,
-        note: "Image(s) written to disk. Deliver each to the user with send_file using its `path`.",
-      };
+      const images = saveInlineImages(data, p.saveDir);
+      return { provider: "googleImage", model, images, note: SEND_FILE_NOTE };
     },
   });
 
@@ -198,32 +207,13 @@ export default function googleImage(rl: RunlinePluginAPI) {
       }
 
       const data = (await res.json()) as GeminiResponse;
-      const dir = (typeof p.saveDir === "string" && p.saveDir.trim()) || tmpdir();
-      const stamp = Date.now();
-      const images: Array<{ path: string; mimeType: string; byteLength: number }> = [];
-      for (const candidate of data.candidates ?? []) {
-        for (const part of candidate.content?.parts ?? []) {
-          if (part.inlineData?.data) {
-            const mimeType = part.inlineData.mimeType ?? "image/png";
-            const ext = mimeType.includes("jpeg") ? "jpg" : mimeType.split("/")[1] || "png";
-            const bytes = Buffer.from(part.inlineData.data, "base64");
-            const path = join(dir, `googleImage-${stamp}-${images.length}.${ext}`);
-            writeFileSync(path, bytes);
-            images.push({ path, mimeType, byteLength: bytes.length });
-          }
-        }
-      }
+      const images = saveInlineImages(data, p.saveDir);
       if (images.length === 0) {
         throw new Error(
           "googleImage: the model returned no edited image — it may have refused; try a more specific instruction",
         );
       }
-      return {
-        provider: "googleImage",
-        model,
-        images,
-        note: "Image(s) written to disk. Deliver each to the user with send_file using its `path`.",
-      };
+      return { provider: "googleImage", model, images, note: SEND_FILE_NOTE };
     },
   });
 }
