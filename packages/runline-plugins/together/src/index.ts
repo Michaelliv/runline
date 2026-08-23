@@ -14,7 +14,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
-import { SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
+import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
 
 const ENDPOINT = "https://api.together.xyz/v1/images/generations";
@@ -30,6 +30,15 @@ interface CreateInput {
 
 interface TogetherImage {
   b64_json: string;
+}
+
+interface EditInput {
+  prompt: string;
+  imagePath: string;
+  model?: string;
+  steps?: number;
+  n?: number;
+  saveDir?: string;
 }
 
 export default function together(rl: RunlinePluginAPI) {
@@ -99,6 +108,85 @@ export default function together(rl: RunlinePluginAPI) {
         width,
         height,
         steps: p.steps ?? 4,
+        n: Math.min(p.n ?? 1, 4),
+        response_format: "base64",
+      };
+
+      const res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(
+          `Together API error ${res.status}: ${await res.text()}`,
+        );
+      }
+
+      const data = (await res.json()) as { data?: TogetherImage[] };
+      const stamp = Date.now();
+      const images = (data.data ?? []).map((d, i) =>
+        writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "together", index: i, saveDir: p.saveDir, stamp }),
+      );
+      return { provider: "together", model, images, note: SEND_FILE_NOTE };
+    },
+  });
+
+  rl.registerAction("image.edit", {
+    access: "write",
+    description:
+      "Edit a local image with Together AI (FLUX.1 Kontext): give the file path and describe the change. Sends the image as a data URI via `image_url` on the generations endpoint, writes the edited image(s) to disk, and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
+    inputSchema: {
+      prompt: {
+        type: "string",
+        required: true,
+        description: "Instruction describing the edit to apply",
+      },
+      imagePath: {
+        type: "string",
+        required: true,
+        description: "Path to the source image file",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+      },
+      model: {
+        type: "string",
+        required: false,
+        description:
+          "Edit-capable model, e.g. black-forest-labs/FLUX.1-kontext-pro (default), black-forest-labs/FLUX.1-kontext-max",
+      },
+      steps: {
+        type: "number",
+        required: false,
+        description: "Inference steps (default: 28)",
+      },
+      n: {
+        type: "number",
+        required: false,
+        description: "Number of edited variants (default: 1, max: 4)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as EditInput;
+      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
+        throw new Error("together: prompt is required");
+      }
+      const img = readImageInput(p.imagePath, "together");
+
+      const apiKey = ctx.connection.config.apiKey as string;
+      const model = p.model ?? "black-forest-labs/FLUX.1-kontext-pro";
+
+      const body: Record<string, unknown> = {
+        model,
+        prompt: p.prompt,
+        image_url: img.dataUri,
+        steps: p.steps ?? 28,
         n: Math.min(p.n ?? 1, 4),
         response_format: "base64",
       };

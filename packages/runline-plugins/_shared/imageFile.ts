@@ -8,9 +8,9 @@
  * send_file/attachment tool. Plugins load in-process via jiti, so node:fs is
  * available (same pattern as googleDrive/googleSlides).
  */
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, extname, join } from "node:path";
 
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
@@ -55,3 +55,49 @@ export function writeImageFile(opts: {
 
 export const SEND_FILE_NOTE =
   "Image(s) written to disk. Deliver each to the user with send_file using its `path`.";
+
+const EXT_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
+export interface LoadedImage {
+  bytes: Buffer;
+  base64: string;
+  mimeType: string;
+  dataUri: string;
+  fileName: string;
+}
+
+/**
+ * Read a local image for an `image.edit` call: bytes + base64 + mime
+ * (from the extension) + a `data:` URI for JSON APIs. Throws with the
+ * plugin's name when the file can't be read so errors point at the
+ * right tool.
+ */
+export function readImageInput(imagePath: string, pluginName: string): LoadedImage {
+  if (typeof imagePath !== "string" || imagePath.trim().length === 0) {
+    throw new Error(`${pluginName}: imagePath is required`);
+  }
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(imagePath);
+  } catch (err) {
+    throw new Error(
+      `${pluginName}: cannot read image at ${imagePath} — ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  const ext = extname(imagePath).slice(1).toLowerCase();
+  const mimeType = EXT_MIME[ext] ?? "image/png";
+  const base64 = bytes.toString("base64");
+  return {
+    bytes,
+    base64,
+    mimeType,
+    dataUri: `data:${mimeType};base64,${base64}`,
+    fileName: basename(imagePath),
+  };
+}

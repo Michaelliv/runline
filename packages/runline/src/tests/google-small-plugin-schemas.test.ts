@@ -48,6 +48,7 @@ const appsScriptFixtures: Record<string, Record<string, unknown>> = {
 
 const imageFixtures: Record<string, Record<string, unknown>> = {
   "image.create": { prompt: "A watercolor fox" },
+  "image.edit": { prompt: "Make the fox red", imagePath: "/tmp/fox.png" },
 };
 
 const tasksFixtures: Record<string, Record<string, unknown>> = {
@@ -125,7 +126,7 @@ describe("small Google plugin TypeBox schemas", () => {
     assertStrictSchemaSurface(tasks, tasksFixtures);
     assert.equal(
       appsScript.actions.length + image.actions.length + tasks.actions.length,
-      23,
+      24,
     );
   });
 

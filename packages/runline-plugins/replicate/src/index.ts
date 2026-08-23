@@ -21,7 +21,7 @@
 
 import { Buffer } from "node:buffer";
 import type { RunlinePluginAPI } from "runline";
-import { type SavedImage, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
+import { readImageInput, type SavedImage, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
 
 const POLL_INTERVAL_MS = 2_000;
@@ -32,6 +32,15 @@ interface CreateInput {
   model?: string;
   size?: string;
   n?: number;
+  timeoutMs?: number;
+  saveDir?: string;
+}
+
+interface EditInput {
+  prompt: string;
+  imagePath: string;
+  model?: string;
+  imageInputKey?: string;
   timeoutMs?: number;
   saveDir?: string;
 }
@@ -51,6 +60,124 @@ function stringifyError(err: unknown): string {
   } catch {
     return String(err);
   }
+}
+
+/**
+ * Create a prediction for `model`, wait for it to reach a terminal
+ * state (Prefer: wait + polling), download the output URL(s), and
+ * write them to disk. Shared by image.create and image.edit — the
+ * only thing that differs between them is the prediction `input`.
+ */
+async function runPrediction(opts: {
+  apiToken: string;
+  model: string;
+  input: Record<string, unknown>;
+  timeoutMs: number;
+  saveDir?: string;
+}): Promise<{ images: SavedImage[]; failures: Array<{ url: string; reason: string }> }> {
+  const { apiToken, model, input, timeoutMs, saveDir } = opts;
+  const deadline = Date.now() + timeoutMs;
+
+  const createRes = await fetch(
+    `https://api.replicate.com/v1/models/${model}/predictions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiToken}`,
+        // `Prefer: wait` lets the server hold the connection open for
+        // fast jobs so we don't have to poll at all on the happy path.
+        Prefer: "wait",
+      },
+      body: JSON.stringify({ input }),
+    },
+  );
+  if (!createRes.ok) {
+    throw new Error(
+      `Replicate API error ${createRes.status}: ${await createRes.text()}`,
+    );
+  }
+
+  let prediction = (await createRes.json()) as Prediction;
+  while (
+    prediction.status !== "succeeded" &&
+    prediction.status !== "failed" &&
+    prediction.status !== "canceled"
+  ) {
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Replicate generation timed out after ${timeoutMs}ms (still ${prediction.status})`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    const pollRes = await fetch(prediction.urls.get, {
+      headers: { Authorization: `Bearer ${apiToken}` },
+    });
+    if (!pollRes.ok) {
+      throw new Error(
+        `Replicate poll error ${pollRes.status}: ${await pollRes.text()}`,
+      );
+    }
+    prediction = (await pollRes.json()) as Prediction;
+  }
+
+  if (prediction.status !== "succeeded") {
+    throw new Error(
+      `Replicate generation ${prediction.status}: ${stringifyError(prediction.error)}`,
+    );
+  }
+
+  // Output is either a single URL or an array of them. Download
+  // each and base64-encode so the caller gets bytes back, not
+  // pre-signed URLs that expire. Track per-URL failures and
+  // surface them: silent partial success would let an agent
+  // think it got 3 images when one 404'd.
+  const outputs = Array.isArray(prediction.output)
+    ? prediction.output
+    : prediction.output
+      ? [prediction.output]
+      : [];
+
+  const images: SavedImage[] = [];
+  const failures: Array<{ url: string; reason: string }> = [];
+  const stamp = Date.now();
+  for (const url of outputs) {
+    if (typeof url !== "string") {
+      failures.push({ url: String(url), reason: "non-string output" });
+      continue;
+    }
+    const imgRes = await fetch(url);
+    if (!imgRes.ok) {
+      failures.push({
+        url,
+        reason: `download failed (${imgRes.status})`,
+      });
+      continue;
+    }
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    const contentType = (imgRes.headers.get("content-type") ?? "image/webp")
+      .split(";")[0]
+      .trim();
+    images.push(
+      writeImageFile({
+        base64: buf.toString("base64"),
+        mimeType: contentType,
+        provider: "replicate",
+        index: images.length,
+        saveDir,
+        stamp,
+      }),
+    );
+  }
+
+  if (images.length === 0 && outputs.length > 0) {
+    const detail = failures.map((f) => `${f.url}: ${f.reason}`).join("; ");
+    throw new Error(
+      `Replicate succeeded but all ${outputs.length} output URLs failed to download — ${detail}`,
+    );
+  }
+
+  return { images, failures };
 }
 
 export default function replicate(rl: RunlinePluginAPI) {
@@ -113,114 +240,92 @@ export default function replicate(rl: RunlinePluginAPI) {
       const apiToken = ctx.connection.config.apiToken as string;
       const model = p.model ?? "black-forest-labs/flux-dev";
       const { width, height } = parseSize(p.size, "replicate");
-      const timeoutMs = p.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-      const deadline = Date.now() + timeoutMs;
 
-      const createRes = await fetch(
-        `https://api.replicate.com/v1/models/${model}/predictions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiToken}`,
-            // `Prefer: wait` lets the server hold the connection open for
-            // fast jobs so we don't have to poll at all on the happy path.
-            Prefer: "wait",
-          },
-          body: JSON.stringify({
-            input: {
-              prompt: p.prompt,
-              width,
-              height,
-              num_outputs: Math.min(p.n ?? 1, 4),
-            },
-          }),
+      const { images, failures } = await runPrediction({
+        apiToken,
+        model,
+        input: {
+          prompt: p.prompt,
+          width,
+          height,
+          num_outputs: Math.min(p.n ?? 1, 4),
         },
-      );
-      if (!createRes.ok) {
-        throw new Error(
-          `Replicate API error ${createRes.status}: ${await createRes.text()}`,
-        );
-      }
+        timeoutMs: p.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        saveDir: p.saveDir,
+      });
 
-      let prediction = (await createRes.json()) as Prediction;
-      while (
-        prediction.status !== "succeeded" &&
-        prediction.status !== "failed" &&
-        prediction.status !== "canceled"
-      ) {
-        if (Date.now() >= deadline) {
-          throw new Error(
-            `Replicate generation timed out after ${timeoutMs}ms (still ${prediction.status})`,
-          );
-        }
-        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-        const pollRes = await fetch(prediction.urls.get, {
-          headers: { Authorization: `Bearer ${apiToken}` },
-        });
-        if (!pollRes.ok) {
-          throw new Error(
-            `Replicate poll error ${pollRes.status}: ${await pollRes.text()}`,
-          );
-        }
-        prediction = (await pollRes.json()) as Prediction;
-      }
+      const result: {
+        provider: "replicate";
+        model: string;
+        images: SavedImage[];
+        note: string;
+        failures?: Array<{ url: string; reason: string }>;
+      } = { provider: "replicate", model, images, note: SEND_FILE_NOTE };
+      if (failures.length > 0) result.failures = failures;
+      return result;
+    },
+  });
 
-      if (prediction.status !== "succeeded") {
-        throw new Error(
-          `Replicate generation ${prediction.status}: ${stringifyError(prediction.error)}`,
-        );
+  rl.registerAction("image.edit", {
+    access: "write",
+    description:
+      "Edit a local image via Replicate: give the file path and describe the change. Default model is black-forest-labs/flux-kontext-pro (input key `input_image`); other models may name their image input differently — override with `imageInputKey` (e.g. google/nano-banana uses `image_input`, which is sent as an array). Writes the edited image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
+    inputSchema: {
+      prompt: {
+        type: "string",
+        required: true,
+        description: "Instruction describing the edit to apply",
+      },
+      imagePath: {
+        type: "string",
+        required: true,
+        description: "Path to the source image file",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+      },
+      model: {
+        type: "string",
+        required: false,
+        description:
+          "Edit-capable Replicate model id, e.g. black-forest-labs/flux-kontext-pro (default), black-forest-labs/flux-kontext-max, google/nano-banana",
+      },
+      imageInputKey: {
+        type: "string",
+        required: false,
+        description:
+          "Name of the model's image input field (default: input_image). Keys ending in `_input` are sent as an array.",
+      },
+      timeoutMs: {
+        type: "number",
+        required: false,
+        description:
+          "Max ms to wait for the prediction to finish (default: 300000 = 5 minutes)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as EditInput;
+      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
+        throw new Error("replicate: prompt is required");
       }
+      const img = readImageInput(p.imagePath, "replicate");
 
-      // Output is either a single URL or an array of them. Download
-      // each and base64-encode so the caller gets bytes back, not
-      // pre-signed URLs that expire. Track per-URL failures and
-      // surface them: silent partial success would let an agent
-      // think it got 3 images when one 404'd.
-      const outputs = Array.isArray(prediction.output)
-        ? prediction.output
-        : prediction.output
-          ? [prediction.output]
-          : [];
+      const apiToken = ctx.connection.config.apiToken as string;
+      const model = p.model ?? "black-forest-labs/flux-kontext-pro";
+      const imageKey = p.imageInputKey ?? "input_image";
 
-      const images: SavedImage[] = [];
-      const failures: Array<{ url: string; reason: string }> = [];
-      const stamp = Date.now();
-      for (const url of outputs) {
-        if (typeof url !== "string") {
-          failures.push({ url: String(url), reason: "non-string output" });
-          continue;
-        }
-        const imgRes = await fetch(url);
-        if (!imgRes.ok) {
-          failures.push({
-            url,
-            reason: `download failed (${imgRes.status})`,
-          });
-          continue;
-        }
-        const buf = Buffer.from(await imgRes.arrayBuffer());
-        const contentType = (imgRes.headers.get("content-type") ?? "image/webp")
-          .split(";")[0]
-          .trim();
-        images.push(
-          writeImageFile({
-            base64: buf.toString("base64"),
-            mimeType: contentType,
-            provider: "replicate",
-            index: images.length,
-            saveDir: p.saveDir,
-            stamp,
-          }),
-        );
-      }
-
-      if (images.length === 0 && outputs.length > 0) {
-        const detail = failures.map((f) => `${f.url}: ${f.reason}`).join("; ");
-        throw new Error(
-          `Replicate succeeded but all ${outputs.length} output URLs failed to download — ${detail}`,
-        );
-      }
+      const { images, failures } = await runPrediction({
+        apiToken,
+        model,
+        input: {
+          prompt: p.prompt,
+          [imageKey]: imageKey.endsWith("_input") ? [img.dataUri] : img.dataUri,
+        },
+        timeoutMs: p.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        saveDir: p.saveDir,
+      });
 
       const result: {
         provider: "replicate";

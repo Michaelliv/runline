@@ -19,8 +19,10 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunlinePluginAPI } from "runline";
+import { readImageInput } from "../../_shared/imageFile.js";
 
 const ENDPOINT = "https://api.openai.com/v1/images/generations";
+const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
 
 interface CreateInput {
   prompt: string;
@@ -28,6 +30,17 @@ interface CreateInput {
   size?: string;
   quality?: string;
   style?: string;
+  n?: number;
+  saveDir?: string;
+}
+
+interface EditInput {
+  prompt: string;
+  imagePath?: string;
+  imagePaths?: string[];
+  model?: string;
+  size?: string;
+  quality?: string;
   n?: number;
   saveDir?: string;
 }
@@ -135,6 +148,118 @@ export default function openai(rl: RunlinePluginAPI) {
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(`OpenAI API error ${res.status}: ${await res.text()}`);
+      }
+
+      const data = (await res.json()) as { data?: OpenAIImage[] };
+      const dir = (typeof p.saveDir === "string" && p.saveDir.trim()) || tmpdir();
+      const stamp = Date.now();
+      const images = (data.data ?? []).map((d, i) => {
+        const bytes = Buffer.from(d.b64_json ?? "", "base64");
+        const path = join(dir, `openai-image-${stamp}-${i}.png`);
+        writeFileSync(path, bytes);
+        return {
+          path,
+          mimeType: "image/png",
+          byteLength: bytes.length,
+          ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
+        };
+      });
+      return {
+        provider: "openai",
+        model,
+        images,
+        note: "Image(s) written to disk. Deliver each to the user with send_file using its `path`.",
+      };
+    },
+  });
+
+  rl.registerAction("image.edit", {
+    access: "write",
+    description:
+      "Edit a local image with OpenAI (gpt-image-*) via /v1/images/edits: give the file path(s) and describe the change. Writes the edited PNG(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
+    inputSchema: {
+      prompt: {
+        type: "string",
+        required: true,
+        description: "Instruction describing the edit to apply",
+      },
+      imagePath: {
+        type: "string",
+        required: false,
+        description: "Path to the source image file. Either this or imagePaths is required.",
+      },
+      imagePaths: {
+        type: "array",
+        required: false,
+        description:
+          "Paths to multiple source images (gpt-image models accept up to 16; the first is the primary).",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+      },
+      model: {
+        type: "string",
+        required: false,
+        description:
+          "gpt-image-2 | gpt-image-1 | gpt-image-1-mini. Omit to use the connection default.",
+      },
+      size: {
+        type: "string",
+        required: false,
+        description: "WxH output size. Omit to let the API match the input.",
+      },
+      quality: {
+        type: "string",
+        required: false,
+        description: "low | medium | high",
+      },
+      n: {
+        type: "number",
+        required: false,
+        description: "Number of edited variants (default: 1, max: 4)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as EditInput;
+      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
+        throw new Error("openai: prompt is required");
+      }
+      const paths =
+        Array.isArray(p.imagePaths) && p.imagePaths.length > 0
+          ? p.imagePaths
+          : p.imagePath
+            ? [p.imagePath]
+            : [];
+      if (paths.length === 0) {
+        throw new Error("openai: imagePath (or imagePaths) is required");
+      }
+
+      const apiKey = ctx.connection.config.apiKey as string;
+      const model =
+        p.model ??
+        (ctx.connection.config.defaultModel as string | undefined) ??
+        "gpt-image-1";
+
+      const form = new FormData();
+      form.append("model", model);
+      form.append("prompt", p.prompt);
+      form.append("n", String(Math.min(p.n ?? 1, 4)));
+      if (p.size) form.append("size", p.size);
+      if (p.quality) form.append("quality", p.quality);
+      for (const path of paths) {
+        const img = readImageInput(path, "openai");
+        form.append("image[]", new Blob([img.bytes], { type: img.mimeType }), img.fileName);
+      }
+
+      const res = await fetch(EDIT_ENDPOINT, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
       });
       if (!res.ok) {
         throw new Error(`OpenAI API error ${res.status}: ${await res.text()}`);

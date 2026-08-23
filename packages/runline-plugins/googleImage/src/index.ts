@@ -14,8 +14,8 @@
  * stripped before delivery. Hand each `path` to the host's file-sending
  * tool (e.g. send_file) to deliver the image.
  *
- * Nano Banana supports conversational editing — chain prompts in
- * follow-up calls and it'll keep iterating on the last image.
+ * Nano Banana is strong at editing — `image.edit` sends a local image
+ * inline next to the instruction and writes the edited result to disk.
  */
 
 import { writeFileSync } from "node:fs";
@@ -23,11 +23,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { readImageInput } from "../../_shared/imageFile.js";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 interface CreateInput {
   prompt: string;
+  model?: string;
+  saveDir?: string;
+}
+
+interface EditInput {
+  prompt: string;
+  imagePath: string;
   model?: string;
   saveDir?: string;
 }
@@ -118,6 +126,97 @@ export default function googleImage(rl: RunlinePluginAPI) {
             images.push({ path, mimeType, byteLength: bytes.length });
           }
         }
+      }
+      return {
+        provider: "googleImage",
+        model,
+        images,
+        note: "Image(s) written to disk. Deliver each to the user with send_file using its `path`.",
+      };
+    },
+  });
+
+  rl.registerAction("image.edit", {
+    access: "write",
+    description:
+      "Edit a local image with Gemini (Nano Banana): give the file path and describe the change. Sends the image inline with the instruction, writes the edited image(s) to disk, and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
+    inputSchema: t.Object(
+      {
+        prompt: t.String({
+          minLength: 1,
+          description: "Instruction describing the edit to apply",
+        }),
+        imagePath: t.String({
+          minLength: 1,
+          description: "Path to the source image file",
+        }),
+        model: t.Optional(
+          t.String({
+            minLength: 1,
+            description:
+              "Gemini image model ID. Defaults to gemini-2.5-flash-image.",
+          }),
+        ),
+        saveDir: t.Optional(
+          t.String({
+            description:
+              "Directory to write the image file(s) into. Empty or omitted uses the OS temp directory.",
+          }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+    async execute(input, ctx) {
+      const p = (input ?? {}) as EditInput;
+      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
+        throw new Error("googleImage: prompt is required");
+      }
+      const img = readImageInput(p.imagePath, "googleImage");
+
+      const apiKey = ctx.connection.config.apiKey as string;
+      const model = p.model ?? "gemini-2.5-flash-image";
+
+      const url = `${BASE}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const body = {
+        contents: [
+          {
+            parts: [
+              { text: p.prompt },
+              { inlineData: { mimeType: img.mimeType, data: img.base64 } },
+            ],
+          },
+        ],
+        generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+      };
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(`Google API error ${res.status}: ${await res.text()}`);
+      }
+
+      const data = (await res.json()) as GeminiResponse;
+      const dir = (typeof p.saveDir === "string" && p.saveDir.trim()) || tmpdir();
+      const stamp = Date.now();
+      const images: Array<{ path: string; mimeType: string; byteLength: number }> = [];
+      for (const candidate of data.candidates ?? []) {
+        for (const part of candidate.content?.parts ?? []) {
+          if (part.inlineData?.data) {
+            const mimeType = part.inlineData.mimeType ?? "image/png";
+            const ext = mimeType.includes("jpeg") ? "jpg" : mimeType.split("/")[1] || "png";
+            const bytes = Buffer.from(part.inlineData.data, "base64");
+            const path = join(dir, `googleImage-${stamp}-${images.length}.${ext}`);
+            writeFileSync(path, bytes);
+            images.push({ path, mimeType, byteLength: bytes.length });
+          }
+        }
+      }
+      if (images.length === 0) {
+        throw new Error(
+          "googleImage: the model returned no edited image — it may have refused; try a more specific instruction",
+        );
       }
       return {
         provider: "googleImage",

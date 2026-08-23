@@ -15,9 +15,10 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
-import { SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
+import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
 
 const ENDPOINT = "https://external.api.recraft.ai/v1/images/generations";
+const EDIT_ENDPOINT = "https://external.api.recraft.ai/v1/images/imageToImage";
 
 interface CreateInput {
   prompt: string;
@@ -31,6 +32,17 @@ interface CreateInput {
 
 interface RecraftImage {
   b64_json: string;
+}
+
+interface EditInput {
+  prompt: string;
+  imagePath: string;
+  strength?: number;
+  model?: string;
+  style?: string;
+  styleId?: string;
+  n?: number;
+  saveDir?: string;
 }
 
 export default function recraft(rl: RunlinePluginAPI) {
@@ -126,6 +138,91 @@ export default function recraft(rl: RunlinePluginAPI) {
         writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "recraft", index: i, saveDir: p.saveDir, stamp }),
       );
       return { provider: "recraft", model, images, note: SEND_FILE_NOTE };
+    },
+  });
+
+  rl.registerAction("image.edit", {
+    access: "write",
+    description:
+      "Edit a local image with Recraft (imageToImage): give the file path, describe the change, and tune `strength` for how far to depart from the original. Writes the edited image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
+    inputSchema: {
+      prompt: {
+        type: "string",
+        required: true,
+        description: "Instruction describing the transformation",
+      },
+      imagePath: {
+        type: "string",
+        required: true,
+        description: "Path to the source image file (PNG)",
+      },
+      strength: {
+        type: "number",
+        required: false,
+        description:
+          "0–1: how strongly to alter the input (default: 0.2 — close to the original)",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+      },
+      model: {
+        type: "string",
+        required: false,
+        description: "recraftv3 (default) | recraftv3_vector",
+      },
+      style: {
+        type: "string",
+        required: false,
+        description:
+          "Photorealism | Illustration | Vector art | Hand-drawn | Icon | Recraft V3 Raw",
+      },
+      styleId: {
+        type: "string",
+        required: false,
+        description: "ID of a custom style created in your Recraft account",
+      },
+      n: {
+        type: "number",
+        required: false,
+        description: "Number of edited variants (default: 1, max: 6)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as EditInput;
+      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
+        throw new Error("recraft: prompt is required");
+      }
+      const img = readImageInput(p.imagePath, "recraft");
+
+      const apiKey = ctx.connection.config.apiKey as string;
+
+      const form = new FormData();
+      form.append("image", new Blob([img.bytes], { type: img.mimeType }), img.fileName);
+      form.append("prompt", p.prompt);
+      form.append("strength", String(p.strength ?? 0.2));
+      form.append("response_format", "b64_json");
+      form.append("n", String(Math.min(p.n ?? 1, 6)));
+      if (p.model) form.append("model", p.model);
+      if (p.style) form.append("style", p.style);
+      if (p.styleId) form.append("style_id", p.styleId);
+
+      const res = await fetch(EDIT_ENDPOINT, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+      });
+      if (!res.ok) {
+        throw new Error(`Recraft API error ${res.status}: ${await res.text()}`);
+      }
+
+      const data = (await res.json()) as { data?: RecraftImage[] };
+      const stamp = Date.now();
+      const images = (data.data ?? []).map((d, i) =>
+        writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "recraft", index: i, saveDir: p.saveDir, stamp }),
+      );
+      return { provider: "recraft", model: p.model ?? "recraftv3", images, note: SEND_FILE_NOTE };
     },
   });
 }
