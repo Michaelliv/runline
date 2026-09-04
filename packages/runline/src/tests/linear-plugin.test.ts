@@ -14,6 +14,7 @@ const LINEAR_ACTIONS = [
   "attachment.linkURL",
   "attachment.list",
   "attachment.update",
+  "comment.create",
   "comment.delete",
   "comment.get",
   "comment.list",
@@ -30,7 +31,6 @@ const LINEAR_ACTIONS = [
   "initiative.list",
   "initiative.removeProject",
   "initiative.update",
-  "issue.addComment",
   "issue.addLabel",
   "issue.addLink",
   "issue.archive",
@@ -38,7 +38,6 @@ const LINEAR_ACTIONS = [
   "issue.delete",
   "issue.get",
   "issue.list",
-  "issue.listComments",
   "issue.removeLabel",
   "issue.search",
   "issue.subscribe",
@@ -185,16 +184,17 @@ describe("linear plugin action surface", () => {
     );
   });
 
-  it("does not expose duplicate comment creation aliases", () => {
+  it("exposes comment creation under the comment namespace only", () => {
     const plugin = makeLinear();
-    assert.ok(plugin.actions.some((a) => a.name === "issue.addComment"));
-    assert.ok(!plugin.actions.some((a) => a.name === "comment.create"));
+    assert.ok(plugin.actions.some((a) => a.name === "comment.create"));
+    assert.ok(!plugin.actions.some((a) => a.name === "issue.addComment"));
+    assert.ok(!plugin.actions.some((a) => a.name === "issue.listComments"));
   });
 });
 
 describe("linear plugin comment actions", () => {
-  it("issue.addComment calls Linear's commentCreate mutation", async () => {
-    const action = getAction(makeLinear(), "issue.addComment");
+  it("comment.create calls Linear's commentCreate mutation", async () => {
+    const action = getAction(makeLinear(), "comment.create");
 
     mockLinear((body) => {
       assert.match(body.query, /commentCreate\(input: \$input\)/);
@@ -658,8 +658,8 @@ describe("linear plugin scoped issue access", () => {
   });
 
   it("checks parent issue scope before adding comments or listing comments", async () => {
-    const addComment = getAction(makeLinear(), "issue.addComment");
-    const listComments = getAction(makeLinear(), "issue.listComments");
+    const createComment = getAction(makeLinear(), "comment.create");
+    const listComments = getAction(makeLinear(), "comment.list");
 
     mockLinearSequence([
       (body) => {
@@ -693,12 +693,15 @@ describe("linear plugin scoped issue access", () => {
     ]);
 
     assert.deepEqual(
-      await addComment.execute({ issueId: "ISS-1", body: "hi" }, scopedCtx()),
+      await createComment.execute(
+        { issueId: "ISS-1", body: "hi" },
+        scopedCtx(),
+      ),
       { id: "comment-1" },
     );
     assert.deepEqual(
       await listComments.execute({ issueId: "ISS-1" }, scopedCtx()),
-      [{ id: "comment-1" }],
+      { nodes: [{ id: "comment-1" }] },
     );
   });
 

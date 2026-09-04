@@ -16,7 +16,7 @@ import { registerWebhookActions } from "./webhooks.js";
 
 export default function linear(rl: RunlinePluginAPI) {
   rl.setName("linear");
-  rl.setVersion("0.4.0");
+  rl.setVersion("0.5.0");
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({

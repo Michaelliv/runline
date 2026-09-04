@@ -3,7 +3,6 @@ import * as t from "typebox";
 import {
   assertIssueInScope,
   buildConnArgs,
-  COMMENT_FIELDS,
   ensureScopeLabelsOnCreateOrReplace,
   forbidScopeLabelRemoval,
   gql,
@@ -589,32 +588,6 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         { input: fields },
       );
       return data.issueRelationCreate;
-    },
-  });
-
-  rl.registerAction("issue.listComments", {
-    access: "read",
-    description: "List comments on an issue.",
-    inputSchema: t.Object({
-      issueId: t.String(),
-      limit: t.Optional(t.Number()),
-    }),
-    async execute(input, ctx) {
-      const { issueId, limit } = input as { issueId: string; limit?: number };
-      await assertIssueInScope(ctx, issueId);
-      const data = await gql(
-        key(ctx),
-        `query($id: String!, $first: Int) {
-          issue(id: $id) { comments(first: $first) { nodes { ${COMMENT_FIELDS} } } }
-        }`,
-        { id: issueId, first: limit ?? 50 },
-      );
-      return (
-        (data.issue as Record<string, unknown>)?.comments as Record<
-          string,
-          unknown
-        >
-      )?.nodes;
     },
   });
 }

@@ -10,9 +10,10 @@ import {
 } from "./shared.js";
 
 export function registerCommentActions(rl: RunlinePluginAPI) {
-  rl.registerAction("issue.addComment", {
+  rl.registerAction("comment.create", {
     access: "write",
-    description: "Add a comment to an issue. Pass parentId to nest as a reply.",
+    description:
+      "Create a comment on an issue. Pass parentId to nest as a reply.",
     inputSchema: t.Object({
       issueId: t.String({
         description:
