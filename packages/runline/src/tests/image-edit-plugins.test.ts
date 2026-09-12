@@ -101,7 +101,7 @@ describe("openai image.edit", () => {
     assert.equal(seen.url, "https://api.openai.com/v1/images/edits");
     assert.ok(seen.form instanceof FormData);
     assert.equal(seen.form?.get("prompt"), "make the sky red");
-    assert.equal(seen.form?.get("model"), "gpt-image-2");
+    assert.equal(seen.form?.get("model"), "gpt-image-2.5-flare");
     const file = seen.form?.get("image[]");
     assert.ok(file instanceof Blob, "image[] should be a file part");
     assert.equal(result.images.length, 1);
@@ -126,15 +126,49 @@ describe("openai image.edit", () => {
 
     const base = { prompt: "x", imagePath: sourcePath, saveDir: dir };
     await action.execute(
-      { ...base, model: "gpt-image-1-mini" },
-      ctx({ apiKey: "sk-test", defaultModel: "gpt-image-1" }),
+      { ...base, model: "gpt-image-2.5-sunburst" },
+      ctx({ apiKey: "sk-test", defaultModel: "gpt-image-2" }),
     );
     await action.execute(
       base,
-      ctx({ apiKey: "sk-test", defaultModel: "gpt-image-1" }),
+      ctx({ apiKey: "sk-test", defaultModel: "gpt-image-2" }),
     );
 
-    assert.deepEqual(seen, ["gpt-image-1-mini", "gpt-image-1"]);
+    assert.deepEqual(seen, ["gpt-image-2.5-sunburst", "gpt-image-2"]);
+  });
+
+  it("forwards the 2.5-only quality and size values untouched", async () => {
+    const action = getAction(makePlugin("openai", openai), "image.edit");
+    let form: FormData | undefined;
+    globalThis.fetch = (async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      form = init?.body as FormData;
+      return new Response(
+        JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }) as typeof fetch;
+
+    await action.execute(
+      {
+        prompt: "sharpen the label",
+        imagePath: sourcePath,
+        model: "gpt-image-2.5-sunburst",
+        quality: "max",
+        size: "1536x864",
+        saveDir: dir,
+      },
+      ctx({ apiKey: "sk-test" }),
+    );
+
+    assert.equal(form?.get("model"), "gpt-image-2.5-sunburst");
+    assert.equal(form?.get("quality"), "max");
+    assert.equal(form?.get("size"), "1536x864");
   });
 
   it("rejects when neither imagePath nor imagePaths is given", async () => {
@@ -147,14 +181,14 @@ describe("openai image.edit", () => {
 });
 
 describe("openai image.create", () => {
-  it("defaults to gpt-image-2", async () => {
-    const action = getAction(makePlugin("openai", openai), "image.create");
-    let model: unknown;
+  // Captures the JSON body of each generations call and answers with one image.
+  function captureBodies(): Record<string, unknown>[] {
+    const bodies: Record<string, unknown>[] = [];
     globalThis.fetch = (async (
       _input: RequestInfo | URL,
       init?: RequestInit,
     ) => {
-      model = JSON.parse(String(init?.body)).model;
+      bodies.push(JSON.parse(String(init?.body)));
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -163,12 +197,112 @@ describe("openai image.create", () => {
         },
       );
     }) as typeof fetch;
+    return bodies;
+  }
 
-    await action.execute(
+  it("defaults to gpt-image-2.5-flare", async () => {
+    const action = getAction(makePlugin("openai", openai), "image.create");
+    const bodies = captureBodies();
+
+    const result = (await action.execute(
       { prompt: "a red bicycle", saveDir: dir },
       ctx({ apiKey: "sk-test" }),
+    )) as { model: string };
+
+    assert.equal(bodies[0]?.model, "gpt-image-2.5-flare");
+    assert.equal(result.model, "gpt-image-2.5-flare");
+  });
+
+  it("prefers the per-call model, then the connection default", async () => {
+    const action = getAction(makePlugin("openai", openai), "image.create");
+    const bodies = captureBodies();
+
+    await action.execute(
+      { prompt: "x", model: "gpt-image-2.5-sunburst", saveDir: dir },
+      ctx({ apiKey: "sk-test", defaultModel: "gpt-image-2" }),
     );
-    assert.equal(model, "gpt-image-2");
+    await action.execute(
+      { prompt: "x", saveDir: dir },
+      ctx({ apiKey: "sk-test", defaultModel: "gpt-image-2" }),
+    );
+
+    assert.deepEqual(
+      bodies.map((b) => b.model),
+      ["gpt-image-2.5-sunburst", "gpt-image-2"],
+    );
+  });
+
+  it("treats both gpt-image-2.5 models as the gpt-image line (output_format, not response_format)", async () => {
+    const action = getAction(makePlugin("openai", openai), "image.create");
+    const bodies = captureBodies();
+
+    for (const model of ["gpt-image-2.5-flare", "gpt-image-2.5-sunburst"]) {
+      await action.execute(
+        { prompt: "x", model, saveDir: dir },
+        ctx({ apiKey: "sk-test" }),
+      );
+    }
+
+    for (const body of bodies) {
+      assert.equal(body.output_format, "png");
+      assert.equal(body.response_format, undefined);
+    }
+  });
+
+  it("forwards the 2.5-only quality and size values untouched", async () => {
+    const action = getAction(makePlugin("openai", openai), "image.create");
+    const bodies = captureBodies();
+
+    await action.execute(
+      {
+        prompt: "a wide banner",
+        model: "gpt-image-2.5-flare",
+        quality: "xhigh",
+        size: "1536x864",
+        saveDir: dir,
+      },
+      ctx({ apiKey: "sk-test" }),
+    );
+    await action.execute(
+      { prompt: "pick for me", quality: "auto", size: "auto", saveDir: dir },
+      ctx({ apiKey: "sk-test" }),
+    );
+
+    assert.equal(bodies[0]?.quality, "xhigh");
+    assert.equal(bodies[0]?.size, "1536x864");
+    assert.equal(bodies[1]?.quality, "auto");
+    assert.equal(bodies[1]?.size, "auto");
+  });
+
+  it("still speaks response_format to the dall-e line", async () => {
+    const action = getAction(makePlugin("openai", openai), "image.create");
+    const bodies = captureBodies();
+
+    await action.execute(
+      { prompt: "x", model: "dall-e-3", saveDir: dir },
+      ctx({ apiKey: "sk-test" }),
+    );
+
+    assert.equal(bodies[0]?.response_format, "b64_json");
+    assert.equal(bodies[0]?.output_format, undefined);
+  });
+
+  it("documents both gpt-image-2.5 models on the model inputs", () => {
+    const plugin = makePlugin("openai", openai);
+    for (const name of ["image.create", "image.edit"]) {
+      const schema = getAction(plugin, name).inputSchema as Record<
+        string,
+        { description?: string }
+      >;
+      for (const model of ["gpt-image-2.5-flare", "gpt-image-2.5-sunburst"]) {
+        assert.ok(
+          schema.model?.description?.includes(model),
+          `${name}.model should mention ${model}`,
+        );
+      }
+      assert.ok(schema.quality?.description?.includes("xhigh"));
+      assert.ok(schema.quality?.description?.includes("max"));
+    }
   });
 });
 

@@ -26,8 +26,18 @@ import {
 const ENDPOINT = "https://api.openai.com/v1/images/generations";
 const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
 
-/** Newest GPT Image model; override per call or via the connection. */
-const DEFAULT_MODEL = "gpt-image-2";
+/**
+ * Newest GPT Image model; override per call or via the connection.
+ *
+ * The GPT Image 2.5 line ships as two models: `gpt-image-2.5-flare`
+ * (OpenAI's default — matches gpt-image-2 quality at up to half the
+ * latency) and `gpt-image-2.5-sunburst` (precision editing). Both accept
+ * the wider `xhigh` / `max` / `auto` quality range and arbitrary
+ * `WIDTHxHEIGHT` sizes (multiples of 16, aspect between 1:3 and 3:1, no
+ * edge over 3840px). Pin `gpt-image-2` via `defaultModel` to keep the
+ * older line.
+ */
+const DEFAULT_MODEL = "gpt-image-2.5-flare";
 
 /**
  * Model precedence, shared by create and edit: the call wins, then the
@@ -84,7 +94,7 @@ export default function openai(rl: RunlinePluginAPI) {
       type: "string",
       required: false,
       description:
-        "Default image model when a call omits `model` — e.g. gpt-image-1 to pin the older line. Defaults to gpt-image-2.",
+        "Default image model when a call omits `model` — e.g. gpt-image-2 to pin the older line. Defaults to gpt-image-2.5-flare.",
       env: "OPENAI_IMAGE_MODEL",
     },
   });
@@ -108,18 +118,19 @@ export default function openai(rl: RunlinePluginAPI) {
         type: "string",
         required: false,
         description:
-          "gpt-image-2 | gpt-image-1 | gpt-image-1-mini | dall-e-3 | dall-e-2. Omit to use the connection default.",
+          "gpt-image-2.5-flare | gpt-image-2.5-sunburst | gpt-image-2 | gpt-image-1 | gpt-image-1-mini | dall-e-3 | dall-e-2. Omit to use the connection default.",
       },
       size: {
         type: "string",
         required: false,
-        description: "WxH (default: 1024x1024). Allowed sizes vary by model.",
+        description:
+          "WxH (default: 1024x1024) or auto. gpt-image-2.5-* accept any WIDTHxHEIGHT with both sides multiples of 16, aspect between 1:3 and 3:1 and no edge over 3840 (above 2560x1440 is experimental); older models take 1024x1024 | 1536x1024 | 1024x1536.",
       },
       quality: {
         type: "string",
         required: false,
         description:
-          "low | medium | high (gpt-image) or standard | hd (dall-e-3)",
+          "low | medium | high | auto (gpt-image), plus xhigh | max on gpt-image-2.5-*; standard | hd (dall-e-3)",
       },
       style: {
         type: "string",
@@ -216,17 +227,19 @@ export default function openai(rl: RunlinePluginAPI) {
         type: "string",
         required: false,
         description:
-          "gpt-image-2 | gpt-image-1 | gpt-image-1-mini. Omit to use the connection default.",
+          "gpt-image-2.5-flare | gpt-image-2.5-sunburst | gpt-image-2 | gpt-image-1 | gpt-image-1-mini. Omit to use the connection default.",
       },
       size: {
         type: "string",
         required: false,
-        description: "WxH output size. Omit to let the API match the input.",
+        description:
+          "WxH output size (gpt-image-2.5-* accept any WIDTHxHEIGHT with sides multiples of 16 and aspect between 1:3 and 3:1). Omit to let the API match the input.",
       },
       quality: {
         type: "string",
         required: false,
-        description: "low | medium | high",
+        description:
+          "low | medium | high | auto, plus xhigh | max on gpt-image-2.5-*",
       },
       n: {
         type: "number",
