@@ -131,33 +131,63 @@ function ctx(config: Record<string, unknown> = {}): ActionContext {
   };
 }
 
+type MockOpts = {
+  /**
+   * Answer the scope-label directory lookup (name → id) transparently.
+   * Scoped suites below configure the scope by label *name*; the identity
+   * mapping keeps their assertions about ids unchanged. The resolution
+   * suite turns this off to assert the lookup itself.
+   */
+  autoResolveLabels?: boolean;
+};
+
+const DIRECTORY_QUERY = /issueLabels\(first: 250/;
+
 function mockLinear(
   assertRequest: (body: {
     query: string;
     variables?: Record<string, unknown>;
   }) => unknown,
+  opts?: MockOpts,
 ) {
-  mockLinearSequence([assertRequest]);
+  mockLinearSequence([assertRequest], opts);
 }
 
 function mockLinearSequence(
   assertions: Array<
     (body: { query: string; variables?: Record<string, unknown> }) => unknown
   >,
+  opts: MockOpts = {},
 ) {
   let i = 0;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     assert.equal(String(input), "https://api.linear.app/graphql");
     assert.equal(init?.method, "POST");
-    assert.equal(
-      init?.headers?.["Authorization" as keyof HeadersInit],
-      "lin_test",
+    assert.match(
+      String(init?.headers?.["Authorization" as keyof HeadersInit]),
+      /^lin_/,
     );
 
     const body = JSON.parse(String(init?.body)) as {
       query: string;
       variables?: Record<string, unknown>;
     };
+    if (opts.autoResolveLabels !== false && DIRECTORY_QUERY.test(body.query)) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            issueLabels: {
+              nodes: ["label-allowed", "label-other"].map((name) => ({
+                id: name,
+                name,
+              })),
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
     const assertRequest = assertions[i++];
     assert.ok(assertRequest, `unexpected Linear request ${i}: ${body.query}`);
     const data = assertRequest(body);
@@ -451,7 +481,8 @@ describe("linear plugin custom view actions", () => {
 });
 
 describe("linear plugin scoped issue access", () => {
-  const scopedCtx = () => ctx({ scopeLabelIds: "label-allowed" });
+  const scopedCtx = () =>
+    ctx({ apiKey: "lin_scoped", scopeLabelIds: "label-allowed" });
 
   it("auto-applies configured scope labels on issue.create", async () => {
     const action = getAction(makeLinear(), "issue.create");
@@ -568,7 +599,6 @@ describe("linear plugin scoped issue access", () => {
     for (const name of [
       "project.list",
       "project.get",
-      "user.list",
       "org.get",
       "webhook.list",
     ] as const) {
@@ -578,6 +608,173 @@ describe("linear plugin scoped issue access", () => {
         /not available to scoped Linear connections/,
       );
     }
+  });
+
+  // SHFT-1644: the scope restricts issue *content*. Blocking cycles and
+  // users left a scoped agent unable to answer "what is assigned to me this
+  // cycle" at all, so it bypassed the plugin and called Linear directly.
+  it("keeps cycle and user reads available under scoped config", async () => {
+    const reads = [
+      ["cycle.list", {}, "cycles", { nodes: [], pageInfo: {} }],
+      ["cycle.get", { id: "cycle-1" }, "cycle", { id: "cycle-1" }],
+      ["user.list", {}, "users", { nodes: [], pageInfo: {} }],
+      ["user.get", { id: "me" }, "user", { id: "user-1" }],
+    ] as const;
+
+    for (const [name, input, rootField, payload] of reads) {
+      const action = getAction(makeLinear(), name);
+      mockLinear((body) => {
+        assert.match(body.query, new RegExp(`${rootField}\\(`));
+        return { [rootField]: payload };
+      });
+      await action.execute(input, scopedCtx());
+    }
+  });
+
+  it("still blocks cycle and user writes under scoped config", async () => {
+    for (const [name, input] of [
+      ["cycle.archive", { id: "cycle-1" }],
+      ["team.cyclesDeleteAll", { teamId: "team-1" }],
+      ["user.update", { id: "me", name: "x" }],
+    ] as const) {
+      const action = getAction(makeLinear(), name);
+      await assert.rejects(
+        action.execute(input, scopedCtx()),
+        /not available to scoped Linear connections/,
+      );
+    }
+  });
+
+  // SHFT-1644: a scope value that is not a UUID (e.g. `requester:yosi`) made
+  // Linear reject every issue query with "each value in in must be a UUID".
+  // Names must resolve to ids, and an unknown one must say so.
+  it("resolves configured label names to UUIDs, once per connection", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const LABEL_ID = "e9fc5d53-a992-4952-9607-fa49ef892689";
+
+    mockLinearSequence(
+      [
+        (body) => {
+          assert.match(body.query, /issueLabels\(first: 250/);
+          return {
+            issueLabels: {
+              nodes: [{ id: LABEL_ID, name: "requester:yosi" }],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          };
+        },
+        (body) => {
+          assert.match(body.query, /issues\(/);
+          assert.deepEqual(body.variables?.filter, {
+            labels: { id: { in: [LABEL_ID] } },
+          });
+          return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+        },
+        (body) => {
+          // second call reuses the cached directory: no lookup request
+          assert.match(body.query, /issues\(/);
+          assert.deepEqual(body.variables?.filter, {
+            labels: { id: { in: [LABEL_ID] } },
+          });
+          return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+        },
+      ],
+      { autoResolveLabels: false },
+    );
+
+    const scoped = ctx({
+      apiKey: "lin_resolve",
+      scopeLabelIds: "requester:yosi",
+    });
+    await action.execute({}, scoped);
+    await action.execute({}, scoped);
+  });
+
+  it("fails with an actionable message when the scope value matches nothing", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const empty = (body: { query: string }) => {
+      assert.match(body.query, /issueLabels\(first: 250/);
+      return {
+        issueLabels: {
+          nodes: [],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      };
+    };
+
+    // The miss triggers one cache-bypassing re-read before giving up.
+    mockLinearSequence([empty, empty], { autoResolveLabels: false });
+
+    await assert.rejects(
+      action.execute(
+        {},
+        ctx({ apiKey: "lin_unknown", scopeLabelIds: "requester:yosi" }),
+      ),
+      /neither a label UUID nor the name of a label/,
+    );
+  });
+
+  // A label created after the directory was first read must not stay
+  // unresolvable for the lifetime of the process.
+  it("re-reads the directory when a name is missing from the cache", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const LABEL_ID = "7c1d2a18-0a2c-4d31-9c2e-7f0f3b0c55aa";
+    const scoped = ctx({ apiKey: "lin_late", scopeLabelIds: "shipped-later" });
+
+    mockLinearSequence(
+      [
+        // first read: the label does not exist yet (cached)
+        () => ({
+          issueLabels: {
+            nodes: [],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+        // forced re-read after the miss: still absent, so this call fails
+        () => ({
+          issueLabels: {
+            nodes: [],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+        // the label now exists; the next attempt re-reads and finds it
+        () => ({
+          issueLabels: {
+            nodes: [{ id: LABEL_ID, name: "shipped-later" }],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+        (body) => {
+          assert.match(body.query, /issues\(/);
+          assert.deepEqual(body.variables?.filter, {
+            labels: { id: { in: [LABEL_ID] } },
+          });
+          return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+        },
+      ],
+      { autoResolveLabels: false },
+    );
+
+    await assert.rejects(
+      action.execute({}, scoped),
+      /neither a label UUID nor the name of a label/,
+    );
+    await action.execute({}, scoped);
+  });
+
+  it("skips the lookup entirely when every scope value is a UUID", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const LABEL_ID = "e9fc5d53-a992-4952-9607-fa49ef892689";
+
+    mockLinear((body) => {
+      assert.match(body.query, /issues\(/);
+      assert.deepEqual(body.variables?.filter, {
+        labels: { id: { in: [LABEL_ID] } },
+      });
+      return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+    });
+
+    await action.execute({}, ctx({ scopeLabelIds: LABEL_ID }));
   });
 
   it("injects the scope label filter on issue.search with caller filters", async () => {

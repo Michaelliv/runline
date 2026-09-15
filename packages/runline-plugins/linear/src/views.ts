@@ -51,11 +51,11 @@ export function registerViewActions(rl: RunlinePluginAPI) {
           viewId: string;
           includeSubTeams?: boolean;
         };
+        if (connectionField !== "issues") requireUnscoped(ctx, name);
         const scopedOpts =
           connectionField === "issues"
-            ? { ...opts, filter: mergeIssueScopeFilter(ctx, opts.filter) }
+            ? { ...opts, filter: await mergeIssueScopeFilter(ctx, opts.filter) }
             : opts;
-        if (connectionField !== "issues") requireUnscoped(ctx, name);
         const { argsDecl, argsCall, vars } = buildConnArgs(
           scopedOpts,
           filterTypeName,

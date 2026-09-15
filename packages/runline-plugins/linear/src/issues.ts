@@ -137,7 +137,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const fields = { ...(input as Record<string, unknown>) };
-      fields.labelIds = ensureScopeLabelsOnCreateOrReplace(
+      fields.labelIds = await ensureScopeLabelsOnCreateOrReplace(
         ctx,
         fields.labelIds,
       );
@@ -166,7 +166,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         { id: (input as { issueId: string }).issueId },
       );
       const issue = data.issue;
-      if (!issueHasScope(ctx, issue))
+      if (!(await issueHasScope(ctx, issue)))
         throw new Error(
           "Linear issue is not available to this scoped connection",
         );
@@ -199,7 +199,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const merged: Record<string, unknown> = { ...(opts.filter ?? {}) };
       if (opts.teamId) merged.team = { id: { eq: opts.teamId } };
       if (opts.assigneeId) merged.assignee = { id: { eq: opts.assigneeId } };
-      const filter = mergeIssueScopeFilter(
+      const filter = await mergeIssueScopeFilter(
         ctx,
         Object.keys(merged).length > 0 ? merged : undefined,
       );
@@ -331,9 +331,9 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const { issueId, ...fields } = input as Record<string, unknown>;
       await assertIssueInScope(ctx, String(issueId));
       if (fields.removedLabelIds)
-        forbidScopeLabelRemoval(ctx, fields.removedLabelIds);
+        await forbidScopeLabelRemoval(ctx, fields.removedLabelIds);
       if (fields.labelIds)
-        fields.labelIds = ensureScopeLabelsOnCreateOrReplace(
+        fields.labelIds = await ensureScopeLabelsOnCreateOrReplace(
           ctx,
           fields.labelIds,
         );
@@ -454,10 +454,10 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
           term: opts.term,
           first: opts.limit ?? 50,
           filter:
-            mergeIssueScopeFilter(
+            (await mergeIssueScopeFilter(
               ctx,
               opts.filter as Record<string, unknown> | undefined,
-            ) ?? null,
+            )) ?? null,
           includeComments: opts.includeComments ?? null,
           includeArchived: opts.includeArchived ?? null,
           teamId: opts.teamId ?? null,
@@ -505,7 +505,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         labelId: string;
       };
       await assertIssueInScope(ctx, issueId);
-      forbidScopeLabelRemoval(ctx, labelId);
+      await forbidScopeLabelRemoval(ctx, labelId);
       const data = await gql(
         key(ctx),
         `mutation($id: String!, $labelId: String!) { issueRemoveLabel(id: $id, labelId: $labelId) { success } }`,

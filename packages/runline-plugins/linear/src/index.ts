@@ -27,7 +27,7 @@ export default function linear(rl: RunlinePluginAPI) {
       scopeLabelIds: t.Optional(
         t.String({
           description:
-            "Comma-separated Linear issue label IDs. When set, issue/comment/attachment access is restricted to issues with one of these labels.",
+            "Comma-separated Linear issue label UUIDs (label names also accepted and resolved). When set, issue/comment/attachment access is restricted to issues with one of these labels; workspace metadata such as teams, states, labels, cycles and users stays readable.",
           env: "LINEAR_SCOPE_LABEL_IDS",
         }),
       ),

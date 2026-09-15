@@ -29,7 +29,11 @@ export function key(ctx: Ctx) {
   return ctx.connection.config.apiKey as string;
 }
 
-export function scopeLabelIds(ctx: Ctx): string[] {
+/**
+ * The configured scope values, verbatim. Each is either a label UUID or a
+ * label name — `resolveScopeLabelIds` turns the latter into the former.
+ */
+export function scopeLabelValues(ctx: Ctx): string[] {
   const raw = ctx.connection.config.scopeLabelIds;
   if (Array.isArray(raw))
     return raw
@@ -43,23 +47,103 @@ export function scopeLabelIds(ctx: Ctx): string[] {
     .filter(Boolean);
 }
 
-export function isScoped(ctx: Ctx): boolean {
-  return scopeLabelIds(ctx).length > 0;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Label name → id, per API key. Linear rejects a non-UUID in
+ * `labels: { id: { in: [...] } }` with "each value in in must be a UUID",
+ * so a human-written scope value like `requester:yosi` used to break every
+ * issue query (SHFT-1644). Names are resolved once and cached.
+ */
+const labelDirectories = new Map<string, Promise<Map<string, string>>>();
+
+async function fetchLabelDirectory(
+  apiKey: string,
+): Promise<Map<string, string>> {
+  const byName = new Map<string, string>();
+  let after: string | null = null;
+  for (;;) {
+    const data: Record<string, unknown> = await gql(
+      apiKey,
+      `query($after: String) { issueLabels(first: 250, after: $after) { nodes { id name } pageInfo { hasNextPage endCursor } } }`,
+      { after },
+    );
+    const conn = data.issueLabels as Record<string, unknown> | undefined;
+    for (const node of (conn?.nodes as Array<Record<string, unknown>>) ?? []) {
+      byName.set(String(node.name).toLowerCase(), String(node.id));
+    }
+    const pageInfo = conn?.pageInfo as Record<string, unknown> | undefined;
+    if (!pageInfo?.hasNextPage) return byName;
+    const next = String(pageInfo.endCursor);
+    // A cursor that does not advance would page forever; stop instead.
+    if (next === after) return byName;
+    after = next;
+  }
 }
 
-export function mergeIssueScopeFilter(
+function labelDirectory(
+  ctx: Ctx,
+  { refresh = false }: { refresh?: boolean } = {},
+): Promise<Map<string, string>> {
+  const apiKey = key(ctx);
+  const cached = refresh ? undefined : labelDirectories.get(apiKey);
+  if (cached) return cached;
+  const pending = fetchLabelDirectory(apiKey);
+  labelDirectories.set(apiKey, pending);
+  // A failed lookup must not be cached as the answer for this key.
+  pending.catch(() => {
+    if (labelDirectories.get(apiKey) === pending)
+      labelDirectories.delete(apiKey);
+  });
+  return pending;
+}
+
+/** Scope label UUIDs, resolving any configured label *names* to their ids. */
+export async function resolveScopeLabelIds(ctx: Ctx): Promise<string[]> {
+  const values = scopeLabelValues(ctx);
+  if (values.length === 0) return [];
+  if (values.every((v) => UUID_RE.test(v))) return values;
+
+  let byName = await labelDirectory(ctx);
+  // A label created after the directory was cached would otherwise stay
+  // unresolvable for the lifetime of the process: re-read once before
+  // declaring a name unknown.
+  if (values.some((v) => !UUID_RE.test(v) && !byName.has(v.toLowerCase())))
+    byName = await labelDirectory(ctx, { refresh: true });
+
+  return values.map((value) => {
+    if (UUID_RE.test(value)) return value;
+    const id = byName.get(value.toLowerCase());
+    if (!id)
+      throw new Error(
+        `Linear scope label "${value}" is neither a label UUID nor the name of a label in this workspace. ` +
+          `Set scopeLabelIds (LINEAR_SCOPE_LABEL_IDS) to label UUIDs or exact label names, or unset it for full access.`,
+      );
+    return id;
+  });
+}
+
+export function isScoped(ctx: Ctx): boolean {
+  return scopeLabelValues(ctx).length > 0;
+}
+
+export async function mergeIssueScopeFilter(
   ctx: Ctx,
   filter?: Record<string, unknown>,
-): Record<string, unknown> | undefined {
-  const ids = scopeLabelIds(ctx);
+): Promise<Record<string, unknown> | undefined> {
+  const ids = await resolveScopeLabelIds(ctx);
   if (ids.length === 0) return filter;
   const scopeFilter = { labels: { id: { in: ids } } };
   if (!filter || Object.keys(filter).length === 0) return scopeFilter;
   return { and: [filter, scopeFilter] };
 }
 
-export function issueHasScope(ctx: Ctx, issue: unknown): boolean {
-  const ids = new Set(scopeLabelIds(ctx));
+export async function issueHasScope(
+  ctx: Ctx,
+  issue: unknown,
+): Promise<boolean> {
+  const ids = new Set(await resolveScopeLabelIds(ctx));
   if (ids.size === 0) return true;
   const labels = (
     (issue as Record<string, unknown> | null)?.labels as
@@ -92,7 +176,7 @@ export async function assertIssueInScope(
 ): Promise<Record<string, unknown> | null> {
   if (!isScoped(ctx)) return null;
   const issue = await getIssueForScope(ctx, issueId);
-  if (!issue || !issueHasScope(ctx, issue))
+  if (!issue || !(await issueHasScope(ctx, issue)))
     throw new Error("Linear issue is not available to this scoped connection");
   return issue;
 }
@@ -108,7 +192,7 @@ export async function assertCommentInScope(
     { id: commentId },
   );
   const issue = (data.comment as Record<string, unknown> | null)?.issue;
-  if (!issue || !issueHasScope(ctx, issue))
+  if (!issue || !(await issueHasScope(ctx, issue)))
     throw new Error(
       "Linear comment is not available to this scoped connection",
     );
@@ -125,14 +209,17 @@ export async function assertAttachmentInScope(
     { id: attachmentId },
   );
   const issue = (data.attachment as Record<string, unknown> | null)?.issue;
-  if (!issue || !issueHasScope(ctx, issue))
+  if (!issue || !(await issueHasScope(ctx, issue)))
     throw new Error(
       "Linear attachment is not available to this scoped connection",
     );
 }
 
-export function forbidScopeLabelRemoval(ctx: Ctx, labelIds: unknown): void {
-  const scoped = new Set(scopeLabelIds(ctx));
+export async function forbidScopeLabelRemoval(
+  ctx: Ctx,
+  labelIds: unknown,
+): Promise<void> {
+  const scoped = new Set(await resolveScopeLabelIds(ctx));
   if (scoped.size === 0) return;
   const ids = Array.isArray(labelIds)
     ? labelIds.map(String)
@@ -142,11 +229,11 @@ export function forbidScopeLabelRemoval(ctx: Ctx, labelIds: unknown): void {
   }
 }
 
-export function ensureScopeLabelsOnCreateOrReplace(
+export async function ensureScopeLabelsOnCreateOrReplace(
   ctx: Ctx,
   labelIds: unknown,
-): unknown {
-  const scoped = scopeLabelIds(ctx);
+): Promise<unknown> {
+  const scoped = await resolveScopeLabelIds(ctx);
   if (scoped.length === 0) return labelIds;
   const ids = new Set(Array.isArray(labelIds) ? labelIds.map(String) : []);
   for (const id of scoped) ids.add(id);
@@ -296,13 +383,19 @@ export function bindGetAction(rl: RunlinePluginAPI) {
   return (...args: GetActionArgs) => registerGetAction(rl, ...args);
 }
 
+/**
+ * Root fields a scoped connection may not read.
+ *
+ * The scope restricts *issue content*, so workspace metadata an agent needs
+ * to route and report on its own issues — cycles, users (alongside teams,
+ * states and labels, which were never blocked) — stays readable. Fields that
+ * would leak other people's content or secrets stay blocked.
+ */
 const SCOPED_BLOCKED_ROOT_FIELDS = new Set([
   "attachments",
   "comments",
   "customView",
   "customViews",
-  "cycle",
-  "cycles",
   "initiative",
   "initiatives",
   "project",
@@ -310,8 +403,6 @@ const SCOPED_BLOCKED_ROOT_FIELDS = new Set([
   "projectMilestone",
   "projectMilestones",
   "projectUpdates",
-  "user",
-  "users",
   "webhook",
   "webhooks",
 ]);
