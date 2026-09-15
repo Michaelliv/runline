@@ -15,6 +15,7 @@ import {
   mergeIssueScopeFilter,
   PROJECT_FIELDS,
   requireUnscoped,
+  withScopedNote,
 } from "./shared.js";
 
 const ISSUE_FILTER_DESCRIPTION =
@@ -34,7 +35,10 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   ) {
     rl.registerAction(name, {
       access: "read",
-      description,
+      description:
+        connectionField === "issues"
+          ? description
+          : withScopedNote(description),
       inputSchema: t.Object({
         viewId: t.String({ description: "The custom view ID or slug" }),
         ...LIST_INPUT_SCHEMA,
@@ -100,8 +104,9 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   );
   rl.registerAction("view.create", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Create a custom view. Set filterData for issue views; projectFilterData, initiativeFilterData, or feedItemFilterData for other view types. Read matches back with view.issues/projects/initiatives/updates.",
+    ),
     inputSchema: t.Object({
       name: t.String({ description: "The name of the custom view" }),
       description: t.Optional(
@@ -165,8 +170,9 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("view.update", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Update a custom view. All fields optional; only provided fields are updated.",
+    ),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the custom view to update",
@@ -230,7 +236,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("view.delete", {
     access: "write",
-    description: "Delete a custom view.",
+    description: withScopedNote("Delete a custom view."),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the custom view to delete",

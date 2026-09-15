@@ -7,6 +7,7 @@ import {
   key,
   requireUnscoped,
   USER_FIELDS,
+  withScopedNote,
 } from "./shared.js";
 
 export function registerUserActions(rl: RunlinePluginAPI) {
@@ -28,7 +29,8 @@ export function registerUserActions(rl: RunlinePluginAPI) {
   );
   rl.registerAction("user.me", {
     access: "read",
-    description: "Get the authenticated user.",
+    description:
+      "Get the authenticated user. Use this to resolve 'me' before filtering issues by assignee.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
       const data = await gql(key(ctx), `query { viewer { ${USER_FIELDS} } }`);
@@ -37,7 +39,9 @@ export function registerUserActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("user.update", {
     access: "write",
-    description: "Update a user. Use id='me' to update the authenticated user.",
+    description: withScopedNote(
+      "Update a user. Use id='me' to update the authenticated user.",
+    ),
     inputSchema: t.Object({
       id: t.String({
         description:

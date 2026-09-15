@@ -7,6 +7,7 @@ import {
   INITIATIVE_FIELDS,
   key,
   requireUnscoped,
+  withScopedNote,
 } from "./shared.js";
 
 export function registerInitiativeActions(rl: RunlinePluginAPI) {
@@ -28,7 +29,9 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   );
   rl.registerAction("initiative.create", {
     access: "write",
-    description: "Create an initiative. Status: Planned | Active | Completed.",
+    description: withScopedNote(
+      "Create an initiative. Status: Planned | Active | Completed.",
+    ),
     inputSchema: t.Object({
       name: t.String({ description: "The name of the initiative" }),
       description: t.Optional(
@@ -89,7 +92,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("initiative.update", {
     access: "write",
-    description: "Update an initiative.",
+    description: withScopedNote("Update an initiative."),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the initiative to update",
@@ -154,7 +157,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("initiative.delete", {
     access: "write",
-    description: "Trash an initiative.",
+    description: withScopedNote("Trash an initiative."),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the initiative to delete",
@@ -172,8 +175,9 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("initiative.addProject", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Associate a project with an initiative. Use this action for project-to-initiative linking; project.update does not accept initiativeId. Verify with initiative.get or the returned initiative.projects list.",
+    ),
     inputSchema: t.Object({
       initiativeId: t.String({
         description: "The identifier of the initiative",
@@ -204,8 +208,9 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("initiative.removeProject", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Remove a project from an initiative. Pass the link id returned by initiative.addProject, then verify with initiative.get.",
+    ),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the initiativeToProject to delete",

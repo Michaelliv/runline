@@ -1,11 +1,17 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { gql, key, ORG_FIELDS, requireUnscoped } from "./shared.js";
+import {
+  gql,
+  key,
+  ORG_FIELDS,
+  requireUnscoped,
+  withScopedNote,
+} from "./shared.js";
 
 export function registerOrganizationActions(rl: RunlinePluginAPI) {
   rl.registerAction("org.get", {
     access: "read",
-    description: "Get the authenticated workspace.",
+    description: withScopedNote("Get the authenticated workspace."),
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
       requireUnscoped(ctx, "org.get");

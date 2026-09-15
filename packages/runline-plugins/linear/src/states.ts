@@ -7,6 +7,7 @@ import {
   key,
   requireUnscoped,
   STATE_FIELDS,
+  withScopedNote,
 } from "./shared.js";
 
 export function registerStateActions(rl: RunlinePluginAPI) {
@@ -28,7 +29,7 @@ export function registerStateActions(rl: RunlinePluginAPI) {
   );
   rl.registerAction("state.create", {
     access: "write",
-    description: "Create a workflow state in a team.",
+    description: withScopedNote("Create a workflow state in a team."),
     inputSchema: t.Object({
       teamId: t.String({ description: "The team associated with the state" }),
       name: t.String({ description: "The name of the state" }),
@@ -65,8 +66,9 @@ export function registerStateActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("state.update", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Update a workflow state. Type cannot be changed after creation.",
+    ),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the state to update" }),
       name: t.Optional(t.String({ description: "The name of the state" })),

@@ -9,6 +9,7 @@ import {
   PROJECT_FIELDS,
   PROJECT_UPDATE_FIELDS,
   requireUnscoped,
+  withScopedNote,
 } from "./shared.js";
 
 export function registerProjectActions(rl: RunlinePluginAPI) {
@@ -30,7 +31,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   );
   rl.registerAction("project.create", {
     access: "write",
-    description: "Create a project. teamIds is required.",
+    description: withScopedNote("Create a project. teamIds is required."),
     inputSchema: t.Object({
       name: t.String({ description: "The name of the project" }),
       teamIds: t.Array(t.Unknown(), {
@@ -143,7 +144,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("project.update", {
     access: "write",
-    description: "Update a project.",
+    description: withScopedNote("Update a project."),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the project to update (UUID or slug)",
@@ -245,8 +246,9 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("project.delete", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Trash (soft-delete) a project. Restorable via project.unarchive.",
+    ),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the project to delete" }),
     }),
@@ -262,7 +264,9 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("project.unarchive", {
     access: "write",
-    description: "Restore a previously trashed or archived project.",
+    description: withScopedNote(
+      "Restore a previously trashed or archived project.",
+    ),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the project to restore (UUID or slug)",
@@ -280,7 +284,9 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("project.search", {
     access: "read",
-    description: "Search projects by text. Rate-limited to 30 req/min.",
+    description: withScopedNote(
+      "Search projects by text. Rate-limited to 30 req/min.",
+    ),
     inputSchema: t.Object({
       term: t.String({ description: "Search string to look for" }),
       limit: t.Optional(
@@ -336,7 +342,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   );
   rl.registerAction("milestone.create", {
     access: "write",
-    description: "Create a project milestone.",
+    description: withScopedNote("Create a project milestone."),
     inputSchema: t.Object({
       projectId: t.String({
         description: "Related project for the project milestone",
@@ -380,7 +386,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("milestone.update", {
     access: "write",
-    description: "Update a project milestone.",
+    description: withScopedNote("Update a project milestone."),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the project milestone to update",
@@ -426,7 +432,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("milestone.delete", {
     access: "write",
-    description: "Delete a project milestone.",
+    description: withScopedNote("Delete a project milestone."),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the project milestone to delete",
@@ -454,7 +460,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   );
   rl.registerAction("projectUpdate.create", {
     access: "write",
-    description: "Post a status update on a project.",
+    description: withScopedNote("Post a status update on a project."),
     inputSchema: t.Object({
       projectId: t.String({
         description: "The project to associate the project update with",
@@ -496,7 +502,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("projectUpdate.update", {
     access: "write",
-    description: "Update a project status update.",
+    description: withScopedNote("Update a project status update."),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the project update to update",
@@ -533,7 +539,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("projectUpdate.archive", {
     access: "write",
-    description: "Archive a project status update.",
+    description: withScopedNote("Archive a project status update."),
     inputSchema: t.Object({
       id: t.String({
         description: "The identifier of the project update to archive",

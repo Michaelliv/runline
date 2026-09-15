@@ -7,6 +7,7 @@ import {
   key,
   LABEL_FIELDS,
   requireUnscoped,
+  withScopedNote,
 } from "./shared.js";
 
 export function registerLabelActions(rl: RunlinePluginAPI) {
@@ -23,7 +24,9 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
   getAction("label.get", "Get a label by ID.", "issueLabel", LABEL_FIELDS);
   rl.registerAction("label.create", {
     access: "write",
-    description: "Create a label. Omit teamId for a workspace-level label.",
+    description: withScopedNote(
+      "Create a label. Omit teamId for a workspace-level label.",
+    ),
     inputSchema: t.Object({
       name: t.String({ description: "The name of the label" }),
       teamId: t.Optional(
@@ -78,7 +81,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("label.update", {
     access: "write",
-    description: "Update a label.",
+    description: withScopedNote("Update a label."),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the label to update" }),
       name: t.Optional(t.String({ description: "The name of the label" })),
@@ -123,7 +126,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("label.delete", {
     access: "write",
-    description: "Delete a label.",
+    description: withScopedNote("Delete a label."),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the label to delete" }),
     }),
@@ -139,8 +142,9 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("label.retire", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Retire a label. Retired labels remain visible but cannot be applied to new issues.",
+    ),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the label to retire" }),
     }),
@@ -156,7 +160,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("label.restore", {
     access: "write",
-    description: "Restore a previously retired label.",
+    description: withScopedNote("Restore a previously retired label."),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the label to restore" }),
     }),

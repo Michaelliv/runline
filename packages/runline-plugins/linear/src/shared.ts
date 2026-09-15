@@ -54,7 +54,8 @@ const UUID_RE =
  * Label name → id, per API key. Linear rejects a non-UUID in
  * `labels: { id: { in: [...] } }` with "each value in in must be a UUID",
  * so a human-written scope value like `requester:yosi` used to break every
- * issue query (SHFT-1644). Names are resolved once and cached.
+ * issue query (SHFT-1644). The directory is fetched once per key and
+ * re-read on a miss, so a label created later still resolves.
  */
 const labelDirectories = new Map<string, Promise<Map<string, string>>>();
 
@@ -238,6 +239,18 @@ export async function ensureScopeLabelsOnCreateOrReplace(
   const ids = new Set(Array.isArray(labelIds) ? labelIds.map(String) : []);
   for (const id of scoped) ids.add(id);
   return [...ids];
+}
+
+/**
+ * Appended to the description of every action a scoped connection cannot
+ * use. Descriptions are static, but they are also all an agent sees when it
+ * picks an action (`actions.find`, the Vex catalog): without this, a scoped
+ * agent discovers the action, calls it, and only then learns it is blocked.
+ */
+export const SCOPED_UNAVAILABLE_NOTE = "Unavailable on scoped connections.";
+
+export function withScopedNote(description: string): string {
+  return `${description} ${SCOPED_UNAVAILABLE_NOTE}`;
 }
 
 export function requireUnscoped(ctx: Ctx, action: string): void {
@@ -425,7 +438,9 @@ export function registerListAction(
 ) {
   rl.registerAction(name, {
     access: "read",
-    description,
+    description: SCOPED_BLOCKED_ROOT_FIELDS.has(rootField)
+      ? withScopedNote(description)
+      : description,
     inputSchema: t.Object(LIST_INPUT_SCHEMA),
     async execute(input, ctx) {
       requireRootFieldAvailable(ctx, name, rootField);
@@ -451,7 +466,9 @@ export function registerGetAction(
 ) {
   rl.registerAction(name, {
     access: "read",
-    description,
+    description: SCOPED_BLOCKED_ROOT_FIELDS.has(rootField)
+      ? withScopedNote(description)
+      : description,
     inputSchema: t.Object({
       id: t.String({ description: "Identifier or slug" }),
     }),

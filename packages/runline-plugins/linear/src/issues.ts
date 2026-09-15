@@ -152,7 +152,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
 
   rl.registerAction("issue.get", {
     access: "read",
-    description: "Get an issue by ID or identifier (e.g. 'THE-154')",
+    description: "Get an issue by ID or identifier (e.g. 'THE-154').",
     inputSchema: t.Object({
       issueId: t.String({
         description:
@@ -177,7 +177,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.list", {
     access: "read",
     description:
-      "List issues. Pass `filter` for state/label/project/etc. Default hides archived.",
+      "List issues. teamId and assigneeId are convenience filters; use `filter` for anything else - assignee { assignee: { isMe: { eq: true } } }, cycle { cycle: { id: { eq: 'cycle-id' } } }, open work { state: { type: { nin: ['completed','canceled'] } } }. Default hides archived.",
     inputSchema: t.Object(
       {
         ...LIST_INPUT_SCHEMA,

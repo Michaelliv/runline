@@ -222,6 +222,60 @@ describe("linear plugin action surface", () => {
   });
 });
 
+// The description is all an agent sees when it picks an action (actions.find,
+// the Vex catalog). If a scoped connection cannot run an action, the
+// description has to say so - otherwise the agent discovers it, calls it, and
+// burns a turn learning it was blocked.
+describe("linear scoped-availability notes match behaviour", () => {
+  const NOTE = "Unavailable on scoped connections.";
+  const SENTINEL = "linear-test: reached the network";
+
+  it("carries the note on exactly the actions a scoped connection cannot run", async () => {
+    const plugin = makeLinear();
+    // Any action that gets past the scope gate hits fetch; stop it there.
+    globalThis.fetch = (async () => {
+      throw new Error(SENTINEL);
+    }) as typeof fetch;
+
+    const scoped = ctx({
+      apiKey: "lin_notes",
+      scopeLabelIds: "11111111-1111-4111-8111-111111111111",
+    });
+    const missingNote: string[] = [];
+    const staleNote: string[] = [];
+
+    for (const action of plugin.actions) {
+      let isBlocked = false;
+      try {
+        await action.execute(
+          { id: "x", teamId: "x", issueId: "x", viewId: "x" },
+          scoped,
+        );
+      } catch (err) {
+        isBlocked = String(err).includes(
+          "not available to scoped Linear connections",
+        );
+        if (!isBlocked && !String(err).includes(SENTINEL))
+          throw new Error(`${action.name}: unexpected failure - ${err}`);
+      }
+      const hasNote = String(action.description).includes(NOTE);
+      if (isBlocked && !hasNote) missingNote.push(action.name);
+      if (!isBlocked && hasNote) staleNote.push(action.name);
+    }
+
+    assert.deepEqual(
+      missingNote,
+      [],
+      "blocked under scope but the description does not say so",
+    );
+    assert.deepEqual(
+      staleNote,
+      [],
+      "description claims blocked but the action runs",
+    );
+  });
+});
+
 describe("linear plugin comment actions", () => {
   it("comment.create calls Linear's commentCreate mutation", async () => {
     const action = getAction(makeLinear(), "comment.create");
@@ -619,6 +673,12 @@ describe("linear plugin scoped issue access", () => {
       ["cycle.get", { id: "cycle-1" }, "cycle", { id: "cycle-1" }],
       ["user.list", {}, "users", { nodes: [], pageInfo: {} }],
       ["user.get", { id: "me" }, "user", { id: "user-1" }],
+      [
+        "team.members",
+        { teamId: "team-1" },
+        "team",
+        { members: { nodes: [] } },
+      ],
     ] as const;
 
     for (const [name, input, rootField, payload] of reads) {

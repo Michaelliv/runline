@@ -7,6 +7,7 @@ import {
   gql,
   key,
   requireUnscoped,
+  withScopedNote,
 } from "./shared.js";
 
 export function registerCycleActions(rl: RunlinePluginAPI) {
@@ -15,7 +16,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
 
   listAction(
     "cycle.list",
-    "List cycles. Use filter for isActive/isNext/isPrevious.",
+    "List cycles. The current cycle is filter { isActive: { eq: true } }; isNext and isPrevious work the same way. Combine with issue.list to report on a cycle's work.",
     "cycles",
     "CycleFilter",
     CYCLE_FIELDS,
@@ -23,7 +24,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
   getAction("cycle.get", "Get a cycle by ID.", "cycle", CYCLE_FIELDS);
   rl.registerAction("cycle.create", {
     access: "write",
-    description: "Create a cycle for a team.",
+    description: withScopedNote("Create a cycle for a team."),
     inputSchema: t.Object({
       teamId: t.String({ description: "The team to associate the cycle with" }),
       startsAt: t.String({
@@ -63,7 +64,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("cycle.update", {
     access: "write",
-    description: "Update a cycle.",
+    description: withScopedNote("Update a cycle."),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the cycle to update" }),
       name: t.Optional(
@@ -105,8 +106,9 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
   // they are not archived with it.
   rl.registerAction("cycle.archive", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Archive one cycle. Issues assigned to it are unlinked from the cycle first, not archived. This is the per-cycle removal; Linear has no single-cycle delete.",
+    ),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the cycle to archive" }),
     }),
@@ -132,8 +134,9 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
   // team, and the description leads with the blast radius.
   rl.registerAction("team.cyclesDeleteAll", {
     access: "write",
-    description:
+    description: withScopedNote(
       "DESTRUCTIVE: delete ALL cycle data for a team and disable the cycles feature. Removes every cycle and its issue associations, not just one. To remove a single cycle use cycle.archive.",
+    ),
     inputSchema: t.Object({
       teamId: t.String({
         description:

@@ -8,6 +8,7 @@ import {
   requireUnscoped,
   TEAM_FIELDS,
   USER_FIELDS,
+  withScopedNote,
 } from "./shared.js";
 
 export function registerTeamActions(rl: RunlinePluginAPI) {
@@ -24,7 +25,9 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
   getAction("team.get", "Get a team by ID or key.", "team", TEAM_FIELDS);
   rl.registerAction("team.create", {
     access: "write",
-    description: "Create a team. Most settings have sensible defaults.",
+    description: withScopedNote(
+      "Create a team. Most settings have sensible defaults.",
+    ),
     inputSchema: t.Object({
       name: t.String({ description: "The name of the team" }),
       key: t.Optional(
@@ -109,8 +112,9 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("team.update", {
     access: "write",
-    description:
+    description: withScopedNote(
       "Update a team. Requires team owner or workspace admin permissions.",
+    ),
     inputSchema: t.Object({
       id: t.String({ description: "The identifier of the team to update" }),
       name: t.Optional(t.String({ description: "The name of the team" })),
@@ -173,7 +177,8 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
   });
   rl.registerAction("team.members", {
     access: "read",
-    description: "List members of a team.",
+    description:
+      "List members of a team. Same people surface as user.list, narrowed to one team.",
     inputSchema: t.Object({
       teamId: t.String({ description: "The identifier of the team" }),
       limit: t.Optional(
@@ -181,7 +186,8 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
       ),
     }),
     async execute(input, ctx) {
-      requireUnscoped(ctx, "team.members");
+      // Team membership is workspace metadata, like user.list: readable
+      // under a scoped connection (SHFT-1644).
       const { teamId, limit } = input as { teamId: string; limit?: number };
       const data = await gql(
         key(ctx),

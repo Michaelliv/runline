@@ -7,13 +7,13 @@ import {
   gql,
   key,
   requireUnscoped,
+  withScopedNote,
 } from "./shared.js";
 
 export function registerAttachmentActions(rl: RunlinePluginAPI) {
   rl.registerAction("attachment.list", {
     access: "read",
-    description:
-      "List issue attachments. Disabled for scoped Linear connections.",
+    description: withScopedNote("List issue attachments."),
     inputSchema: t.Object({ limit: t.Optional(t.Number()) }),
     async execute(input, ctx) {
       requireUnscoped(ctx, "attachment.list");
