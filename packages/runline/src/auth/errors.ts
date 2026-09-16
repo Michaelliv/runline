@@ -1,8 +1,15 @@
 const messages = {
   invalid_definition: "Invalid authentication definition",
   invalid_credentials: "Missing or invalid authentication credentials",
+  request_not_allowed: "Authenticated request is outside the approved policy",
+  transport_failed:
+    "Authenticated request failed; remote outcome may be unknown",
+  response_too_large: "Authenticated response exceeds the configured limit",
+  credential_store_failed:
+    "Credential storage failed; provider outcome may be unknown",
+  binding_changed: "Credential binding identity changed",
   unsupported_operation: "Authentication operation is not supported",
-  invalid_response: "Invalid OAuth token response",
+  invalid_response: "Invalid provider response",
   request_failed: "OAuth token request failed; provider outcome may be unknown",
   provider_rejected: "OAuth provider rejected the token request",
   reconnect_required: "OAuth grant is invalid; reconnect the account",

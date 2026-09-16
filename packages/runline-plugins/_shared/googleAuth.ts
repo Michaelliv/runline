@@ -1,141 +1,164 @@
-import { createSign } from "node:crypto";
-import type { ActionContext } from "runline";
-import { coordinatedAccessToken, requestToken } from "./tokenRefresh.js";
+import {
+  type ActionContext,
+  AuthError,
+  downloadResource,
+  type HttpMethod,
+} from "runline";
+import { credentialRuntime } from "./credentialAdapter.js";
+import {
+  type GoogleAuthConfig,
+  googleCredentialType,
+  googleIdentity,
+  googleMethod,
+  googleResources,
+} from "./googleCredentials.js";
 
-const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+export type { GoogleAuthConfig } from "./googleCredentials.js";
 
-export type GoogleAuthConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
+/** Explicit storage adapter: the registry owns token protocols and renewal. */
+export function googleRuntime(
+  ctx: ActionContext,
+  pluginName: string,
+  scopes: string[],
+) {
+  const config = ctx.connection.config as GoogleAuthConfig;
+  const method = googleMethod(config);
+  const runtime = credentialRuntime(
+    ctx,
+    googleCredentialType(scopes, pluginName),
+    method,
+    (current) => {
+      const cfg = current as GoogleAuthConfig;
+      return [
+        pluginName,
+        scopes,
+        googleMethod(cfg),
+        ...(method === "serviceAccount"
+          ? [googleIdentity(cfg)]
+          : [cfg.clientId, cfg.clientSecret]),
+      ];
+    },
+  );
+  if (method === "serviceAccount")
+    runtime.binding.jwtIdentity = googleIdentity(config);
+  return runtime;
+}
 
+/** Trusted-runtime token compatibility only; resource consumers use googleResponse. */
 export async function googleAccessToken(
   ctx: ActionContext,
   pluginName: string,
   scopes: string[],
 ): Promise<string> {
-  return coordinatedAccessToken(ctx, async (current) => {
-    const cfg = current as GoogleAuthConfig;
-    return hasServiceAccountConfig(cfg)
-      ? refreshServiceAccountAccessToken(pluginName, cfg, scopes)
-      : refreshOAuthAccessToken(pluginName, cfg);
+  const { binding, transport } = googleRuntime(ctx, pluginName, scopes);
+  return transport.accessToken(binding);
+}
+
+/** Translate builtin absolute URLs at one boundary; validate the raw path before URL normalization. */
+export async function googleResponse(
+  ctx: ActionContext,
+  plugin: string,
+  scopes: string[],
+  url: string,
+  init: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string | Uint8Array;
+  } = {},
+  query?: Record<string, unknown>,
+): Promise<Response> {
+  const resources = googleResources(plugin);
+  const selected = Object.entries(resources.targets).find(([, target]) =>
+    url.startsWith(target.baseUrl),
+  );
+  if (!selected) throw new AuthError("request_not_allowed");
+  const [target, policy] = selected;
+  let path = url.slice(policy.baseUrl.length);
+  if (query) {
+    const separator = path.indexOf("?");
+    const params = new URLSearchParams(
+      separator < 0 ? "" : path.slice(separator + 1),
+    );
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null) continue;
+      params.delete(key);
+      for (const entry of Array.isArray(value) ? value : [value])
+        params.append(key, String(entry));
+    }
+    path = `${separator < 0 ? path : path.slice(0, separator)}?${params}`;
+  }
+  const { binding, transport } = googleRuntime(ctx, plugin, scopes);
+  return transport.request(binding, {
+    target,
+    path,
+    method: (init.method ?? "GET") as HttpMethod,
+    headers: init.headers,
+    body: init.body,
   });
 }
 
-function hasServiceAccountConfig(cfg: GoogleAuthConfig): boolean {
-  return (
-    !!cfg.serviceAccountJson ||
-    !!(cfg.serviceAccountEmail && cfg.serviceAccountPrivateKey)
+export async function googleJsonRequest(
+  ctx: ActionContext,
+  plugin: string,
+  scopes: string[],
+  method: string,
+  url: string,
+  body?: unknown,
+  query?: Record<string, unknown>,
+): Promise<unknown> {
+  const response = await googleResponse(
+    ctx,
+    plugin,
+    scopes,
+    url,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    query,
   );
-}
-
-async function refreshOAuthAccessToken(
-  pluginName: string,
-  cfg: GoogleAuthConfig,
-) {
-  const { clientId, clientSecret, refreshToken } = cfg;
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      `${pluginName}: missing OAuth clientId/clientSecret/refreshToken or service account credentials. Run the OAuth helper or set serviceAccountJson.`,
-    );
+  if (!response.ok)
+    throw new Error(`${plugin}: request failed (HTTP ${response.status})`);
+  if (response.status === 204) return { success: true };
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : { success: true };
+  } catch {
+    throw new AuthError("invalid_response");
   }
-
-  return requestToken(
-    { url: TOKEN_ENDPOINT, clientAuthentication: "client_secret_post" },
-    { refresh_token: refreshToken, grant_type: "refresh_token" },
-    { clientId, clientSecret },
-  );
 }
 
-async function refreshServiceAccountAccessToken(
-  pluginName: string,
-  cfg: GoogleAuthConfig,
+export async function googleProbe(
+  ctx: ActionContext,
+  plugin: string,
   scopes: string[],
 ) {
-  const serviceAccount = parseServiceAccount(pluginName, cfg);
-  const now = Math.floor(Date.now() / 1000);
-  const assertion = signJwt(
-    {
-      alg: "RS256",
-      typ: "JWT",
-    },
-    {
-      iss: serviceAccount.client_email,
-      scope: scopes.join(" "),
-      aud: TOKEN_ENDPOINT,
-      iat: now,
-      exp: now + 3600,
-      ...(cfg.serviceAccountSubject ? { sub: cfg.serviceAccountSubject } : {}),
-    },
-    serviceAccount.private_key,
-  );
-
-  return requestToken(
-    { url: TOKEN_ENDPOINT, clientAuthentication: "none" },
-    { grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion },
-  );
+  const { binding, transport } = googleRuntime(ctx, plugin, scopes);
+  return transport.probe(binding);
 }
 
-function parseServiceAccount(
-  pluginName: string,
-  cfg: GoogleAuthConfig,
-): { client_email: string; private_key: string } {
-  if (cfg.serviceAccountJson) {
-    try {
-      const parsed = JSON.parse(cfg.serviceAccountJson) as {
-        client_email?: string;
-        private_key?: string;
-      };
-      if (parsed.client_email && parsed.private_key) {
-        return {
-          client_email: parsed.client_email,
-          private_key: parsed.private_key,
-        };
-      }
-    } catch {
-      throw new Error(`${pluginName}: invalid serviceAccountJson`);
-    }
+/** Only Google-issued thumbnail hosts; never attach credentials to signed URLs. */
+export async function googleDownload(value: string): Promise<Response> {
+  let url: URL;
+  try {
+    url = new URL(value);
+    if (
+      url.port ||
+      !(
+        url.hostname === "googleusercontent.com" ||
+        url.hostname.endsWith(".googleusercontent.com")
+      )
+    )
+      throw new Error();
+  } catch {
+    throw new AuthError("request_not_allowed");
   }
-
-  if (cfg.serviceAccountEmail && cfg.serviceAccountPrivateKey) {
-    return {
-      client_email: cfg.serviceAccountEmail,
-      private_key: cfg.serviceAccountPrivateKey.replace(/\\n/g, "\n"),
-    };
-  }
-
-  throw new Error(
-    `${pluginName}: service account requires serviceAccountJson or serviceAccountEmail/serviceAccountPrivateKey`,
-  );
-}
-
-function signJwt(
-  header: Record<string, unknown>,
-  payload: Record<string, unknown>,
-  privateKey: string,
-): string {
-  const encodedHeader = base64url(JSON.stringify(header));
-  const encodedPayload = base64url(JSON.stringify(payload));
-  const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = createSign("RSA-SHA256");
-  signer.update(signingInput);
-  signer.end();
-  const signature = signer.sign(privateKey.replace(/\\n/g, "\n"));
-  return `${signingInput}.${base64url(signature)}`;
-}
-
-function base64url(input: string | Buffer): string {
-  const buf = typeof input === "string" ? Buffer.from(input, "utf-8") : input;
-  return buf
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return downloadResource(value, {
+    allowedOrigins: [url.origin],
+    fetch: globalThis.fetch,
+  });
 }

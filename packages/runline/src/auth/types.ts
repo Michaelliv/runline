@@ -6,9 +6,14 @@ export interface OAuth2Definition {
     url: string;
     parameters?: Record<string, string>;
   };
-  exchange?: OAuth2TokenEndpoint;
+  exchange?: OAuth2TokenEndpoint & {
+    /** Some providers require the host-validated state again at code exchange. */
+    sendState?: boolean;
+    requirePkce?: boolean;
+  };
   refresh?: OAuth2TokenEndpoint;
   clientCredentials?: OAuth2TokenEndpoint;
+  jwtBearer?: OAuth2TokenEndpoint;
 }
 
 /** Each operation can use a different endpoint, encoding, and client authentication. */
@@ -54,7 +59,18 @@ export interface OAuthTokens {
   metadata?: Record<string, string>;
 }
 
-export type OAuthOperation = "exchange" | "refresh" | "clientCredentials";
+/** Host-selected signing identity. Never accepted from resource/action input. */
+export interface OAuthJwtIdentity {
+  issuer: string;
+  privateKey: string;
+  subject?: string;
+}
+
+export type OAuthOperation =
+  | "exchange"
+  | "refresh"
+  | "clientCredentials"
+  | "jwtBearer";
 
 /** Protocol events report issuance, never durability. They contain no credential data. */
 export interface OAuthEvent {
@@ -88,4 +104,6 @@ export interface OAuthCodeOptions {
   code: string;
   redirectUri: string;
   codeVerifier?: string;
+  /** State already validated by the host callback lifecycle. */
+  state?: string;
 }

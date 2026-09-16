@@ -1,3 +1,4 @@
+import { createPrivateKey, sign } from "node:crypto";
 import { notifyObserver } from "../utils/observer.js";
 import { AuthError } from "./errors.js";
 import {
@@ -10,6 +11,7 @@ import type {
   OAuthApplication,
   OAuthAuthorizationOptions,
   OAuthCodeOptions,
+  OAuthJwtIdentity,
   OAuthOperation,
   OAuthRuntimeOptions,
   OAuthTokens,
@@ -21,12 +23,25 @@ function required(value: string): string {
   return value;
 }
 
+/** Shared by definition registration and both setup primitives; no truthy coercion. */
+export function validateOAuth2ExchangePolicy(
+  endpoint: OAuth2Definition["exchange"],
+): void {
+  for (const key of ["sendState", "requirePkce"] as const) {
+    if (endpoint?.[key] !== undefined && typeof endpoint[key] !== "boolean")
+      throw new AuthError("invalid_definition");
+  }
+}
+
 /** Redirect registration and state custody belong to the host's setup lifecycle. */
 export function buildOAuth2AuthorizationUrl(
   definition: OAuth2Definition,
   options: OAuthAuthorizationOptions,
 ): string {
+  validateOAuth2ExchangePolicy(definition.exchange);
   if (!definition.authorization) throw new AuthError("unsupported_operation");
+  if (definition.exchange?.requirePkce && !options.pkceChallenge)
+    throw new AuthError("invalid_credentials");
   const url = oauthEndpoint(definition.authorization.url);
   const parameters = providerParameters(definition.authorization.parameters);
   for (const [key, value] of Object.entries(parameters))
@@ -63,6 +78,7 @@ async function operate(
       exchange: "authorization_code",
       refresh: "refresh_token",
       clientCredentials: "client_credentials",
+      jwtBearer: "urn:ietf:params:oauth:grant-type:jwt-bearer",
     };
     const tokens = await requestOAuth2Token(
       configured,
@@ -89,12 +105,15 @@ export async function exchangeOAuth2Code(
   input: OAuthCodeOptions,
   options: OAuthRuntimeOptions = {},
 ): Promise<OAuthTokens> {
+  validateOAuth2ExchangePolicy(definition.exchange);
   const fields: Record<string, string> = {
     code: required(input.code),
     redirect_uri: required(input.redirectUri),
   };
-  if (input.codeVerifier !== undefined)
-    fields.code_verifier = required(input.codeVerifier);
+  if (definition.exchange?.requirePkce || input.codeVerifier !== undefined)
+    fields.code_verifier = required(input.codeVerifier ?? "");
+  if (definition.exchange?.sendState)
+    fields.state = required(input.state ?? "");
   return operate(definition, "exchange", input.application, fields, options);
 }
 
@@ -103,7 +122,7 @@ export async function refreshOAuth2Token(
   definition: OAuth2Definition,
   input: {
     application?: OAuthApplication;
-    tokens: OAuthTokens;
+    tokens: Partial<OAuthTokens>;
     scopes?: string[];
   },
   options: OAuthRuntimeOptions = {},
@@ -132,6 +151,76 @@ export async function refreshOAuth2Token(
       ? { metadata: { ...metadata, ...next.metadata } }
       : {}),
   };
+}
+
+/** Fixed RS256 assertion protocol; no caller-defined signer or executable credential hook. */
+export async function acquireOAuth2JwtToken(
+  definition: OAuth2Definition,
+  input: { identity: OAuthJwtIdentity; scopes: string[] },
+  options: OAuthRuntimeOptions = {},
+): Promise<OAuthTokens> {
+  const endpoint = definition.jwtBearer;
+  if (!endpoint) throw new AuthError("unsupported_operation");
+  const audience = oauthEndpoint(endpoint.url).toString();
+  if (
+    endpoint.clientAuthentication !== "none" ||
+    endpoint.grantType !== undefined
+  )
+    throw new AuthError("invalid_definition");
+  let assertion: string;
+  let now: number;
+  try {
+    now = (options.now ?? Date.now)();
+    if (
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
+      now > Number.MAX_SAFE_INTEGER - 3_600_000
+    )
+      throw new Error();
+    if (
+      !Array.isArray(input.scopes) ||
+      !input.scopes.length ||
+      input.scopes.some(
+        (scope) => typeof scope !== "string" || !scope || /\s/.test(scope),
+      )
+    )
+      throw new Error();
+    const identity = input.identity;
+    required(identity.issuer);
+    if (identity.subject !== undefined) required(identity.subject);
+    if (
+      typeof identity.privateKey !== "string" ||
+      identity.privateKey.length > 65_536
+    )
+      throw new Error();
+    const key = createPrivateKey(identity.privateKey);
+    if (
+      key.asymmetricKeyType !== "rsa" ||
+      (key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048
+    )
+      throw new Error();
+    const iat = Math.floor(now / 1000);
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url");
+    const unsigned = `${encode({ alg: "RS256", typ: "JWT" })}.${encode({
+      iss: identity.issuer,
+      aud: audience,
+      scope: input.scopes.join(" "),
+      iat,
+      exp: iat + 3600,
+      ...(identity.subject === undefined ? {} : { sub: identity.subject }),
+    })}`;
+    assertion = `${unsigned}.${sign("RSA-SHA256", Buffer.from(unsigned), key).toString("base64url")}`;
+  } catch {
+    throw new AuthError("invalid_credentials");
+  }
+  return operate(
+    definition,
+    "jwtBearer",
+    undefined,
+    { assertion },
+    { ...options, now: () => now },
+  );
 }
 
 export async function acquireOAuth2ClientToken(

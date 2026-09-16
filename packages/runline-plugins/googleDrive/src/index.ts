@@ -57,7 +57,7 @@
 import { createReadStream, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleAccessToken } from "../../_shared/googleAuth.js";
+import { googleJsonRequest, googleResponse } from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -147,13 +147,24 @@ const DRIVE = {
 
 // ─── Auth ────────────────────────────────────────────────────────
 
-async function accessToken(ctx: Ctx): Promise<string> {
-  return googleAccessToken(ctx, "googleDrive", SCOPES);
+function driveResponse(ctx: Ctx, url: string, init: { method?: string; headers?: Record<string, string>; body?: string | Uint8Array } = {}) {
+  return googleResponse(ctx, "googleDrive", SCOPES, url, init);
 }
 
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://www.googleapis.com";
+
+function filePathId(id: string): string {
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error("googleDrive: invalid file ID");
+  return id;
+}
+
+function uploadSession(value: string | null): string {
+  if (!value || !/^https:\/\/www\.googleapis\.com\/upload\/drive\/v3\/files(?:\/[a-zA-Z0-9_-]+)?\?/.test(value))
+    throw new Error("googleDrive: invalid resumable session Location");
+  return value;
+}
 
 async function driveRequest(
   ctx: Ctx,
@@ -162,36 +173,7 @@ async function driveRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const token = await accessToken(ctx);
-  const url = new URL(`${API_BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v === undefined || v === null) continue;
-      if (Array.isArray(v)) {
-        for (const entry of v) url.searchParams.append(k, String(entry));
-      } else {
-        url.searchParams.set(k, String(v));
-      }
-    }
-  }
-  const init: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`googleDrive: ${method} ${path} → ${res.status} ${text}`);
-  }
-  return text ? JSON.parse(text) : { success: true };
+  return googleJsonRequest(ctx, "googleDrive", SCOPES, method, `${API_BASE}${path}`, body, qs);
 }
 
 /**
@@ -317,7 +299,6 @@ async function uploadBytes(
   extraQs: Record<string, unknown> = {},
 ): Promise<{ id: string } & Record<string, unknown>> {
   const mimeType = c.mimeType ?? "application/octet-stream";
-  const token = await accessToken(ctx);
 
   if (c.buffer) {
     const body = buildMultipart(metadata, c.buffer, mimeType);
@@ -327,19 +308,17 @@ async function uploadBytes(
     for (const [k, v] of Object.entries(extraQs)) {
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
-    const res = await fetch(url.toString(), {
+    const res = await driveResponse(ctx, url.toString(), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": `multipart/related; boundary=${MULTIPART_BOUNDARY}`,
-        "Content-Length": String(body.byteLength),
       },
       // Buffer is a Uint8Array so it's a valid BodyInit.
       body: new Uint8Array(body),
     });
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`googleDrive: upload failed (${res.status}): ${text}`);
+      throw new Error(`googleDrive: upload failed (HTTP ${res.status})`);
     }
     return JSON.parse(text);
   }
@@ -351,10 +330,9 @@ async function uploadBytes(
   for (const [k, v] of Object.entries(extraQs)) {
     if (v !== undefined) initUrl.searchParams.set(k, String(v));
   }
-  const initRes = await fetch(initUrl.toString(), {
+  const initRes = await driveResponse(ctx, initUrl.toString(), {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json; charset=UTF-8",
       "X-Upload-Content-Type": mimeType,
       "X-Upload-Content-Length": String(c.size),
@@ -362,11 +340,9 @@ async function uploadBytes(
     body: JSON.stringify(metadata),
   });
   if (!initRes.ok) {
-    const t = await initRes.text();
-    throw new Error(`googleDrive: resumable init failed (${initRes.status}): ${t}`);
+    throw new Error(`googleDrive: resumable init failed (HTTP ${initRes.status})`);
   }
-  const uploadUrl = initRes.headers.get("location");
-  if (!uploadUrl) throw new Error("googleDrive: resumable session missing Location header");
+  const uploadUrl = uploadSession(initRes.headers.get("location"));
 
   // Stream in 2 MiB chunks. Must be a multiple of 256 KiB per Drive docs.
   const CHUNK_SIZE = 2 * 1024 * 1024;
@@ -379,10 +355,9 @@ async function uploadBytes(
   const flushChunk = async (chunk: Buffer, isLast: boolean): Promise<void> => {
     const start = offset;
     const end = offset + chunk.byteLength - 1;
-    const res = await fetch(uploadUrl, {
+    const res = await driveResponse(ctx, uploadUrl, {
       method: "PUT",
       headers: {
-        "Content-Length": String(chunk.byteLength),
         "Content-Range": `bytes ${start}-${end}/${c.size}`,
       },
       body: new Uint8Array(chunk),
@@ -396,8 +371,7 @@ async function uploadBytes(
       // Discard body, keep streaming.
       await res.text();
     } else {
-      const t = await res.text();
-      throw new Error(`googleDrive: resumable chunk failed (${res.status}): ${t}`);
+      throw new Error(`googleDrive: resumable chunk failed (HTTP ${res.status})`);
     }
     void isLast;
   };
@@ -511,6 +485,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   });
 
   rl.setConnectionSchema({
+    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
     clientId: {
       type: "string",
       required: false,
@@ -654,13 +629,11 @@ export default function googleDrive(rl: RunlinePluginAPI) {
           supportsAllDrives: true,
         })) as { id: string };
 
-        const token = await accessToken(ctx);
-        const res = await fetch(
-          `https://docs.googleapis.com/v1/documents/${doc.id}:batchUpdate`,
+        const res = await driveResponse(
+          ctx, `https://docs.googleapis.com/v1/documents/${encodeURIComponent(doc.id)}:batchUpdate`,
           {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -677,7 +650,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         );
         if (!res.ok) {
           throw new Error(
-            `googleDrive: docs.batchUpdate failed (${res.status}): ${await res.text()}`,
+            `googleDrive: docs.batchUpdate failed (HTTP ${res.status})`,
           );
         }
         return { id: doc.id };
@@ -724,7 +697,6 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       )) as { mimeType: string; name: string };
 
       const isGoogleNative = meta.mimeType?.includes("vnd.google-apps");
-      const token = await accessToken(ctx);
       let url: string;
       let contentType = meta.mimeType;
       if (isGoogleNative) {
@@ -740,21 +712,19 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         };
         const mime = (p.googleDocFormat as string | undefined) ?? defaults[type] ?? "application/pdf";
         contentType = mime;
-        const u = new URL(`${API_BASE}/drive/v3/files/${fileId}/export`);
+        const u = new URL(`${API_BASE}/drive/v3/files/${filePathId(fileId)}/export`);
         u.searchParams.set("mimeType", mime);
         u.searchParams.set("supportsAllDrives", "true");
         url = u.toString();
       } else {
-        const u = new URL(`${API_BASE}/drive/v3/files/${fileId}`);
+        const u = new URL(`${API_BASE}/drive/v3/files/${filePathId(fileId)}`);
         u.searchParams.set("alt", "media");
         u.searchParams.set("supportsAllDrives", "true");
         url = u.toString();
       }
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await driveResponse(ctx, url);
       if (!res.ok) {
-        throw new Error(`googleDrive: download failed (${res.status}): ${await res.text()}`);
+        throw new Error(`googleDrive: download failed (HTTP ${res.status})`);
       }
       const bytes = Buffer.from(await res.arrayBuffer());
       const fileName = meta.name;
@@ -904,9 +874,8 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       if (hasBytes) {
         const c = resolveContent(p);
         const mimeType = c.mimeType ?? (p.mimeType as string) ?? "application/octet-stream";
-        const token = await accessToken(ctx);
         if (c.buffer) {
-          const url = new URL(`${API_BASE}/upload/drive/v3/files/${fileId}`);
+          const url = new URL(`${API_BASE}/upload/drive/v3/files/${filePathId(fileId)}`);
           url.searchParams.set("uploadType", "media");
           url.searchParams.set("supportsAllDrives", "true");
           for (const key of [
@@ -918,23 +887,21 @@ export default function googleDrive(rl: RunlinePluginAPI) {
               url.searchParams.set(key, String(p[key]));
             }
           }
-          const res = await fetch(url.toString(), {
+          const res = await driveResponse(ctx, url.toString(), {
             method: "PATCH",
             headers: {
-              Authorization: `Bearer ${token}`,
               "Content-Type": mimeType,
-              "Content-Length": String(c.buffer.byteLength),
             },
             body: new Uint8Array(c.buffer),
           });
           if (!res.ok) {
             throw new Error(
-              `googleDrive: content update failed (${res.status}): ${await res.text()}`,
+              `googleDrive: content update failed (HTTP ${res.status})`,
             );
           }
         } else if (c.path) {
           // Resumable PATCH
-          const initUrl = new URL(`${API_BASE}/upload/drive/v3/files/${fileId}`);
+          const initUrl = new URL(`${API_BASE}/upload/drive/v3/files/${filePathId(fileId)}`);
           initUrl.searchParams.set("uploadType", "resumable");
           initUrl.searchParams.set("supportsAllDrives", "true");
           for (const key of [
@@ -946,38 +913,37 @@ export default function googleDrive(rl: RunlinePluginAPI) {
               initUrl.searchParams.set(key, String(p[key]));
             }
           }
-          const initRes = await fetch(initUrl.toString(), {
+          const initRes = await driveResponse(ctx, initUrl.toString(), {
             method: "PATCH",
             headers: {
-              Authorization: `Bearer ${token}`,
               "X-Upload-Content-Type": mimeType,
               "X-Upload-Content-Length": String(c.size),
             },
           });
           if (!initRes.ok) {
             throw new Error(
-              `googleDrive: resumable update init failed (${initRes.status}): ${await initRes.text()}`,
+              `googleDrive: resumable update init failed (HTTP ${initRes.status})`,
             );
           }
-          const uploadUrl = initRes.headers.get("location");
-          if (!uploadUrl) throw new Error("googleDrive: missing Location on resumable init");
+          const uploadUrl = uploadSession(initRes.headers.get("location"));
           const CHUNK = 2 * 1024 * 1024;
           const stream = createReadStream(c.path, { highWaterMark: CHUNK });
           let offset = 0;
           let pending = Buffer.alloc(0);
+          let lastStatus = 0;
           const flush = async (chunk: Buffer) => {
-            const res = await fetch(uploadUrl, {
+            const res = await driveResponse(ctx, uploadUrl, {
               method: "PUT",
               headers: {
-                "Content-Length": String(chunk.byteLength),
                 "Content-Range": `bytes ${offset}-${offset + chunk.byteLength - 1}/${c.size}`,
               },
               body: new Uint8Array(chunk),
             });
             offset += chunk.byteLength;
+            lastStatus = res.status;
             if (res.status !== 200 && res.status !== 201 && res.status !== 308) {
               throw new Error(
-                `googleDrive: resumable chunk failed (${res.status}): ${await res.text()}`,
+                `googleDrive: resumable chunk failed (HTTP ${res.status})`,
               );
             }
             await res.text();
@@ -990,6 +956,8 @@ export default function googleDrive(rl: RunlinePluginAPI) {
             }
           }
           if (pending.byteLength > 0) await flush(pending);
+          if (offset !== c.size || (lastStatus !== 200 && lastStatus !== 201))
+            throw new Error("googleDrive: resumable update did not complete");
         }
       }
 
@@ -1866,15 +1834,12 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       const fileId = p.fileId as string;
       const revisionId = p.revisionId as string;
-      const token = await accessToken(ctx);
-      const url = new URL(`${API_BASE}/drive/v3/files/${fileId}/revisions/${revisionId}`);
+      const url = new URL(`${API_BASE}/drive/v3/files/${filePathId(fileId)}/revisions/${filePathId(revisionId)}`);
       url.searchParams.set("alt", "media");
-      const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await driveResponse(ctx, url.toString());
       if (!res.ok) {
         throw new Error(
-          `googleDrive: revision download failed (${res.status}): ${await res.text()}`,
+          `googleDrive: revision download failed (HTTP ${res.status})`,
         );
       }
       const bytes = Buffer.from(await res.arrayBuffer());
@@ -1972,16 +1937,13 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       const fileId = p.fileId as string;
       const revisionId = p.revisionId as string;
-      const token = await accessToken(ctx);
-
       // 1. Pull the chosen revision's bytes.
-      const dl = await fetch(
-        `${API_BASE}/drive/v3/files/${fileId}/revisions/${revisionId}?alt=media`,
-        { headers: { Authorization: `Bearer ${token}` } },
+      const dl = await driveResponse(ctx,
+        `${API_BASE}/drive/v3/files/${encodeURIComponent(fileId)}/revisions/${encodeURIComponent(revisionId)}?alt=media`,
       );
       if (!dl.ok) {
         throw new Error(
-          `googleDrive: revision restore download failed (${dl.status}): ${await dl.text()}`,
+          `googleDrive: revision restore download failed (HTTP ${dl.status})`,
         );
       }
       const bytes = Buffer.from(await dl.arrayBuffer());
@@ -1991,7 +1953,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         "application/octet-stream";
 
       // 2. Multipart-PATCH them as the new head of the same file.
-      const url = new URL(`${API_BASE}/upload/drive/v3/files/${fileId}`);
+      const url = new URL(`${API_BASE}/upload/drive/v3/files/${filePathId(fileId)}`);
       url.searchParams.set("uploadType", "multipart");
       url.searchParams.set("supportsAllDrives", "true");
       url.searchParams.set(
@@ -1999,18 +1961,16 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         "id,name,mimeType,modifiedTime,size,headRevisionId,webViewLink",
       );
       const body = buildMultipart({ mimeType: mime }, bytes, mime);
-      const res = await fetch(url.toString(), {
+      const res = await driveResponse(ctx, url.toString(), {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": `multipart/related; boundary=${MULTIPART_BOUNDARY}`,
-          "Content-Length": String(body.byteLength),
         },
         body: new Uint8Array(body),
       });
       if (!res.ok) {
         throw new Error(
-          `googleDrive: revision restore upload failed (${res.status}): ${await res.text()}`,
+          `googleDrive: revision restore upload failed (HTTP ${res.status})`,
         );
       }
       const head = (await res.json()) as Record<string, unknown>;
@@ -2289,12 +2249,11 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const token = await accessToken(ctx);
-      const u = new URL(`${API_BASE}/drive/v3/files/${p.fileId}/export`);
+      const u = new URL(`${API_BASE}/drive/v3/files/${filePathId(String(p.fileId))}/export`);
       u.searchParams.set("mimeType", p.mimeType as string);
-      const res = await fetch(u.toString(), { headers: { Authorization: `Bearer ${token}` } });
+      const res = await driveResponse(ctx, u.toString());
       if (!res.ok) {
-        throw new Error(`googleDrive: export failed (${res.status}): ${await res.text()}`);
+        throw new Error(`googleDrive: export failed (HTTP ${res.status})`);
       }
       const bytes = Buffer.from(await res.arrayBuffer());
       const contentType = res.headers.get("content-type") ?? (p.mimeType as string);

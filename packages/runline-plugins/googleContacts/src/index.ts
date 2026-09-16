@@ -25,7 +25,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleAccessToken } from "../../_shared/googleAuth.js";
+import { googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -108,12 +108,6 @@ const UPDATABLE_PERSON_FIELDS = new Set([
   "userDefined",
 ]);
 
-// ─── Auth ────────────────────────────────────────────────────────
-
-async function accessToken(ctx: Ctx): Promise<string> {
-  return googleAccessToken(ctx, "googleContacts", SCOPES);
-}
-
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://people.googleapis.com/v1";
@@ -125,33 +119,7 @@ async function peopleRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const token = await accessToken(ctx);
-  const url = new URL(`${API_BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v === undefined || v === null) continue;
-      if (Array.isArray(v)) {
-        for (const entry of v) url.searchParams.append(k, String(entry));
-      } else {
-        url.searchParams.set(k, String(v));
-      }
-    }
-  }
-  const init: RequestInit = {
-    method,
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  };
-  if (body && Object.keys(body).length > 0) {
-    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`googleContacts: ${method} ${path} → ${res.status} ${text}`);
-  }
-  return text ? JSON.parse(text) : { success: true };
+  return googleJsonRequest(ctx, "googleContacts", SCOPES, method, `${API_BASE}${path}`, body, qs);
 }
 
 async function paginateAll(
@@ -538,6 +506,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
   });
 
   rl.setConnectionSchema({
+    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
     clientId: { type: "string", required: false, env: "GOOGLE_CONTACTS_CLIENT_ID" },
     clientSecret: { type: "string", required: false, env: "GOOGLE_CONTACTS_CLIENT_SECRET" },
     refreshToken: { type: "string", required: false, env: "GOOGLE_CONTACTS_REFRESH_TOKEN" },

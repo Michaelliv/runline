@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { OAUTH_CALLBACK_URI, runOAuth } from "../core/oauth.js";
+import {
+  OAUTH_CALLBACK_URI,
+  type RunOAuthOptions,
+  runOAuth,
+} from "../core/oauth.js";
+import type { OAuthConfig } from "../plugin/types.js";
 
 const nativeFetch = globalThis.fetch;
 afterEach(() => {
@@ -63,8 +68,67 @@ describe("local OAuth callback lifecycle", () => {
     assert.equal(requests, 1);
   });
 
+  it("pins endpoints, application credentials, scopes and launch hooks before awaiting consent", async () => {
+    for (const explicit of [false, true]) {
+      const flow: OAuthConfig = explicit
+        ? {
+            protocol: {
+              id: "example",
+              provider: "example",
+              authorization: { url: config.authUrl },
+              exchange: {
+                url: config.tokenUrl,
+                clientAuthentication: "client_secret_post",
+              },
+            },
+            scopes: ["read"],
+          }
+        : { ...config, scopes: ["read"] };
+      let calls = 0;
+      globalThis.fetch = (async (url, init) => {
+        calls++;
+        assert.equal(String(url), config.tokenUrl);
+        const fields = new URLSearchParams(String(init?.body));
+        assert.equal(fields.get("client_id"), "client");
+        assert.equal(fields.get("client_secret"), "secret");
+        return Response.json({ access_token: "issued" });
+      }) as typeof fetch;
+      let visit: Promise<void> | undefined;
+      const options: RunOAuthOptions = {
+        ...credentials,
+        onAuthUrl() {
+          if (flow.protocol?.exchange)
+            flow.protocol.exchange.url = "https://other.test/token";
+          else if (!flow.protocol) flow.tokenUrl = "https://other.test/token";
+          flow.scopes.push("write");
+          options.clientId = "other-client";
+          options.clientSecret = "other-secret";
+          options.openBrowser = () => {
+            throw new Error("must use pinned launcher");
+          };
+        },
+        openBrowser(url) {
+          visit = (async () => {
+            const consent = new URL(url);
+            assert.equal(consent.searchParams.get("scope"), "read");
+            const state = consent.searchParams.get("state");
+            assert.ok(state);
+            const response = await nativeFetch(
+              callback(state, { code: "accepted-code" }),
+            );
+            assert.equal(response.status, 200);
+          })();
+          return visit;
+        },
+      };
+      assert.equal((await runOAuth(flow, options)).accessToken, "issued");
+      await visit;
+      assert.equal(calls, 1);
+    }
+  });
+
   it("redacts provider errors after state validation without exchanging a code", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url, _init): Promise<Response> => {
       throw new Error("must not exchange");
     }) as typeof fetch;
     let visit: Promise<void> | undefined;
@@ -87,6 +151,29 @@ describe("local OAuth callback lifecycle", () => {
       { message: "OAuth: authorization denied" },
     );
     await visit;
+  });
+
+  it("does not launch a browser after consent publication outlives the callback timeout", async () => {
+    let release: (() => void) | undefined;
+    let launches = 0;
+    await assert.rejects(
+      runOAuth(config, {
+        ...credentials,
+        callbackTimeoutMs: 20,
+        onAuthUrl: () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+        openBrowser() {
+          launches++;
+        },
+      }),
+      /timed out/,
+    );
+    assert.ok(release);
+    release();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(launches, 0);
   });
 
   it("closes the listener after timeout and browser-launch failure", async () => {

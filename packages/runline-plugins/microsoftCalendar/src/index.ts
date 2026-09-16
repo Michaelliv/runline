@@ -17,6 +17,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
   rl.setVersion("1.0.0");
 
   rl.setConnectionSchema({
+    authMethod: { type: "string", required: false, description: "delegated or appOnly; legacy configs infer the method from existing credentials" },
     tenantId: { type: "string", required: false, env: "MS_GRAPH_TENANT_ID", description: "Entra tenant id (app-only) or omit for OAuth /common" },
     clientId: { type: "string", required: false, env: "MS_GRAPH_CLIENT_ID", description: "App (client) id" },
     clientSecret: { type: "string", required: false, env: "MS_GRAPH_CLIENT_SECRET", description: "Client secret VALUE" },
@@ -58,7 +59,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     description: "Get one calendar event by id (full details incl. body).",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input: any, ctx: Ctx) {
-      return graphRequest(ctx, NAME, SCOPES, "GET", `${userBase(ctx)}/events/${input.id}`);
+      return graphRequest(ctx, NAME, SCOPES, "GET", `${userBase(ctx)}/events/${encodeURIComponent(input.id)}`);
     },
   });
 }

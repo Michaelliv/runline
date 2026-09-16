@@ -10,9 +10,10 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import {
   graphRequest,
-  microsoftAccessToken,
+  graphResponse,
+  microsoftDownload,
+  microsoftDriveBase,
   microsoftSetupHelp,
-  userBase,
 } from "../../_shared/microsoftAuth.js";
 
 const NAME = "microsoftFiles";
@@ -24,23 +25,11 @@ type Ctx = ActionContext;
 
 /** Resolve the drive root path: explicit drive/site, else the user's default drive. */
 function driveBase(ctx: Ctx): string {
-  const cfg = ctx.connection.config as Record<string, string>;
-  if (cfg.driveId) return `/drives/${cfg.driveId}`;
-  if (cfg.siteId) return `/sites/${cfg.siteId}/drive`;
-  return `${userBase(ctx)}/drive`;
+  return microsoftDriveBase(ctx.connection.config);
 }
 
 async function binaryFetch(ctx: Ctx, method: string, path: string, body?: Uint8Array) {
-  const token = await microsoftAccessToken(ctx, NAME, SCOPES);
-  const init: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(body ? { "Content-Type": "application/octet-stream" } : {}),
-    },
-  };
-  if (body) init.body = body;
-  return fetch(`https://graph.microsoft.com/v1.0${path}`, init);
+  return graphResponse(ctx, NAME, SCOPES, method, path, body, body ? "application/octet-stream" : undefined);
 }
 
 export default function microsoftFiles(rl: RunlinePluginAPI): void {
@@ -48,6 +37,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
   rl.setVersion("1.0.0");
 
   rl.setConnectionSchema({
+    authMethod: { type: "string", required: false, description: "delegated or appOnly; legacy configs infer the method from existing credentials" },
     tenantId: { type: "string", required: false, env: "MS_GRAPH_TENANT_ID", description: "Entra tenant id (app-only) or omit for OAuth /common" },
     clientId: { type: "string", required: false, env: "MS_GRAPH_CLIENT_ID", description: "App (client) id" },
     clientSecret: { type: "string", required: false, env: "MS_GRAPH_CLIENT_SECRET", description: "Client secret VALUE" },
@@ -91,7 +81,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
       top: { type: "number", required: false, default: 100 },
     },
     async execute(input: any, ctx: Ctx) {
-      const where = input.folderId ? `/items/${input.folderId}/children` : "/root/children";
+      const where = input.folderId ? `/items/${encodeURIComponent(input.folderId)}/children` : "/root/children";
       const qs = new URLSearchParams({
         $top: String(input.top ?? 100),
         $select: "id,name,size,lastModifiedDateTime,webUrl,folder,file",
@@ -107,9 +97,9 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
       "Download a file by id. Returns {id,name,size,contentType,base64}. base64 is the file bytes.",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input: any, ctx: Ctx) {
-      const meta = await graphRequest(ctx, NAME, SCOPES, "GET", `${driveBase(ctx)}/items/${input.id}`);
-      const res = await binaryFetch(ctx, "GET", `${driveBase(ctx)}/items/${input.id}/content`);
-      if (!res.ok) throw new Error(`${NAME}: download ${input.id} → ${res.status} ${await res.text()}`);
+      const meta = await graphRequest(ctx, NAME, SCOPES, "GET", `${driveBase(ctx)}/items/${encodeURIComponent(input.id)}`);
+      const res = await microsoftDownload(meta["@microsoft.graph.downloadUrl"]);
+      if (!res.ok) throw new Error(`${NAME}: download failed (HTTP ${res.status})`);
       const buf = Buffer.from(await res.arrayBuffer());
       return {
         id: meta.id,
@@ -133,7 +123,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
       const bytes = Buffer.from(input.base64, "base64");
       const p = input.path.split("/").map(encodeURIComponent).join("/");
       const res = await binaryFetch(ctx, "PUT", `${driveBase(ctx)}/root:/${p}:/content`, bytes);
-      if (!res.ok) throw new Error(`${NAME}: upload ${input.path} → ${res.status} ${await res.text()}`);
+      if (!res.ok) throw new Error(`${NAME}: upload failed (HTTP ${res.status})`);
       return JSON.parse(await res.text());
     },
   });
@@ -146,7 +136,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
       parentId: { type: "string", required: false, description: "Parent folder id; omit for root" },
     },
     async execute(input: any, ctx: Ctx) {
-      const where = input.parentId ? `/items/${input.parentId}/children` : "/root/children";
+      const where = input.parentId ? `/items/${encodeURIComponent(input.parentId)}/children` : "/root/children";
       return graphRequest(ctx, NAME, SCOPES, "POST", `${driveBase(ctx)}${where}`, {
         name: input.name,
         folder: {},

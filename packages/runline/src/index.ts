@@ -1,6 +1,7 @@
 export { AuthError, type AuthErrorCode } from "./auth/errors.js";
 export {
   acquireOAuth2ClientToken,
+  acquireOAuth2JwtToken,
   buildOAuth2AuthorizationUrl,
   exchangeOAuth2Code,
   refreshOAuth2Token,
@@ -13,6 +14,7 @@ export type {
   OAuthAuthorizationOptions,
   OAuthCodeOptions,
   OAuthEvent,
+  OAuthJwtIdentity,
   OAuthOperation,
   OAuthRuntimeOptions,
 } from "./auth/types.js";
@@ -59,6 +61,29 @@ export {
   OAUTH_CALLBACK_URI,
   runOAuth,
 } from "./core/oauth.js";
+export { downloadResource } from "./credentials/http.js";
+export {
+  CredentialRegistry,
+  OAuthGrantSchema,
+  OAuthTokensSchema,
+  validateCredential,
+} from "./credentials/registry.js";
+export type {
+  AuthenticatedRequest,
+  CredentialTransportOptions,
+} from "./credentials/transport.js";
+export { CredentialTransport } from "./credentials/transport.js";
+export type {
+  CredentialAuthentication,
+  CredentialBinding,
+  CredentialMethod,
+  CredentialProbe,
+  CredentialProbeResult,
+  CredentialTarget,
+  CredentialType,
+  HttpMethod,
+  OAuthGrant,
+} from "./credentials/types.js";
 export type {
   ActionDefinition,
   PluginFunction,

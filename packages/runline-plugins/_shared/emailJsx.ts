@@ -20,10 +20,7 @@ type Rendered = { html: string; text: string };
 type ReactEmailModules = {
   React: typeof import("react");
   components: Record<string, unknown>;
-  render: (
-    element: import("react").ReactElement,
-    options?: { plainText?: boolean },
-  ) => Promise<string>;
+  render: typeof import("@react-email/render").render;
   transform: typeof import("sucrase").transform;
 };
 
@@ -64,9 +61,10 @@ async function loadModules(): Promise<ReactEmailModules> {
  * capitalized) can be exposed. Lowercase utility exports are omitted
  * on purpose: the JSX surface is components-only.
  */
-function componentScope(
-  components: Record<string, unknown>,
-): { names: string[]; values: unknown[] } {
+function componentScope(components: Record<string, unknown>): {
+  names: string[];
+  values: unknown[];
+} {
   const names: string[] = [];
   const values: unknown[] = [];
   for (const [key, value] of Object.entries(components)) {

@@ -56,6 +56,12 @@ export default function googleDocs(rl: RunlinePluginAPI) {
   });
 
   rl.setConnectionSchema({
+    authMethod: {
+      type: "string",
+      required: false,
+      description:
+        "delegated or serviceAccount (legacy configs infer the method)",
+    },
     clientId: { type: "string", required: false, env: "GOOGLE_DOCS_CLIENT_ID" },
     clientSecret: {
       type: "string",

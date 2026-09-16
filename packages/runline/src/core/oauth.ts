@@ -30,6 +30,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import { AuthError } from "../auth/errors.js";
 import {
   buildOAuth2AuthorizationUrl,
   exchangeOAuth2Code,
@@ -88,6 +89,8 @@ export interface ExchangeCodeOptions {
   redirectUri: string;
   /** PKCE verifier matching the challenge sent on the auth URL. */
   codeVerifier?: string;
+  /** Host-validated state; sent only when the provider protocol requires it. */
+  state?: string;
 }
 
 export interface PKCEPair {
@@ -98,6 +101,16 @@ export interface PKCEPair {
 
 /** Plugin OAuth declarations retain their body-auth default at the compatibility boundary. */
 function definition(config: OAuthConfig): OAuth2Definition {
+  if (config.protocol !== undefined) {
+    if (
+      !config.protocol ||
+      config.authUrl !== undefined ||
+      config.tokenUrl !== undefined ||
+      config.authParams !== undefined
+    )
+      throw new AuthError("invalid_definition");
+    return config.protocol;
+  }
   return {
     id: "plugin-oauth",
     provider: "legacy",
@@ -154,6 +167,7 @@ export async function exchangeAuthCode(
     code: opts.code,
     redirectUri: opts.redirectUri,
     codeVerifier: opts.codeVerifier,
+    state: opts.state,
   });
 }
 
@@ -172,12 +186,26 @@ export async function runOAuth(
   config: OAuthConfig,
   options: RunOAuthOptions,
 ): Promise<OAuthTokens> {
+  // Consent and exchange use the same detached setup snapshot.
+  let flowConfig: OAuthConfig;
+  try {
+    flowConfig = structuredClone(config);
+  } catch {
+    throw new AuthError("invalid_definition");
+  }
+  const {
+    clientId,
+    clientSecret,
+    onAuthUrl,
+    openBrowser = defaultOpenBrowser,
+    callbackTimeoutMs = 300_000,
+  } = options;
   const redirectUri = OAUTH_CALLBACK_URI;
   const state = randomState();
   const { verifier, challenge } = generatePKCE();
 
-  const authUrl = buildAuthUrl(config, {
-    clientId: options.clientId,
+  const authUrl = buildAuthUrl(flowConfig, {
+    clientId,
     redirectUri,
     state,
     pkceChallenge: challenge,
@@ -186,20 +214,21 @@ export async function runOAuth(
   const { code } = await captureCode(
     OAUTH_CALLBACK_PORT,
     state,
-    async () => {
-      // Publish consent only after the callback listener is ready.
-      if (options.onAuthUrl) await options.onAuthUrl(authUrl);
+    async (signal) => {
+      // Publication may outlive the flow; never launch a finished consent request.
+      if (onAuthUrl) await onAuthUrl(authUrl);
       else console.error(`Open this URL to authorize:\n  ${authUrl}`);
-      await (options.openBrowser ?? defaultOpenBrowser)(authUrl);
+      if (!signal.aborted) await openBrowser(authUrl);
     },
-    options.callbackTimeoutMs ?? 300_000,
+    callbackTimeoutMs,
   );
-  return exchangeAuthCode(config, {
-    clientId: options.clientId,
-    clientSecret: options.clientSecret,
+  return exchangeAuthCode(flowConfig, {
+    clientId,
+    clientSecret,
     code,
     redirectUri,
     codeVerifier: verifier,
+    state,
   });
 }
 
@@ -208,7 +237,7 @@ export async function runOAuth(
 function captureCode(
   port: number,
   expectedState: string,
-  onReady: () => Promise<void>,
+  onReady: (signal: AbortSignal) => Promise<void>,
   timeoutMs: number,
 ): Promise<{ code: string }> {
   if (
@@ -219,10 +248,10 @@ function captureCode(
     return Promise.reject(new Error("OAuth: invalid callback timeout"));
   }
   return new Promise((resolve, reject) => {
-    let settled = false;
+    const lifecycle = new AbortController();
     const finish = (result: { code: string } | Error) => {
-      if (settled) return;
-      settled = true;
+      if (lifecycle.signal.aborted) return;
+      lifecycle.abort();
       clearTimeout(timer);
       server.close();
       if (result instanceof Error) reject(result);
@@ -244,7 +273,7 @@ function captureCode(
       }
       // Unauthenticated callbacks cannot cancel or complete a pending flow.
       if (
-        settled ||
+        lifecycle.signal.aborted ||
         url.searchParams.getAll("state").length !== 1 ||
         url.searchParams.get("state") !== expectedState
       ) {
@@ -274,8 +303,8 @@ function captureCode(
       finish(new Error("OAuth: callback listener unavailable")),
     );
     server.listen(port, "127.0.0.1", () => {
-      if (settled) return;
-      void onReady().catch(() =>
+      if (lifecycle.signal.aborted) return;
+      void onReady(lifecycle.signal).catch(() =>
         finish(new Error("OAuth: browser launch failed")),
       );
     });
@@ -308,8 +337,7 @@ function defaultOpenBrowser(url: string): void {
     detached: true,
   });
   proc.on("error", () => {
-    // Browser failed to open — caller's onAuthUrl prints the URL
-    // so the user can paste it manually.
+    // The displayed consent URL remains available for manual browser navigation.
   });
   proc.unref();
 }

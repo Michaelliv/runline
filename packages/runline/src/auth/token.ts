@@ -21,6 +21,7 @@ const protectedParameters = new Set([
   "code_challenge",
   "code_challenge_method",
   "scope",
+  "assertion",
 ]);
 
 export function providerParameters(

@@ -23,7 +23,7 @@
 import { writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleAccessToken } from "../../_shared/googleAuth.js";
+import { googleJsonRequest, googleDownload } from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -56,12 +56,6 @@ interface ReplaceTextEntry {
   pageObjectIds?: string[];
 }
 
-// ─── Auth ────────────────────────────────────────────────────────
-
-async function accessToken(ctx: Ctx): Promise<string> {
-  return googleAccessToken(ctx, "googleSlides", SCOPES);
-}
-
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://slides.googleapis.com/v1";
@@ -73,34 +67,7 @@ async function slidesRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const token = await accessToken(ctx);
-  const url = new URL(`${API_BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v === undefined || v === null) continue;
-      if (Array.isArray(v)) {
-        for (const entry of v) url.searchParams.append(k, String(entry));
-      } else {
-        url.searchParams.set(k, String(v));
-      }
-    }
-  }
-  const init: RequestInit = {
-    method,
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  };
-  if (body && Object.keys(body).length > 0) {
-    (init.headers as Record<string, string>)["Content-Type"] =
-      "application/json";
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`googleSlides: ${method} ${path} → ${res.status} ${text}`);
-  }
-  return text ? JSON.parse(text) : { success: true };
+  return googleJsonRequest(ctx, "googleSlides", SCOPES, method, `${API_BASE}${path}`, body, qs);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -160,6 +127,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   });
 
   rl.setConnectionSchema({
+    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
     clientId: {
       type: "string",
       required: false,
@@ -404,10 +372,10 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       if (!p.savePath && !p.download) return res;
 
       // contentUrl is a signed Google URL — fetch without auth headers.
-      const imgRes = await fetch(res.contentUrl);
+      const imgRes = await googleDownload(res.contentUrl);
       if (!imgRes.ok) {
         throw new Error(
-          `googleSlides: thumbnail fetch failed (${imgRes.status}): ${await imgRes.text()}`,
+          `googleSlides: thumbnail fetch failed (HTTP ${imgRes.status})`,
         );
       }
       const bytes = Buffer.from(await imgRes.arrayBuffer());

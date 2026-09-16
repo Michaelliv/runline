@@ -24,7 +24,7 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { renderEmailJsx } from "../../_shared/emailJsx.js";
-import { googleAccessToken } from "../../_shared/googleAuth.js";
+import { googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
   Id,
@@ -76,12 +76,6 @@ interface EmailInput {
   attachments?: EmailAttachmentInput[];
 }
 
-// ─── Auth ────────────────────────────────────────────────────────
-
-async function accessToken(ctx: Ctx): Promise<string> {
-  return googleAccessToken(ctx, "gmail", SCOPES);
-}
-
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -98,47 +92,13 @@ async function gmailRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const token = await accessToken(ctx);
-  const url = new URL(`${API_BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v === undefined || v === null) continue;
-      if (Array.isArray(v)) {
-        for (const entry of v) url.searchParams.append(k, String(entry));
-      } else {
-        url.searchParams.set(k, String(v));
-      }
-    }
-  }
-  const init: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    (init.headers as Record<string, string>)["Content-Type"] =
-      "application/json";
-    init.body = JSON.stringify(body);
-  }
-  let res: Response;
   try {
-    res = await fetch(url.toString(), init);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `gmail: ${method} ${path} failed: ${msg}.${sendFailureRetryHint(method, path)}`,
-    );
+    return await googleJsonRequest(ctx, "gmail", SCOPES, method, `${API_BASE}${path}`, body, qs);
+  } catch (error) {
+    const hint = sendFailureRetryHint(method, path);
+    if (!hint) throw error;
+    throw new Error(`${error instanceof Error ? error.message : "gmail: request failed"}.${hint}`);
   }
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(
-      `gmail: ${method} ${path} → ${res.status} ${text}${sendFailureRetryHint(method, path)}`,
-    );
-  }
-  return text ? JSON.parse(text) : { success: true };
 }
 
 async function paginateAll(
@@ -870,6 +830,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   });
 
   rl.setConnectionSchema({
+    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
     clientId: {
       type: "string",
       required: false,

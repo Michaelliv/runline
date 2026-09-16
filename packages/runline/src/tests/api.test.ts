@@ -52,15 +52,14 @@ describe("createPluginAPI", () => {
   it("sets connection schema", () => {
     const { api, resolve } = createPluginAPI("test");
     api.setName("withAuth");
-    api.setConnectionSchema({
+    const schema = {
       apiKey: { type: "string", required: true, env: "MY_API_KEY" },
       baseUrl: { type: "string", required: false },
-    });
+    };
+    api.setConnectionSchema(schema);
 
     const plugin = resolve();
-    assert.ok(plugin.connectionConfigSchema);
-    assert.equal(plugin.connectionConfigSchema.apiKey.type, "string");
-    assert.equal(plugin.connectionConfigSchema.apiKey.env, "MY_API_KEY");
+    assert.deepEqual(plugin.connectionConfigSchema, schema);
   });
 
   it("records OAuth config when setOAuth is called", () => {

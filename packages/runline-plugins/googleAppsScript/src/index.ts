@@ -11,7 +11,7 @@
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleAccessToken } from "../../_shared/googleAuth.js";
+import { googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -57,30 +57,8 @@ const scriptFileSchema = t.Object(
   { additionalProperties: false },
 );
 
-function accessToken(ctx: ActionContext): Promise<string> {
-  return googleAccessToken(ctx, "googleAppsScript", SCOPES);
-}
-
 async function call(ctx: ActionContext, method: string, url: string, payload?: unknown): Promise<any> {
-  const headers: Record<string, string> = { Authorization: `Bearer ${await accessToken(ctx)}` };
-  if (payload !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: payload !== undefined ? JSON.stringify(payload) : undefined,
-  });
-  const text = await res.text();
-  let json: any;
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch {
-    json = { raw: text };
-  }
-  if (!res.ok) {
-    const msg = json?.error?.message || json?.error_description || text.slice(0, 300) || res.status;
-    throw new Error(`googleAppsScript: ${method} ${res.status}: ${msg}`);
-  }
-  return json;
+  return googleJsonRequest(ctx, "googleAppsScript", SCOPES, method, url, payload);
 }
 
 export default function googleAppsScript(rl: RunlinePluginAPI): void {
@@ -88,6 +66,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.setVersion("1.0.0");
 
   rl.setConnectionSchema({
+    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
     clientId: { type: "string", required: false, description: "OAuth client ID", env: "GOOGLE_APPS_SCRIPT_CLIENT_ID" },
     clientSecret: { type: "string", required: false, description: "OAuth client secret", env: "GOOGLE_APPS_SCRIPT_CLIENT_SECRET" },
     refreshToken: { type: "string", required: false, description: "OAuth refresh token", env: "GOOGLE_APPS_SCRIPT_REFRESH_TOKEN" },

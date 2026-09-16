@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import type { TSchema } from "typebox";
+import type { TObject, TSchema } from "typebox";
 import { Check } from "typebox/value";
 import googleDocs from "../../../runline-plugins/googleDocs/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
@@ -333,8 +333,11 @@ describe("googleDocs plugin", () => {
         `${action.name} must use TypeBox`,
       );
       const fixture = validInputs[action.name];
-      assert.equal(action.inputSchema.type, "object", action.name);
-      assert.equal(action.inputSchema.additionalProperties, false, action.name);
+      const schema = action.inputSchema as TObject & {
+        additionalProperties?: boolean;
+      };
+      assert.equal(schema.type, "object", action.name);
+      assert.equal(schema.additionalProperties, false, action.name);
       assert.equal(
         Check(action.inputSchema, fixture),
         true,
@@ -345,7 +348,7 @@ describe("googleDocs plugin", () => {
         false,
         `${action.name} must reject unknown top-level fields`,
       );
-      for (const required of action.inputSchema.required ?? []) {
+      for (const required of schema.required ?? []) {
         const missing = { ...fixture };
         delete missing[required];
         assert.equal(
@@ -355,7 +358,7 @@ describe("googleDocs plugin", () => {
         );
       }
       for (const [property, propertySchema] of Object.entries(
-        action.inputSchema.properties ?? {},
+        schema.properties ?? {},
       )) {
         assert.equal(
           Check(action.inputSchema, {
@@ -670,7 +673,7 @@ describe("googleDocs plugin", () => {
     assert.equal(calls[0].url, "https://www.googleapis.com/drive/v3/files");
     assert.equal(calls[0].init?.method, "POST");
     assert.equal(
-      (calls[0].init?.headers as Record<string, string>).Authorization,
+      new Headers(calls[0].init?.headers).get("authorization"),
       "Bearer tok_docs",
     );
     assert.deepEqual(calls[0].body, {

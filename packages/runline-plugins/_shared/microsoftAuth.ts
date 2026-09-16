@@ -1,121 +1,153 @@
-import type { ActionContext } from "runline";
-import { coordinatedAccessToken, requestToken } from "./tokenRefresh.js";
+import {
+  AuthError,
+  downloadResource,
+  type ActionContext,
+  type HttpMethod,
+} from "runline";
+import { credentialRuntime } from "./credentialAdapter.js";
+import {
+  microsoftCredentialType,
+  microsoftMethod,
+  microsoftUserBase,
+  type MicrosoftAuthConfig,
+} from "./microsoftCredentials.js";
 
-/**
- * Shared auth for the Microsoft Graph plugins (mail, calendar, files).
- *
- * Two modes, auto-detected from the connection config:
- *
- *  - Delegated (OAuth2): the connection has clientId/clientSecret/refreshToken
- *    (seeded by the OAuth flow, e.g. `runline auth`). Acts as the signed-in
- *    user; use /me paths.
- *  - App-only (client credentials): the connection has tenantId/clientId/
- *    clientSecret but no refreshToken. Acts as the application; target a mailbox/
- *    drive with userUpn → /users/{upn} paths.
- *
- * Tokens are cached in the connection (accessToken + accessTokenExpiresAt) via
- * ctx.updateConnection, matching the Google plugins' pattern.
- */
-export type MicrosoftAuthConfig = {
-  tenantId?: string;
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  userUpn?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
-
-function authority(cfg: MicrosoftAuthConfig): string {
-  return `https://login.microsoftonline.com/${encodeURIComponent(cfg.tenantId || "common")}/oauth2/v2.0/token`;
-}
+export type { MicrosoftAuthConfig } from "./microsoftCredentials.js";
+export { microsoftDriveBase } from "./microsoftCredentials.js";
 
 export function isAppOnly(cfg: MicrosoftAuthConfig): boolean {
-  return (
-    !cfg.refreshToken && !!(cfg.tenantId && cfg.clientId && cfg.clientSecret)
-  );
+  return microsoftMethod(cfg) === "appOnly";
 }
 
-/** Graph path prefix for the acting principal: /me (delegated) or /users/{upn} (app-only). */
 export function userBase(ctx: ActionContext): string {
+  return microsoftUserBase(ctx.connection.config as MicrosoftAuthConfig);
+}
+
+function runtime(ctx: ActionContext, plugin: string, scopes: string[]) {
   const cfg = ctx.connection.config as MicrosoftAuthConfig;
-  if (cfg.refreshToken) return "/me";
-  if (cfg.userUpn) return `/users/${encodeURIComponent(cfg.userUpn)}`;
-  throw new Error(
-    "microsoft: app-only mode requires userUpn (target mailbox/drive). Set MS_GRAPH_USER_UPN, or connect via OAuth.",
+  const method = microsoftMethod(cfg);
+  if (
+    method === "appOnly" &&
+    (!cfg.tenantId ||
+      ["common", "organizations", "consumers"].includes(cfg.tenantId))
+  )
+    throw new AuthError("invalid_credentials");
+  return credentialRuntime(
+    ctx,
+    microsoftCredentialType(cfg, plugin, scopes),
+    method,
+    (current) => {
+      const c = current as MicrosoftAuthConfig;
+      return [
+        microsoftMethod(c),
+        c.tenantId,
+        c.clientId,
+        c.clientSecret,
+        scopes,
+      ];
+    },
   );
 }
 
+/** Compatibility token access uses the same grant runtime as resource requests. */
 export async function microsoftAccessToken(
   ctx: ActionContext,
-  pluginName: string,
+  plugin: string,
   scopes: string[],
 ): Promise<string> {
-  return coordinatedAccessToken(ctx, (current) =>
-    refreshMicrosoftToken(current as MicrosoftAuthConfig, pluginName, scopes),
-  );
+  const { binding, transport } = runtime(ctx, plugin, scopes);
+  return transport.accessToken(binding);
 }
 
-async function refreshMicrosoftToken(
-  cfg: MicrosoftAuthConfig,
-  pluginName: string,
+export async function microsoftProbe(
+  ctx: ActionContext,
+  plugin: string,
   scopes: string[],
 ) {
-  let body: Record<string, string>;
-  if (cfg.refreshToken) {
-    if (!cfg.clientId || !cfg.clientSecret) {
-      throw new Error(
-        `${pluginName}: missing clientId/clientSecret for OAuth refresh.`,
-      );
-    }
-    body = {
-      refresh_token: cfg.refreshToken,
-      grant_type: "refresh_token",
-      scope: [...scopes, "offline_access"].join(" "),
-    };
-  } else if (isAppOnly(cfg)) {
-    body = {
-      grant_type: "client_credentials",
-      scope: "https://graph.microsoft.com/.default",
-    };
-  } else {
-    throw new Error(
-      `${pluginName}: no credentials. Connect via OAuth, or set tenantId/clientId/clientSecret (app-only).`,
-    );
-  }
-
-  return requestToken(
-    { url: authority(cfg), clientAuthentication: "client_secret_post" },
-    body,
-    { clientId: cfg.clientId as string, clientSecret: cfg.clientSecret },
-  );
+  const { binding, transport } = runtime(ctx, plugin, scopes);
+  return transport.probe(binding);
 }
 
-/** Authenticated Graph v1.0 request. Returns parsed JSON ({success:true} for 204). */
+export async function graphResponse(
+  ctx: ActionContext,
+  plugin: string,
+  scopes: string[],
+  method: string,
+  path: string,
+  body?: string | Uint8Array,
+  contentType?: string,
+): Promise<Response> {
+  if (!path.startsWith("/") || path.startsWith("//"))
+    throw new AuthError("request_not_allowed");
+  const { binding, transport } = runtime(ctx, plugin, scopes);
+  return transport.request(binding, {
+    target: "graph",
+    path: path.slice(1),
+    method: method as HttpMethod,
+    headers: {
+      Accept: "application/json",
+      ...(contentType ? { "Content-Type": contentType } : {}),
+    },
+    body,
+  });
+}
+
+/** JSON and binary requests share the same destination, renewal and replay policy. */
 export async function graphRequest(
   ctx: ActionContext,
-  pluginName: string,
+  plugin: string,
   scopes: string[],
   method: string,
   path: string,
   body?: unknown,
 ): Promise<any> {
-  const token = await microsoftAccessToken(ctx, pluginName, scopes);
-  const init: RequestInit = {
+  const res = await graphResponse(
+    ctx,
+    plugin,
+    scopes,
     method,
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  };
-  if (body !== undefined) {
-    (init.headers as Record<string, string>)["Content-Type"] =
-      "application/json";
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, init);
+    path,
+    body === undefined ? undefined : JSON.stringify(body),
+    body === undefined ? undefined : "application/json",
+  );
+  if (!res.ok)
+    throw new Error(`${plugin}: Graph request failed (HTTP ${res.status})`);
   if (res.status === 204) return { success: true };
   const text = await res.text();
-  if (!res.ok)
-    throw new Error(`${pluginName}: ${method} ${path} → ${res.status} ${text}`);
-  return text ? JSON.parse(text) : { success: true };
+  try {
+    return text ? JSON.parse(text) : { success: true };
+  } catch {
+    throw new Error(`${plugin}: invalid Graph response`);
+  }
+}
+
+/** Graph-issued signed download URLs carry their own authority, never a bearer header. */
+export async function microsoftDownload(value: unknown): Promise<Response> {
+  if (typeof value !== "string") throw new AuthError("invalid_response");
+  let url: URL;
+  try {
+    url = new URL(value);
+    const domains = [
+      "sharepoint.com",
+      "1drv.com",
+      "storage.live.com",
+      "onedrive.com",
+    ];
+    if (
+      url.port ||
+      !domains.some(
+        (domain) =>
+          url.hostname === domain || url.hostname.endsWith(`.${domain}`),
+      )
+    )
+      throw new Error();
+  } catch {
+    throw new AuthError("request_not_allowed");
+  }
+  return downloadResource(value, {
+    allowedOrigins: [url.origin],
+    fetch: globalThis.fetch,
+  });
 }
 
 /** Setup help shown by the OAuth wizard for all Microsoft plugins. */

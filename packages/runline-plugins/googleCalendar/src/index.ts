@@ -31,7 +31,7 @@
 import rrulePkg from "rrule";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleAccessToken } from "../../_shared/googleAuth.js";
+import { googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -97,12 +97,6 @@ interface EventBody {
   conferenceData?: ConferenceCreateRequest;
 }
 
-// ─── Auth ────────────────────────────────────────────────────────
-
-async function accessToken(ctx: Ctx): Promise<string> {
-  return googleAccessToken(ctx, "googleCalendar", SCOPES);
-}
-
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://www.googleapis.com/calendar/v3";
@@ -114,38 +108,7 @@ async function calRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const token = await accessToken(ctx);
-  const url = new URL(`${API_BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v === undefined || v === null) continue;
-      if (Array.isArray(v)) {
-        for (const entry of v) url.searchParams.append(k, String(entry));
-      } else {
-        url.searchParams.set(k, String(v));
-      }
-    }
-  }
-  const init: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  if (!res.ok) {
-    // 403/429 deserve a retry with exponential backoff — Calendar
-    // hands these out freely when you hit per-user quota.
-    throw new Error(`googleCalendar: ${method} ${path} → ${res.status} ${text}`);
-  }
-  return text ? JSON.parse(text) : { success: true };
+  return googleJsonRequest(ctx, "googleCalendar", SCOPES, method, `${API_BASE}${path}`, body, qs);
 }
 
 async function paginateAll(
@@ -701,6 +664,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   });
 
   rl.setConnectionSchema({
+    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
     clientId: {
       type: "string",
       required: false,

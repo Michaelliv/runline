@@ -1,4 +1,5 @@
 import type { TSchema } from "typebox";
+import type { OAuth2Definition } from "../auth/types.js";
 import type { ConnectionUpdate } from "../connections/types.js";
 
 export interface InputField {
@@ -92,19 +93,27 @@ export interface ActionContext {
  * of `clientId`, `clientSecret`, `refreshToken`, `accessToken`,
  * and `accessTokenExpiresAt` into the plugin's connection.
  */
-export interface OAuthConfig {
-  /** Authorization endpoint, e.g. https://accounts.google.com/o/oauth2/v2/auth */
-  authUrl: string;
-  /** Token endpoint, e.g. https://oauth2.googleapis.com/token */
-  tokenUrl: string;
+export type OAuthConfig = OAuthSetupOptions &
+  (
+    | {
+        /** One provider definition supplies every endpoint and protocol policy. */
+        protocol: OAuth2Definition;
+        authUrl?: never;
+        tokenUrl?: never;
+        authParams?: never;
+      }
+    | {
+        /** Flat declarations use body-secret authentication at the adapter boundary. */
+        protocol?: never;
+        authUrl: string;
+        tokenUrl: string;
+        authParams?: Record<string, string>;
+      }
+  );
+
+interface OAuthSetupOptions {
   /** Scopes to request on the consent screen. */
   scopes: string[];
-  /**
-   * Extra query parameters on the auth URL. Used for provider-
-   * specific knobs like Google's `access_type=offline` and
-   * `prompt=consent` (both required to get a refresh token back).
-   */
-  authParams?: Record<string, string>;
   /**
    * Printed by `runline auth <plugin>` before credentials are
    * requested. Each array entry is a line. The token

@@ -38,7 +38,11 @@ function provider(config: Record<string, unknown> = {}) {
   ]);
 }
 
-const helpers = { google: googleAccessToken, microsoft: microsoftAccessToken };
+const helpers = {
+  google: (ctx: ActionContext, _name: string, scopes: string[]) =>
+    googleAccessToken(ctx, "googleDrive", scopes),
+  microsoft: microsoftAccessToken,
+};
 for (const [name, accessToken] of Object.entries(helpers)) {
   describe(`${name} coordinated refresh`, () => {
     it("spends a rotating token once across stale contexts and persists the replacement", async () => {
@@ -78,7 +82,7 @@ for (const [name, accessToken] of Object.entries(helpers)) {
 
     it("preserves an existing refresh token when the provider omits a replacement", async () => {
       const store = provider();
-      globalThis.fetch = (async () =>
+      globalThis.fetch = (async (_url: Parameters<typeof fetch>[0]) =>
         Response.json({
           access_token: "a1",
           expires_in: 3600,
@@ -94,7 +98,7 @@ for (const [name, accessToken] of Object.entries(helpers)) {
         accessTokenExpiresAt: 1,
       });
       let calls = 0;
-      globalThis.fetch = (async () => {
+      globalThis.fetch = (async (_url: Parameters<typeof fetch>[0]) => {
         calls++;
         return Response.json({ access_token: "no-expiry" });
       }) as typeof fetch;
@@ -126,7 +130,8 @@ for (const [name, accessToken] of Object.entries(helpers)) {
         }),
         Response.json(null),
       ]) {
-        globalThis.fetch = (async () => response) as typeof fetch;
+        globalThis.fetch = (async (_url: Parameters<typeof fetch>[0]) =>
+          response) as typeof fetch;
         await assert.rejects(accessToken(ctx, name, []), (err: Error) => {
           assert.ok(!err.message.includes("private-token"));
           return true;
@@ -148,7 +153,7 @@ for (const [name, accessToken] of Object.entries(helpers)) {
         },
       });
       let calls = 0;
-      globalThis.fetch = (async () => {
+      globalThis.fetch = (async (_url: Parameters<typeof fetch>[0]) => {
         calls++;
         return Response.json({
           access_token: "issued",
@@ -156,7 +161,11 @@ for (const [name, accessToken] of Object.entries(helpers)) {
           expires_in: 3600,
         });
       }) as typeof fetch;
-      await assert.rejects(accessToken(ctx, name, []), /Persistence failed/);
+      await assert.rejects(accessToken(ctx, name, []), {
+        name: "AuthError",
+        code: "credential_store_failed",
+        message: "Credential storage failed; provider outcome may be unknown",
+      });
       assert.equal(calls, 1);
       assert.equal(ctx.connection.config.accessToken, undefined);
       assert.equal(ctx.connection.config.refreshToken, "r1");
@@ -188,7 +197,7 @@ it("Google service-account refresh shares the same coordination", async () => {
   );
   assert.deepEqual(
     await Promise.all(
-      contexts.map((ctx) => googleAccessToken(ctx, "google", ["scope"])),
+      contexts.map((ctx) => googleAccessToken(ctx, "googleDrive", ["scope"])),
     ),
     ["service-token", "service-token"],
   );

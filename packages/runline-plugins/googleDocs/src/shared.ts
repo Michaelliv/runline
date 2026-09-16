@@ -1,6 +1,6 @@
 import type { ActionContext } from "runline";
 import * as t from "typebox";
-import { googleAccessToken } from "../../_shared/googleAuth.js";
+import { googleJsonRequest } from "../../_shared/googleAuth.js";
 import { RawGoogleObject } from "../../_shared/googleSchemas.js";
 
 export type Ctx = ActionContext;
@@ -86,10 +86,6 @@ export const WriteControl = t.Object(
 );
 export { RawGoogleObject };
 
-export async function accessToken(ctx: Ctx): Promise<string> {
-  return googleAccessToken(ctx, "googleDocs", SCOPES);
-}
-
 export async function docsRequest(
   ctx: Ctx,
   method: string,
@@ -98,30 +94,15 @@ export async function docsRequest(
   qs?: Record<string, unknown>,
   baseOverride?: string,
 ): Promise<unknown> {
-  const token = await accessToken(ctx);
-  const url = new URL(`${baseOverride ?? DOCS_BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v === undefined || v === null) continue;
-      url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return googleJsonRequest(
+    ctx,
+    "googleDocs",
+    SCOPES,
     method,
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  };
-  if (body && Object.keys(body).length > 0) {
-    (init.headers as Record<string, string>)["Content-Type"] =
-      "application/json";
-    init.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`googleDocs: ${method} ${path} → ${res.status} ${text}`);
-  }
-  return text ? JSON.parse(text) : { success: true };
+    `${baseOverride ?? DOCS_BASE}${path}`,
+    body,
+    qs,
+  );
 }
 
 const DOC_URL_REGEX =
