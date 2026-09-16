@@ -19,9 +19,11 @@ export interface OAuth2Definition {
 /** Each operation can use a different endpoint, encoding, and client authentication. */
 export interface OAuth2TokenEndpoint {
   url: string;
+  /** `client_id_basic` is a public client: Basic `client_id:` with an empty secret. */
   clientAuthentication:
     | "none"
     | "client_id"
+    | "client_id_basic"
     | "client_secret_basic"
     | "client_secret_post";
   encoding?: "form" | "json";

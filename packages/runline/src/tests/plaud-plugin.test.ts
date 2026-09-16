@@ -6,6 +6,8 @@ import plaud from "../../../runline-plugins/plaud/src/index.js";
 import {
   PLAUD_CREDENTIAL,
   PLAUD_OAUTH,
+  PLAUD_PUBLIC_CLIENT_ID,
+  PLAUD_REDIRECT_URI,
   plaudRuntime,
 } from "../../../runline-plugins/plaud/src/shared.js";
 import {
@@ -16,7 +18,7 @@ import { MemoryConnectionProvider } from "../connections/memory.js";
 import {
   buildAuthUrl,
   exchangeAuthCode,
-  OAUTH_CALLBACK_URI,
+  oauthCallback,
   runOAuth,
 } from "../core/oauth.js";
 import { CredentialRegistry } from "../credentials/registry.js";
@@ -98,11 +100,17 @@ describe("native Plaud plugin", () => {
     });
   });
 
-  it("uses PKCE, validated state, Basic code exchange and no grant_type through the generic CLI adapter", async () => {
+  it("uses PKCE, validated state, public-client Basic exchange and no grant_type through the generic CLI adapter", async () => {
     assert.ok(plugin.oauth);
+    assert.equal(plugin.oauth.publicClient, true);
+    assert.equal(plugin.oauth.defaultClientId, PLAUD_PUBLIC_CLIENT_ID);
+    assert.deepEqual(oauthCallback(plugin.oauth), {
+      uri: PLAUD_REDIRECT_URI,
+      port: 8199,
+      path: "/auth/callback",
+    });
     const options = {
       clientId: "client",
-      clientSecret: "secret",
       redirectUri: "https://host.test/callback",
       code: "code",
       state: "bound-state",
@@ -125,7 +133,7 @@ describe("native Plaud plugin", () => {
       assert.equal(init.redirect, "error");
       assert.equal(
         new Headers(init.headers).get("authorization"),
-        `Basic ${Buffer.from("client:secret").toString("base64")}`,
+        `Basic ${Buffer.from("client:").toString("base64")}`,
       );
       assert.deepEqual(
         Object.fromEntries(new URLSearchParams(String(init.body))),
@@ -153,6 +161,10 @@ describe("native Plaud plugin", () => {
       exchangeAuthCode(plugin.oauth, { ...options, codeVerifier: undefined }),
       { code: "invalid_credentials" },
     );
+    await assert.rejects(
+      exchangeAuthCode(plugin.oauth, { ...options, clientSecret: "leaked" }),
+      { code: "invalid_credentials" },
+    );
     const oauth = plugin.oauth;
     assert.throws(() => buildAuthUrl(oauth, { ...options }), {
       code: "invalid_credentials",
@@ -169,7 +181,6 @@ describe("native Plaud plugin", () => {
     });
     const input = {
       clientId: "client",
-      clientSecret: "secret",
       state: "state",
       redirectUri: "https://host.test/cb",
       code: "code",
@@ -197,7 +208,11 @@ describe("native Plaud plugin", () => {
         const definition = structuredClone(PLAUD_OAUTH);
         assert.ok(definition.exchange);
         Object.assign(definition.exchange, { [key]: value });
-        const oauth: OAuthConfig = { protocol: definition, scopes: [] };
+        const oauth: OAuthConfig = {
+          protocol: definition,
+          scopes: [],
+          publicClient: true,
+        };
         assert.throws(() => buildAuthUrl(oauth, input), {
           code: "invalid_definition",
         });
@@ -216,37 +231,53 @@ describe("native Plaud plugin", () => {
     assert.equal(calls, 0);
   });
 
-  it("carries callback-validated state into end-to-end CLI code exchange", async () => {
+  it("serves Plaud's fixed localhost callback on both loopback families and carries state into the exchange", async () => {
     assert.ok(plugin.oauth);
-    let state: string | null = null;
-    mock((_url, init) => {
-      const body = new URLSearchParams(String(init.body));
-      assert.ok(state);
-      assert.equal(body.get("state"), state);
-      assert.ok(body.get("code_verifier"));
-      return Response.json({ access_token: "issued" });
-    });
-    let visit: Promise<void> | undefined;
-    const result = await runOAuth(plugin.oauth, {
-      clientId: "client",
-      clientSecret: "secret",
-      onAuthUrl() {},
-      callbackTimeoutMs: 2000,
-      openBrowser(url) {
-        state = new URL(url).searchParams.get("state");
-        visit = (async () => {
-          const callback = new URL(OAUTH_CALLBACK_URI);
-          assert.ok(state);
-          callback.searchParams.set("state", state);
-          callback.searchParams.set("code", "accepted");
-          const response = await nativeFetch(callback);
-          assert.equal(response.status, 200);
-        })();
-        return visit;
-      },
-    });
-    await visit;
-    assert.equal(result.accessToken, "issued");
+    for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+      let state: string | null = null;
+      mock((_url, init) => {
+        const body = new URLSearchParams(String(init.body));
+        assert.ok(state);
+        assert.equal(body.get("state"), state);
+        assert.ok(body.get("code_verifier"));
+        assert.equal(body.get("redirect_uri"), PLAUD_REDIRECT_URI);
+        return Response.json({ access_token: "issued" });
+      });
+      let visit: Promise<void> | undefined;
+      const result = await runOAuth(plugin.oauth, {
+        clientId: "client",
+        onAuthUrl() {},
+        callbackTimeoutMs: 2000,
+        openBrowser(url) {
+          const consent = new URL(url);
+          assert.equal(
+            consent.searchParams.get("redirect_uri"),
+            PLAUD_REDIRECT_URI,
+          );
+          state = consent.searchParams.get("state");
+          visit = (async () => {
+            const callback = new URL(`http://${host}:8199/auth/callback`);
+            assert.ok(state);
+            callback.searchParams.set("state", state);
+            callback.searchParams.set("code", "accepted");
+            const wrongPath = await nativeFetch(
+              `http://127.0.0.1:8199/callback?state=${state}&code=x`,
+            );
+            assert.equal(wrongPath.status, 404);
+            const response = await nativeFetch(callback).catch((error) => {
+              // Machines without IPv6 loopback still complete via IPv4.
+              if (host !== "[::1]") throw error;
+              callback.hostname = "127.0.0.1";
+              return nativeFetch(callback);
+            });
+            assert.equal(response.status, 200);
+          })();
+          return visit;
+        },
+      });
+      await visit;
+      assert.equal(result.accessToken, "issued");
+    }
   });
 
   it("does not let declarations replace protocol-owned state or transmit state for ordinary providers", async () => {

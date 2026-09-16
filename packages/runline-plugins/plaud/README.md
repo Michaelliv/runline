@@ -6,18 +6,19 @@ Uses Plaud's **third-party API** at `https://platform.plaud.ai/developer/api/ope
 
 ## Authentication
 
-For browser login, obtain your own third-party OAuth client ID/secret and have Plaud register Runline's exact callback (`http://127.0.0.1:47823/callback` by default). The official CLI uses a different callback; its registration does not imply Runline's is allowed. See [Plaud contact](https://docs.plaud.ai/plaud-mcp-cli/contact) for registration questions.
+`runline auth plaud` performs the same flow as Plaud's official CLI: the **published public OAuth client** (`client_f9e0b214-…`), PKCE with S256, no client secret, and Plaud's fixed loopback callback `http://localhost:8199/auth/callback`. Runline listens on both `127.0.0.1` and `::1` because browsers resolve `localhost` to either. Port 8199 must be free (another `plaud login` or `plaud-mcp` may hold it).
 
 ```sh
-# PLAUD_CLIENT_ID and PLAUD_CLIENT_SECRET may be supplied by your secret manager.
 runline auth plaud
 ```
 
-Alternatively, the host can seed a connection with `refreshToken`, or a cached `accessToken` and optional `accessTokenExpiresAt` (epoch milliseconds). Environment hints for explicit CLI/file connections are `PLAUD_REFRESH_TOKEN` and `PLAUD_ACCESS_TOKEN`. The in-memory SDK never reads them implicitly. Refresh needs only the refresh token, not application credentials. A cached access token without a refresh token cannot renew after expiry/rejection.
+Set `PLAUD_CLIENT_ID` (or `--client-id`) to use a different public client registered for that callback. There is no secret to supply; refresh uses only the refresh token at a separate endpoint.
 
-The shared protocol declares PKCE, host-validated state at exchange, Basic authentication for code exchange, no `grant_type`, and a separate refresh endpoint with only `refresh_token`. Host connection updates coordinate renewal and commit before resource use; one rejected GET can renew/replay. No network, rate-limit, server-error, or failed-refresh retries.
+The host can also seed a connection directly with `refreshToken`, or a cached `accessToken` and optional `accessTokenExpiresAt` (epoch milliseconds). Environment hints for explicit CLI/file connections are `PLAUD_REFRESH_TOKEN` and `PLAUD_ACCESS_TOKEN`; the in-memory SDK never reads them implicitly. Runline never reads `~/.plaud/tokens.json`.
 
-**Verification:** mocked tests and the published `@plaud-ai/cli@0.3.13` protocol were used. Third-party application registration, live login, and live refresh rotation have not been verified. This implementation does not imply self-service client registration is available.
+Host connection updates coordinate renewal and commit before resource use; one rejected GET can renew/replay. No network, rate-limit, server-error, or failed-refresh retries.
+
+**Live-verified** (2026-09-16): browser login, every action, and refresh renewal against the production API. Observed tokens: access valid 24 hours, refresh valid 7 days, and refresh rotates both. A connection idle for more than 7 days must log in again.
 
 ## Actions
 
@@ -48,11 +49,11 @@ Inline `data_content` is preferred. Linked `data_link` content requires an exact
 
 ```json
 {
-  "contentOrigins": ["https://your-approved-plaud-content-host.example"]
+  "contentOrigins": ["https://apse1-prod-plaud-content-storage.s3-accelerate.amazonaws.com"]
 }
 ```
 
-This is an illustrative origin, not a real Plaud storage host. Verify the actual storage origin before approving it. No arbitrary S3/CDN wildcard is trusted, and action input cannot expand the allowlist. Without approval, the result has `status: "link_requires_approval"`, `content: null`, and `contentUrl`; it does not silently report a missing transcript.
+That origin was observed on a production account; other regions may use a different bucket, so confirm it from `note.list` before approving. In practice transcripts and summaries arrive inline and the link is rarely needed. No arbitrary S3/CDN wildcard is trusted, and action input cannot expand the allowlist. Without approval, the result has `status: "link_requires_approval"`, `content: null`, and `contentUrl`; it does not silently report a missing transcript.
 
 Approved downloads send no Plaud bearer or cookies, refuse redirects, time out after 20 seconds, and are bounded to 8 MiB. Transcript JSON is decoded into `content`; plain text remains a string. Summary content remains text/Markdown. Missing blocks or empty content return `status: "unavailable"`. Errors do not include signed URLs or raw provider bodies.
 

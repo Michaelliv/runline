@@ -28,6 +28,7 @@ import { createHash, randomBytes } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
+  type Server,
   type ServerResponse,
 } from "node:http";
 import { AuthError } from "../auth/errors.js";
@@ -60,9 +61,55 @@ export const OAUTH_CALLBACK_PORT: number = (() => {
 /** Canonical localhost redirect URI for CLI-based flows. */
 export const OAUTH_CALLBACK_URI = `http://127.0.0.1:${OAUTH_CALLBACK_PORT}/callback`;
 
+/** Browsers resolve `localhost` to either family; IPv6 may be unavailable. */
+const LOOPBACK_HOSTS = ["127.0.0.1", "::1"];
+const IPV6_UNAVAILABLE = new Set([
+  "EAFNOSUPPORT",
+  "EADDRNOTAVAIL",
+  "EINVAL",
+  "EPROTONOSUPPORT",
+]);
+
+interface Callback {
+  uri: string;
+  port: number;
+  path: string;
+}
+
+/** Only loopback HTTP callbacks are accepted; the flow never listens on other interfaces. */
+export function oauthCallback(config: OAuthConfig): Callback {
+  if (config.redirectUri === undefined)
+    return {
+      uri: OAUTH_CALLBACK_URI,
+      port: OAUTH_CALLBACK_PORT,
+      path: "/callback",
+    };
+  let url: URL;
+  try {
+    url = new URL(config.redirectUri);
+  } catch {
+    throw new AuthError("invalid_definition");
+  }
+  const port = Number(url.port);
+  if (
+    url.protocol !== "http:" ||
+    !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) ||
+    !Number.isInteger(port) ||
+    port <= 0 ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname === "/"
+  )
+    throw new AuthError("invalid_definition");
+  return { uri: url.toString(), port, path: url.pathname };
+}
+
 export interface RunOAuthOptions {
   clientId: string;
-  clientSecret: string;
+  /** Omitted for public clients; PKCE protects the exchange instead. */
+  clientSecret?: string;
   /**
    * Called with the consent URL before the browser is opened.
    * Lets the CLI print a clickable link in case auto-open fails.
@@ -84,7 +131,7 @@ export interface BuildAuthUrlOptions {
 
 export interface ExchangeCodeOptions {
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
   code: string;
   redirectUri: string;
   /** PKCE verifier matching the challenge sent on the auth URL. */
@@ -111,6 +158,7 @@ function definition(config: OAuthConfig): OAuth2Definition {
       throw new AuthError("invalid_definition");
     return config.protocol;
   }
+  if (config.publicClient) throw new AuthError("invalid_definition");
   return {
     id: "plugin-oauth",
     provider: "legacy",
@@ -162,7 +210,12 @@ export async function exchangeAuthCode(
   config: OAuthConfig,
   opts: ExchangeCodeOptions,
 ): Promise<OAuthTokens> {
-  return exchangeOAuth2Code(definition(config), {
+  const protocol = definition(config);
+  if (
+    config.publicClient ? opts.clientSecret !== undefined : !opts.clientSecret
+  )
+    throw new AuthError("invalid_credentials");
+  return exchangeOAuth2Code(protocol, {
     application: { clientId: opts.clientId, clientSecret: opts.clientSecret },
     code: opts.code,
     redirectUri: opts.redirectUri,
@@ -200,7 +253,8 @@ export async function runOAuth(
     openBrowser = defaultOpenBrowser,
     callbackTimeoutMs = 300_000,
   } = options;
-  const redirectUri = OAUTH_CALLBACK_URI;
+  const callback = oauthCallback(flowConfig);
+  const redirectUri = callback.uri;
   const state = randomState();
   const { verifier, challenge } = generatePKCE();
 
@@ -212,7 +266,7 @@ export async function runOAuth(
   });
 
   const { code } = await captureCode(
-    OAUTH_CALLBACK_PORT,
+    callback,
     state,
     async (signal) => {
       // Publication may outlive the flow; never launch a finished consent request.
@@ -234,8 +288,43 @@ export async function runOAuth(
 
 // ─── Local callback server ───────────────────────────────────────
 
-function captureCode(
+function listenLoopback(
   port: number,
+  handler: (req: IncomingMessage, res: ServerResponse) => void,
+  onError: () => void,
+): Promise<Server[]> {
+  const servers: Server[] = [];
+  const close = () => {
+    for (const server of servers) server.close();
+  };
+  const listen = (host: string) =>
+    new Promise<void>((resolve, reject) => {
+      const server = createServer(handler);
+      server.once("error", reject);
+      server.listen(port, host, () => {
+        server.removeListener("error", reject);
+        server.on("error", onError);
+        servers.push(server);
+        resolve();
+      });
+    });
+  return (async () => {
+    for (const host of LOOPBACK_HOSTS) {
+      try {
+        await listen(host);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code ?? "";
+        if (host !== LOOPBACK_HOSTS[0] && IPV6_UNAVAILABLE.has(code)) continue;
+        close();
+        throw error;
+      }
+    }
+    return servers;
+  })();
+}
+
+function captureCode(
+  callback: Callback,
   expectedState: string,
   onReady: (signal: AbortSignal) => Promise<void>,
   timeoutMs: number,
@@ -249,25 +338,26 @@ function captureCode(
   }
   return new Promise((resolve, reject) => {
     const lifecycle = new AbortController();
+    let servers: Server[] = [];
     const finish = (result: { code: string } | Error) => {
       if (lifecycle.signal.aborted) return;
       lifecycle.abort();
       clearTimeout(timer);
-      server.close();
+      for (const server of servers) server.close();
       if (result instanceof Error) reject(result);
       else resolve(result);
     };
-    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    const handler = (req: IncomingMessage, res: ServerResponse) => {
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Cache-Control", "no-store");
       let url: URL;
       try {
-        url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
+        url = new URL(req.url ?? "/", `http://127.0.0.1:${callback.port}`);
       } catch {
         res.writeHead(400).end("Invalid callback");
         return;
       }
-      if (req.method !== "GET" || url.pathname !== "/callback") {
+      if (req.method !== "GET" || url.pathname !== callback.path) {
         res.writeHead(404).end("Not found");
         return;
       }
@@ -294,20 +384,23 @@ function captureCode(
         "Authorization received. Return to your terminal for the connection result.",
       );
       finish({ code });
-    });
+    };
     const timer = setTimeout(
       () => finish(new Error("OAuth: browser consent timed out")),
       timeoutMs,
     );
-    server.once("error", () =>
-      finish(new Error("OAuth: callback listener unavailable")),
-    );
-    server.listen(port, "127.0.0.1", () => {
-      if (lifecycle.signal.aborted) return;
+    const unavailable = () =>
+      finish(new Error("OAuth: callback listener unavailable"));
+    listenLoopback(callback.port, handler, unavailable).then((bound) => {
+      servers = bound;
+      if (lifecycle.signal.aborted) {
+        for (const server of servers) server.close();
+        return;
+      }
       void onReady(lifecycle.signal).catch(() =>
         finish(new Error("OAuth: browser launch failed")),
       );
-    });
+    }, unavailable);
   });
 }
 

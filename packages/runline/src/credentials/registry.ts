@@ -98,6 +98,7 @@ function validateMethod(method: CredentialMethod): void {
         ![
           "none",
           "client_id",
+          "client_id_basic",
           "client_secret_basic",
           "client_secret_post",
         ].includes(endpoint.clientAuthentication) ||

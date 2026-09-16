@@ -11,6 +11,11 @@ import { credentialRuntime } from "../../_shared/credentialAdapter.js";
 
 const BASE = "https://platform.plaud.ai/developer/api";
 
+/** Public client identifier and fixed callback published in Plaud's official CLI. */
+export const PLAUD_PUBLIC_CLIENT_ID =
+  "client_f9e0b214-c11f-434b-8b95-c4497d1feb81";
+export const PLAUD_REDIRECT_URI = "http://localhost:8199/auth/callback";
+
 /** Third-party personal-recording API, NOT Plaud Embedded's partner-token API. */
 export const PLAUD_OAUTH: OAuth2Definition = {
   id: "plaud.oauth2",
@@ -18,7 +23,7 @@ export const PLAUD_OAUTH: OAuth2Definition = {
   authorization: { url: "https://web.plaud.ai/platform/oauth" },
   exchange: {
     url: `${BASE}/oauth/third-party/access-token`,
-    clientAuthentication: "client_secret_basic",
+    clientAuthentication: "client_id_basic",
     grantType: null,
     sendState: true,
     requirePkce: true,
@@ -60,7 +65,6 @@ export const PLAUD_CREDENTIAL: CredentialType = {
 export function plaudRuntime(ctx: ActionContext) {
   return credentialRuntime(ctx, PLAUD_CREDENTIAL, "oauth2", (config) => [
     config.clientId,
-    config.clientSecret,
   ]);
 }
 

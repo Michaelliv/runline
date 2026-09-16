@@ -116,7 +116,7 @@ optional authorization endpoint, and separately optional code-exchange, refresh,
 client-credentials, and RS256 JWT-bearer operations. Unsupported operations fail explicitly.
 
 Each token operation declares its endpoint, form/JSON encoding, client authentication
-(none, client ID only, Basic, or body secret), optional grant-type override/omission,
+(none, client ID only, public-client Basic, Basic, or body secret), optional grant-type override/omission,
 provider-specific parameters, and token response field/envelope mapping. Protocol-owned
 parameters cannot be overwritten by definition extras or endpoint query parameters.
 The host supplies `OAuthApplication`, redirect URI, state, PKCE material and scopes.
@@ -164,7 +164,9 @@ token was consumed. Protocol events contain only definition/provider IDs, operat
 result and safe error code. `issued` means issued by the provider, **not persisted**.
 
 The local CLI pins configuration, application credentials, and launch hooks before
-awaiting consent, for both protocol and flat declarations. It binds its callback
+awaiting consent, for both protocol and flat declarations. Plugins may declare a
+provider-fixed loopback callback, a public client, and a published default client ID;
+the listener binds both loopback families and only the declared callback path. It binds its callback
 listener before publishing the consent URL, validates state before accepting either
 success or provider denial, ignores unbound callbacks, redacts provider errors, and
 releases the listener on timeout or launch failure. Delayed consent publication cannot
@@ -310,14 +312,15 @@ Script. Docs/Sheets/Slides return unverified rather than inventing document IDs 
 requiring broader Drive scopes. `googleAccessToken` remains a trusted-runtime token
 compatibility primitive, not a resource-request path or broker API.
 Plaud is a native nine-action read-only plugin on the shared credential transport.
-Its third-party OAuth definition uses Basic code exchange with PKCE/state, omits
-`grant_type`, and refreshes at a separate endpoint with only `refresh_token`.
+Its third-party OAuth definition is a public client: Basic `client_id:` code exchange
+with required PKCE and state, no `grant_type`, and refresh at a separate endpoint with
+only `refresh_token`. Setup uses Plaud's published client ID and fixed loopback
+callback, the same flow as the official CLI.
 The current-user GET is its fixed probe. Transcript/summary content prefers inline
 blocks; signed links require exact host-approved `contentOrigins` and use bounded
 unauthenticated downloads. Unapproved links return an explicit approval-needed status.
-No official CLI client credentials or token files are reused. Registration of a
-third-party application and Runline's callback with Plaud remains a host prerequisite.
-No provider migration has been verified against live accounts.
+Runline never reads the official CLI's token file. Plaud login, all actions, and
+refresh rotation are live-verified; Google and Microsoft migrations are not.
 
 ## Remaining implementation stages
 
@@ -338,7 +341,7 @@ broker operations merely because the transport now exists.
    IPC, and revision-aware invalidation. Token renewal must not restart workspace
    hosts. Authorization changes must take effect according to explicit policy.
 3. **Provider migrations:** additional providers still using legacy resource helpers;
-   live verification of Plaud's nonstandard refresh and application registration.
+   live verification of the Google and Microsoft migrations.
    Converge AI-provider lifecycle infrastructure without replacing
    provider SDK adapters or inference-routing policy.
 

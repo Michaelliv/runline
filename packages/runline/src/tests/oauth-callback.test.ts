@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import {
+  exchangeAuthCode,
   OAUTH_CALLBACK_URI,
+  oauthCallback,
   type RunOAuthOptions,
   runOAuth,
 } from "../core/oauth.js";
@@ -151,6 +153,45 @@ describe("local OAuth callback lifecycle", () => {
       { message: "OAuth: authorization denied" },
     );
     await visit;
+  });
+
+  it("accepts only loopback HTTP callbacks and requires an explicit protocol for public clients", async () => {
+    assert.deepEqual(oauthCallback(config), {
+      uri: OAUTH_CALLBACK_URI,
+      port: Number(new URL(OAUTH_CALLBACK_URI).port),
+      path: "/callback",
+    });
+    for (const redirectUri of [
+      "https://localhost:8199/auth/callback",
+      "http://example.test:8199/auth/callback",
+      "http://localhost/auth/callback",
+      "http://localhost:8199/",
+      "http://localhost:8199/auth/callback?x=1",
+      "http://user:pw@localhost:8199/auth/callback",
+      "not a url",
+    ])
+      assert.throws(() => oauthCallback({ ...config, redirectUri }), {
+        code: "invalid_definition",
+      });
+    assert.equal(
+      oauthCallback({ ...config, redirectUri: "http://[::1]:9/cb" }).path,
+      "/cb",
+    );
+    globalThis.fetch = (async (_url, _init): Promise<Response> => {
+      throw new Error("must not exchange");
+    }) as typeof fetch;
+    const exchange = {
+      clientId: "client",
+      code: "c",
+      redirectUri: "http://127.0.0.1:1/cb",
+    };
+    await assert.rejects(
+      exchangeAuthCode({ ...config, publicClient: true }, exchange),
+      { code: "invalid_definition" },
+    );
+    await assert.rejects(exchangeAuthCode(config, exchange), {
+      code: "invalid_credentials",
+    });
   });
 
   it("does not launch a browser after consent publication outlives the callback timeout", async () => {

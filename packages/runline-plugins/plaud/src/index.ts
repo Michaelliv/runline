@@ -6,6 +6,8 @@ import {
   dateBoundary,
   list,
   PLAUD_OAUTH,
+  PLAUD_PUBLIC_CLIENT_ID,
+  PLAUD_REDIRECT_URI,
   recording,
   request,
   scan,
@@ -80,13 +82,13 @@ export default function plaud(rl: RunlinePluginAPI) {
   rl.setOAuth({
     protocol: PLAUD_OAUTH,
     scopes: [],
+    redirectUri: PLAUD_REDIRECT_URI,
+    publicClient: true,
+    defaultClientId: PLAUD_PUBLIC_CLIENT_ID,
     setupHelp: [
-      "Use a Plaud third-party OAuth application approved for access to personal recordings.",
+      "Plaud publishes a public OAuth client (PKCE, no secret) with the fixed callback {{redirectUri}}; the same flow as the official CLI.",
+      "Set PLAUD_CLIENT_ID to use a different client registered for that callback.",
       "Plaud Embedded partner credentials are for a different API and are not interchangeable.",
-      "Register this exact Runline callback with Plaud: {{redirectUri}}",
-      "Ask Plaud about client registration: https://docs.plaud.ai/plaud-mcp-cli/contact",
-      "Supply your own client ID and secret; Runline does not borrow the official CLI's application.",
-      "Alternatively seed refreshToken in a host-managed connection. Runline never reads ~/.plaud/tokens.json.",
     ],
   });
   rl.setConnectionSchema({
@@ -95,14 +97,7 @@ export default function plaud(rl: RunlinePluginAPI) {
       required: false,
       env: "PLAUD_CLIENT_ID",
       description:
-        "Your registered third-party OAuth client ID (needed for login)",
-    },
-    clientSecret: {
-      type: "string",
-      required: false,
-      env: "PLAUD_CLIENT_SECRET",
-      description:
-        "Your third-party OAuth client secret (needed for login, not refresh)",
+        "Public third-party OAuth client ID used at login; defaults to Plaud's published client",
     },
     refreshToken: {
       type: "string",

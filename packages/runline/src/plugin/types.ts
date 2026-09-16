@@ -115,6 +115,16 @@ interface OAuthSetupOptions {
   /** Scopes to request on the consent screen. */
   scopes: string[];
   /**
+   * Provider-fixed loopback callback (`http://localhost:<port>/<path>`),
+   * replacing Runline's default `http://127.0.0.1:47823/callback`. Use only
+   * when the provider validates redirects against a URI it published.
+   */
+  redirectUri?: string;
+  /** Public client: PKCE protects the exchange and no client secret is collected or sent. */
+  publicClient?: boolean;
+  /** Provider-published client identifier used when the user supplies none. */
+  defaultClientId?: string;
+  /**
    * Printed by `runline auth <plugin>` before credentials are
    * requested. Each array entry is a line. The token
    * `{{redirectUri}}` is substituted with the actual callback URL

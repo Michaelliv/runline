@@ -180,6 +180,29 @@ describe("OAuth2 definitions and protocol runtime", () => {
       },
     );
     assert.deepEqual(tokens, { accessToken: "access" });
+    def.exchange.clientAuthentication = "client_id_basic";
+    let requests = 0;
+    const basic = mock((_url, init) => {
+      requests++;
+      const fields = new URLSearchParams(String(init.body));
+      assert.equal(fields.has("client_id"), false);
+      assert.equal(
+        new Headers(init.headers).get("authorization"),
+        `Basic ${Buffer.from("public:").toString("base64")}`,
+      );
+      return Response.json({ access_token: "access" });
+    });
+    await exchangeOAuth2Code(
+      def,
+      { ...code, application: { clientId: "public" } },
+      { fetch: basic },
+    );
+    // A supplied secret means the definition and application disagree about the client type.
+    await assert.rejects(
+      exchangeOAuth2Code(def, { ...code, application }, { fetch: basic }),
+      { code: "invalid_credentials" },
+    );
+    assert.equal(requests, 1);
   });
 
   it("supports separate refresh endpoints with only a JSON refresh token", async () => {

@@ -2,7 +2,7 @@ import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import { addConnection } from "../config/loader.js";
-import { OAUTH_CALLBACK_PORT, runOAuth } from "../core/oauth.js";
+import { oauthCallback, runOAuth } from "../core/oauth.js";
 import { loadAllPlugins } from "../plugin/loader.js";
 import { registry } from "../plugin/registry.js";
 import { connectionFields } from "../plugin/schema.js";
@@ -29,22 +29,31 @@ export async function auth(
     process.exit(1);
   }
 
-  // Client credentials: CLI flag > env > interactive prompt.
+  // Client credentials: CLI flag > env > plugin default > interactive prompt.
   // Environment names come from the plugin's connection schema.
   const connectionSchema = connectionFields(def.connectionConfigSchema);
   const envIdVar = connectionSchema.clientId?.env;
   const envSecretVar = connectionSchema.clientSecret?.env;
+  const publicClient = def.oauth.publicClient === true;
 
   const resolvedClientId =
-    options.clientId ?? (envIdVar ? process.env[envIdVar] : undefined);
-  const resolvedClientSecret =
-    options.clientSecret ??
-    (envSecretVar ? process.env[envSecretVar] : undefined);
+    options.clientId ??
+    (envIdVar ? process.env[envIdVar] : undefined) ??
+    def.oauth.defaultClientId;
+  const resolvedClientSecret = publicClient
+    ? undefined
+    : (options.clientSecret ??
+      (envSecretVar ? process.env[envSecretVar] : undefined));
+  if (publicClient && options.clientSecret !== undefined) {
+    printError(`Plugin "${plugin}" uses a public OAuth client; no secret.`);
+    process.exit(1);
+  }
 
   // If we're about to prompt and the plugin published setup help,
   // print it once so the user knows what to paste. Suppressed
   // under --json and --quiet.
-  const willPrompt = !resolvedClientId || !resolvedClientSecret;
+  const willPrompt =
+    !resolvedClientId || (!publicClient && !resolvedClientSecret);
   if (
     willPrompt &&
     def.oauth.setupHelp &&
@@ -52,7 +61,7 @@ export async function auth(
     !options.json &&
     !options.quiet
   ) {
-    const redirectUri = `http://127.0.0.1:${OAUTH_CALLBACK_PORT}/callback`;
+    const redirectUri = oauthCallback(def.oauth).uri;
     console.log();
     console.log(chalk.bold(`Setting up ${plugin} OAuth`));
     console.log();
@@ -67,11 +76,17 @@ export async function auth(
 
   const clientId =
     resolvedClientId ?? (await prompt(`${plugin} OAuth client ID: `));
-  const clientSecret =
-    resolvedClientSecret ?? (await prompt(`${plugin} OAuth client secret: `));
+  const clientSecret = publicClient
+    ? undefined
+    : (resolvedClientSecret ??
+      (await prompt(`${plugin} OAuth client secret: `)));
 
-  if (!clientId || !clientSecret) {
-    printError("Both client ID and client secret are required.");
+  if (!clientId || (!publicClient && !clientSecret)) {
+    printError(
+      publicClient
+        ? "A client ID is required."
+        : "Both client ID and client secret are required.",
+    );
     process.exit(1);
   }
 

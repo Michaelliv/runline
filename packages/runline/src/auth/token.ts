@@ -186,7 +186,11 @@ export async function requestOAuth2Token(
       throw new AuthError("invalid_definition");
     if (endpoint.clientAuthentication === "client_id")
       fields.client_id = application.clientId;
-    else {
+    else if (endpoint.clientAuthentication === "client_id_basic") {
+      if (application.clientSecret !== undefined)
+        throw new AuthError("invalid_credentials");
+      headers.Authorization = `Basic ${Buffer.from(`${formValue(application.clientId)}:`).toString("base64")}`;
+    } else {
       if (
         typeof application.clientSecret !== "string" ||
         !application.clientSecret
