@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun run --filter '*' build",
+    "build": "bun --filter runline build && bun --filter pi-runline build",
     "test": "bun run --filter '*' test",
     "check": "bunx @biomejs/biome check .",
     "format": "bunx @biomejs/biome format --write .",
