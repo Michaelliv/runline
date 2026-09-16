@@ -12,9 +12,9 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.29.0",
+      "version": "0.30.0",
       "dependencies": {
-        "runline": "0.29.0",
+        "runline": "0.30.0",
       },
       "peerDependencies": {
         "@mariozechner/pi-coding-agent": "*",
@@ -24,7 +24,7 @@
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.29.0",
+      "version": "0.30.0",
       "bin": {
         "runline": "./dist/main.js",
       },
