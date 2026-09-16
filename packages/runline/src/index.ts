@@ -59,6 +59,7 @@ export {
   generatePKCE,
   OAUTH_CALLBACK_PORT,
   OAUTH_CALLBACK_URI,
+  oauthCallback,
   runOAuth,
 } from "./core/oauth.js";
 export { downloadResource } from "./credentials/http.js";
