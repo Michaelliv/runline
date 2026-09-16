@@ -30,8 +30,7 @@ export async function auth(
   }
 
   // Client credentials: CLI flag > env > interactive prompt.
-  // Env var names follow the plugin's own convention when declared
-  // on its connection schema; fall back to generic names otherwise.
+  // Environment names come from the plugin's connection schema.
   const connectionSchema = connectionFields(def.connectionConfigSchema);
   const envIdVar = connectionSchema.clientId?.env;
   const envSecretVar = connectionSchema.clientSecret?.env;
@@ -95,7 +94,7 @@ export async function auth(
       },
     });
 
-    addConnection(connectionName, plugin, {
+    await addConnection(connectionName, plugin, {
       clientId,
       clientSecret,
       refreshToken: tokens.refreshToken,

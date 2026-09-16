@@ -1,8 +1,8 @@
 import { createSign } from "node:crypto";
 import type { ActionContext } from "runline";
+import { coordinatedAccessToken, requestToken } from "./tokenRefresh.js";
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
-const REFRESH_SKEW_MS = 60_000;
 
 export type GoogleAuthConfig = {
   clientId?: string;
@@ -21,31 +21,25 @@ export async function googleAccessToken(
   pluginName: string,
   scopes: string[],
 ): Promise<string> {
-  const cfg = ctx.connection.config as GoogleAuthConfig;
-  if (
-    cfg.accessToken &&
-    typeof cfg.accessTokenExpiresAt === "number" &&
-    Date.now() < cfg.accessTokenExpiresAt - REFRESH_SKEW_MS
-  ) {
-    return cfg.accessToken;
-  }
-
-  if (hasServiceAccountConfig(cfg)) {
-    return refreshServiceAccountAccessToken(ctx, pluginName, cfg, scopes);
-  }
-
-  return refreshOAuthAccessToken(ctx, pluginName, cfg);
+  return coordinatedAccessToken(ctx, async (current) => {
+    const cfg = current as GoogleAuthConfig;
+    return hasServiceAccountConfig(cfg)
+      ? refreshServiceAccountAccessToken(pluginName, cfg, scopes)
+      : refreshOAuthAccessToken(pluginName, cfg);
+  });
 }
 
 function hasServiceAccountConfig(cfg: GoogleAuthConfig): boolean {
-  return !!cfg.serviceAccountJson || !!(cfg.serviceAccountEmail && cfg.serviceAccountPrivateKey);
+  return (
+    !!cfg.serviceAccountJson ||
+    !!(cfg.serviceAccountEmail && cfg.serviceAccountPrivateKey)
+  );
 }
 
 async function refreshOAuthAccessToken(
-  ctx: ActionContext,
   pluginName: string,
   cfg: GoogleAuthConfig,
-): Promise<string> {
+) {
   const { clientId, clientSecret, refreshToken } = cfg;
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
@@ -53,35 +47,18 @@ async function refreshOAuthAccessToken(
     );
   }
 
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-    grant_type: "refresh_token",
-  });
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  if (!res.ok) {
-    throw new Error(`${pluginName}: token refresh failed (${res.status}): ${await res.text()}`);
-  }
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  const expiresAt = Date.now() + data.expires_in * 1000;
-  await ctx.updateConnection({
-    accessToken: data.access_token,
-    accessTokenExpiresAt: expiresAt,
-  });
-  return data.access_token;
+  return requestToken(
+    { url: TOKEN_ENDPOINT, clientAuthentication: "client_secret_post" },
+    { refresh_token: refreshToken, grant_type: "refresh_token" },
+    { clientId, clientSecret },
+  );
 }
 
 async function refreshServiceAccountAccessToken(
-  ctx: ActionContext,
   pluginName: string,
   cfg: GoogleAuthConfig,
   scopes: string[],
-): Promise<string> {
+) {
   const serviceAccount = parseServiceAccount(pluginName, cfg);
   const now = Math.floor(Date.now() / 1000);
   const assertion = signJwt(
@@ -100,25 +77,10 @@ async function refreshServiceAccountAccessToken(
     serviceAccount.private_key,
   );
 
-  const body = new URLSearchParams({
-    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-    assertion,
-  });
-  const res = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  if (!res.ok) {
-    throw new Error(`${pluginName}: service account token failed (${res.status}): ${await res.text()}`);
-  }
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  const expiresAt = Date.now() + data.expires_in * 1000;
-  await ctx.updateConnection({
-    accessToken: data.access_token,
-    accessTokenExpiresAt: expiresAt,
-  });
-  return data.access_token;
+  return requestToken(
+    { url: TOKEN_ENDPOINT, clientAuthentication: "none" },
+    { grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion },
+  );
 }
 
 function parseServiceAccount(
@@ -132,10 +94,13 @@ function parseServiceAccount(
         private_key?: string;
       };
       if (parsed.client_email && parsed.private_key) {
-        return { client_email: parsed.client_email, private_key: parsed.private_key };
+        return {
+          client_email: parsed.client_email,
+          private_key: parsed.private_key,
+        };
       }
-    } catch (err) {
-      throw new Error(`${pluginName}: invalid serviceAccountJson: ${(err as Error).message}`);
+    } catch {
+      throw new Error(`${pluginName}: invalid serviceAccountJson`);
     }
   }
 
@@ -168,5 +133,9 @@ function signJwt(
 
 function base64url(input: string | Buffer): string {
   const buf = typeof input === "string" ? Buffer.from(input, "utf-8") : input;
-  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return buf
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }

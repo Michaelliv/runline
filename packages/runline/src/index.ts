@@ -1,3 +1,21 @@
+export { AuthError, type AuthErrorCode } from "./auth/errors.js";
+export {
+  acquireOAuth2ClientToken,
+  buildOAuth2AuthorizationUrl,
+  exchangeOAuth2Code,
+  refreshOAuth2Token,
+} from "./auth/oauth2.js";
+export { decodeOAuthTokens, requestOAuth2Token } from "./auth/token.js";
+export type {
+  OAuth2Definition,
+  OAuth2TokenEndpoint,
+  OAuthApplication,
+  OAuthAuthorizationOptions,
+  OAuthCodeOptions,
+  OAuthEvent,
+  OAuthOperation,
+  OAuthRuntimeOptions,
+} from "./auth/types.js";
 export {
   addConnection,
   findConfigDir,
@@ -9,6 +27,16 @@ export {
 } from "./config/loader.js";
 export type { RunlineConfig } from "./config/types.js";
 export { DEFAULT_CONFIG } from "./config/types.js";
+export { FileConnectionProvider } from "./connections/file.js";
+export { MemoryConnectionProvider } from "./connections/memory.js";
+export type {
+  ConnectionHandle,
+  ConnectionPatch,
+  ConnectionProvider,
+  ConnectionRequest,
+  ConnectionUpdate,
+  ConnectionUpdater,
+} from "./connections/types.js";
 export type {
   ActionInvocation,
   EngineHooks,

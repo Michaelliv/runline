@@ -1,40 +1,8 @@
-import type { RunlinePluginAPI } from "runline";
-
-let cachedToken: { value: string; expiresAt: number } | null = null;
-
-async function getAccessToken(
-  clientId: string,
-  clientSecret: string,
-  tokenUrl: string,
-): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt)
-    return cachedToken.value;
-
-  const res = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: "client_credentials",
-      scope: "api.organization",
-      deviceName: "runline",
-      deviceType: "2",
-      deviceIdentifier: "runline",
-    }),
-  });
-  if (!res.ok)
-    throw new Error(`Bitwarden token error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as {
-    access_token: string;
-    expires_in: number;
-  };
-  cachedToken = {
-    value: data.access_token,
-    expiresAt: Date.now() + (data.expires_in - 60) * 1000,
-  };
-  return cachedToken.value;
-}
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  coordinatedAccessToken,
+  requestToken,
+} from "../../_shared/tokenRefresh.js";
 
 async function apiRequest(
   token: string,
@@ -79,8 +47,7 @@ async function apiRequest(
   return { success: true };
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
+function getConn(cfg: Readonly<Record<string, unknown>>) {
   const domain = (cfg.domain as string | undefined)?.replace(/\/$/, "");
   const env = cfg.environment as string | undefined;
   const baseUrl =
@@ -100,15 +67,34 @@ function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
 }
 
 async function authedRequest(
-  ctx: { connection: { config: Record<string, unknown> } },
+  ctx: ActionContext,
   method: string,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ) {
-  const { clientId, clientSecret, baseUrl, tokenUrl } = getConn(ctx);
-  const token = await getAccessToken(clientId, clientSecret, tokenUrl);
-  return apiRequest(token, baseUrl, method, endpoint, body, qs);
+  const token = await coordinatedAccessToken(ctx, (current) => {
+    const { clientId, clientSecret, tokenUrl } = getConn(current);
+    return requestToken(
+      { url: tokenUrl, clientAuthentication: "client_secret_post" },
+      {
+        grant_type: "client_credentials",
+        scope: "api.organization",
+        deviceName: "runline",
+        deviceType: "2",
+        deviceIdentifier: "runline",
+      },
+      { clientId, clientSecret },
+    );
+  });
+  return apiRequest(
+    token,
+    getConn(ctx.connection.config).baseUrl,
+    method,
+    endpoint,
+    body,
+    qs,
+  );
 }
 
 export default function bitwarden(rl: RunlinePluginAPI) {

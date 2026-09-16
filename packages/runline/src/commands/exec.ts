@@ -1,5 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { loadConfig } from "../config/loader.js";
+import { join } from "node:path";
+import { findConfigDir, loadConfig } from "../config/loader.js";
+import { FileConnectionProvider } from "../connections/file.js";
 import { ExecutionEngine } from "../core/engine.js";
 import { loadAllPlugins } from "../plugin/loader.js";
 import { registry } from "../plugin/registry.js";
@@ -13,7 +15,12 @@ export async function exec(
   await loadAllPlugins({
     builtinAllowlist: new Set(config.connections.map((c) => c.plugin)),
   });
-  const engine = new ExecutionEngine(registry, config);
+  const configDir = findConfigDir() ?? join(process.cwd(), ".runline");
+  const engine = new ExecutionEngine(registry, config, {
+    connectionProvider: new FileConnectionProvider(
+      join(configDir, "config.json"),
+    ),
+  });
 
   if (options.file) {
     if (!existsSync(code)) {

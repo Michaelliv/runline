@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import chalk from "chalk";
+import { updateConnectionFile } from "../config/store.js";
 import { DEFAULT_CONFIG } from "../config/types.js";
 import { printJson, printSuccess, printWarn } from "../utils/output.js";
 
@@ -22,10 +23,12 @@ export async function init(options: {
   mkdirSync(dir, { recursive: true });
   mkdirSync(join(dir, "plugins"), { recursive: true });
 
-  writeFileSync(
-    join(dir, "config.json"),
-    `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`,
-  );
+  const path = join(dir, "config.json");
+  await updateConnectionFile(path, (data) => {
+    if (existsSync(path)) return { result: undefined, write: false };
+    Object.assign(data, structuredClone(DEFAULT_CONFIG));
+    return { result: undefined, write: true };
+  });
 
   if (options.json) {
     printJson({ ok: true, path: dir });

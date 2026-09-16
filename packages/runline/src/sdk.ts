@@ -1,9 +1,13 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { loadConfigFrom } from "./config/loader.js";
 import type { RunlineConfig } from "./config/types.js";
 import { DEFAULT_CONFIG } from "./config/types.js";
+import { FileConnectionProvider } from "./connections/file.js";
+import { MemoryConnectionProvider } from "./connections/memory.js";
+import type { ConnectionProvider } from "./connections/types.js";
 import {
-  type ActionInvocation,
+  type EngineHooks,
   type ExecuteResult,
   ExecutionEngine,
 } from "./core/engine.js";
@@ -20,7 +24,10 @@ import type {
 
 export interface RunlineOptions {
   plugins?: Array<PluginDef | PluginFunction>;
+  /** Initial process-local connections. No environment lookup or disk writes. */
   connections?: ConnectionConfig[];
+  /** Host-owned credentials; mutually exclusive with initial connections. */
+  connectionProvider?: ConnectionProvider;
   timeoutMs?: number;
   memoryLimitBytes?: number;
   /**
@@ -36,7 +43,7 @@ export interface RunlineOptions {
    * never breaks a run. Not part of `RunlineConfig` on purpose —
    * config round-trips through JSON (`fromProject`), functions do not.
    */
-  onAction?: (info: ActionInvocation) => void;
+  onAction?: EngineHooks["onAction"];
 }
 
 export interface RunlineExecuteOptions {
@@ -49,18 +56,30 @@ export interface RunlineExecuteOptions {
 export class Runline {
   private _registry: PluginRegistry;
   private _config: RunlineConfig;
+  private readonly _connectionProvider: ConnectionProvider;
+  private readonly _memoryConnections?: MemoryConnectionProvider;
   /**
    * One engine per Runline instance, so its pooled worker survives across
-   * `execute()` calls. Constructing an engine per call would spawn (and
-   * leak) a fresh worker every time — the exact bug pooling exists to fix.
+   * `execute()` calls and avoids per-execution thread allocation.
    */
   private _engine: ExecutionEngine | null = null;
 
-  private readonly _onAction: ((info: ActionInvocation) => void) | undefined;
+  private readonly _onAction: EngineHooks["onAction"];
 
   private constructor(options: RunlineOptions) {
     this._registry = new PluginRegistry();
     this._onAction = options.onAction;
+    if (options.connectionProvider && options.connections) {
+      throw new Error("Pass connections or connectionProvider, not both");
+    }
+    if (options.connectionProvider) {
+      this._connectionProvider = options.connectionProvider;
+    } else {
+      this._memoryConnections = new MemoryConnectionProvider(
+        options.connections,
+      );
+      this._connectionProvider = this._memoryConnections;
+    }
 
     for (const pluginOrFn of options.plugins ?? []) {
       const plugin = resolvePluginExport(pluginOrFn, "unknown");
@@ -68,7 +87,7 @@ export class Runline {
     }
 
     this._config = {
-      connections: options.connections ?? [],
+      connections: [],
       timeoutMs: options.timeoutMs ?? DEFAULT_CONFIG.timeoutMs,
       memoryLimitBytes:
         options.memoryLimitBytes ?? DEFAULT_CONFIG.memoryLimitBytes,
@@ -82,6 +101,7 @@ export class Runline {
     if (!this._engine) {
       this._engine = new ExecutionEngine(this._registry, this._config, {
         onAction: this._onAction,
+        connectionProvider: this._connectionProvider,
       });
     }
     return this._engine;
@@ -115,15 +135,16 @@ export class Runline {
     connections?: ConnectionConfig[],
   ): void {
     const plugin = resolvePluginExport(pluginOrFn, "unknown");
-    this._registry.register(plugin);
     if (connections) {
-      this._config = {
-        ...this._config,
-        connections: [...this._config.connections, ...connections],
-      };
+      if (!this._memoryConnections) {
+        throw new Error(
+          "Configure connections through the host connection provider",
+        );
+      }
+      this._memoryConnections.add(connections);
     }
-    // The pooled worker baked in the old plugin surface and the engine holds
-    // the old config object: both are stale now.
+    this._registry.register(plugin);
+    // Rebuild the worker's action surface; connection custody survives disposal.
     this.dispose();
   }
 
@@ -159,9 +180,12 @@ export class Runline {
     }));
   }
 
-  /** Return all connections currently configured. */
+  /**
+   * Snapshot of process-local connections. Host-managed providers are not
+   * enumerated: their accounts can be caller-scoped and must be listed by the host.
+   */
   connections(): ConnectionConfig[] {
-    return [...this._config.connections];
+    return this._memoryConnections?.list() ?? [];
   }
 
   /**
@@ -193,7 +217,7 @@ export class Runline {
     const configDir = findRunlineDir(dir);
     if (!configDir) return null;
 
-    const config = loadConfigFrom(configDir);
+    const config = loadConfigFrom(join(configDir, "config.json"));
     const builtinAllowlist = new Set(config.connections.map((c) => c.plugin));
     const plugins = await discoverPlugins(configDir, {
       builtinAllowlist,
@@ -201,9 +225,12 @@ export class Runline {
     });
 
     const rl = new Runline({
-      connections: config.connections,
+      connectionProvider: new FileConnectionProvider(
+        join(configDir, "config.json"),
+      ),
       timeoutMs: config.timeoutMs,
       memoryLimitBytes: config.memoryLimitBytes,
+      maxRunsPerWorker: config.maxRunsPerWorker,
     });
 
     for (const plugin of plugins) {
@@ -215,7 +242,7 @@ export class Runline {
 }
 
 function findRunlineDir(from: string): string | null {
-  let dir = from;
+  let dir = resolve(from);
   while (true) {
     if (existsSync(join(dir, ".runline"))) return join(dir, ".runline");
     const parent = join(dir, "..");
@@ -223,15 +250,4 @@ function findRunlineDir(from: string): string | null {
     dir = parent;
   }
   return null;
-}
-
-function loadConfigFrom(configDir: string): RunlineConfig {
-  const configPath = join(configDir, "config.json");
-  if (!existsSync(configPath)) return { ...DEFAULT_CONFIG };
-  try {
-    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-    return { ...DEFAULT_CONFIG, ...raw };
-  } catch {
-    return { ...DEFAULT_CONFIG };
-  }
 }

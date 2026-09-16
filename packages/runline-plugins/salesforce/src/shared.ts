@@ -1,4 +1,4 @@
-import type { ActionContext } from "runline";
+import { type ActionContext, requestOAuth2Token } from "runline";
 
 export const DEFAULT_API_VERSION = "v59.0";
 
@@ -76,47 +76,34 @@ export async function getSession(ctx: Ctx): Promise<SalesforceSession> {
   const clientId = requireString(c.clientId, "clientId");
   const clientSecret = requireString(c.clientSecret, "clientSecret");
 
-  const body = new URLSearchParams();
-  body.set("grant_type", "client_credentials");
-  body.set("client_id", clientId);
-  body.set("client_secret", clientSecret);
-
-  const res = await fetch(`${loginUrl}/services/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
+  const tokens = await requestOAuth2Token(
+    {
+      url: `${loginUrl}/services/oauth2/token`,
+      clientAuthentication: "client_secret_post",
+      response: {
+        metadata: {
+          instanceUrl: "instance_url",
+          id: "id",
+          issuedAt: "issued_at",
+        },
+      },
     },
-    body,
-  });
-  const text = await res.text();
-  let data: Record<string, unknown>;
-  try {
-    data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  } catch {
-    data = { raw: text };
-  }
-  if (!res.ok) {
-    const err = typeof data.error === "string" ? data.error : res.status;
-    const description =
-      typeof data.error_description === "string"
-        ? `: ${data.error_description}`
-        : "";
-    throw new Error(`Salesforce token error ${err}${description}`);
-  }
+    { grant_type: "client_credentials" },
+    { clientId, clientSecret },
+  );
 
   return {
     instanceUrl: validateInstanceUrl(
-      requireString(data.instance_url, "token response instance_url"),
+      requireString(
+        tokens.metadata?.instanceUrl,
+        "token response instance_url",
+      ),
     ),
-    accessToken: requireString(
-      data.access_token,
-      "token response access_token",
-    ),
-    tokenType: typeof data.token_type === "string" ? data.token_type : "Bearer",
-    scope: typeof data.scope === "string" ? data.scope : undefined,
-    id: typeof data.id === "string" ? data.id : undefined,
-    issuedAt: typeof data.issued_at === "string" ? data.issued_at : undefined,
+    accessToken: tokens.accessToken,
+    tokenType: tokens.tokenType ?? "Bearer",
+    scope: tokens.scope,
+    id: tokens.metadata?.id,
+    issuedAt: tokens.metadata?.issuedAt,
   };
 }
 

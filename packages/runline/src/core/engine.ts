@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
-import { applyEnvOverrides, updateConnectionConfig } from "../config/loader.js";
 import type { RunlineConfig } from "../config/types.js";
+import { MemoryConnectionProvider } from "../connections/memory.js";
+import type { ConnectionProvider } from "../connections/types.js";
 import type { PluginRegistry } from "../plugin/registry.js";
 import {
   formatValidationError,
@@ -13,11 +14,11 @@ import {
 } from "../plugin/schema.js";
 import type {
   ActionContext,
-  ConnectionConfig,
   HelpInput,
   PluginDef,
   TypedInputSchema,
 } from "../plugin/types.js";
+import { notifyObserver } from "../utils/observer.js";
 
 export interface ExecuteResult {
   result: unknown;
@@ -53,11 +54,13 @@ export interface ActionInvocation {
 }
 
 export interface EngineHooks {
+  /** Host-owned resolution and persistence. Defaults to process-local memory. */
+  connectionProvider?: ConnectionProvider;
   /**
    * Observer for every action invocation. Must not throw — but if it
    * does, the engine swallows it: observability never breaks a run.
    */
-  onAction?: (info: ActionInvocation) => void;
+  onAction?: (info: ActionInvocation) => void | Promise<void>;
 }
 
 // Messages worker → host. Every message carries the `runId` it belongs to so
@@ -198,6 +201,7 @@ export class ExecutionEngine {
   private registry: PluginRegistry;
   private config: RunlineConfig;
   private hooks: EngineHooks;
+  private connectionProvider: ConnectionProvider;
   private pooled: PooledWorker | null = null;
   private readonly maxRunsPerWorker: number;
 
@@ -209,6 +213,9 @@ export class ExecutionEngine {
     this.registry = registry;
     this.config = config;
     this.hooks = hooks;
+    this.connectionProvider =
+      hooks.connectionProvider ??
+      new MemoryConnectionProvider(config.connections);
     this.maxRunsPerWorker =
       config.maxRunsPerWorker ?? DEFAULT_MAX_RUNS_PER_WORKER;
   }
@@ -501,7 +508,26 @@ export class ExecutionEngine {
     }
 
     const { plugin, action } = resolved;
-    const connection = this.resolveConnection(plugin);
+    if (isTypedInputSchema(action.inputSchema)) {
+      const validation = validateTypedInput(action.inputSchema, args);
+      if (!validation.ok) {
+        throw new Error(formatValidationError(path, validation));
+      }
+    }
+
+    const handle = await this.connectionProvider.resolve({
+      plugin: plugin.name,
+      action: action.name,
+      schema: plugin.connectionConfigSchema,
+      context,
+    });
+    const connection = structuredClone(await handle.read());
+    if (connection.plugin !== plugin.name) {
+      throw new Error(
+        `Connection provider returned the wrong plugin for ${path}`,
+      );
+    }
+    const connectionName = connection.name;
     const ctx: ActionContext = {
       connection,
       context,
@@ -510,20 +536,19 @@ export class ExecutionEngine {
         warn: (msg) => console.warn(`[${plugin.name}] ${msg}`),
         error: (msg) => console.error(`[${plugin.name}] ${msg}`),
       },
-      updateConnection: async (patch) => {
-        // Mutate the in-memory copy so the rest of this action
-        // sees the new values without re-reading disk.
-        Object.assign(connection.config, patch);
-        await updateConnectionConfig(connection.name, patch);
+      updateConnection: async (change) => {
+        const committed = await handle.update(change);
+        if (
+          committed.plugin !== plugin.name ||
+          committed.name !== connectionName
+        ) {
+          throw new Error(
+            `Connection provider changed identity during update for ${path}`,
+          );
+        }
+        connection.config = structuredClone(committed.config);
       },
     };
-
-    if (isTypedInputSchema(action.inputSchema)) {
-      const validation = validateTypedInput(action.inputSchema, args);
-      if (!validation.ok) {
-        throw new Error(formatValidationError(path, validation));
-      }
-    }
 
     const started = performance.now();
     try {
@@ -546,19 +571,13 @@ export class ExecutionEngine {
     failed: boolean,
     error?: unknown,
   ): void {
-    const onAction = this.hooks.onAction;
-    if (!onAction) return;
-    try {
-      onAction({
-        plugin: pluginName,
-        action: actionName,
-        path,
-        durationMs: performance.now() - started,
-        ...(failed ? { error: error ?? new Error("Unknown error") } : {}),
-      });
-    } catch {
-      // Observability never breaks a run.
-    }
+    notifyObserver(this.hooks.onAction, {
+      plugin: pluginName,
+      action: actionName,
+      path,
+      durationMs: performance.now() - started,
+      ...(failed ? { error: error ?? new Error("Unknown error") } : {}),
+    });
   }
 
   /**
@@ -581,16 +600,6 @@ export class ExecutionEngine {
       `path is "${doubled}".`
     );
   }
-
-  private resolveConnection(plugin: PluginDef): ConnectionConfig {
-    const conn = this.config.connections.find((c) => c.plugin === plugin.name);
-    const base = conn ?? {
-      name: "default",
-      plugin: plugin.name,
-      config: {},
-    };
-    return applyEnvOverrides(base, plugin.connectionConfigSchema);
-  }
 }
 
 // ── Helpers ──────────────────────────────
@@ -610,9 +619,8 @@ function newRunId(): string {
 }
 
 /**
- * JSON round-trip to (a) guarantee structured-clone compatibility and
- * (b) preserve the previous engine's value semantics, where every action
- * result crossed a JSON boundary (Dates → ISO strings, no Maps, etc.).
+ * Action results cross a JSON boundary (Dates → ISO strings, no Maps).
+ * The round-trip also guarantees structured-clone compatibility.
  */
 function toPlainJson(value: unknown): unknown {
   if (value === undefined) return undefined;
@@ -632,8 +640,8 @@ function formatError(cause: unknown): string {
   return String(cause);
 }
 
-// ferrosearch is a Rust native addon, so unlike the old minisearch UMD it
-// cannot be inlined into the worker source as text. Resolve its entry point
+// ferrosearch is a Rust native addon and cannot be inlined as worker source.
+// Resolve its entry point
 // host-side and require it by absolute path inside the worker: eval'd worker
 // code gets a cwd-relative `require`, so a bare specifier would resolve
 // against the caller's cwd instead of runline's own node_modules.
@@ -704,10 +712,8 @@ function buildWorkerSource(
   helpData: Record<string, HelpEntry[]> = {},
 ): string {
   // Injected into every body's scope. `require` is here because bodies are
-  // compiled with `new Function`, whose scope is the worker's *global* object
-  // — not the module scope that used to hold the inlined body. Without it,
-  // pooling would silently revoke a documented capability ("agent code gets
-  // the full host JS runtime") as a side effect of a memory fix.
+  // compiled with `new Function`, whose scope is the worker's global object.
+  // Explicit injection gives bodies access to the host JS runtime.
   const injectNames = [
     ...pluginNames,
     "actions",
@@ -806,9 +812,8 @@ const __fmtErr = (e) => {
 const __toJson = (v) => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 
 // ferrosearch native addon, resolved to an absolute path by the host. Its
-// index memory lives outside the V8 heap, which is the point — minisearch's
-// JS index counted against maxOldGenerationSizeMb and grew worker RSS — but
-// also means an index built by agent code is invisible to that limit.
+// index memory lives outside the V8 heap. An index built by agent code is
+// therefore invisible to maxOldGenerationSizeMb.
 const { FerroSearch } = require(${JSON.stringify(ferrosearchPath)});
 
 // The host's own validator, for actions.check on typed schemas.
@@ -1146,12 +1151,9 @@ const __scrubGlobals = () => {
 
 // The host channel is the one capability a body must not hold.
 //
-// A body can require("node:worker_threads"). Before pooling that was
-// harmless: anything it attached died with the worker after a single run.
-// Under reuse a surviving listener sees the {t:"run", runId} of EVERY later
-// body and can post a forged "done" for it, handing that run attacker-chosen
-// output. Randomising the run id does not help — the listener is simply told
-// what it is.
+// A surviving parentPort listener sees the {t:"run", runId} of every later
+// body and can forge its "done" message. Random run IDs alone cannot protect
+// a channel that exposes those IDs to the body.
 //
 // Bun's MessagePort exposes no listenerCount/removeAllListeners, so listeners
 // cannot be enumerated and stripped after the fact. Instead the route in is

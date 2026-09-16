@@ -1,13 +1,10 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  coordinatedAccessToken,
+  requestToken,
+} from "../../_shared/tokenRefresh.js";
 
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
+function getConn(c: Readonly<Record<string, unknown>>) {
   const env = (c.env as string) ?? "sandbox";
   const base =
     env === "live"
@@ -16,40 +13,25 @@ function getConn(ctx: { connection: Conn }) {
   return { base, clientId: c.clientId as string, secret: c.secret as string };
 }
 
-async function getAccessToken(conn: {
-  base: string;
-  clientId: string;
-  secret: string;
-}): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt)
-    return cachedToken.token;
-  const res = await fetch(`${conn.base}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Authorization: "Basic " + btoa(`${conn.clientId}:${conn.secret}`),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  });
-  if (!res.ok)
-    throw new Error(`PayPal auth error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
-  cachedToken = {
-    token: data.access_token as string,
-    expiresAt: Date.now() + ((data.expires_in as number) - 60) * 1000,
-  };
-  return cachedToken.token;
-}
-
 async function apiRequest(
-  conn: { base: string; clientId: string; secret: string },
+  ctx: ActionContext,
   method: string,
   endpoint: string,
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const token = await getAccessToken(conn);
-  const url = new URL(`${conn.base}/v1${endpoint}`);
+  const token = await coordinatedAccessToken(ctx, (current) => {
+    const conn = getConn(current);
+    return requestToken(
+      {
+        url: `${conn.base}/v1/oauth2/token`,
+        clientAuthentication: "client_secret_basic",
+      },
+      { grant_type: "client_credentials" },
+      { clientId: conn.clientId, clientSecret: conn.secret },
+    );
+  });
+  const url = new URL(`${getConn(ctx.connection.config).base}/v1${endpoint}`);
   if (qs) {
     for (const [k, v] of Object.entries(qs)) {
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
@@ -122,7 +104,7 @@ export default function paypal(rl: RunlinePluginAPI) {
       if (p.emailSubject) header.email_subject = p.emailSubject;
       if (p.emailMessage) header.email_message = p.emailMessage;
       if (p.note) header.note = p.note;
-      return apiRequest(getConn(ctx), "POST", "/payments/payouts", {
+      return apiRequest(ctx, "POST", "/payments/payouts", {
         sender_batch_header: header,
         items: p.items,
       });
@@ -145,7 +127,7 @@ export default function paypal(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.page_size = p.limit;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
         `/payments/payouts/${p.payoutBatchId}`,
         undefined,
@@ -161,11 +143,7 @@ export default function paypal(rl: RunlinePluginAPI) {
     inputSchema: { payoutItemId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { payoutItemId } = input as Record<string, unknown>;
-      return apiRequest(
-        getConn(ctx),
-        "GET",
-        `/payments/payouts-item/${payoutItemId}`,
-      );
+      return apiRequest(ctx, "GET", `/payments/payouts-item/${payoutItemId}`);
     },
   });
 
@@ -176,7 +154,7 @@ export default function paypal(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { payoutItemId } = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "POST",
         `/payments/payouts-item/${payoutItemId}/cancel`,
       );

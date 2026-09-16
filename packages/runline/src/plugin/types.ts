@@ -1,4 +1,5 @@
 import type { TSchema } from "typebox";
+import type { ConnectionUpdate } from "../connections/types.js";
 
 export interface InputField {
   type: "string" | "number" | "boolean" | "object" | "array";
@@ -73,18 +74,15 @@ export interface ActionContext {
     error(msg: string): void;
   };
   /**
-   * Merge a partial config patch into the current connection,
-   * persisting it atomically to `.runline/config.json`.
+   * Persist a shallow config patch through the host's connection provider.
+   * For token refresh, pass an async updater: it receives freshly read config
+   * under update ownership, so the provider coordinates the whole refresh.
+   * Return undefined to reuse a token refreshed by another caller.
    *
-   * Intended for plugins that refresh credentials at runtime
-   * (OAuth access tokens, rotating API keys). The write is
-   * guarded by a file lock, so concurrent `runline exec`
-   * processes refreshing the same connection won't race.
-   *
-   * In-memory `ctx.connection.config` is also mutated so the
-   * rest of the current action sees the new values.
+   * This action's snapshot changes only after a successful store update.
+   * A patch alone serializes the write, not any preceding network request.
    */
-  updateConnection(patch: Record<string, unknown>): Promise<void>;
+  updateConnection(change: ConnectionUpdate): Promise<void>;
 }
 
 /**

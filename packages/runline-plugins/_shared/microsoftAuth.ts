@@ -1,6 +1,5 @@
 import type { ActionContext } from "runline";
-
-const REFRESH_SKEW_MS = 60_000;
+import { coordinatedAccessToken, requestToken } from "./tokenRefresh.js";
 
 /**
  * Shared auth for the Microsoft Graph plugins (mail, calendar, files).
@@ -28,11 +27,13 @@ export type MicrosoftAuthConfig = {
 };
 
 function authority(cfg: MicrosoftAuthConfig): string {
-  return `https://login.microsoftonline.com/${cfg.tenantId || "common"}/oauth2/v2.0/token`;
+  return `https://login.microsoftonline.com/${encodeURIComponent(cfg.tenantId || "common")}/oauth2/v2.0/token`;
 }
 
 export function isAppOnly(cfg: MicrosoftAuthConfig): boolean {
-  return !cfg.refreshToken && !!(cfg.tenantId && cfg.clientId && cfg.clientSecret);
+  return (
+    !cfg.refreshToken && !!(cfg.tenantId && cfg.clientId && cfg.clientSecret)
+  );
 }
 
 /** Graph path prefix for the acting principal: /me (delegated) or /users/{upn} (app-only). */
@@ -50,61 +51,44 @@ export async function microsoftAccessToken(
   pluginName: string,
   scopes: string[],
 ): Promise<string> {
-  const cfg = ctx.connection.config as MicrosoftAuthConfig;
-  if (
-    cfg.accessToken &&
-    typeof cfg.accessTokenExpiresAt === "number" &&
-    Date.now() < cfg.accessTokenExpiresAt - REFRESH_SKEW_MS
-  ) {
-    return cfg.accessToken;
-  }
+  return coordinatedAccessToken(ctx, (current) =>
+    refreshMicrosoftToken(current as MicrosoftAuthConfig, pluginName, scopes),
+  );
+}
 
-  let body: URLSearchParams;
+async function refreshMicrosoftToken(
+  cfg: MicrosoftAuthConfig,
+  pluginName: string,
+  scopes: string[],
+) {
+  let body: Record<string, string>;
   if (cfg.refreshToken) {
     if (!cfg.clientId || !cfg.clientSecret) {
-      throw new Error(`${pluginName}: missing clientId/clientSecret for OAuth refresh.`);
+      throw new Error(
+        `${pluginName}: missing clientId/clientSecret for OAuth refresh.`,
+      );
     }
-    body = new URLSearchParams({
-      client_id: cfg.clientId,
-      client_secret: cfg.clientSecret,
+    body = {
       refresh_token: cfg.refreshToken,
       grant_type: "refresh_token",
       scope: [...scopes, "offline_access"].join(" "),
-    });
+    };
   } else if (isAppOnly(cfg)) {
-    body = new URLSearchParams({
-      client_id: cfg.clientId as string,
-      client_secret: cfg.clientSecret as string,
+    body = {
       grant_type: "client_credentials",
       scope: "https://graph.microsoft.com/.default",
-    });
+    };
   } else {
     throw new Error(
       `${pluginName}: no credentials. Connect via OAuth, or set tenantId/clientId/clientSecret (app-only).`,
     );
   }
 
-  const res = await fetch(authority(cfg), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  if (!res.ok) {
-    throw new Error(`${pluginName}: token request failed (${res.status}): ${await res.text()}`);
-  }
-  const data = (await res.json()) as {
-    access_token: string;
-    expires_in: number;
-    refresh_token?: string;
-  };
-  const patch: Record<string, unknown> = {
-    accessToken: data.access_token,
-    accessTokenExpiresAt: Date.now() + data.expires_in * 1000,
-  };
-  // Microsoft rotates refresh tokens — persist the new one when present.
-  if (data.refresh_token) patch.refreshToken = data.refresh_token;
-  await ctx.updateConnection(patch);
-  return data.access_token;
+  return requestToken(
+    { url: authority(cfg), clientAuthentication: "client_secret_post" },
+    body,
+    { clientId: cfg.clientId as string, clientSecret: cfg.clientSecret },
+  );
 }
 
 /** Authenticated Graph v1.0 request. Returns parsed JSON ({success:true} for 204). */
@@ -122,13 +106,15 @@ export async function graphRequest(
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   };
   if (body !== undefined) {
-    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
+    (init.headers as Record<string, string>)["Content-Type"] =
+      "application/json";
     init.body = JSON.stringify(body);
   }
   const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, init);
   if (res.status === 204) return { success: true };
   const text = await res.text();
-  if (!res.ok) throw new Error(`${pluginName}: ${method} ${path} → ${res.status} ${text}`);
+  if (!res.ok)
+    throw new Error(`${pluginName}: ${method} ${path} → ${res.status} ${text}`);
   return text ? JSON.parse(text) : { success: true };
 }
 

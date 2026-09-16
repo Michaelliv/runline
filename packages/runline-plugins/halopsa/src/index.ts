@@ -1,37 +1,8 @@
-import type { RunlinePluginAPI } from "runline";
-
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-async function getToken(
-  authUrl: string,
-  clientId: string,
-  clientSecret: string,
-  scope: string,
-  tenant?: string,
-): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt)
-    return cachedToken.token;
-  const url = tenant ? `${authUrl}?tenant=${tenant}` : authUrl;
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-    scope,
-  });
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  if (!res.ok)
-    throw new Error(`HaloPSA auth error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
-  cachedToken = {
-    token: data.access_token as string,
-    expiresAt: Date.now() + ((data.expires_in as number) - 60) * 1000,
-  };
-  return cachedToken.token;
-}
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  coordinatedAccessToken,
+  requestToken,
+} from "../../_shared/tokenRefresh.js";
 
 async function apiRequest(
   apiUrl: string,
@@ -69,26 +40,33 @@ async function apiRequest(
 }
 
 async function req(
-  ctx: { connection: { config: Record<string, unknown> } },
+  ctx: ActionContext,
   method: string,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ) {
-  const cfg = ctx.connection.config;
-  const authUrl =
-    cfg.hostingType === "on-premise"
-      ? `${cfg.appUrl}/auth/token`
-      : `${cfg.authUrl}/token`;
-  const token = await getToken(
-    authUrl,
-    cfg.clientId as string,
-    cfg.clientSecret as string,
-    (cfg.scope as string) ?? "all",
-    cfg.tenant as string | undefined,
-  );
+  const token = await coordinatedAccessToken(ctx, (cfg) => {
+    const url = new URL(
+      cfg.hostingType === "on-premise"
+        ? `${cfg.appUrl}/auth/token`
+        : `${cfg.authUrl}/token`,
+    );
+    if (cfg.tenant) url.searchParams.set("tenant", cfg.tenant as string);
+    return requestToken(
+      { url: url.toString(), clientAuthentication: "client_secret_post" },
+      {
+        grant_type: "client_credentials",
+        scope: (cfg.scope as string) ?? "all",
+      },
+      {
+        clientId: cfg.clientId as string,
+        clientSecret: cfg.clientSecret as string,
+      },
+    );
+  });
   return apiRequest(
-    (cfg.resourceApiUrl as string).replace(/\/$/, ""),
+    (ctx.connection.config.resourceApiUrl as string).replace(/\/$/, ""),
     token,
     method,
     endpoint,

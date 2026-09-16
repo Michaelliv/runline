@@ -1,6 +1,6 @@
 /**
  * The onAction hook — the engine's single observation point for
- * action invocations (added for vex's usage counters, SHFT-922).
+ * action invocations and host usage counters.
  *
  * Contract under test:
  *   - fires once per invocation that ENTERS a plugin's execute(),
@@ -41,7 +41,6 @@ const demo: PluginDef = {
     },
     {
       name: "boomUndefined",
-      // biome-ignore lint/suspicious/useAwait: throws before it could await — a nullish throw is the case under test
       execute: async () => {
         throw undefined;
       },
@@ -121,6 +120,17 @@ describe("onAction", () => {
 
     expect(out.error).toBeUndefined();
     expect(out.result).toEqual({ echoed: {} });
+  });
+
+  test("an asynchronously rejecting hook never breaks the run", async () => {
+    const rl = harness(() => Promise.reject(new Error("observer bug")));
+    try {
+      const out = await rl.execute("return await demo.ok({});");
+      expect(out.error).toBeUndefined();
+      expect(out.result).toEqual({ echoed: {} });
+    } finally {
+      rl.dispose();
+    }
   });
 
   test("fires per invocation, not per run", async () => {

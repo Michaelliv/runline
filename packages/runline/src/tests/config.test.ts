@@ -40,6 +40,17 @@ describe("applyEnvOverrides", () => {
     assert.equal(result.config.token, "from-config");
   });
 
+  it("preserves explicit falsy values instead of injecting ambient credentials", () => {
+    process.env.MY_TOKEN = "ambient";
+    for (const token of ["", false, 0]) {
+      const conn = { name: "x", plugin: "y", config: { token } };
+      const result = applyEnvOverrides(conn, {
+        token: { type: "string", env: "MY_TOKEN" },
+      });
+      assert.equal(result.config.token, token);
+    }
+  });
+
   it("returns connection unchanged when no schema", () => {
     const conn = { name: "gh", plugin: "github", config: { x: 1 } };
     const result = applyEnvOverrides(conn, undefined);

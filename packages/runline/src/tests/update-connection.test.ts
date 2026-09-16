@@ -8,6 +8,7 @@ import {
   loadConfig,
   updateConnectionConfig,
 } from "../config/loader.js";
+import { FileConnectionProvider } from "../connections/file.js";
 import { ExecutionEngine } from "../core/engine.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { PluginRegistry } from "../plugin/registry.js";
@@ -33,7 +34,7 @@ describe("updateConnectionConfig", () => {
   });
 
   it("merges a patch into an existing connection", async () => {
-    addConnection("gm", "gmail", { clientId: "abc", refreshToken: "r1" });
+    await addConnection("gm", "gmail", { clientId: "abc", refreshToken: "r1" });
     await updateConnectionConfig("gm", {
       accessToken: "a1",
       expiresAt: 1234,
@@ -50,7 +51,7 @@ describe("updateConnectionConfig", () => {
   });
 
   it("overwrites existing keys", async () => {
-    addConnection("gm", "gmail", { accessToken: "old", expiresAt: 1 });
+    await addConnection("gm", "gmail", { accessToken: "old", expiresAt: 1 });
     await updateConnectionConfig("gm", { accessToken: "new", expiresAt: 2 });
 
     const cfg = loadConfig();
@@ -59,9 +60,12 @@ describe("updateConnectionConfig", () => {
     assert.equal(conn?.config.expiresAt, 2);
   });
 
-  it("is a no-op for unknown connections", async () => {
-    addConnection("gm", "gmail", { clientId: "abc" });
-    await updateConnectionConfig("nope", { accessToken: "x" });
+  it("rejects unknown connections without creating them", async () => {
+    await addConnection("gm", "gmail", { clientId: "abc" });
+    await assert.rejects(
+      updateConnectionConfig("nope", { accessToken: "x" }),
+      /not found/,
+    );
 
     const cfg = loadConfig();
     assert.equal(cfg.connections.length, 1);
@@ -70,7 +74,7 @@ describe("updateConnectionConfig", () => {
   });
 
   it("writes valid JSON with trailing newline", async () => {
-    addConnection("gm", "gmail", {});
+    await addConnection("gm", "gmail", {});
     await updateConnectionConfig("gm", { token: "x" });
 
     const raw = readFileSync(join(tempDir, ".runline", "config.json"), "utf-8");
@@ -100,7 +104,10 @@ describe("ActionContext.updateConnection", () => {
   });
 
   it("persists and mutates in-memory connection during an action", async () => {
-    addConnection("gm", "gmail", { refreshToken: "r1", accessToken: "old" });
+    await addConnection("gm", "gmail", {
+      refreshToken: "r1",
+      accessToken: "old",
+    });
 
     const { api, resolve } = createPluginAPI("gmail");
     api.setName("gmail");
@@ -116,7 +123,11 @@ describe("ActionContext.updateConnection", () => {
 
     const registry = new PluginRegistry();
     registry.register(resolve());
-    const engine = new ExecutionEngine(registry, loadConfig());
+    const engine = new ExecutionEngine(registry, loadConfig(), {
+      connectionProvider: new FileConnectionProvider(
+        join(tempDir, ".runline", "config.json"),
+      ),
+    });
 
     const result = await engine.execute("return await gmail.probe()");
     assert.equal(result.error, undefined);
@@ -127,5 +138,6 @@ describe("ActionContext.updateConnection", () => {
     const conn = cfg.connections.find((c) => c.name === "gm");
     assert.equal(conn?.config.accessToken, "fresh");
     assert.equal(conn?.config.expiresAt, 42);
+    engine.dispose();
   });
 });

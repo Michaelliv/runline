@@ -20,7 +20,7 @@ export async function connectionAdd(
     configValues[kv.slice(0, eq)] = kv.slice(eq + 1);
   }
 
-  addConnection(name, options.plugin, configValues);
+  await addConnection(name, options.plugin, configValues);
 
   if (options.json) {
     printJson({ ok: true, name, plugin: options.plugin });
@@ -35,7 +35,7 @@ export async function connectionRemove(
   name: string,
   options: { json?: boolean },
 ): Promise<void> {
-  const removed = removeConnection(name);
+  const removed = await removeConnection(name);
   if (!removed) {
     printError(`Connection "${name}" not found`);
     process.exit(1);
@@ -60,10 +60,7 @@ export async function connectionList(options: {
         name: c.name,
         plugin: c.plugin,
         config: Object.fromEntries(
-          Object.entries(c.config).map(([k, v]) => [
-            k,
-            typeof v === "string" && v.length > 8 ? `${v.slice(0, 4)}...` : v,
-          ]),
+          Object.keys(c.config).map((key) => [key, "[redacted]"]),
         ),
       })),
     );
