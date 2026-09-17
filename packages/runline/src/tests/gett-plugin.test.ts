@@ -38,8 +38,8 @@ const CONNECTED = {
 };
 
 /**
- * A real connection handle, so token rotation goes through the same
- * update-ownership path the engine gives a plugin at runtime.
+ * A real connection handle, so token rotation runs through the same update
+ * ownership the engine gives a plugin at runtime.
  */
 async function context(config: Record<string, unknown> = {}) {
   const store = new MemoryConnectionProvider([
@@ -65,8 +65,10 @@ interface Call {
   body: Record<string, unknown>;
 }
 
-/** Route by path fragment; every unmatched call fails loudly rather than silently. */
-function mock(routes: Array<[string, unknown | (() => unknown)]>) {
+type Route = [string, unknown | (() => unknown)];
+
+/** Route by path fragment; anything unrouted 404s loudly rather than passing. */
+function mock(routes: Route[]) {
   const calls: Call[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -78,22 +80,26 @@ function mock(routes: Array<[string, unknown | (() => unknown)]>) {
       body: init?.body ? JSON.parse(String(init.body)) : {},
     });
     for (const [fragment, payload] of routes) {
-      if (url.includes(fragment)) {
-        const value = typeof payload === "function" ? payload() : payload;
-        if (value instanceof Response) return value;
-        return new Response(JSON.stringify(value), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
+      if (!url.includes(fragment)) continue;
+      const value = typeof payload === "function" ? payload() : payload;
+      if (value instanceof Response) return value;
+      return new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
     return new Response(JSON.stringify({ unrouted: url }), { status: 404 });
   }) as typeof fetch;
   return calls;
 }
 
-/** The provider calls a ride costs money; the happy path needs the whole chain. */
-function ridePlanRoutes(price = "₪45.00") {
+/** Calls that reached the one endpoint which actually orders a car. */
+function created(list: Call[]): Call[] {
+  return list.filter((c) => new URL(c.url).pathname.endsWith("/create"));
+}
+
+/** The full chain a priced ride walks: session, both lookups, then pricing. */
+function ridePlanRoutes(price = "45.00"): Route[] {
   return [
     [
       "create_session",
@@ -146,35 +152,42 @@ function ridePlanRoutes(price = "₪45.00") {
       }),
     ],
     ["global-ride-request/api/v1/create", { rc: 0, order: { id: "order-9" } }],
-  ] as Array<[string, unknown | (() => unknown)]>;
+  ];
 }
 
 describe("gett plugin surface", () => {
-  it("registers nine actions with typed schemas and correct access", () => {
+  it("registers resource.verb actions with typed schemas and correct access", () => {
     assert.equal(plugin.name, "gett");
     assert.deepEqual(plugin.actions.map((a) => a.name).sort(), [
-      "book_ride",
-      "cancel_ride",
-      "connect",
-      "find_place",
-      "nearby_drivers",
-      "price",
-      "refresh",
-      "ride_status",
-      "whoami",
+      "account.get",
+      "account.refresh",
+      "account.requestCode",
+      "account.status",
+      "account.verifyCard",
+      "account.verifyCode",
+      "driver.listNearby",
+      "place.search",
+      "ride.book",
+      "ride.cancel",
+      "ride.price",
+      "ride.status",
     ]);
-    const writes = plugin.actions
-      .filter((a) => a.access === "write")
-      .map((a) => a.name)
-      .sort();
-    assert.deepEqual(writes, [
-      "book_ride",
-      "cancel_ride",
-      "connect",
-      "refresh",
-    ]);
-    // Typed schemas are what make the engine validate before execute runs — on a
-    // plugin that spends money, an unvalidated input is the whole risk.
+    assert.deepEqual(
+      plugin.actions
+        .filter((a) => a.access === "write")
+        .map((a) => a.name)
+        .sort(),
+      [
+        "account.refresh",
+        "account.requestCode",
+        "account.verifyCard",
+        "account.verifyCode",
+        "ride.book",
+        "ride.cancel",
+      ],
+    );
+    // Typed schemas are what make the engine validate before execute runs. On the
+    // one plugin in the catalog that spends money, that is not optional.
     for (const a of plugin.actions) {
       assert.ok(
         isTypedInputSchema(a.inputSchema),
@@ -184,20 +197,39 @@ describe("gett plugin surface", () => {
     assert.ok(isTypedInputSchema(plugin.connectionConfigSchema));
   });
 
+  it("requires each login step's own input, which a single dispatch action could not", () => {
+    // Every field optional is the price of one connect() that switches on shape;
+    // one action per step lets the schema demand what the step actually needs.
+    assert.equal(
+      Check(action("account.verifyCode").inputSchema as TSchema, {}),
+      false,
+    );
+    assert.equal(
+      Check(action("account.verifyCard").inputSchema as TSchema, {}),
+      false,
+    );
+    assert.equal(
+      Check(action("account.requestCode").inputSchema as TSchema, {}),
+      true,
+      "requestCode may reuse a stored phone",
+    );
+  });
+
   it("rejects malformed and unknown input before any request", () => {
     globalThis.fetch = (async () => {
       throw new Error("must not reach the network");
     }) as typeof fetch;
     const invalid: Array<[string, unknown]> = [
-      ["book_ride", { from: "a" }],
-      ["book_ride", { from: "a", to: "b", surprise: true }],
-      ["book_ride", { from: "a", to: "b", confirm: "yes" }],
-      ["book_ride", { from: "a", to: "b", lat: 999 }],
-      ["find_place", { query: "" }],
-      ["ride_status", {}],
-      ["cancel_ride", { order_id: "o", reason: 1.5 }],
-      ["connect", { phone: "0500000000", extra: 1 }],
-      ["refresh", { anything: true }],
+      ["ride.book", { from: "a" }],
+      ["ride.book", { from: "a", to: "b", surprise: true }],
+      ["ride.book", { from: "a", to: "b", confirm: "yes" }],
+      ["ride.book", { from: "a", to: "b", lat: 999 }],
+      ["place.search", { query: "" }],
+      ["ride.status", {}],
+      ["ride.cancel", { order_id: "o", reason: 1.5 }],
+      ["account.verifyCode", { code: "" }],
+      ["account.requestCode", { phone: "0500000000", extra: 1 }],
+      ["account.refresh", { anything: true }],
     ];
     for (const [name, input] of invalid) {
       assert.equal(
@@ -224,29 +256,36 @@ describe("gett plugin surface", () => {
       ["500000000", "972500000000"],
     ] as const) {
       calls.length = 0;
-      const r = (await action("connect").execute({ phone: entered }, ctx)) as {
-        phone: string;
-      };
+      const r = (await action("account.requestCode").execute(
+        { phone: entered },
+        ctx,
+      )) as { sent: boolean; phone: string };
+      assert.equal(r.sent, true);
       assert.equal(r.phone, expected);
       assert.ok(calls[0].url.includes(`/phone/${expected}/`), calls[0].url);
     }
   });
 
+  it("reports a refused SMS instead of a code that will never arrive", async () => {
+    const { ctx } = await context({ refreshToken: undefined });
+    mock([["auth/otp/challenge", { status: "blocked", blocked_until: 30 }]]);
+    const r = (await action("account.requestCode").execute({}, ctx)) as {
+      sent: boolean;
+      blocked: boolean;
+      retry_after_minutes: number;
+    };
+    assert.equal(r.sent, false);
+    assert.equal(r.blocked, true);
+    assert.equal(r.retry_after_minutes, 30);
+  });
+
   it("refuses path-climbing ids instead of encoding and hoping", async () => {
     const { ctx } = await context();
     const calls = mock([["orders", { id: "x" }]]);
-    for (const id of [
-      "..",
-      "../../auth/token",
-      "a/b",
-      "",
-      "  ",
-      "?x=1",
-      "#f",
-    ]) {
+    for (const id of ["..", "../../auth/token", "a/b", "  ", "?x=1", "#f"]) {
       await assert.rejects(
         () =>
-          action("ride_status").execute(
+          action("ride.status").execute(
             { order_id: id },
             ctx,
           ) as Promise<unknown>,
@@ -263,14 +302,12 @@ describe("gett plugin surface", () => {
         "create_session",
         new Response(
           JSON.stringify({ token: "leaked-secret", message: "boom" }),
-          {
-            status: 500,
-          },
+          { status: 500 },
         ),
       ],
     ]);
     await assert.rejects(
-      () => action("whoami").execute({}, ctx) as Promise<unknown>,
+      () => action("account.get").execute({}, ctx) as Promise<unknown>,
       (e: Error) => {
         assert.match(e.message, /HTTP 500/);
         assert.match(e.message, /\{phone\}/);
@@ -285,7 +322,7 @@ describe("gett plugin surface", () => {
   it("never lets a redirect carry the bearer to another host", async () => {
     const { ctx } = await context();
     const calls = mock([["create_session", { user_profile: {} }]]);
-    await action("whoami").execute({}, ctx);
+    await action("account.get").execute({}, ctx);
     assert.ok(calls.length > 0);
     for (const call of calls) assert.equal(call.redirect, "error");
   });
@@ -312,8 +349,8 @@ describe("gett plugin surface", () => {
       ["drivers/locations", { drivers: [] }],
     ]);
     await Promise.all([
-      action("whoami").execute({}, ctx),
-      action("nearby_drivers").execute({}, ctx),
+      action("account.get").execute({}, ctx),
+      action("driver.listNearby").execute({}, ctx),
     ]);
     assert.equal(grants, 1, "parallel actions must share one refresh");
     assert.equal((await handle.read()).config.refreshToken, "refresh-2");
@@ -326,15 +363,72 @@ describe("gett plugin surface", () => {
     const { ctx } = await context({ accessTokenExpiresAt: 1 });
     mock([["auth/token", new Response("", { status: 400 })]]);
     await assert.rejects(
-      () => action("whoami").execute({}, ctx) as Promise<unknown>,
-      /session expired .* re-run the owner login/,
+      () => action("account.get").execute({}, ctx) as Promise<unknown>,
+      /session expired .* account\.requestCode/,
     );
+  });
+
+  it("answers account.status from local state, with no network at all", async () => {
+    const { ctx } = await context({
+      creditCardId: undefined,
+      allowOrdering: true,
+    });
+    const calls = mock([]);
+    const r = (await action("account.status").execute({}, ctx)) as {
+      connected: boolean;
+      orderingEnabled: boolean;
+      missing: string[];
+    };
+    assert.equal(calls.length, 0);
+    assert.equal(r.connected, true);
+    assert.equal(r.orderingEnabled, true);
+    assert.deepEqual(r.missing, ["creditCardId (auto-discovered on login)"]);
+  });
+
+  it("keeps a login that succeeded when its optional follow-ups fail", async () => {
+    const { ctx, handle } = await context({
+      refreshToken: undefined,
+      accessToken: undefined,
+      pendingTempCode: "temp-1",
+    });
+    let grants = 0;
+    mock([
+      [
+        "auth/mfa/verify",
+        {
+          tokens: {
+            refresh_token: "r-new",
+            access_token: "a-new",
+            expires_in: 3600,
+          },
+        },
+      ],
+      [
+        "auth/token",
+        () => {
+          grants++;
+          return new Response("", { status: 500 });
+        },
+      ],
+      ["create_session", new Response("", { status: 503 })],
+    ]);
+    const r = (await action("account.verifyCard").execute(
+      { card: "4242" },
+      ctx,
+    )) as { connected: boolean; warnings: string[] };
+    assert.equal(r.connected, true);
+    assert.equal((await handle.read()).config.refreshToken, "r-new");
+    assert.ok(grants > 0);
+    // Both optional steps failed; neither is hidden and neither lost the login.
+    assert.equal(r.warnings.length, 2);
+    assert.match(r.warnings[0], /IL->GL token conversion failed/);
+    assert.match(r.warnings[1], /saved-card discovery failed/);
   });
 
   it("previews a ride with a quote and books nothing", async () => {
     const { ctx } = await context({ allowOrdering: true });
     const calls = mock(ridePlanRoutes());
-    const preview = (await action("book_ride").execute(
+    const preview = (await action("ride.book").execute(
       { from: "a", to: "b" },
       ctx,
     )) as {
@@ -344,72 +438,64 @@ describe("gett plugin surface", () => {
     };
     assert.equal(preview.requiresConfirmation, true);
     assert.match(preview.quote, /^q_[0-9a-f]{16}$/);
-    assert.equal(preview.summary.price, "₪45.00");
-    assert.equal(
-      calls.filter((c) => c.url.includes("ride-request")).length,
-      0,
-      "a preview must never reach the create endpoint",
-    );
+    assert.equal(preview.summary.price, "45.00");
+    assert.equal(created(calls).length, 0, "a preview must never reach create");
   });
 
   it("books only the fare that was actually approved", async () => {
     const { ctx } = await context({ allowOrdering: true });
-    mock(ridePlanRoutes("₪45.00"));
-    const preview = (await action("book_ride").execute(
+    mock(ridePlanRoutes("45.00"));
+    const preview = (await action("ride.book").execute(
       { from: "a", to: "b" },
       ctx,
     )) as { quote: string };
 
     // Same fare, matching quote: books.
-    const calls = mock(ridePlanRoutes("₪45.00"));
-    const booked = (await action("book_ride").execute(
+    const booking = mock(ridePlanRoutes("45.00"));
+    const booked = (await action("ride.book").execute(
       { from: "a", to: "b", confirm: true, quote: preview.quote },
       ctx,
     )) as { status: string; order_id: string };
     assert.equal(booked.status, "booked");
     assert.equal(booked.order_id, "order-9");
-    assert.equal(calls.filter((c) => c.url.includes("ride-request")).length, 1);
+    assert.equal(created(booking).length, 1);
 
     // Surge between preview and confirmation: refuses, and hands back the new price.
-    const surged = mock(ridePlanRoutes("₪98.00"));
-    const refused = (await action("book_ride").execute(
+    const surged = mock(ridePlanRoutes("98.00"));
+    const refused = (await action("ride.book").execute(
       { from: "a", to: "b", confirm: true, quote: preview.quote },
       ctx,
     )) as { booked: boolean; reason: string; summary: { price: string } };
     assert.equal(refused.booked, false);
     assert.equal(refused.reason, "price_changed");
-    assert.equal(refused.summary.price, "₪98.00");
-    assert.equal(
-      surged.filter((c) => c.url.includes("ride-request")).length,
-      0,
-      "a moved fare must not book",
-    );
+    assert.equal(refused.summary.price, "98.00");
+    assert.equal(created(surged).length, 0, "a moved fare must not book");
   });
 
   it("refuses a confirmation that carries no quote at all", async () => {
     const { ctx } = await context({ allowOrdering: true });
     const calls = mock(ridePlanRoutes());
-    const r = (await action("book_ride").execute(
+    const r = (await action("ride.book").execute(
       { from: "a", to: "b", confirm: true },
       ctx,
     )) as { booked: boolean; reason: string };
     assert.equal(r.booked, false);
     assert.equal(r.reason, "quote_required");
-    assert.equal(calls.filter((c) => c.url.includes("ride-request")).length, 0);
+    assert.equal(created(calls).length, 0);
   });
 
   it("gates both money actions behind allowOrdering", async () => {
     const { ctx } = await context({ allowOrdering: false });
     const calls = mock([...ridePlanRoutes(), ["cancel", { rc: 0 }]]);
-    const preview = (await action("book_ride").execute(
+    const preview = (await action("ride.book").execute(
       { from: "a", to: "b" },
       ctx,
     )) as { quote: string; note: string };
-    // The preview must not tell the caller to do something that will be refused.
+    // A preview must not instruct the caller to do something that will be refused.
     assert.match(preview.note, /disabled/);
     await assert.rejects(
       () =>
-        action("book_ride").execute(
+        action("ride.book").execute(
           { from: "a", to: "b", confirm: true, quote: preview.quote },
           ctx,
         ) as Promise<unknown>,
@@ -417,14 +503,27 @@ describe("gett plugin surface", () => {
     );
     await assert.rejects(
       () =>
-        action("cancel_ride").execute(
+        action("ride.cancel").execute(
           { order_id: "order-9" },
           ctx,
         ) as Promise<unknown>,
-      /disabled for this connection/,
+      /ordering is disabled/,
     );
-    assert.equal(calls.filter((c) => c.url.includes("ride-request")).length, 0);
-    assert.equal(calls.filter((c) => c.url.includes("/cancel")).length, 0);
+    assert.equal(created(calls).length, 0);
+    assert.equal(calls.filter((c) => c.url.endsWith("/cancel")).length, 0);
+  });
+
+  it("refuses to book a class the route does not offer", async () => {
+    const { ctx } = await context({ allowOrdering: true });
+    mock(ridePlanRoutes());
+    await assert.rejects(
+      () =>
+        action("ride.book").execute(
+          { from: "a", to: "b", class_uuid: "class-nope" },
+          ctx,
+        ) as Promise<unknown>,
+      /class-nope is not available/,
+    );
   });
 
   it("reports whether an optional cancellation reason landed", async () => {
@@ -433,7 +532,7 @@ describe("gett plugin surface", () => {
       ["order_cancellation_reason", new Response("", { status: 500 })],
       ["cancel", { rc: 0 }],
     ]);
-    const r = (await action("cancel_ride").execute(
+    const r = (await action("ride.cancel").execute(
       { order_id: "order-9", reason: 3 },
       ctx,
     )) as { cancelled: boolean; reason_recorded: boolean | null };
@@ -445,7 +544,7 @@ describe("gett plugin surface", () => {
     const { ctx } = await context();
     mock([["drivers/locations", new Response("", { status: 401 })]]);
     await assert.rejects(
-      () => action("nearby_drivers").execute({}, ctx) as Promise<unknown>,
+      () => action("driver.listNearby").execute({}, ctx) as Promise<unknown>,
       /HTTP 401/,
     );
   });
@@ -457,7 +556,7 @@ describe("gett plugin surface", () => {
     });
     const calls = mock([["", { ok: true }]]);
     await assert.rejects(
-      () => action("whoami").execute({}, ctx) as Promise<unknown>,
+      () => action("account.get").execute({}, ctx) as Promise<unknown>,
       /not connected/,
     );
     assert.equal(calls.length, 0);
