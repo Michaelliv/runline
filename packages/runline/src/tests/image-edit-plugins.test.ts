@@ -302,6 +302,12 @@ describe("openai image.create", () => {
       }
       assert.ok(schema.quality?.description?.includes("xhigh"));
       assert.ok(schema.quality?.description?.includes("max"));
+      // Three of the four size rules let 512x512 through; only the total-pixel
+      // floor rejects it, so an agent that never reads it fails at the API.
+      assert.ok(
+        schema.size?.description?.includes("655,360"),
+        `${name}.size should state the minimum total pixels`,
+      );
     }
   });
 });

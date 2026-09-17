@@ -30,14 +30,27 @@ const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
  * Newest GPT Image model; override per call or via the connection.
  *
  * The GPT Image 2.5 line ships as two models: `gpt-image-2.5-flare`
- * (OpenAI's default — matches gpt-image-2 quality at up to half the
- * latency) and `gpt-image-2.5-sunburst` (precision editing). Both accept
- * the wider `xhigh` / `max` / `auto` quality range and arbitrary
- * `WIDTHxHEIGHT` sizes (multiples of 16, aspect between 1:3 and 3:1, no
- * edge over 3840px). Pin `gpt-image-2` via `defaultModel` to keep the
- * older line.
+ * (OpenAI's own default — gpt-image-2 quality at up to half the latency)
+ * and `gpt-image-2.5-sunburst` (precision editing). Both widen the
+ * quality range and take custom sizes; see QUALITY_RULE and SIZE_RULE.
+ * Pin `gpt-image-2` via `defaultModel` to stay on the older line.
  */
 const DEFAULT_MODEL = "gpt-image-2.5-flare";
+
+/**
+ * The size contract, shared by create and edit so the two cannot drift apart.
+ *
+ * All four constraints bind together: the total-pixel floor is the one that
+ * surprises, because 512x512 satisfies every other rule and still 400s.
+ */
+const SIZE_RULE =
+  "gpt-image-2 and gpt-image-2.5-* take any WIDTHxHEIGHT with both sides multiples of 16, aspect between 1:3 and 3:1, " +
+  "no edge over 3840, and a total between 655,360 and 8,294,400 pixels — so 512x512 is too small and 1536x864 is fine; " +
+  "above 2560x1440 is experimental. gpt-image-1* and dall-e-* take 1024x1024 | 1536x1024 | 1024x1536.";
+
+/** Quality tiers, likewise shared. `auto` is what the 2.5 models pick by default. */
+const QUALITY_RULE =
+  "low | medium | high | auto, plus xhigh | max on gpt-image-2.5-*";
 
 /**
  * Model precedence, shared by create and edit: the call wins, then the
@@ -123,14 +136,12 @@ export default function openai(rl: RunlinePluginAPI) {
       size: {
         type: "string",
         required: false,
-        description:
-          "WxH (default: 1024x1024) or auto. gpt-image-2.5-* accept any WIDTHxHEIGHT with both sides multiples of 16, aspect between 1:3 and 3:1 and no edge over 3840 (above 2560x1440 is experimental); older models take 1024x1024 | 1536x1024 | 1024x1536.",
+        description: `WxH (default: 1024x1024) or auto. ${SIZE_RULE}`,
       },
       quality: {
         type: "string",
         required: false,
-        description:
-          "low | medium | high | auto (gpt-image), plus xhigh | max on gpt-image-2.5-*; standard | hd (dall-e-3)",
+        description: `${QUALITY_RULE}; standard | hd (dall-e-3)`,
       },
       style: {
         type: "string",
@@ -232,14 +243,12 @@ export default function openai(rl: RunlinePluginAPI) {
       size: {
         type: "string",
         required: false,
-        description:
-          "WxH output size (gpt-image-2.5-* accept any WIDTHxHEIGHT with sides multiples of 16 and aspect between 1:3 and 3:1). Omit to let the API match the input.",
+        description: `WxH output size. Omit to let the API match the input. ${SIZE_RULE}`,
       },
       quality: {
         type: "string",
         required: false,
-        description:
-          "low | medium | high | auto, plus xhigh | max on gpt-image-2.5-*",
+        description: QUALITY_RULE,
       },
       n: {
         type: "number",
