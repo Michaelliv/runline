@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 
@@ -50,54 +51,107 @@ export function scopeLabelValues(ctx: Ctx): string[] {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Label name → id, per API key. Linear rejects a non-UUID in
- * `labels: { id: { in: [...] } }` with "each value in in must be a UUID",
- * so a human-written scope value like `requester:yosi` used to break every
- * issue query (SHFT-1644). The directory is fetched once per key and
- * re-read on a miss, so a label created later still resolves.
- */
-const labelDirectories = new Map<string, Promise<Map<string, string>>>();
+/** One label in the workspace directory. `teamKey` is null for a workspace label. */
+interface LabelEntry {
+  id: string;
+  name: string;
+  teamKey: string | null;
+}
 
-async function fetchLabelDirectory(
-  apiKey: string,
-): Promise<Map<string, string>> {
-  const byName = new Map<string, string>();
+/** Lowercased name → every label carrying it. Names are not unique. */
+type LabelDirectory = Map<string, LabelEntry[]>;
+
+/**
+ * The workspace's labels, per API key. Linear rejects a non-UUID in
+ * `labels: { id: { in: [...] } }` with "each value in in must be a UUID",
+ * so a human-written scope value like `requester:yosi` breaks every issue
+ * query (SHFT-1644) unless it is resolved to an id first. The directory is
+ * fetched once per key and re-read on a miss, so a label created later
+ * still resolves.
+ *
+ * Keyed by digest, so a long-lived Map never holds the API key itself.
+ */
+const labelDirectories = new Map<string, Promise<LabelDirectory>>();
+
+const directoryKey = (apiKey: string): string =>
+  createHash("sha256").update(apiKey).digest("hex");
+
+async function fetchLabelDirectory(apiKey: string): Promise<LabelDirectory> {
+  const byName: LabelDirectory = new Map();
   let after: string | null = null;
   for (;;) {
     const data: Record<string, unknown> = await gql(
       apiKey,
-      `query($after: String) { issueLabels(first: 250, after: $after) { nodes { id name } pageInfo { hasNextPage endCursor } } }`,
+      `query($after: String) { issueLabels(first: 250, after: $after) { nodes { id name team { key } } pageInfo { hasNextPage endCursor } } }`,
       { after },
     );
     const conn = data.issueLabels as Record<string, unknown> | undefined;
     for (const node of (conn?.nodes as Array<Record<string, unknown>>) ?? []) {
-      byName.set(String(node.name).toLowerCase(), String(node.id));
+      const name = String(node.name);
+      const team = node.team as Record<string, unknown> | null | undefined;
+      const entry: LabelEntry = {
+        id: String(node.id),
+        name,
+        teamKey: team?.key === undefined ? null : String(team.key),
+      };
+      const lookup = name.toLowerCase();
+      const existing = byName.get(lookup);
+      if (existing) existing.push(entry);
+      else byName.set(lookup, [entry]);
     }
     const pageInfo = conn?.pageInfo as Record<string, unknown> | undefined;
-    if (!pageInfo?.hasNextPage) return byName;
+    if (!pageInfo?.hasNextPage) break;
     const next = String(pageInfo.endCursor);
     // A cursor that does not advance would page forever; stop instead.
-    if (next === after) return byName;
+    if (next === after) break;
     after = next;
   }
+  return byName;
 }
 
 function labelDirectory(
-  ctx: Ctx,
+  apiKey: string,
   { refresh = false }: { refresh?: boolean } = {},
-): Promise<Map<string, string>> {
-  const apiKey = key(ctx);
-  const cached = refresh ? undefined : labelDirectories.get(apiKey);
+): Promise<LabelDirectory> {
+  const cacheKey = directoryKey(apiKey);
+  const cached = refresh ? undefined : labelDirectories.get(cacheKey);
   if (cached) return cached;
   const pending = fetchLabelDirectory(apiKey);
-  labelDirectories.set(apiKey, pending);
+  labelDirectories.set(cacheKey, pending);
   // A failed lookup must not be cached as the answer for this key.
   pending.catch(() => {
-    if (labelDirectories.get(apiKey) === pending)
-      labelDirectories.delete(apiKey);
+    if (labelDirectories.get(cacheKey) === pending)
+      labelDirectories.delete(cacheKey);
   });
   return pending;
+}
+
+function unknownLabelError(value: string): Error {
+  return new Error(
+    `Linear scope label "${value}" is neither a label UUID nor the name of a label in this workspace. ` +
+      `Set scopeLabelIds (LINEAR_SCOPE_LABEL_IDS) to label UUIDs or exact label names, or unset it for full access.`,
+  );
+}
+
+/**
+ * Label names are not unique in Linear: every team may own a `bug` alongside
+ * a workspace one, and a case-insensitive match widens that further. Picking
+ * whichever paginated last would scope the connection to a label nobody
+ * chose — and a scope that silently binds to the wrong label shows the agent
+ * issues it was never meant to read. An ambiguous name is refused instead,
+ * with the candidates to choose between.
+ */
+function ambiguousLabelError(value: string, matches: LabelEntry[]): Error {
+  const candidates = matches
+    .map(
+      (m) =>
+        `${m.teamKey ? `team ${m.teamKey}` : "workspace"} "${m.name}" → ${m.id}`,
+    )
+    .join("; ");
+  return new Error(
+    `Linear scope label "${value}" is ambiguous: ${matches.length} labels share that name (${candidates}). ` +
+      `Set scopeLabelIds (LINEAR_SCOPE_LABEL_IDS) to the UUID of the one you mean.`,
+  );
 }
 
 /** Scope label UUIDs, resolving any configured label *names* to their ids. */
@@ -106,22 +160,22 @@ export async function resolveScopeLabelIds(ctx: Ctx): Promise<string[]> {
   if (values.length === 0) return [];
   if (values.every((v) => UUID_RE.test(v))) return values;
 
-  let byName = await labelDirectory(ctx);
+  const apiKey = key(ctx);
+  const missing = (directory: LabelDirectory) =>
+    values.some((v) => !UUID_RE.test(v) && !directory.has(v.toLowerCase()));
+  let directory = await labelDirectory(apiKey);
   // A label created after the directory was cached would otherwise stay
   // unresolvable for the lifetime of the process: re-read once before
   // declaring a name unknown.
-  if (values.some((v) => !UUID_RE.test(v) && !byName.has(v.toLowerCase())))
-    byName = await labelDirectory(ctx, { refresh: true });
+  if (missing(directory))
+    directory = await labelDirectory(apiKey, { refresh: true });
 
   return values.map((value) => {
     if (UUID_RE.test(value)) return value;
-    const id = byName.get(value.toLowerCase());
-    if (!id)
-      throw new Error(
-        `Linear scope label "${value}" is neither a label UUID nor the name of a label in this workspace. ` +
-          `Set scopeLabelIds (LINEAR_SCOPE_LABEL_IDS) to label UUIDs or exact label names, or unset it for full access.`,
-      );
-    return id;
+    const matches = directory.get(value.toLowerCase()) ?? [];
+    if (matches.length === 0) throw unknownLabelError(value);
+    if (matches.length > 1) throw ambiguousLabelError(value, matches);
+    return matches[0].id;
   });
 }
 

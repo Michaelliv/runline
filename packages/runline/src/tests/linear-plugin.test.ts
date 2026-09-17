@@ -774,6 +774,74 @@ describe("linear plugin scoped issue access", () => {
     );
   });
 
+  // Label names are not unique in Linear: every team may own a `bug`, and a
+  // case-insensitive match widens that further. Resolving to whichever
+  // paginated last would scope the connection to a label nobody chose.
+  it("refuses an ambiguous label name instead of picking one", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const ENG = "1f2e3d4c-5b6a-4798-8765-43210fedcba9";
+    const OPS = "9abcdef0-1234-4567-8901-234567890abc";
+
+    mockLinearSequence(
+      [
+        () => ({
+          issueLabels: {
+            nodes: [
+              { id: ENG, name: "bug", team: { key: "ENG" } },
+              { id: OPS, name: "Bug", team: { key: "OPS" } },
+            ],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+      ],
+      { autoResolveLabels: false },
+    );
+
+    await assert.rejects(
+      action.execute(
+        {},
+        ctx({ apiKey: "lin_ambiguous", scopeLabelIds: "bug" }),
+      ),
+      (e: Error) => {
+        assert.match(e.message, /ambiguous: 2 labels share that name/);
+        // The candidates are what makes the error actionable.
+        assert.match(e.message, /team ENG/);
+        assert.match(e.message, /team OPS/);
+        assert.ok(e.message.includes(ENG) && e.message.includes(OPS));
+        return true;
+      },
+    );
+  });
+
+  it("resolves a workspace label whose name no other label shares", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const ID = "2b3c4d5e-6f70-4812-9a3b-4c5d6e7f8091";
+
+    mockLinearSequence(
+      [
+        () => ({
+          issueLabels: {
+            // A workspace label carries no team; the directory must accept that.
+            nodes: [{ id: ID, name: "requester:yosi", team: null }],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+        (body) => {
+          assert.deepEqual(body.variables?.filter, {
+            labels: { id: { in: [ID] } },
+          });
+          return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+        },
+      ],
+      { autoResolveLabels: false },
+    );
+
+    await action.execute(
+      {},
+      ctx({ apiKey: "lin_workspace", scopeLabelIds: "requester:yosi" }),
+    );
+  });
+
   // A label created after the directory was first read must not stay
   // unresolvable for the lifetime of the process.
   it("re-reads the directory when a name is missing from the cache", async () => {
