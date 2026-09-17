@@ -17,6 +17,9 @@ export async function gql(
     method: "POST",
     headers: { Authorization: apiKey, "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    // The API key rides on every request; a redirect would hand it to
+    // whatever host the response names.
+    redirect: "error",
   });
   if (!res.ok)
     throw new Error(`Linear API error ${res.status}: ${await res.text()}`);
@@ -92,7 +95,7 @@ async function fetchLabelDirectory(apiKey: string): Promise<LabelDirectory> {
       const entry: LabelEntry = {
         id: String(node.id),
         name,
-        teamKey: team?.key === undefined ? null : String(team.key),
+        teamKey: typeof team?.key === "string" ? team.key : null,
       };
       const lookup = name.toLowerCase();
       const existing = byName.get(lookup);
@@ -454,9 +457,9 @@ export function bindGetAction(rl: RunlinePluginAPI) {
  * Root fields a scoped connection may not read.
  *
  * The scope restricts *issue content*, so workspace metadata an agent needs
- * to route and report on its own issues — cycles, users (alongside teams,
- * states and labels, which were never blocked) — stays readable. Fields that
- * would leak other people's content or secrets stay blocked.
+ * to route and report on its own issues — cycles, users, teams, states and
+ * labels — stays readable. Fields that would leak other people's content or
+ * secrets are blocked, and a blocked field's description says so.
  */
 const SCOPED_BLOCKED_ROOT_FIELDS = new Set([
   "attachments",

@@ -167,6 +167,9 @@ function mockLinearSequence(
       String(init?.headers?.["Authorization" as keyof HeadersInit]),
       /^lin_/,
     );
+    // Asserted on every request in the suite: the API key travels on all of
+    // them, and a followed redirect would carry it off to another host.
+    assert.equal(init?.redirect, "error");
 
     const body = JSON.parse(String(init?.body)) as {
       query: string;
