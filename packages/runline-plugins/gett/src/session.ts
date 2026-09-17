@@ -1,6 +1,7 @@
 import type { ActionContext } from "runline";
 import {
   APP_VERSION,
+  accepted,
   arr,
   authed,
   cfgOf,
@@ -11,6 +12,7 @@ import {
   http,
   normPhone,
   num,
+  numOrNull,
   obj,
   pick,
   seg,
@@ -60,12 +62,11 @@ export async function requestCode(ctx: ActionContext, phone?: string) {
     `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/otp/challenge`,
     { method: "POST", body },
   );
-  // Gett answers 200 even when it refuses to send (rate limit / block); the verdict
-  // is in the body's rc/status, not the HTTP code. Success is rc:0 / status:"success".
-  // Report a refusal rather than claiming an SMS that will never arrive.
+  // Gett answers 200 even when it refuses to send, so a refusal is reported
+  // rather than an SMS claimed that will never arrive.
   const status = pick(r.status);
-  if ((r.rc != null && r.rc !== 0) || (status && status !== "success")) {
-    const mins = r.blocked_until != null ? num(r.blocked_until, 0) : null;
+  if (!accepted(r)) {
+    const mins = numOrNull(r.blocked_until);
     return {
       sent: false,
       blocked: status === "blocked",
@@ -106,8 +107,7 @@ export async function verifyCode(ctx: ActionContext, code: string) {
   const toks = tokensIn(r);
   if (toks) {
     const warnings = await finishTokens(ctx, toks);
-    // `connected` comes from status(), which reads what was actually persisted,
-    // rather than from the branch that hoped it would be.
+    // `connected` is read back from what was persisted, not asserted here.
     return { mfa_required: false, warnings, ...(await status(ctx)) };
   }
   const mfa = r.mfa_required === true || pick(r.status) === "mfa_required";

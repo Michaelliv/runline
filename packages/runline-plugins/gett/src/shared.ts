@@ -80,6 +80,23 @@ export const num = (value: unknown, fallback: number): number =>
   numOrNull(value) ?? fallback;
 
 /**
+ * Whether a 2xx body reports success.
+ *
+ * Gett signals refusal inside the body on some endpoints (`rc`) and in a status
+ * string on others, and answers 200 either way. An explicit `rc` decides; failing
+ * that an explicit status decides; a body carrying neither is an acceptance,
+ * because `http` has already rejected every non-2xx. Erring the other way would
+ * report a booked ride as unbooked, and the caller would order a second car.
+ */
+export function accepted(body: Record<string, unknown>): boolean {
+  const rc = numOrNull(body.rc);
+  if (rc !== null) return rc === 0;
+  const status = pick(body.status);
+  if (status !== null) return status === "success";
+  return true;
+}
+
+/**
  * Normalize a phone to Gett's expected international digits (E.164 without '+'),
  * so a number typed the local Israeli way still routes the SMS. Gett pairs the
  * path number with country_phone_prefix:972, so a national "0500000000" (or

@@ -11,6 +11,7 @@ import {
   verifyCode,
 } from "./session.js";
 import {
+  accepted,
   accessToken,
   arr,
   authed,
@@ -369,6 +370,12 @@ export default function gett(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const cfg = cfgOf(ctx);
+      // A confirmation that ordering will refuse is decided before spending four
+      // requests to price a ride nobody can book.
+      if (p.confirm === true && !cfg.allowOrdering)
+        throw new Error(
+          "gett ride.book: ordering is disabled for this connection (set allowOrdering:true). Refusing to book.",
+        );
       const { lat, lon } = bias(p, ctx);
       const ride = await plan(
         ctx,
@@ -392,10 +399,6 @@ export default function gett(rl: RunlinePluginAPI) {
             : "Ordering is disabled for this connection (allowOrdering is false), so this preview cannot be booked. Enable allowOrdering first.",
         };
       }
-      if (!cfg.allowOrdering)
-        throw new Error(
-          "gett ride.book: ordering is disabled for this connection (set allowOrdering:true). Refusing to book.",
-        );
       if (p.quote !== quote) {
         return {
           booked: false,
@@ -408,12 +411,16 @@ export default function gett(rl: RunlinePluginAPI) {
         };
       }
       const result = await book(ctx, ride, p.note ? String(p.note) : undefined);
+      // Gett accepted the order or it did not; "booked" is never claimed over a
+      // body that said otherwise, because the caller's next move differs entirely.
       return {
-        ok: result.ok,
-        status: "booked",
+        booked: result.ok,
+        status: result.ok ? "booked" : "rejected",
         order_id: result.order_id,
         summary,
-        track_with: `ride.status({ order_id: "${result.order_id}" })`,
+        ...(result.order_id
+          ? { track_with: `ride.status({ order_id: "${result.order_id}" })` }
+          : {}),
       };
     },
   });
@@ -435,7 +442,10 @@ export default function gett(rl: RunlinePluginAPI) {
         status: pick(r.status),
         eta_seconds: numOrNull(r.eta),
         distance_m: numOrNull(r.distance),
-        cancellable: r.cancellable_by_client ?? null,
+        cancellable:
+          typeof r.cancellable_by_client === "boolean"
+            ? r.cancellable_by_client
+            : null,
         driver_assigned_at: pick(r.driver_assigned_at),
         payment_type: pick(r.payment_type),
         driver: r.driver ?? r.driver_details ?? null,
@@ -480,10 +490,7 @@ export default function gett(rl: RunlinePluginAPI) {
           ctx,
           `/gl/server/2_9/phone/${phone}/orders/${order}/order_cancellation_reason`,
           { method: "POST", body: { cancellation_reason_id: reason } },
-        ).then(
-          () => true,
-          () => false,
-        );
+        ).then(accepted, () => false);
       }
       const r = await authed(
         ctx,
@@ -491,7 +498,7 @@ export default function gett(rl: RunlinePluginAPI) {
         { method: "POST", body: {} },
       );
       return {
-        cancelled: r.rc === 0,
+        cancelled: accepted(r),
         order_id,
         reason_recorded: reasonRecorded,
       };

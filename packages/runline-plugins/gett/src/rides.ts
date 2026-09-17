@@ -2,7 +2,15 @@ import { createHash, randomUUID } from "node:crypto";
 import type { ActionContext } from "runline";
 import { flat, type Place, resolve, stop } from "./places.js";
 import { createSession } from "./session.js";
-import { arr, authed, cfgOf, numOrNull, obj, pick } from "./shared.js";
+import {
+  accepted,
+  arr,
+  authed,
+  cfgOf,
+  numOrNull,
+  obj,
+  pick,
+} from "./shared.js";
 
 /** Pricing, the quote that binds a confirmation to a fare, and the booking itself. */
 
@@ -187,7 +195,7 @@ export async function book(ctx: ActionContext, ride: Plan, note?: string) {
     body,
   });
   return {
-    ok: r.rc === 0 || pick(r.status) === "success",
+    ok: accepted(r),
     order_id: pick(obj(r.order).id, r.order_id),
   };
 }

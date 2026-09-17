@@ -98,8 +98,15 @@ function created(list: Call[]): Call[] {
   return list.filter((c) => new URL(c.url).pathname.endsWith("/create"));
 }
 
-/** The full chain a priced ride walks: session, both lookups, then pricing. */
-function ridePlanRoutes(price = "45.00"): Route[] {
+/**
+ * The full chain a priced ride walks: session, both lookups, pricing, and the
+ * endpoint that orders the car. Routes match first-wins, so the create response
+ * is a parameter rather than something a caller can append and expect to win.
+ */
+function ridePlanRoutes(
+  price = "45.00",
+  createResponse: unknown = { rc: 0, order: { id: "order-9" } },
+): Route[] {
   return [
     [
       "create_session",
@@ -151,7 +158,7 @@ function ridePlanRoutes(price = "45.00"): Route[] {
         ],
       }),
     ],
-    ["global-ride-request/api/v1/create", { rc: 0, order: { id: "order-9" } }],
+    ["global-ride-request/api/v1/create", createResponse],
   ];
 }
 
@@ -455,7 +462,8 @@ describe("gett plugin surface", () => {
     const booked = (await action("ride.book").execute(
       { from: "a", to: "b", confirm: true, quote: preview.quote },
       ctx,
-    )) as { status: string; order_id: string };
+    )) as { booked: boolean; status: string; order_id: string };
+    assert.equal(booked.booked, true);
     assert.equal(booked.status, "booked");
     assert.equal(booked.order_id, "order-9");
     assert.equal(created(booking).length, 1);
@@ -472,6 +480,40 @@ describe("gett plugin surface", () => {
     assert.equal(created(surged).length, 0, "a moved fare must not book");
   });
 
+  it("never reports a ride as booked over a body that refused it", async () => {
+    const { ctx } = await context({ allowOrdering: true });
+    mock(ridePlanRoutes());
+    const { quote } = (await action("ride.book").execute(
+      { from: "a", to: "b" },
+      ctx,
+    )) as { quote: string };
+    mock(ridePlanRoutes("45.00", { rc: 7, error: "no supply" }));
+    const r = (await action("ride.book").execute(
+      { from: "a", to: "b", confirm: true, quote },
+      ctx,
+    )) as { booked: boolean; status: string };
+    assert.equal(r.booked, false);
+    assert.equal(r.status, "rejected");
+  });
+
+  it("treats a 2xx with no verdict as accepted, so no one orders a second car", async () => {
+    const { ctx } = await context({ allowOrdering: true });
+    mock(ridePlanRoutes());
+    const { quote } = (await action("ride.book").execute(
+      { from: "a", to: "b" },
+      ctx,
+    )) as { quote: string };
+    // No rc and no status: the transport already rejected every non-2xx, so the
+    // order stands. Guessing the other way would summon a second taxi.
+    mock(ridePlanRoutes("45.00", { order: { id: "order-9" } }));
+    const r = (await action("ride.book").execute(
+      { from: "a", to: "b", confirm: true, quote },
+      ctx,
+    )) as { booked: boolean; track_with: string };
+    assert.equal(r.booked, true);
+    assert.match(r.track_with, /order-9/);
+  });
+
   it("refuses a confirmation that carries no quote at all", async () => {
     const { ctx } = await context({ allowOrdering: true });
     const calls = mock(ridePlanRoutes());
@@ -486,13 +528,19 @@ describe("gett plugin surface", () => {
 
   it("gates both money actions behind allowOrdering", async () => {
     const { ctx } = await context({ allowOrdering: false });
-    const calls = mock([...ridePlanRoutes(), ["cancel", { rc: 0 }]]);
+
+    const priced = mock(ridePlanRoutes());
     const preview = (await action("ride.book").execute(
       { from: "a", to: "b" },
       ctx,
     )) as { quote: string; note: string };
     // A preview must not instruct the caller to do something that will be refused.
     assert.match(preview.note, /disabled/);
+    assert.equal(created(priced).length, 0);
+
+    // A confirmation that ordering will refuse costs nothing: it is decided
+    // before the four requests that price a ride.
+    const confirming = mock(ridePlanRoutes());
     await assert.rejects(
       () =>
         action("ride.book").execute(
@@ -501,6 +549,9 @@ describe("gett plugin surface", () => {
         ) as Promise<unknown>,
       /ordering is disabled/,
     );
+    assert.equal(confirming.length, 0, "a doomed confirmation must not price");
+
+    const cancelling = mock([["cancel", { rc: 0 }]]);
     await assert.rejects(
       () =>
         action("ride.cancel").execute(
@@ -509,8 +560,7 @@ describe("gett plugin surface", () => {
         ) as Promise<unknown>,
       /ordering is disabled/,
     );
-    assert.equal(created(calls).length, 0);
-    assert.equal(calls.filter((c) => c.url.endsWith("/cancel")).length, 0);
+    assert.equal(cancelling.length, 0, "a disabled connection cannot cancel");
   });
 
   it("refuses to book a class the route does not offer", async () => {
