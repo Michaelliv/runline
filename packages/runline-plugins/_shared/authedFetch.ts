@@ -25,13 +25,14 @@ export async function authedFetch(
   init: RequestInit = {},
 ): Promise<Response> {
   const response = await fetch(input, { ...init, redirect: "error" });
-  if (
-    response.redirected ||
-    (response.status >= 300 && response.status < 400)
-  ) {
+  const followed = response.redirected;
+  const offered = response.status >= 300 && response.status < 400;
+  if (followed || offered) {
     void response.body?.cancel().catch(() => {});
     throw new Error(
-      `Refusing a redirect on a request carrying credentials (HTTP ${response.status}).`,
+      followed
+        ? "Refusing a request that followed a redirect while carrying credentials."
+        : `Refusing a redirect on a request carrying credentials (HTTP ${response.status}).`,
     );
   }
   return response;

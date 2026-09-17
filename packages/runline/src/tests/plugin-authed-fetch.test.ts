@@ -313,14 +313,15 @@ describe("plugin requests carrying credentials refuse redirects", () => {
       }) as typeof fetch;
       await assert.rejects(
         authedFetch("https://example.test/x"),
-        /Refusing a redirect/,
+        /followed a redirect/,
       );
 
+      // A 3xx handed back rather than followed is refused on its own terms.
       globalThis.fetch = (async () =>
         new Response(null, { status: 302 })) as typeof fetch;
       await assert.rejects(
         authedFetch("https://example.test/x"),
-        /Refusing a redirect/,
+        /Refusing a redirect .*HTTP 302/,
       );
     } finally {
       globalThis.fetch = original;
@@ -339,12 +340,22 @@ describe("plugin requests carrying credentials refuse redirects", () => {
     );
   });
 
-  it("the backlog is real and shrinking is the only direction", () => {
-    // A guard on the guard: if the detector silently stops matching, the
-    // ratchet would pass while enforcing nothing.
+  it("drops a file from the backlog as soon as it is migrated", () => {
+    // Without this the list rots: a migrated file keeps its line, the gate
+    // still passes, and the backlog stops describing the work that is left.
+    const offenders = new Set(filesCallingBareFetch());
+    const stale = [...BARE_FETCH_BACKLOG].filter((rel) => !offenders.has(rel));
+    assert.deepEqual(
+      stale,
+      [],
+      "these files now use authedFetch; delete their lines from BARE_FETCH_BACKLOG",
+    );
+  });
+
+  it("still has a backlog, so a broken detector cannot look like finished work", () => {
     assert.ok(
       BARE_FETCH_BACKLOG.size > 0,
-      "expected a backlog; a zero-sized one means the detector broke",
+      "a zero-sized backlog means the detector stopped matching, not that the work is done",
     );
     for (const rel of BARE_FETCH_BACKLOG) {
       assert.ok(
