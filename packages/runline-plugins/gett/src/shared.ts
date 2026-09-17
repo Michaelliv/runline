@@ -1,5 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type { ActionContext } from "runline";
+import {
+  arr,
+  num,
+  numOrNull,
+  obj,
+  pick,
+  readBounded,
+  seg as segment,
+} from "../../_shared/provider.js";
+
+export { arr, num, numOrNull, obj, pick };
 
 /**
  * Transport and credentials for the Gett consumer surface.
@@ -41,44 +52,6 @@ export type Cfg = {
 export const cfgOf = (ctx: ActionContext): Cfg =>
   (ctx.connection.config || {}) as Cfg;
 
-// ---------- reading unshaped provider JSON ----------
-//
-// The API is undocumented and its payloads are deep, so every read goes through
-// one of these. They are total: a missing or wrongly-typed field yields the empty
-// value for its shape rather than throwing halfway through a response.
-
-export function obj(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-export function arr(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-/** The first non-empty string among the candidates, else null. */
-export function pick(...values: unknown[]): string | null {
-  for (const value of values) {
-    if (typeof value === "string" && value !== "") return value;
-    if (typeof value === "number" && Number.isFinite(value))
-      return String(value);
-  }
-  return null;
-}
-
-export function numOrNull(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-export const num = (value: unknown, fallback: number): number =>
-  numOrNull(value) ?? fallback;
-
 /**
  * Whether a 2xx body reports success.
  *
@@ -111,18 +84,8 @@ export function normPhone(input: string): string {
   return `972${digits}`;
 }
 
-/**
- * One path segment, escaped. Caller-supplied ids reach a URL carrying a bearer
- * token, so a segment that could climb out of its position is refused outright
- * rather than encoded and hoped about.
- */
-export function seg(value: unknown, what: string): string {
-  const raw = String(value ?? "").trim();
-  if (!raw || raw === "." || raw === ".." || /[/\\?#]/.test(raw)) {
-    throw new Error(`gett: invalid ${what}`);
-  }
-  return encodeURIComponent(raw);
-}
+export const seg = (value: unknown, what: string): string =>
+  segment(value, what, "gett");
 
 // ---------- HTTP ----------
 
@@ -139,31 +102,6 @@ class GettError extends Error {
 /** The account's phone is in nearly every path; it never belongs in an error. */
 function endpointOf(path: string): string {
   return path.split("?")[0].replace(/\/phone\/[^/]+/, "/phone/{phone}");
-}
-
-async function bodyText(res: Response, endpoint: string): Promise<string> {
-  const reader = res.body?.getReader();
-  if (!reader) return "";
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.byteLength;
-    if (total > MAX_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new Error(`gett: response exceeded the size limit on ${endpoint}`);
-    }
-    chunks.push(value);
-  }
-  const joined = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    joined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(joined);
 }
 
 export async function http(
@@ -193,7 +131,11 @@ export async function http(
     // A redirect would carry the bearer to whatever host the response names.
     redirect: "error",
   });
-  const text = await bodyText(res, endpoint);
+  const text = await readBounded(
+    res,
+    MAX_RESPONSE_BYTES,
+    () => new Error(`gett: response exceeded the size limit on ${endpoint}`),
+  );
   let parsed: unknown = null;
   try {
     parsed = text ? JSON.parse(text) : null;
