@@ -60,7 +60,7 @@ export function seg(value: unknown, what: string, plugin: string): string {
 export async function readBounded(
   res: Response,
   maxBytes: number,
-  onOversize: () => Error,
+  oversizeMessage: string,
 ): Promise<string> {
   const reader = res.body?.getReader();
   if (!reader) return "";
@@ -73,7 +73,7 @@ export async function readBounded(
     total += value.byteLength;
     if (total > maxBytes) {
       await reader.cancel();
-      throw onOversize();
+      throw new Error(oversizeMessage);
     }
     chunks.push(value);
   }

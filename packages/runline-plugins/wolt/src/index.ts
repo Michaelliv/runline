@@ -665,8 +665,10 @@ export default function wolt(rl: RunlinePluginAPI) {
         );
       const { lat, lon } = coords(p, ctx);
       const slug = String(p.slug);
-      const detail = await venue(slug, lat, lon);
-      const addresses = await listAddresses(ctx);
+      const [detail, addresses] = await Promise.all([
+        venue(slug, lat, lon),
+        listAddresses(ctx),
+      ]);
       const plan = await planOrder(
         ctx,
         detail,

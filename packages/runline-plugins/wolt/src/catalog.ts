@@ -127,14 +127,15 @@ export async function nearby(
 /** A venue's static page plus its live status; the live half is best-effort. */
 export async function venue(slug: string, lat: number, lon: number) {
   const params = new URLSearchParams({ lat: String(lat), lon: String(lon) });
+  const name = seg(slug, "slug");
   const [staticPage, dynamic] = await Promise.all([
     http(
       CONSUMER,
-      `/order-xp/web/v1/pages/venue/slug/${seg(slug, "slug")}/static?${params}`,
+      `/order-xp/web/v1/pages/venue/slug/${name}/static?${params}`,
     ),
     http(
       CONSUMER,
-      `/order-xp/web/v1/venue/slug/${seg(slug, "slug")}/dynamic/?selected_delivery_method=homedelivery`,
+      `/order-xp/web/v1/venue/slug/${name}/dynamic/?selected_delivery_method=homedelivery`,
     ).catch(() => null),
   ]);
   const v = obj(staticPage.venue);

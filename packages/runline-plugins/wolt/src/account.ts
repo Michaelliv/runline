@@ -63,8 +63,8 @@ async function authForm(
   });
 }
 
-const captchaHeader = (token: unknown): Record<string, string> =>
-  token ? { "h-captcha-response": String(token) } : {};
+const captchaHeader = (token?: string): Record<string, string> =>
+  token ? { "h-captcha-response": token } : {};
 
 /** The query of a URL, or of a bare `a=b&c=d` fragment. */
 function queryOf(text: string): URLSearchParams | null {
@@ -109,10 +109,7 @@ export function linkToken(link: string): string {
 }
 
 /** Persist the grant and learn what ordering will need. */
-async function finish(
-  ctx: ActionContext,
-  grant: Record<string, unknown>,
-): Promise<{ warnings: Warnings } & Record<string, unknown>> {
+async function finish(ctx: ActionContext, grant: Record<string, unknown>) {
   const access = pick(grant.access_token);
   const refresh = pick(grant.refresh_token);
   if (!access || !refresh)
@@ -123,7 +120,6 @@ async function finish(
     accessTokenExpiresAt: expiresAt(grant.expires_in),
     pendingPhone: undefined,
     pendingEmail: undefined,
-    pendingOperationToken: undefined,
     pendingConfirmationToken: undefined,
     pendingEmailToken: undefined,
   });
@@ -253,7 +249,6 @@ export async function requestSmsCode(
     phone_number: normalized,
   }).catch(() => ({}) as Record<string, unknown>);
   const operationToken = pick(operation.operation_token);
-  await ctx.updateConnection({ pendingOperationToken: operationToken });
 
   // The merge path: a magic-link token from any mailbox proves the email half,
   // which is what unlocks SMS on a social or phone-only account.
@@ -339,9 +334,10 @@ export async function submitCode(ctx: ActionContext, code: string) {
     return finish(ctx, grant);
   } catch (e) {
     if (!(e instanceof WoltError)) throw e;
-    const escalation = pick(e.details().access_confirmation_token);
+    const details = e.details();
+    const escalation = pick(details.access_confirmation_token);
     if (!escalation) throw e;
-    return startEmailConfirmation(ctx, escalation, e.details());
+    return startEmailConfirmation(ctx, escalation, details);
   }
 }
 

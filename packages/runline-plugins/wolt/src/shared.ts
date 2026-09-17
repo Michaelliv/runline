@@ -9,6 +9,7 @@ import {
   readBounded,
   seg as segment,
 } from "../../_shared/provider.js";
+import { coordinatedAccessToken } from "../../_shared/tokenRefresh.js";
 
 export { arr, num, numOrNull, obj, pick };
 
@@ -30,8 +31,6 @@ export const AUDIENCE = "restaurant-api";
 export const CAPABILITIES = "access_confirmation";
 
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
-/** Renew this long before expiry so an in-flight request never races the clock. */
-const EXPIRY_SKEW_MS = 60_000;
 const DEFAULT_TOKEN_TTL_MS = 3_600_000;
 
 const WEB_UA =
@@ -69,7 +68,6 @@ export type Cfg = {
   pendingPhone?: string;
   pendingEmail?: string;
   pendingEmailToken?: string;
-  pendingOperationToken?: string;
   pendingConfirmationToken?: string;
   defaultLat?: string | number;
   defaultLon?: string | number;
@@ -196,7 +194,7 @@ async function httpText(
   const text = await readBounded(
     res,
     MAX_RESPONSE_BYTES,
-    () => new Error(`wolt: response exceeded the size limit on ${endpoint}`),
+    `wolt: response exceeded the size limit on ${endpoint}`,
   );
   if (res.status >= 400) throw new WoltError(res.status, endpoint, text);
   return text;
@@ -236,14 +234,6 @@ export function clientHeaders(cfg: Cfg): Record<string, string> {
 
 // ---------- credentials ----------
 
-function fresh(cfg: Cfg): boolean {
-  return Boolean(
-    cfg.accessToken &&
-      cfg.accessTokenExpiresAt &&
-      Date.now() < cfg.accessTokenExpiresAt - EXPIRY_SKEW_MS,
-  );
-}
-
 export function expiresAt(expiresIn: unknown): number {
   const seconds = numOrNull(expiresIn);
   return Date.now() + (seconds ? seconds * 1000 : DEFAULT_TOKEN_TTL_MS);
@@ -278,34 +268,27 @@ export async function accessToken(
     throw new Error(
       "wolt: not connected — run the owner login (account.requestEmailCode / account.requestSmsCode / account.redeemLink)",
     );
-  if (!force && fresh(cfg)) return cfg.accessToken as string;
-
-  let token: string | undefined;
-  // Renewal runs under the store's update ownership so parallel actions coalesce
-  // onto one grant. Wolt rotates the refresh token on every grant, so a race here
-  // would persist a token the provider has already replaced.
-  await ctx.updateConnection(async (current) => {
-    const owned = current as Cfg;
-    if (!force && fresh(owned)) {
-      token = owned.accessToken;
-      return undefined;
-    }
-    const resp = await refreshGrant(owned);
-    const issued = pick(resp.access_token);
-    if (!issued)
-      throw new Error(
-        "wolt: token refresh returned no access_token — the refresh token has expired, re-run the owner login",
-      );
-    token = issued;
-    const rotated = pick(resp.refresh_token);
-    return {
-      accessToken: issued,
-      accessTokenExpiresAt: expiresAt(resp.expires_in),
-      ...(rotated ? { refreshToken: rotated } : {}),
-    };
-  });
-  if (!token) throw new Error("wolt: token refresh produced no access token");
-  return token;
+  // Renewal runs under the store's update ownership, so parallel actions
+  // coalesce onto one grant. Wolt rotates the refresh token on every grant, so
+  // a race would persist one the provider has already replaced.
+  return coordinatedAccessToken(
+    ctx,
+    async (current) => {
+      const resp = await refreshGrant(current as Cfg);
+      const issued = pick(resp.access_token);
+      if (!issued)
+        throw new Error(
+          "wolt: token refresh returned no access_token — the refresh token has expired, re-run the owner login",
+        );
+      const rotated = pick(resp.refresh_token);
+      return {
+        accessToken: issued,
+        accessTokenExpiresAt: expiresAt(resp.expires_in),
+        ...(rotated ? { refreshToken: rotated } : {}),
+      };
+    },
+    force,
+  );
 }
 
 export async function authed(

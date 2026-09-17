@@ -9,6 +9,7 @@ import {
   readBounded,
   seg as segment,
 } from "../../_shared/provider.js";
+import { coordinatedAccessToken } from "../../_shared/tokenRefresh.js";
 
 export { arr, num, numOrNull, obj, pick };
 
@@ -27,8 +28,6 @@ export const DEF_LAT = 32.0779;
 export const DEF_LON = 34.7743;
 
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
-/** Renew this long before expiry so an in-flight request never races the clock. */
-const EXPIRY_SKEW_MS = 60_000;
 const DEFAULT_TOKEN_TTL_MS = 3_600_000;
 
 export type Cfg = {
@@ -134,7 +133,7 @@ export async function http(
   const text = await readBounded(
     res,
     MAX_RESPONSE_BYTES,
-    () => new Error(`gett: response exceeded the size limit on ${endpoint}`),
+    `gett: response exceeded the size limit on ${endpoint}`,
   );
   let parsed: unknown = null;
   try {
@@ -163,14 +162,6 @@ export async function ensureDevice(ctx: ActionContext): Promise<void> {
 }
 
 // ---------- credentials ----------
-
-function fresh(cfg: Cfg): boolean {
-  return Boolean(
-    cfg.accessToken &&
-      cfg.accessTokenExpiresAt &&
-      Date.now() < cfg.accessTokenExpiresAt - EXPIRY_SKEW_MS,
-  );
-}
 
 export function expiresAt(expiresIn: unknown): number {
   const seconds = numOrNull(expiresIn);
@@ -222,31 +213,24 @@ export async function accessToken(
       "gett: not connected — run account.requestCode({ phone }) -> account.verifyCode({ code }) -> account.verifyCard({ card })",
     );
   if (!cfg.phone) throw new Error("gett: no phone configured");
-  if (!force && fresh(cfg)) return cfg.accessToken as string;
-
-  let token: string | undefined;
-  // Renewal runs under the store's update ownership so parallel actions coalesce
-  // onto one grant instead of racing and clobbering each other's rotated token.
-  await ctx.updateConnection(async (current) => {
-    const owned = current as Cfg;
-    if (!force && fresh(owned)) {
-      token = owned.accessToken;
-      return undefined;
-    }
-    const resp = await refreshGrant(ctx, owned);
-    const issued = pick(resp.access_token);
-    if (!issued)
-      throw new Error("gett: token refresh returned no access_token");
-    token = issued;
-    const rotated = pick(resp.refresh_token);
-    return {
-      accessToken: issued,
-      accessTokenExpiresAt: expiresAt(resp.expires_in),
-      ...(rotated ? { refreshToken: rotated } : {}),
-    };
-  });
-  if (!token) throw new Error("gett: token refresh produced no access token");
-  return token;
+  // Renewal runs under the store's update ownership, so parallel actions
+  // coalesce onto one grant instead of clobbering each other's rotated token.
+  return coordinatedAccessToken(
+    ctx,
+    async (current) => {
+      const resp = await refreshGrant(ctx, current as Cfg);
+      const issued = pick(resp.access_token);
+      if (!issued)
+        throw new Error("gett: token refresh returned no access_token");
+      const rotated = pick(resp.refresh_token);
+      return {
+        accessToken: issued,
+        accessTokenExpiresAt: expiresAt(resp.expires_in),
+        ...(rotated ? { refreshToken: rotated } : {}),
+      };
+    },
+    force,
+  );
 }
 
 export async function authed(

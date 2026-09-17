@@ -128,7 +128,7 @@ const ASSORTMENT = {
 
 /** The whole chain an order walks: venue, addresses, assortment, checkout, purchase. */
 function orderRoutes(
-  payable = 6100,
+  payable: number | null = 6100,
   purchaseResponse: unknown = { results: [{ id: { $oid: "order-9" } }] },
 ): Route[] {
   return [
@@ -167,8 +167,11 @@ function orderRoutes(
       "/pages/checkout",
       () => ({
         id: "checkout-1",
-        payable_amount: payable,
-        purchase_validation: { end_amount: payable, delivery_price: 900 },
+        ...(payable === null ? {} : { payable_amount: payable }),
+        purchase_validation:
+          payable === null
+            ? { delivery_price: 900 }
+            : { end_amount: payable, delivery_price: 900 },
         delivery_configs: [
           {
             method: "homedelivery",
@@ -472,6 +475,22 @@ describe("wolt plugin surface", () => {
     assert.equal(refused.reason, "price_changed");
     assert.equal(refused.summary.payable_amount, 8400);
     assert.equal(purchased(surged).length, 0, "a moved total must not order");
+  });
+
+  it("refuses to price an order the checkout gave no total for", async () => {
+    const { ctx } = await context({ allowOrdering: true });
+    const calls = mock(orderRoutes(null));
+    await assert.rejects(
+      () =>
+        action("order.create").execute(
+          { slug: "sushi-bar", items: CART },
+          ctx,
+        ) as Promise<unknown>,
+      /no payable amount/,
+    );
+    // Nothing to show a person, nothing to bind a quote to, and a purchase
+    // would have posted a null charge.
+    assert.equal(purchased(calls).length, 0);
   });
 
   it("refuses a confirmation that carries no quote", async () => {

@@ -30,11 +30,13 @@ function usableToken(
 export async function coordinatedAccessToken(
   ctx: ActionContext,
   refresh: (current: Readonly<Record<string, unknown>>) => Promise<TokenPatch>,
+  /** Renew even when the stored token is still usable, to prove it or to rotate it. */
+  force = false,
 ): Promise<string> {
-  const cached = usableToken(ctx.connection.config);
+  const cached = force ? undefined : usableToken(ctx.connection.config);
   if (cached) return cached;
   await ctx.updateConnection(async (current) => {
-    if (usableToken(current)) return;
+    if (!force && usableToken(current)) return;
     return refresh(current);
   });
   const token = ctx.connection.config.accessToken;
