@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { authedFetch } from "../../_shared/authedFetch.js";
 
 const GQL_URL = "https://api.linear.app/graphql";
 
@@ -13,13 +14,10 @@ export async function gql(
 ): Promise<Record<string, unknown>> {
   const body: Record<string, unknown> = { query };
   if (variables) body.variables = variables;
-  const res = await fetch(GQL_URL, {
+  const res = await authedFetch(GQL_URL, {
     method: "POST",
     headers: { Authorization: apiKey, "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    // The API key rides on every request; a redirect would hand it to
-    // whatever host the response names.
-    redirect: "error",
   });
   if (!res.ok)
     throw new Error(`Linear API error ${res.status}: ${await res.text()}`);

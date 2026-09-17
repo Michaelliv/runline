@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ActionContext } from "runline";
+import { authedFetch } from "../../_shared/authedFetch.js";
 import {
   arr,
   num,
@@ -123,12 +124,10 @@ export async function http(
   if (token) headers.authorization = `Bearer ${token}`;
   if (payload) headers["content-type"] = "application/json; charset=UTF-8";
   const endpoint = endpointOf(path);
-  const res = await fetch(`https://${HOST}${path}`, {
+  const res = await authedFetch(`https://${HOST}${path}`, {
     method,
     headers,
     body: payload,
-    // A redirect would carry the bearer to whatever host the response names.
-    redirect: "error",
   });
   const text = await readBounded(
     res,
