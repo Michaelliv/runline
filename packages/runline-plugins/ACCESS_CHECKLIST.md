@@ -55,6 +55,7 @@ Status values: `pending`, `in-progress`, `done`.
 | `elasticsearch` | done | Annotated 9 actions: 4 read (`document.get`, `document.search`, `index.get`, `index.list`) and 5 write (`document.create`, `document.update`, `document.delete`, `index.create`, `index.delete`). |
 | `emelia` | done | Annotated 9 actions: 3 read (`campaign.get`, `campaign.list`, `contactList.list`) and 6 write (campaign create/addContact/start/pause/duplicate plus contactList.addContact). |
 | `erpnext` | done | Annotated 5 actions: 2 read (`document.get`, `document.list`) and 3 write (`document.create`, `document.update`, `document.delete`). |
+| `fal` | done | Annotated 8 actions: 1 read (`queue.status`) and 7 write (`image.create`, `image.edit`, `video.create`, `run`, `queue.submit`, `queue.result`, `queue.cancel`). Generation and submission consume billed compute; `queue.result` writes files locally without re-running the model; `queue.cancel` changes queue state and may not stop an in-progress request. |
 | `facebookGraph` | done | Annotated 1 action: 1 write (`request`) because the generic Graph API request action supports POST and DELETE as well as GET. |
 | `freshdesk` | done | Annotated 10 actions: 4 read (`ticket.get`, `ticket.list`, `contact.get`, `contact.list`) and 6 write (ticket/contact create/update/delete). |
 | `freshservice` | done | Annotated 77 runtime actions via CRUD helper and direct registrations: 32 read (resource get/list plus agentRole get/list) and 45 write (resource create/update/delete). |

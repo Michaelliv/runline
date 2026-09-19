@@ -1,7 +1,6 @@
 /**
- * Helpers for plugins that consume an undocumented provider JSON API over a
- * bearer token (gett, wolt): total readers for unshaped payloads, path-segment
- * safety, and a bounded body read.
+ * Provider helpers: total readers for unshaped JSON, path-segment safety,
+ * and bounded text or binary body reads.
  *
  * The readers are total by design. These payloads are deep and change without
  * notice, so a missing or wrongly-typed field yields the empty value for its
@@ -62,20 +61,34 @@ export async function readBounded(
   maxBytes: number,
   oversizeMessage: string,
 ): Promise<string> {
+  return new TextDecoder().decode(
+    await readBoundedBytes(res, maxBytes, oversizeMessage),
+  );
+}
+
+/** Text and binary consumers share the same streaming byte limit. */
+export async function readBoundedBytes(
+  res: Response,
+  maxBytes: number,
+  oversizeMessage: string,
+): Promise<Uint8Array> {
   const reader = res.body?.getReader();
-  if (!reader) return "";
+  if (!reader) return new Uint8Array();
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel();
-      throw new Error(oversizeMessage);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error(oversizeMessage);
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } finally {
+    reader.releaseLock();
   }
   const joined = new Uint8Array(total);
   let offset = 0;
@@ -83,5 +96,5 @@ export async function readBounded(
     joined.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder().decode(joined);
+  return joined;
 }

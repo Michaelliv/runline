@@ -14,7 +14,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
-import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
+import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/mediaFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
 
 const ENDPOINT = "https://api.together.xyz/v1/images/generations";

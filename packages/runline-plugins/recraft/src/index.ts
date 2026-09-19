@@ -15,7 +15,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
-import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
+import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/mediaFile.js";
 
 const ENDPOINT = "https://external.api.recraft.ai/v1/images/generations";
 const EDIT_ENDPOINT = "https://external.api.recraft.ai/v1/images/imageToImage";

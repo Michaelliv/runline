@@ -10,7 +10,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
-import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
+import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/mediaFile.js";
 
 const ENDPOINT = "https://api.x.ai/v1/images/generations";
 const EDIT_ENDPOINT = "https://api.x.ai/v1/images/edits";

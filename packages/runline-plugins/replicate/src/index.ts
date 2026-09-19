@@ -15,13 +15,12 @@
  * Predictions are created with `Prefer: wait` so simple jobs return
  * synchronously; anything still processing is polled until terminal
  * or until `timeoutMs` elapses (default: 5 minutes). Output URLs are
- * downloaded and base64-encoded so callers don't have to fetch them
- * separately.
+ * downloaded to local files so callers can deliver them directly.
  */
 
 import { Buffer } from "node:buffer";
 import type { RunlinePluginAPI } from "runline";
-import { readImageInput, type SavedImage, SEND_FILE_NOTE, writeImageFile } from "../../_shared/imageFile.js";
+import { readImageInput, type SavedMedia, SEND_FILE_NOTE, writeMediaFile } from "../../_shared/mediaFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
 
 const POLL_INTERVAL_MS = 2_000;
@@ -74,7 +73,7 @@ async function runPrediction(opts: {
   input: Record<string, unknown>;
   timeoutMs: number;
   saveDir?: string;
-}): Promise<{ images: SavedImage[]; failures: Array<{ url: string; reason: string }> }> {
+}): Promise<{ images: SavedMedia[]; failures: Array<{ url: string; reason: string }> }> {
   const { apiToken, model, input, timeoutMs, saveDir } = opts;
   const deadline = Date.now() + timeoutMs;
 
@@ -128,7 +127,7 @@ async function runPrediction(opts: {
   }
 
   // Output is either a single URL or an array of them. Download
-  // each and base64-encode so the caller gets bytes back, not
+  // each to disk so the caller gets file paths, not
   // pre-signed URLs that expire. Track per-URL failures and
   // surface them: silent partial success would let an agent
   // think it got 3 images when one 404'd.
@@ -138,7 +137,7 @@ async function runPrediction(opts: {
       ? [prediction.output]
       : [];
 
-  const images: SavedImage[] = [];
+  const images: SavedMedia[] = [];
   const failures: Array<{ url: string; reason: string }> = [];
   const stamp = Date.now();
   for (const url of outputs) {
@@ -159,8 +158,8 @@ async function runPrediction(opts: {
       .split(";")[0]
       .trim();
     images.push(
-      writeImageFile({
-        base64: buf.toString("base64"),
+      writeMediaFile({
+        bytes: buf,
         mimeType: contentType,
         provider: "replicate",
         index: images.length,
@@ -257,7 +256,7 @@ export default function replicate(rl: RunlinePluginAPI) {
       const result: {
         provider: "replicate";
         model: string;
-        images: SavedImage[];
+        images: SavedMedia[];
         note: string;
         failures?: Array<{ url: string; reason: string }>;
       } = { provider: "replicate", model, images, note: SEND_FILE_NOTE };
@@ -331,7 +330,7 @@ export default function replicate(rl: RunlinePluginAPI) {
       const result: {
         provider: "replicate";
         model: string;
-        images: SavedImage[];
+        images: SavedMedia[];
         note: string;
         failures?: Array<{ url: string; reason: string }>;
       } = { provider: "replicate", model, images, note: SEND_FILE_NOTE };

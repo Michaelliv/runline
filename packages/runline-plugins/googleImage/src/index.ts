@@ -22,10 +22,10 @@ import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   readImageInput,
-  type SavedImage,
+  type SavedMedia,
   SEND_FILE_NOTE,
   writeImageFile,
-} from "../../_shared/imageFile.js";
+} from "../../_shared/mediaFile.js";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -55,9 +55,9 @@ interface GeminiResponse {
 function saveInlineImages(
   data: GeminiResponse,
   saveDir: string | undefined,
-): SavedImage[] {
+): SavedMedia[] {
   const stamp = Date.now();
-  const images: SavedImage[] = [];
+  const images: SavedMedia[] = [];
   for (const candidate of data.candidates ?? []) {
     for (const part of candidate.content?.parts ?? []) {
       if (part.inlineData?.data) {
