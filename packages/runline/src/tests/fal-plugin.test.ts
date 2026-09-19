@@ -384,6 +384,22 @@ describe("fal queue lifecycle", () => {
     assert.ok(calls[0].url.endsWith("/requests/req-1/cancel"), calls[0].url);
   });
 
+  it("preserves the live API's already-completed cancellation status", async () => {
+    globalThis.fetch = (async () =>
+      Response.json(
+        { status: "ALREADY_COMPLETED" },
+        { status: 400 },
+      )) as typeof fetch;
+    await assert.rejects(
+      () =>
+        action("queue.cancel").execute(
+          { model: "fal-ai/flux/schnell", requestId: "req-1" },
+          ctx(),
+        ),
+      /fal 400: ALREADY_COMPLETED/,
+    );
+  });
+
   it("result collects the output and downloads its media", async () => {
     mockQueue(IMAGE_OUTPUT);
     const out = (await action("queue.result").execute(

@@ -75,7 +75,9 @@ export function explainFalError(status: number, body: unknown): string {
         .join("; ")
     : typeof detail === "string"
       ? detail
-      : "request failed";
+      : typeof data.status === "string"
+        ? data.status
+        : "request failed";
   const type =
     typeof data.error_type === "string" ? ` [${data.error_type}]` : "";
   return `fal ${status}: ${message.slice(0, 1000)}${type}`;
