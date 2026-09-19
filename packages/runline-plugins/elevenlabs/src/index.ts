@@ -12,6 +12,15 @@ const timeout = t.Integer({
   description:
     "Request deadline including response body. Does not cancel billed server work.",
 });
+const mp3Formats = [
+  t.Literal("mp3_22050_32"),
+  t.Literal("mp3_24000_48"),
+  t.Literal("mp3_44100_32"),
+  t.Literal("mp3_44100_64"),
+  t.Literal("mp3_44100_96"),
+  t.Literal("mp3_44100_128"),
+  t.Literal("mp3_44100_192"),
+];
 const audioOptions = {
   saveDir: t.Optional(
     t.String({
@@ -21,21 +30,10 @@ const audioOptions = {
   ),
   timeoutMs: t.Optional(timeout),
   outputFormat: t.Optional(
-    t.Union(
-      [
-        t.Literal("mp3_22050_32"),
-        t.Literal("mp3_24000_48"),
-        t.Literal("mp3_44100_32"),
-        t.Literal("mp3_44100_64"),
-        t.Literal("mp3_44100_96"),
-        t.Literal("mp3_44100_128"),
-        t.Literal("mp3_44100_192"),
-      ],
-      {
-        default: "mp3_44100_128",
-        description: "MP3 output. Higher bitrates may require a paid tier.",
-      },
-    ),
+    t.Union(mp3Formats, {
+      default: "mp3_44100_128",
+      description: "MP3 output. Higher bitrates may require a paid tier.",
+    }),
   ),
 };
 const voiceSettings = t.Object(
@@ -56,7 +54,13 @@ const speech = t.Object(
     model: t.Optional(
       t.String({ default: "eleven_multilingual_v2", minLength: 1 }),
     ),
-    languageCode: t.Optional(text),
+    languageCode: t.Optional(
+      t.String({
+        pattern: "^[a-z]{2}$",
+        description:
+          "ISO 639-1 language. Not supported by eleven_multilingual_v2; use a compatible model such as Flash or Turbo.",
+      }),
+    ),
     voiceSettings: t.Optional(voiceSettings),
   },
   STRICT,
@@ -122,6 +126,23 @@ const clone = t.Object(
 const music = t.Object(
   {
     ...audioOptions,
+    outputFormat: t.Optional(
+      t.Union(
+        [
+          ...mp3Formats,
+          t.Literal("auto"),
+          t.Literal("mp3_48000_128"),
+          t.Literal("mp3_48000_192"),
+          t.Literal("mp3_48000_240"),
+          t.Literal("mp3_48000_320"),
+        ],
+        {
+          default: "auto",
+          description:
+            "auto selects the model's native MP3 format: 44.1 kHz for v1, 48 kHz for v2.",
+        },
+      ),
+    ),
     prompt: t.String({
       minLength: 1,
       maxLength: 4100,
@@ -175,7 +196,7 @@ export default function elevenlabs(rl: RunlinePluginAPI): void {
     description: "List ElevenLabs models and their supported capabilities.",
     inputSchema: t.Object({}, STRICT),
     async execute(_input, ctx) {
-      return jsonRequest(ctx, "/v1/models");
+      return jsonRequest(ctx, "/v1/models", "models");
     },
   });
   rl.registerAction("voices.list", {
@@ -188,7 +209,7 @@ export default function elevenlabs(rl: RunlinePluginAPI): void {
       const query = new URLSearchParams({ page_size: String(p.limit ?? 10) });
       if (p.cursor !== undefined) query.set("next_page_token", p.cursor);
       if (p.search !== undefined) query.set("search", p.search);
-      return jsonRequest(ctx, `/v2/voices?${query}`);
+      return jsonRequest(ctx, `/v2/voices?${query}`, "voices");
     },
   });
   rl.registerAction("voices.get", {
@@ -199,6 +220,7 @@ export default function elevenlabs(rl: RunlinePluginAPI): void {
       return jsonRequest(
         ctx,
         `/v1/voices/${voicePath((input as t.Static<typeof voice>).voiceId)}`,
+        "voice",
       );
     },
   });
@@ -210,6 +232,7 @@ export default function elevenlabs(rl: RunlinePluginAPI): void {
       return jsonRequest(
         ctx,
         `/v1/voices/${voicePath((input as t.Static<typeof voice>).voiceId)}`,
+        "deletion",
         { method: "DELETE" },
       );
     },
@@ -230,7 +253,10 @@ export default function elevenlabs(rl: RunlinePluginAPI): void {
         form.append("labels", JSON.stringify(p.labels));
       if (p.removeBackgroundNoise !== undefined)
         form.append("remove_background_noise", String(p.removeBackgroundNoise));
-      return jsonRequest(ctx, "/v1/voices/add", { method: "POST", body: form });
+      return jsonRequest(ctx, "/v1/voices/add", "clone", {
+        method: "POST",
+        body: form,
+      });
     },
   });
   rl.registerAction("speech.create", {
@@ -292,6 +318,7 @@ export default function elevenlabs(rl: RunlinePluginAPI): void {
       return jsonRequest(
         ctx,
         "/v1/speech-to-text",
+        "transcription",
         { method: "POST", body: form },
         p.timeoutMs ?? 300_000,
       );
@@ -313,7 +340,7 @@ export default function elevenlabs(rl: RunlinePluginAPI): void {
           model_id: p.model ?? "music_v1",
           force_instrumental: p.instrumental ?? false,
         },
-        p,
+        { ...p, outputFormat: p.outputFormat ?? "auto" },
       );
     },
   });

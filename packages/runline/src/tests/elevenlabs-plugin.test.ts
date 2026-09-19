@@ -60,6 +60,7 @@ function audio() {
       "content-type": "audio/mpeg",
       "request-id": "req-1",
       "song-id": "song-1",
+      "character-cost": "80",
     },
   });
 }
@@ -165,12 +166,14 @@ describe("elevenlabs plugin", () => {
     assert.equal(url.searchParams.get("next_page_token"), "x+y");
     assert.equal(url.searchParams.get("page_size"), "5");
   });
-  it("uses GET and DELETE on the same voice path and accepts empty 204", async () => {
-    let calls = mock({ voice_id: "v" });
+  it("uses GET and DELETE on the same voice path with the documented JSON receipt", async () => {
+    let calls = mock({ voice_id: "v", name: "Voice" });
     await run("voices.get", { voiceId: "v" });
     assert.equal(calls[0].url, "https://api.elevenlabs.io/v1/voices/v");
-    calls = mock(new Response(null, { status: 204 }));
-    await run("voices.delete", { voiceId: "v" });
+    calls = mock({ status: "ok" });
+    assert.deepEqual(await run("voices.delete", { voiceId: "v" }), {
+      status: "ok",
+    });
     assert.equal(calls[0].init.method, "DELETE");
   });
   it("rejects unsafe voice IDs on all voice-specific actions", async () => {
@@ -221,12 +224,79 @@ describe("elevenlabs plugin", () => {
       saveDir: dir,
     });
     assert.equal(new URL(calls[0].url).pathname, "/v1/music");
+    assert.equal(
+      new URL(calls[0].url).searchParams.get("output_format"),
+      "auto",
+    );
     assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
       prompt: "ambient",
       music_length_ms: 10000,
       force_instrumental: true,
       model_id: "music_v2",
     });
+  });
+  it("supports native music MP3 formats without exposing them to speech", async () => {
+    for (const outputFormat of [
+      "auto",
+      "mp3_48000_128",
+      "mp3_48000_192",
+      "mp3_48000_240",
+      "mp3_48000_320",
+    ]) {
+      assert.ok(
+        Check(action("music.create").inputSchema as TSchema, {
+          prompt: "ambient",
+          durationMs: 3000,
+          outputFormat,
+        }),
+      );
+      assert.equal(
+        Check(action("speech.create").inputSchema as TSchema, {
+          voiceId: "v",
+          text: "hello",
+          outputFormat,
+        }),
+        false,
+      );
+    }
+    const calls = mock(audio());
+    const result = (await run("music.create", {
+      prompt: "ambient",
+      durationMs: 3000,
+      outputFormat: "mp3_48000_320",
+      saveDir: dir,
+    })) as { songId: string; characterCost: string };
+    assert.equal(
+      new URL(calls[0].url).searchParams.get("output_format"),
+      "mp3_48000_320",
+    );
+    assert.equal(result.songId, "song-1");
+    assert.equal(result.characterCost, "80");
+  });
+  it("validates essential response fields on every JSON action", async () => {
+    for (const [name, input] of [
+      ["models.list", {}],
+      ["voices.list", {}],
+      ["voices.get", { voiceId: "v" }],
+      ["voices.delete", { voiceId: "v" }],
+      ["voices.clone", { name: "me", audioPaths: [source] }],
+      ["transcription.create", { filePath: source }],
+    ] as const) {
+      mock({});
+      await assert.rejects(() => run(name, input), /invalid .* response/);
+    }
+    mock({ voices: [], has_more: true, next_page_token: null });
+    await assert.rejects(() => run("voices.list"), /continuation token/);
+    mock({ text: "", words: [] });
+    assert.deepEqual(await run("transcription.create", { filePath: source }), {
+      text: "",
+      words: [],
+    });
+    mock({ status: "failed" });
+    await assert.rejects(
+      () => run("voices.delete", { voiceId: "v" }),
+      /invalid deletion response/,
+    );
   });
   it("maps sound effects and explicit false options", async () => {
     const calls = mock(audio());

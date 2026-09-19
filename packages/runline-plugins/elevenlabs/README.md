@@ -28,7 +28,13 @@ return await elevenlabs.music.create({
 });
 ```
 
-Audio generation returns `{ audio: { path, mimeType, byteLength }, requestId, songId, note }`. IDs are null when the provider omits their headers. Deliver `audio.path` using the host's file-sending tool. Output is MP3; other codecs and music composition plans are not exposed.
+Audio generation returns `{ audio: { path, mimeType, byteLength }, requestId, songId, characterCost, note }`. Header metadata is returned as strings, or null when omitted by the provider. Deliver `audio.path` using the host's file-sending tool. Output is MP3. Music defaults to `outputFormat: "auto"` (44.1 kHz for v1, 48 kHz for v2) and supports the music-only 48 kHz MP3 formats; speech and sound default to `mp3_44100_128`.
+
+## API coverage
+
+This is the official n8n node's speech/voice operation baseline plus models, prompt-based music, and sound effects—not the entire ElevenLabs API. JSON responses validate essential IDs, pagination, clone verification, deletion status, and transcript fields while preserving additional metadata. Voice deletion expects the documented `{ status: "ok" }` receipt.
+
+Not exposed: music composition plans/inpainting, non-MP3 output, streaming/WebSockets, speech alignment, pronunciation dictionaries, dubbing, dialogue, agents, audio isolation, history retrieval, and advanced transcription options (remote sources, webhooks, multichannel, entity detection). Local upload limits are Runline limits, not ElevenLabs service limits. TTS `languageCode` is not supported by the default Multilingual v2 model; choose a compatible model when using it.
 
 ## Limits and billing
 

@@ -1,6 +1,8 @@
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import { basename } from "node:path";
+import * as t from "typebox";
+import { Check } from "typebox/value";
 import { authedFetch } from "../../_shared/authedFetch.js";
 import { SEND_FILE_NOTE, writeMediaFile } from "../../_shared/mediaFile.js";
 import {
@@ -87,15 +89,42 @@ async function json(response: Response): Promise<unknown> {
   return body;
 }
 
+const id = t.String({ minLength: 1 });
+// Validate the fields callers depend on; preserve additional provider metadata.
+const voiceResponse = t.Object({ voice_id: id, name: t.String() });
+const responses = {
+  models: t.Array(t.Object({ model_id: id, name: t.String() })),
+  voices: t.Object({
+    voices: t.Array(voiceResponse),
+    has_more: t.Boolean(),
+    next_page_token: t.Optional(t.Union([id, t.Null()])),
+  }),
+  voice: voiceResponse,
+  clone: t.Object({ voice_id: id, requires_verification: t.Boolean() }),
+  deletion: t.Object({ status: t.Literal("ok") }),
+  transcription: t.Object({ text: t.String(), words: t.Array(t.Unknown()) }),
+};
+
 export async function jsonRequest(
   ctx: Ctx,
   path: string,
+  expected: keyof typeof responses,
   init: RequestInit = {},
   timeoutMs = 60_000,
 ) {
   return request(ctx, path, init, timeoutMs, async (response) => {
-    if (init.method === "DELETE" && response.status === 204) return null;
-    return json(response);
+    const body = await json(response);
+    if (!Check(responses[expected], body))
+      throw new Error(`elevenlabs: invalid ${expected} response`);
+    if (
+      expected === "voices" &&
+      obj(body).has_more &&
+      !obj(body).next_page_token
+    )
+      throw new Error(
+        "elevenlabs: voice page is missing its continuation token",
+      );
+    return body;
   });
 }
 
@@ -150,6 +179,7 @@ export async function audioRequest(
         audio,
         requestId: response.headers.get("request-id"),
         songId: response.headers.get("song-id"),
+        characterCost: response.headers.get("character-cost"),
         note: SEND_FILE_NOTE,
       };
     },
