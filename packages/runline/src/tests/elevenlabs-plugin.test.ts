@@ -15,6 +15,7 @@ import type { TSchema } from "typebox";
 import { Check } from "typebox/value";
 import elevenlabs from "../../../runline-plugins/elevenlabs/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
+import { helpInputs } from "../plugin/schema.js";
 import type { ActionContext } from "../plugin/types.js";
 
 const originalFetch = globalThis.fetch;
@@ -66,10 +67,17 @@ function audio() {
 }
 
 describe("elevenlabs plugin", () => {
-  it("registers the official node baseline plus models, music and sound", () => {
+  it("registers 20 creative-audio actions with explicit access levels", () => {
     assert.deepEqual(plugin.actions.map((a) => a.name).sort(), [
+      "audio.isolate",
+      "dialogue.create",
+      "history.download",
+      "history.get",
+      "history.list",
       "models.list",
       "music.create",
+      "pronunciationDictionaries.create",
+      "pronunciationDictionaries.list",
       "sound.create",
       "speech.convert",
       "speech.create",
@@ -78,11 +86,22 @@ describe("elevenlabs plugin", () => {
       "voices.delete",
       "voices.get",
       "voices.list",
+      "voices.settings.get",
+      "voices.settings.update",
+      "voices.update",
     ]);
     for (const a of plugin.actions)
       assert.equal(
         a.access,
-        ["models.list", "voices.get", "voices.list"].includes(a.name)
+        [
+          "models.list",
+          "voices.get",
+          "voices.list",
+          "history.get",
+          "history.list",
+          "voices.settings.get",
+          "pronunciationDictionaries.list",
+        ].includes(a.name)
           ? "read"
           : "write",
       );
@@ -125,7 +144,7 @@ describe("elevenlabs plugin", () => {
       Check(action("speech.create").inputSchema as TSchema, {
         text: "hello",
         voiceId: "v",
-        outputFormat: "pcm_8000",
+        outputFormat: "not-an-audio-format",
       }),
       false,
     );
@@ -183,6 +202,9 @@ describe("elevenlabs plugin", () => {
       "voices.delete",
       "speech.create",
       "speech.convert",
+      "voices.update",
+      "voices.settings.get",
+      "voices.settings.update",
     ]) {
       for (const voiceId of ["..", "a/b", "x?y", ""])
         await assert.rejects(
@@ -273,7 +295,7 @@ describe("elevenlabs plugin", () => {
     assert.equal(result.songId, "song-1");
     assert.equal(result.characterCost, "80");
   });
-  it("validates essential response fields on every JSON action", async () => {
+  it("validates catalog, cloning, deletion and transcription response fields", async () => {
     for (const [name, input] of [
       ["models.list", {}],
       ["voices.list", {}],
@@ -295,7 +317,45 @@ describe("elevenlabs plugin", () => {
     mock({ status: "failed" });
     await assert.rejects(
       () => run("voices.delete", { voiceId: "v" }),
-      /invalid deletion response/,
+      /invalid acknowledgement response/,
+    );
+  });
+  it("validates management responses and continuation tokens", async () => {
+    for (const [name, input] of [
+      ["history.list", {}],
+      ["history.get", { historyItemId: "h" }],
+      ["pronunciationDictionaries.list", {}],
+      [
+        "pronunciationDictionaries.create",
+        {
+          name: "Names",
+          rules: [{ type: "alias", string_to_replace: "x", alias: "ex" }],
+        },
+      ],
+      ["voices.update", { voiceId: "v", name: "Name" }],
+      ["voices.settings.update", { voiceId: "v", settings: { stability: 0 } }],
+    ] as const) {
+      mock({});
+      await assert.rejects(() => run(name, input), /invalid .* response/);
+    }
+    for (const [name, response] of [
+      ["history.list", { history: [], has_more: true }],
+      [
+        "pronunciationDictionaries.list",
+        { pronunciation_dictionaries: [], has_more: true },
+      ],
+    ] as const) {
+      mock(response);
+      await assert.rejects(() => run(name), /continuation token/);
+    }
+    mock({ stability: null });
+    assert.deepEqual(await run("voices.settings.get", { voiceId: "v" }), {
+      stability: null,
+    });
+    mock({ stability: "invalid" });
+    await assert.rejects(
+      () => run("voices.settings.get", { voiceId: "v" }),
+      /invalid settings/,
     );
   });
   it("maps sound effects and explicit false options", async () => {
@@ -431,7 +491,7 @@ describe("elevenlabs plugin", () => {
       mock(response);
       await assert.rejects(
         () => run("speech.create", { voiceId: "v", text: "hi" }),
-        /empty audio|expected MP3/,
+        /empty audio|expected audio/,
       );
     }
   });
@@ -444,6 +504,20 @@ describe("elevenlabs plugin", () => {
       ["voices.delete", { voiceId: "v" }],
       ["music.create", { prompt: "ambient", durationMs: 3000 }],
       ["sound.create", { text: "rain" }],
+      ["dialogue.create", { inputs: [{ text: "Hi", voiceId: "v" }] }],
+      ["audio.isolate", { audioPath: source }],
+      ["voices.update", { voiceId: "v", name: "Name" }],
+      [
+        "voices.settings.update",
+        { voiceId: "v", settings: { stability: 0.5 } },
+      ],
+      [
+        "pronunciationDictionaries.create",
+        {
+          name: "Names",
+          rules: [{ type: "alias", string_to_replace: "x", alias: "ex" }],
+        },
+      ],
     ] as const) {
       const calls = mock(
         Response.json(
@@ -546,6 +620,352 @@ describe("elevenlabs plugin", () => {
     ] as const)
       await assert.rejects(() => run(name, input), /regular file/);
     assert.equal(calls.length, 0);
+  });
+  it("saves WAV, raw PCM and Opus with correct MIME and extension", async () => {
+    for (const [outputFormat, mime, extension] of [
+      ["wav_44100", "audio/wav", ".wav"],
+      ["pcm_16000", "audio/x-pcm", ".pcm"],
+      ["opus_48000_128", "audio/ogg", ".ogg"],
+    ]) {
+      mock(
+        new Response(bytes, {
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      );
+      const out = (await run("speech.create", {
+        voiceId: "v",
+        text: "hello",
+        outputFormat,
+        saveDir: dir,
+      })) as {
+        audio: { path: string; mimeType: string };
+        outputFormat: string;
+      };
+      assert.equal(out.audio.mimeType, mime);
+      assert.ok(out.audio.path.endsWith(extension));
+      assert.deepEqual(readFileSync(out.audio.path), bytes);
+      assert.equal(out.outputFormat, outputFormat);
+    }
+    assert.equal(
+      Check(action("music.create").inputSchema as TSchema, {
+        prompt: "rain",
+        durationMs: 3000,
+        outputFormat: "wav_44100",
+      }),
+      false,
+    );
+    assert.equal(
+      Check(action("sound.create").inputSchema as TSchema, {
+        text: "rain",
+        outputFormat: "wav_44100",
+      }),
+      false,
+    );
+  });
+  it("saves timestamped audio without exposing base64 and maps speech controls", async () => {
+    const alignment = {
+      characters: ["H"],
+      character_start_times_seconds: [0],
+      character_end_times_seconds: [0.1],
+    };
+    const calls = mock({
+      audio_base64: bytes.toString("base64"),
+      alignment,
+      normalized_alignment: alignment,
+    });
+    const out = (await run("speech.create", {
+      voiceId: "v",
+      text: "Hi",
+      timestamps: true,
+      seed: 0,
+      normalization: "off",
+      languageNormalization: false,
+      previousText: "Before",
+      nextText: "After",
+      previousRequestIds: ["r1"],
+      nextRequestIds: ["r2"],
+      pronunciationDictionaries: [{ pronunciation_dictionary_id: "d" }],
+      saveDir: dir,
+    })) as { audio: { path: string }; alignment: unknown };
+    assert.ok(calls[0].url.includes("/with-timestamps?"));
+    assert.deepEqual(out.alignment, alignment);
+    assert.equal("audio_base64" in out, false);
+    assert.deepEqual(readFileSync(out.audio.path), bytes);
+    const body = JSON.parse(String(calls[0].init.body));
+    assert.equal(body.seed, 0);
+    assert.equal(body.apply_text_normalization, "off");
+    assert.equal(body.apply_language_text_normalization, false);
+    assert.equal(body.previous_text, "Before");
+    assert.deepEqual(body.next_request_ids, ["r2"]);
+    assert.deepEqual(body.pronunciation_dictionary_locators, [
+      { pronunciation_dictionary_id: "d" },
+    ]);
+  });
+  it("rejects invalid base64 and mismatched alignment before writing audio", async () => {
+    for (const output of [
+      { audio_base64: "!!!" },
+      { audio_base64: "a" },
+      {
+        audio_base64: bytes.toString("base64"),
+        alignment: {
+          characters: ["H"],
+          character_start_times_seconds: [],
+          character_end_times_seconds: [],
+        },
+      },
+    ]) {
+      mock(output);
+      await assert.rejects(
+        () =>
+          run("speech.create", { voiceId: "v", text: "hi", timestamps: true }),
+        /invalid align/,
+      );
+    }
+  });
+  it("accepts model-specific music plans and rejects incompatible input combinations", async () => {
+    const section = {
+      section_name: "Verse",
+      duration_ms: 3000,
+      lines: ["Hello"],
+      positive_local_styles: [],
+      negative_local_styles: [],
+    };
+    const v1 = {
+      positive_global_styles: ["pop"],
+      negative_global_styles: [],
+      sections: [section],
+    };
+    const v2 = {
+      chunks: [
+        { text: "[Verse] Hello", duration_ms: 3000, positive_styles: ["pop"] },
+      ],
+    };
+    const schema = action("music.create").inputSchema as TSchema;
+    for (const [model, compositionPlan] of [
+      ["music_v1", v1],
+      ["music_v2", v2],
+      ["music_v2_5", v2],
+    ] as const) {
+      assert.ok(Check(schema, { model, compositionPlan }));
+      const calls = mock(audio());
+      await run("music.create", {
+        model,
+        compositionPlan,
+        seed: 0,
+        saveDir: dir,
+      });
+      const body = JSON.parse(String(calls[0].init.body));
+      assert.deepEqual(body.composition_plan, compositionPlan);
+      assert.equal(body.seed, 0);
+      assert.equal("prompt" in body, false);
+    }
+    for (const input of [
+      { model: "music_v2", compositionPlan: v1 },
+      { model: "music_v1", compositionPlan: v2 },
+      { prompt: "a", durationMs: 3000, compositionPlan: v1 },
+      { prompt: "a", durationMs: 3000, seed: 1 },
+    ])
+      assert.equal(Check(schema, input), false);
+    const calls = mock();
+    await assert.rejects(
+      () =>
+        run("music.create", {
+          model: "music_v1",
+          compositionPlan: {
+            ...v1,
+            sections: Array(6).fill({ ...section, duration_ms: 120000 }),
+          },
+        }),
+      /600000ms/,
+    );
+    assert.equal(calls.length, 0);
+  });
+  it("exposes both music request shapes through Runline discovery", () => {
+    const fields = helpInputs(action("music.create").inputSchema);
+    assert.ok(fields.prompt);
+    assert.ok(fields.durationMs);
+    assert.ok(fields.compositionPlan.variants?.length === 2);
+    assert.deepEqual(fields.model.enum, ["music_v1", "music_v2", "music_v2_5"]);
+  });
+  it("maps dialogue and rejects oversized conversations before billing", async () => {
+    const calls = mock(audio());
+    await run("dialogue.create", {
+      inputs: [
+        { text: "Hello", voiceId: "v1" },
+        { text: "Hi", voiceId: "v2" },
+      ],
+      stability: 0,
+      saveDir: dir,
+    });
+    const body = JSON.parse(String(calls[0].init.body));
+    assert.equal(body.model_id, "eleven_v3");
+    assert.equal(body.inputs[0].voice_id, "v1");
+    assert.deepEqual(body.settings, { stability: 0 });
+    await assert.rejects(
+      () =>
+        run("dialogue.create", {
+          inputs: [{ text: "a".repeat(2001), voiceId: "v" }],
+        }),
+      /2000/,
+    );
+    await assert.rejects(
+      () =>
+        run("dialogue.create", {
+          inputs: Array.from({ length: 11 }, (_, i) => ({
+            text: "hi",
+            voiceId: String(i),
+          })),
+        }),
+      /10 voices/,
+    );
+    assert.equal(calls.length, 1);
+  });
+  it("isolates local audio without sending unsupported output format parameters", async () => {
+    const calls = mock(audio());
+    await run("audio.isolate", { audioPath: source, saveDir: dir });
+    assert.equal(calls[0].url, "https://api.elevenlabs.io/v1/audio-isolation");
+    assert.ok((calls[0].init.body as FormData).get("audio") instanceof Blob);
+  });
+  it("supports remote multichannel transcription and repeated keyterms", async () => {
+    const output = {
+      transcripts: [{ text: "Hi", words: [], channel_index: 0 }],
+    };
+    const calls = mock(output);
+    assert.deepEqual(
+      await run("transcription.create", {
+        sourceUrl: "https://media.example/audio.wav",
+        multiChannel: true,
+        channelOutput: "separate",
+        timestampsGranularity: "character",
+        keyterms: ["Runline", "Eleven Labs"],
+      }),
+      output,
+    );
+    const form = calls[0].init.body as FormData;
+    assert.equal(form.get("file"), null);
+    assert.equal(form.get("source_url"), "https://media.example/audio.wav");
+    assert.deepEqual(form.getAll("keyterms"), ["Runline", "Eleven Labs"]);
+    assert.equal(form.get("use_multi_channel"), "true");
+    for (const input of [
+      {},
+      { filePath: source, sourceUrl: "https://x.test/a" },
+      { sourceUrl: "https://x.test/a", channelOutput: "combined" },
+      {
+        filePath: source,
+        multiChannel: true,
+        channelOutput: "combined",
+        timestampsGranularity: "none",
+      },
+      { filePath: source, keyterms: ["a b c d e f"] },
+      { sourceUrl: "https://user:password@x.test/a" },
+    ])
+      await assert.rejects(
+        () => run("transcription.create", input),
+        /elevenlabs:/,
+      );
+    assert.equal(calls.length, 1);
+  });
+  it("recovers history audio via GET without generating and preserves raw format", async () => {
+    const calls: string[] = [];
+    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(String(url));
+      assert.equal(init?.method, undefined);
+      return String(url).endsWith("/audio")
+        ? new Response(bytes, {
+            headers: { "content-type": "application/octet-stream" },
+          })
+        : Response.json({
+            history_item_id: "h",
+            content_type: "audio/pcm",
+            output_format: "pcm_16000",
+          });
+    }) as typeof fetch;
+    const out = (await run("history.download", {
+      historyItemId: "h",
+      saveDir: dir,
+    })) as { audio: { path: string } };
+    assert.deepEqual(calls, [
+      "https://api.elevenlabs.io/v1/history/h",
+      "https://api.elevenlabs.io/v1/history/h/audio",
+    ]);
+    assert.ok(out.audio.path.endsWith(".pcm"));
+    await assert.rejects(
+      () => run("history.download", { historyItemId: "../x" }),
+      /invalid history item/,
+    );
+  });
+  it("lists history with provider pagination fields", async () => {
+    const output = {
+      history: [{ history_item_id: "h" }],
+      has_more: true,
+      last_history_item_id: "h",
+    };
+    const calls = mock(output);
+    assert.deepEqual(
+      await run("history.list", {
+        cursor: "previous",
+        source: "TTS",
+        limit: 5,
+      }),
+      output,
+    );
+    const url = new URL(calls[0].url);
+    assert.equal(
+      url.searchParams.get("start_after_history_item_id"),
+      "previous",
+    );
+    assert.equal(url.searchParams.get("source"), "TTS");
+  });
+  it("gets and updates saved settings and uses shared multipart voice editing", async () => {
+    mock({ stability: 0.5, similarity_boost: 0.75 });
+    await run("voices.settings.get", { voiceId: "v" });
+    let calls = mock({ status: "ok" });
+    await run("voices.settings.update", {
+      voiceId: "v",
+      settings: { stability: 0 },
+    });
+    assert.equal(
+      calls[0].url,
+      "https://api.elevenlabs.io/v1/voices/v/settings/edit",
+    );
+    assert.deepEqual(JSON.parse(String(calls[0].init.body)), { stability: 0 });
+    calls = mock({ status: "ok" });
+    await run("voices.update", {
+      voiceId: "v",
+      name: "Name",
+      description: "",
+      labels: {},
+      audioPaths: [source],
+    });
+    const form = calls[0].init.body as FormData;
+    assert.equal(form.get("description"), "");
+    assert.equal(form.getAll("files").length, 1);
+    assert.equal(
+      Check(action("voices.settings.update").inputSchema as TSchema, {
+        voiceId: "v",
+        settings: {},
+      }),
+      false,
+    );
+  });
+  it("lists and creates pronunciation dictionaries with provider rule fields", async () => {
+    let calls = mock({
+      pronunciation_dictionaries: [
+        { id: "d", name: "Names", latest_version_id: "v" },
+      ],
+      has_more: false,
+    });
+    await run("pronunciationDictionaries.list", { cursor: "c" });
+    assert.equal(new URL(calls[0].url).searchParams.get("cursor"), "c");
+    calls = mock({ id: "d", version_id: "v" });
+    const rules = [
+      { type: "alias", string_to_replace: "Runline", alias: "run line" },
+    ];
+    await run("pronunciationDictionaries.create", { name: "Names", rules });
+    assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
+      name: "Names",
+      rules,
+    });
   });
   it("bounds chunked audio and cancels the reader", async () => {
     let cancelled = false;

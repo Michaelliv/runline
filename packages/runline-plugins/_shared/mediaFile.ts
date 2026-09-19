@@ -28,6 +28,8 @@ const MIME_EXT: Record<string, string> = {
   "audio/wav": "wav",
   "audio/x-wav": "wav",
   "audio/ogg": "ogg",
+  "audio/opus": "opus",
+  "audio/x-pcm": "pcm",
 };
 
 export function extForMime(mimeType: string | undefined): string {

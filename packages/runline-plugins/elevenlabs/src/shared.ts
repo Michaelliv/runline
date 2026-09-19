@@ -53,11 +53,11 @@ async function request<T>(
   }
 }
 
-async function json(response: Response): Promise<unknown> {
+async function json(response: Response, limit = JSON_LIMIT): Promise<unknown> {
   const text = await readBounded(
     response,
-    JSON_LIMIT,
-    "elevenlabs: JSON exceeds 8 MiB",
+    limit,
+    `elevenlabs: JSON exceeds ${limit / (1024 * 1024)} MiB`,
   );
   let body: unknown;
   try {
@@ -101,8 +101,37 @@ const responses = {
   }),
   voice: voiceResponse,
   clone: t.Object({ voice_id: id, requires_verification: t.Boolean() }),
-  deletion: t.Object({ status: t.Literal("ok") }),
-  transcription: t.Object({ text: t.String(), words: t.Array(t.Unknown()) }),
+  acknowledgement: t.Object({ status: t.Literal("ok") }),
+  transcription: t.Union([
+    t.Object({ text: t.String(), words: t.Array(t.Unknown()) }),
+    t.Object({
+      transcripts: t.Array(
+        t.Object({ text: t.String(), words: t.Array(t.Unknown()) }),
+        { minItems: 1 },
+      ),
+    }),
+  ]),
+  history: t.Object({
+    history: t.Array(t.Object({ history_item_id: id })),
+    has_more: t.Boolean(),
+    last_history_item_id: t.Optional(t.Union([id, t.Null()])),
+  }),
+  historyItem: t.Object({ history_item_id: id, content_type: t.String() }),
+  settings: t.Object({
+    stability: t.Optional(t.Union([t.Number(), t.Null()])),
+    similarity_boost: t.Optional(t.Union([t.Number(), t.Null()])),
+    style: t.Optional(t.Union([t.Number(), t.Null()])),
+    speed: t.Optional(t.Union([t.Number(), t.Null()])),
+    use_speaker_boost: t.Optional(t.Union([t.Boolean(), t.Null()])),
+  }),
+  dictionaries: t.Object({
+    pronunciation_dictionaries: t.Array(
+      t.Object({ id, name: t.String(), latest_version_id: id }),
+    ),
+    has_more: t.Boolean(),
+    next_cursor: t.Optional(t.Union([id, t.Null()])),
+  }),
+  dictionary: t.Object({ id, version_id: id }),
 };
 
 export async function jsonRequest(
@@ -116,14 +145,17 @@ export async function jsonRequest(
     const body = await json(response);
     if (!Check(responses[expected], body))
       throw new Error(`elevenlabs: invalid ${expected} response`);
+    const cursor = {
+      voices: "next_page_token",
+      history: "last_history_item_id",
+      dictionaries: "next_cursor",
+    };
     if (
-      expected === "voices" &&
+      expected in cursor &&
       obj(body).has_more &&
-      !obj(body).next_page_token
+      !obj(body)[cursor[expected as keyof typeof cursor]]
     )
-      throw new Error(
-        "elevenlabs: voice page is missing its continuation token",
-      );
+      throw new Error("elevenlabs: page is missing its continuation token");
     return body;
   });
 }
@@ -132,6 +164,47 @@ export interface AudioOptions {
   saveDir?: string;
   timeoutMs?: number;
   outputFormat?: string;
+  timestamps?: boolean;
+}
+
+const alignment = t.Object({
+  characters: t.Array(t.String()),
+  character_start_times_seconds: t.Array(t.Number({ minimum: 0 })),
+  character_end_times_seconds: t.Array(t.Number({ minimum: 0 })),
+});
+const alignedAudio = t.Object({
+  audio_base64: t.String({
+    minLength: 1,
+    pattern: "^[A-Za-z0-9+/]*={0,2}$",
+  }),
+  alignment: t.Optional(t.Union([alignment, t.Null()])),
+  normalized_alignment: t.Optional(t.Union([alignment, t.Null()])),
+});
+
+/** Format is authoritative for raw PCM, whose provider Content-Type may be generic. */
+function audioMime(format: string | undefined, contentType: string | null) {
+  const mime = contentType?.split(";")[0].trim().toLowerCase();
+  const supported = [
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/ogg",
+    "audio/opus",
+    "audio/x-pcm",
+    "audio/pcm",
+  ];
+  if (mime && mime !== "application/octet-stream" && !supported.includes(mime))
+    throw new Error(`elevenlabs: expected audio, received ${mime}`);
+  if (format?.startsWith("pcm_")) return "audio/x-pcm";
+  if (format?.startsWith("wav_")) return "audio/wav";
+  if (format?.startsWith("opus_")) return "audio/ogg";
+  if (format === "auto" || format?.startsWith("mp3_")) return "audio/mpeg";
+  if (!mime || !supported.includes(mime))
+    throw new Error(
+      "elevenlabs: unknown audio format; retrieve history metadata first",
+    );
+  return mime === "audio/pcm" ? "audio/x-pcm" : mime;
 }
 export async function audioRequest(
   ctx: Ctx,
@@ -140,36 +213,74 @@ export async function audioRequest(
   options: AudioOptions,
 ) {
   const format = options.outputFormat ?? "mp3_44100_128";
-  return request(
+  return binaryRequest(
     ctx,
     `${path}?output_format=${encodeURIComponent(format)}`,
     {
       method: "POST",
       body: body instanceof FormData ? body : JSON.stringify(body),
     },
+    { ...options, outputFormat: format },
+  );
+}
+
+/** All generated, aligned, isolated, and recovered audio uses the same file writer. */
+export async function binaryRequest(
+  ctx: Ctx,
+  path: string,
+  init: RequestInit,
+  options: AudioOptions,
+) {
+  return request(
+    ctx,
+    path,
+    init,
     options.timeoutMs ?? 300_000,
     async (response) => {
-      const mime = response.headers
-        .get("content-type")
-        ?.split(";")[0]
-        .trim()
-        .toLowerCase();
-      if (
-        mime &&
-        !["audio/mpeg", "audio/mp3", "application/octet-stream"].includes(mime)
-      ) {
-        await response.body?.cancel();
-        throw new Error(`elevenlabs: expected MP3 audio, received ${mime}`);
+      let bytes: Uint8Array;
+      let timestamps: Record<string, unknown> = {};
+      let mime: string;
+      if (options.timestamps) {
+        const body = await json(response, 32 * 1024 * 1024);
+        if (!Check(alignedAudio, body) || body.audio_base64.length % 4 !== 0)
+          throw new Error("elevenlabs: invalid aligned audio response");
+        for (const a of [body.alignment, body.normalized_alignment]) {
+          if (
+            a &&
+            (a.characters.length !== a.character_start_times_seconds.length ||
+              a.characters.length !== a.character_end_times_seconds.length ||
+              a.character_end_times_seconds.some(
+                (end, i) => end < a.character_start_times_seconds[i],
+              ))
+          )
+            throw new Error("elevenlabs: invalid alignment lengths or times");
+        }
+        bytes = Buffer.from(body.audio_base64, "base64");
+        timestamps = {
+          alignment: body.alignment,
+          normalizedAlignment: body.normalized_alignment,
+        };
+        mime = audioMime(options.outputFormat, null);
+      } else {
+        try {
+          mime = audioMime(
+            options.outputFormat,
+            response.headers.get("content-type"),
+          );
+        } catch (error) {
+          await response.body?.cancel();
+          throw error;
+        }
+        bytes = await readBoundedBytes(
+          response,
+          AUDIO_LIMIT,
+          "elevenlabs: audio exceeds 100 MiB",
+        );
       }
-      const bytes = await readBoundedBytes(
-        response,
-        AUDIO_LIMIT,
-        "elevenlabs: audio exceeds 100 MiB",
-      );
       if (!bytes.length) throw new Error("elevenlabs: empty audio response");
       const audio = writeMediaFile({
         bytes,
-        mimeType: "audio/mpeg",
+        mimeType: mime,
         provider: "elevenlabs",
         index: 0,
         saveDir: options.saveDir,
@@ -177,13 +288,35 @@ export async function audioRequest(
       return {
         provider: "elevenlabs",
         audio,
+        outputFormat: options.outputFormat ?? null,
         requestId: response.headers.get("request-id"),
         songId: response.headers.get("song-id"),
         characterCost: response.headers.get("character-cost"),
+        ...timestamps,
         note: SEND_FILE_NOTE,
       };
     },
   );
+}
+
+export async function voiceForm(input: {
+  name: string;
+  audioPaths?: string[];
+  description?: string;
+  labels?: Record<string, string>;
+  removeBackgroundNoise?: boolean;
+}) {
+  const form = new FormData();
+  form.append("name", input.name);
+  for (const path of input.audioPaths ?? [])
+    await appendFile(form, "files", path);
+  if (input.description !== undefined)
+    form.append("description", input.description);
+  if (input.labels !== undefined)
+    form.append("labels", JSON.stringify(input.labels));
+  if (input.removeBackgroundNoise !== undefined)
+    form.append("remove_background_noise", String(input.removeBackgroundNoise));
+  return form;
 }
 
 /** Bound uploads before allocating; read through the same handle to avoid stat/read races. */
