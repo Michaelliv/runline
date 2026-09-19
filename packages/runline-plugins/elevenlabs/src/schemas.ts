@@ -123,7 +123,7 @@ const v2Plan = t.Object(
   },
   STRICT,
 );
-const musicVariants = [
+export const musicSchema = t.Union([
   t.Object(
     {
       ...fileOptions,
@@ -162,25 +162,4 @@ const musicVariants = [
     },
     STRICT,
   ),
-] satisfies [t.TSchema, t.TSchema, t.TSchema];
-// Object metadata exposes fields to Runline discovery; anyOf enforces the complete alternatives.
-export const musicSchema: t.TUnion<typeof musicVariants> = t.Union(
-  musicVariants,
-  {
-    type: "object",
-    properties: {
-      ...Object.assign(
-        {},
-        ...musicVariants.map((variant) => variant.properties),
-      ),
-      model: t.Union([
-        t.Literal("music_v1"),
-        t.Literal("music_v2"),
-        t.Literal("music_v2_5"),
-      ]),
-      compositionPlan: t.Union([v1Plan, v2Plan]),
-    },
-    description:
-      "Supply prompt + durationMs, or compositionPlan + its compatible model. Seed is plan-only; instrumental is prompt-only.",
-  },
-);
+]);

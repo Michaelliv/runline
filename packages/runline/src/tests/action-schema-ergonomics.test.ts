@@ -3,22 +3,11 @@ import { describe, it } from "node:test";
 import * as t from "typebox";
 import { helpInputs, validateTypedInput } from "../plugin/schema.js";
 
-/**
- * Two ways an agent's *first* call to an unfamiliar action fails even
- * after consulting `actions.describe`: the parameter's shape was not in
- * the answer, or the call took no arguments and was refused for it. Each
- * costs a failed call and a retry, and neither is the agent's fault.
- *
- * A third — id parameters that disagree with what sibling actions emit —
- * is tracked separately, since fixing it coherently is a breaking rename
- * across ten plugins.
- */
+/** Discovery exposes usable input shapes; validation accepts bare no-input calls. */
 describe("action schema ergonomics", () => {
   describe("describe exposes nested shapes", () => {
     it("returns the item schema for an array of objects", () => {
-      // The shape that started this: fields[] described as a bare
-      // "array", so the only way to learn it wanted `name` (not `key`)
-      // was to call it wrong and read the validation error.
+      // Array item fields must be discoverable without a failed execution.
       const schema = t.Object({
         fields: t.Array(
           t.Object({
@@ -89,6 +78,66 @@ describe("action schema ergonomics", () => {
       ]);
     });
 
+    it("discovers root object alternatives with conditional required fields", () => {
+      const branches = [
+        t.Object({
+          kind: t.Literal("ref"),
+          ref: t.String(),
+          shared: t.String(),
+        }),
+        t.Object({
+          kind: t.Literal("css"),
+          selector: t.String(),
+          shared: t.Optional(t.String()),
+        }),
+      ];
+      for (const schema of [t.Union(branches), { oneOf: branches }]) {
+        const fields = helpInputs(schema as never);
+        assert.deepEqual(fields.kind.enum, ["ref", "css"]);
+        assert.equal(fields.kind.required, true);
+        assert.equal(fields.ref.required, false);
+        assert.equal(fields.selector.required, false);
+        assert.equal(fields.shared.required, false);
+        assert.equal(fields.shared.variants, undefined);
+      }
+    });
+    it("does not invent inherited fields in other alternatives", () => {
+      const fields = helpInputs(
+        t.Union([
+          t.Object({ toString: t.String(), constructor: t.Number() }),
+          t.Object({ other: t.String() }),
+        ]),
+      );
+      for (const [name, type] of [
+        ["toString", "string"],
+        ["constructor", "number"],
+      ]) {
+        assert.equal(fields[name].type, type);
+        assert.equal(fields[name].required, false);
+        assert.equal(fields[name].variants, undefined);
+      }
+    });
+    it("bounds recursive root unions and preserves nested alternatives", () => {
+      const recursive: Record<string, unknown> = {};
+      recursive.anyOf = [recursive, t.Object({ value: t.String() })];
+      assert.equal(helpInputs(recursive as never).value.required, false);
+      const nested = helpInputs({
+        type: "object",
+        properties: { choice: recursive },
+      } as never);
+      assert.ok(nested.choice.displayType?.includes("unknown"));
+      assert.ok(nested.choice.variants);
+      const fields = helpInputs(
+        t.Union([
+          t.Object({ value: t.Object({ a: t.String() }) }),
+          t.Object({ value: t.Object({ b: t.Number() }) }),
+        ]),
+      );
+      assert.equal(fields.value.required, true);
+      assert.equal(fields.value.variants?.length, 2);
+      assert.equal(fields.value.variants?.[0].properties?.a.type, "string");
+      assert.deepEqual(helpInputs(t.Union([t.String(), t.Number()])), {});
+    });
     it("describes oneOf branches too, which plugins also use", () => {
       const described = helpInputs({
         type: "object",
@@ -187,8 +236,7 @@ describe("action schema ergonomics", () => {
     const noInputs = t.Object({});
 
     it("treats a missing argument as an empty object", () => {
-      // `linear.user.me()` is the most natural way to write a call that
-      // takes nothing, and it always failed.
+      // A bare no-input call is equivalent to an explicit empty object.
       assert.equal(validateTypedInput(noInputs, undefined).ok, true);
       assert.equal(validateTypedInput(noInputs, {}).ok, true);
     });

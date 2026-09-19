@@ -24,7 +24,7 @@ Audio returns `audio.path`, `audio.mimeType`, `audio.byteLength`, `outputFormat`
 - Music and sound: MP3, raw PCM, or Opus. These endpoints do not advertise WAV.
 - Music defaults to `auto`, selecting the model's native MP3 format; 48 kHz MP3 options are also available.
 - PCM files have no WAV header; retain `outputFormat` for sample rate and consult the endpoint's channel layout. Opus output is saved as Ogg. No local transcoding is performed.
-- Isolation preserves the response format. History retrieval reads metadata before downloading to identify raw audio correctly.
+- Isolation and history retrieval preserve the downloaded response format. History's original generation format is not a guarantee of the download format. Ambiguous downloads without an audio Content-Type are rejected rather than mislabeled.
 - Higher-quality formats may require a paid subscription tier.
 
 ### Speech, timestamps, and pronunciation
@@ -103,7 +103,7 @@ return await elevenlabs.music.create({
 - Shared redirect-refusing authentication, fixed API origin, bounded readers, and exclusive private file creation (`0600`).
 - Local inputs: nonempty regular files, up to 25 MiB each; cloning/editing accepts up to 10 samples. These are Runline limits, not service-wide limits.
 - Responses: up to 100 MiB for binary audio, 8 MiB for ordinary JSON, 32 MiB for timestamped audio JSON (including base64 and alignment).
-- Generation/transcription HTTP requests default to 300 seconds, configurable up to one hour. Metadata and voice management requests default to 60 seconds. History recovery performs a metadata read followed by a separately bounded audio read.
+- Generation/transcription HTTP requests default to 300 seconds, configurable up to one hour. Metadata and voice management requests default to 60 seconds. History recovery uses one audio GET with the generation-style deadline.
 - The host execution timeout is independent; configure it for long generation calls. Client timeouts do not cancel provider work.
 - `saveDir` must already exist; default is the OS temp directory.
 

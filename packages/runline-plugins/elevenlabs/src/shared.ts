@@ -181,7 +181,7 @@ const alignedAudio = t.Object({
   normalized_alignment: t.Optional(t.Union([alignment, t.Null()])),
 });
 
-/** Format is authoritative for raw PCM, whose provider Content-Type may be generic. */
+/** Requested formats resolve generic headers; explicit audio types must agree. */
 function audioMime(format: string | undefined, contentType: string | null) {
   const mime = contentType?.split(";")[0].trim().toLowerCase();
   const supported = [
@@ -196,15 +196,31 @@ function audioMime(format: string | undefined, contentType: string | null) {
   ];
   if (mime && mime !== "application/octet-stream" && !supported.includes(mime))
     throw new Error(`elevenlabs: expected audio, received ${mime}`);
-  if (format?.startsWith("pcm_")) return "audio/x-pcm";
-  if (format?.startsWith("wav_")) return "audio/wav";
-  if (format?.startsWith("opus_")) return "audio/ogg";
-  if (format === "auto" || format?.startsWith("mp3_")) return "audio/mpeg";
-  if (!mime || !supported.includes(mime))
+  const expected = format?.startsWith("pcm_")
+    ? "audio/x-pcm"
+    : format?.startsWith("wav_")
+      ? "audio/wav"
+      : format?.startsWith("opus_")
+        ? "audio/ogg"
+        : format === "auto" || format?.startsWith("mp3_")
+          ? "audio/mpeg"
+          : undefined;
+  const aliases: Record<string, string> = {
+    "audio/mp3": "audio/mpeg",
+    "audio/x-wav": "audio/wav",
+    "audio/pcm": "audio/x-pcm",
+    "audio/opus": "audio/ogg",
+  };
+  const actual =
+    mime && supported.includes(mime) ? (aliases[mime] ?? mime) : undefined;
+  if (expected && actual && expected !== actual)
     throw new Error(
-      "elevenlabs: unknown audio format; retrieve history metadata first",
+      `elevenlabs: audio format mismatch: expected ${expected}, received ${actual}`,
     );
-  return mime === "audio/pcm" ? "audio/x-pcm" : mime;
+  const resolved = actual ?? expected;
+  if (!resolved)
+    throw new Error("elevenlabs: response has no identifiable audio format");
+  return resolved;
 }
 export async function audioRequest(
   ctx: Ctx,

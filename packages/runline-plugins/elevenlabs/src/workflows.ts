@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { obj, seg } from "../../_shared/provider.js";
+import { seg } from "../../_shared/provider.js";
 import {
   audioOptions,
   dictionaries,
@@ -203,17 +203,11 @@ export function registerWorkflows(rl: RunlinePluginAPI) {
   rl.registerAction("history.download", {
     access: "write",
     description:
-      "Recover existing speech audio without regenerating. Reads metadata to identify raw formats, then writes audio.path locally.",
+      "Recover existing speech audio without regenerating. Saves the downloaded response format to audio.path; the original generation format may differ.",
     inputSchema: historyDownload,
     async execute(input, ctx) {
       const p = input as t.Static<typeof historyDownload>;
-      const path = historyPath(p.historyItemId);
-      const metadata = obj(await jsonRequest(ctx, path, "historyItem"));
-      const outputFormat =
-        typeof metadata.output_format === "string"
-          ? metadata.output_format
-          : undefined;
-      return binaryRequest(ctx, `${path}/audio`, {}, { ...p, outputFormat });
+      return binaryRequest(ctx, `${historyPath(p.historyItemId)}/audio`, {}, p);
     },
   });
   rl.registerAction("voices.settings.get", {

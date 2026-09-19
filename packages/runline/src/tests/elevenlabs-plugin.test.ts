@@ -865,34 +865,68 @@ describe("elevenlabs plugin", () => {
       );
     assert.equal(calls.length, 1);
   });
-  it("recovers history audio via GET without generating and preserves raw format", async () => {
-    const calls: string[] = [];
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
-      calls.push(String(url));
-      assert.equal(init?.method, undefined);
-      return String(url).endsWith("/audio")
-        ? new Response(bytes, {
-            headers: { "content-type": "application/octet-stream" },
-          })
-        : Response.json({
-            history_item_id: "h",
-            content_type: "audio/pcm",
-            output_format: "pcm_16000",
-          });
-    }) as typeof fetch;
-    const out = (await run("history.download", {
-      historyItemId: "h",
-      saveDir: dir,
-    })) as { audio: { path: string } };
-    assert.deepEqual(calls, [
-      "https://api.elevenlabs.io/v1/history/h",
-      "https://api.elevenlabs.io/v1/history/h/audio",
-    ]);
-    assert.ok(out.audio.path.endsWith(".pcm"));
+  it("recovers history with one GET and uses the downloaded format", async () => {
+    for (const [mime, extension] of [
+      ["audio/mpeg", ".mp3"],
+      ["audio/pcm", ".pcm"],
+      ["audio/x-wav", ".wav"],
+    ]) {
+      const calls = mock(
+        new Response(bytes, { headers: { "content-type": mime } }),
+      );
+      const out = (await run("history.download", {
+        historyItemId: "h",
+        saveDir: dir,
+      })) as { audio: { path: string }; outputFormat: null };
+      assert.equal(calls.length, 1);
+      assert.equal(
+        calls[0].url,
+        "https://api.elevenlabs.io/v1/history/h/audio",
+      );
+      assert.equal(calls[0].init.method, undefined);
+      assert.ok(out.audio.path.endsWith(extension));
+      assert.equal(out.outputFormat, null);
+    }
+    mock(
+      new Response(bytes, {
+        headers: { "content-type": "application/octet-stream" },
+      }),
+    );
+    await assert.rejects(
+      () => run("history.download", { historyItemId: "h" }),
+      /no identifiable audio format/,
+    );
     await assert.rejects(
       () => run("history.download", { historyItemId: "../x" }),
       /invalid history item/,
     );
+  });
+  it("rejects conflicting audio types across every format-selecting generation path", async () => {
+    for (const [name, input] of [
+      ["speech.create", { voiceId: "v", text: "hi" }],
+      ["speech.convert", { voiceId: "v", audioPath: source }],
+      ["dialogue.create", { inputs: [{ voiceId: "v", text: "hi" }] }],
+      ["music.create", { prompt: "ambient", durationMs: 3000 }],
+      ["sound.create", { text: "rain" }],
+    ] as const) {
+      let cancelled = false;
+      const calls = mock(
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { headers: { "content-type": "audio/wav" } },
+        ),
+      );
+      await assert.rejects(
+        () => run(name, input),
+        /format mismatch.*do not retry/,
+      );
+      assert.ok(cancelled);
+      assert.equal(calls.length, 1);
+    }
   });
   it("lists history with provider pagination fields", async () => {
     const output = {

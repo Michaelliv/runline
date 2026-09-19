@@ -96,15 +96,60 @@ export function helpInputs(
     );
   }
 
-  const metadata = schema as SchemaMetadata;
-  if (metadata.type !== "object") return {};
-  return describeProperties(metadata, 0);
+  return describeProperties(schema as SchemaMetadata, 0);
 }
 
 function describeProperties(
   schema: SchemaMetadata,
   depth: number,
 ): Record<string, HelpInput> {
+  if (depth > MAX_DESCRIBE_DEPTH) return {};
+  const branches = branchesOf(schema);
+  if (branches && !schema.properties) {
+    const alternatives = branches.map((branch) =>
+      describeProperties(branch, depth + 1),
+    );
+    const names = new Set(
+      alternatives.flatMap((fields) => Object.keys(fields)),
+    );
+    return Object.fromEntries(
+      [...names].map((name) => {
+        const fields = alternatives.flatMap((fields) =>
+          Object.hasOwn(fields, name)
+            ? [{ ...fields[name], required: false }]
+            : [],
+        );
+        // Descriptions are depth-bounded, so deduplication is safe for recursive schemas.
+        const unique = [
+          ...new Map(
+            fields.map((field) => [JSON.stringify(field), field]),
+          ).values(),
+        ];
+        const required = alternatives.every(
+          (fields) => Object.hasOwn(fields, name) && fields[name].required,
+        );
+        if (unique.length === 1) return [name, { ...unique[0], required }];
+        const values = unique.map(
+          (field) =>
+            field.enum ??
+            (field.const !== undefined ? [field.const] : undefined),
+        );
+        return [
+          name,
+          {
+            type: [...new Set(unique.map((field) => field.type))].join(" | "),
+            displayType: [
+              ...new Set(unique.map((field) => field.displayType)),
+            ].join(" | "),
+            required,
+            ...(values.every((value) => value !== undefined)
+              ? { enum: [...new Set(values.flat())] }
+              : { variants: unique }),
+          },
+        ];
+      }),
+    );
+  }
   const required = new Set(schema.required ?? []);
   return Object.fromEntries(
     Object.entries(schema.properties ?? {}).map(([key, field]) => [
@@ -225,10 +270,8 @@ export function validateLegacyInput(
 /**
  * A call written with no arguments is a call with an empty argument set.
  *
- * `linear.user.me()` is the most natural way to invoke an action that
- * takes nothing, and validating `undefined` against an object schema
- * rejected it every time. It also made a genuinely missing input report
- * "must be object" instead of naming the field.
+ * `linear.user.me()` supplies no argument, so object validation needs an
+ * empty object to accept no-input actions and name missing required fields.
  *
  * Only `undefined` is normalized: an explicit `null` or `42` is an
  * argument, and a wrong one.
@@ -310,18 +353,23 @@ function branchesOf(schema: SchemaMetadata): SchemaMetadata[] | undefined {
   return branches?.length ? branches : undefined;
 }
 
-function displayType(schema: SchemaMetadata): string {
+function displayType(schema: SchemaMetadata, depth = 0): string {
+  if (depth >= MAX_DESCRIBE_DEPTH) return schema.type ?? "unknown";
   const branches = branchesOf(schema);
-  if (branches) return branches.map(displayType).join(" | ");
+  if (branches)
+    return branches.map((branch) => displayType(branch, depth + 1)).join(" | ");
   if (schema.enum?.length) return schema.enum.map(String).join(" | ");
   if (schema.const !== undefined) return JSON.stringify(schema.const);
   return schema.type ?? "unknown";
 }
 
-function baseType(schema: SchemaMetadata): string {
+function baseType(schema: SchemaMetadata, depth = 0): string {
+  if (depth >= MAX_DESCRIBE_DEPTH) return schema.type ?? "unknown";
   const branches = branchesOf(schema);
   if (branches) {
-    const types = [...new Set(branches.map(baseType))];
+    const types = [
+      ...new Set(branches.map((branch) => baseType(branch, depth + 1))),
+    ];
     return types.length === 1 ? types[0] : types.join(" | ");
   }
   if (schema.type) return schema.type;
