@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import { basename } from "node:path";
 import { authedFetch } from "../../_shared/authedFetch.js";
@@ -15,25 +16,39 @@ const JSON_LIMIT = 8 * 1024 * 1024;
 const AUDIO_LIMIT = 100 * 1024 * 1024;
 
 /** A fixed origin, no redirects or retries, and one deadline through body consumption. */
-async function request(
+async function request<T>(
   ctx: Ctx,
   path: string,
   init: RequestInit,
   timeoutMs: number,
-) {
+  consume: (response: Response) => Promise<T>,
+): Promise<T> {
   const key = ctx.connection.config.apiKey;
   if (typeof key !== "string" || !key.trim())
     throw new Error("Missing ELEVENLABS_API_KEY");
-  return authedFetch(`https://api.elevenlabs.io${path}`, {
-    ...init,
-    headers: {
-      "xi-api-key": key.trim(),
-      ...(typeof init.body === "string"
-        ? { "content-type": "application/json" }
-        : {}),
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  let requestId: string | null = null;
+  try {
+    const response = await authedFetch(`https://api.elevenlabs.io${path}`, {
+      ...init,
+      headers: {
+        "xi-api-key": key.trim(),
+        ...(typeof init.body === "string"
+          ? { "content-type": "application/json" }
+          : {}),
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    requestId = response.headers.get("request-id");
+    // Both JSON and audio errors use the provider's JSON error envelope.
+    if (!response.ok) await json(response);
+    return await consume(response);
+  } catch (error) {
+    const mutation = init.method && init.method !== "GET";
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}${requestId ? ` (requestId ${requestId})` : ""}${mutation ? ". Request may have been applied or billed; do not retry automatically." : ""}`,
+      { cause: error },
+    );
+  }
 }
 
 async function json(response: Response): Promise<unknown> {
@@ -51,7 +66,7 @@ async function json(response: Response): Promise<unknown> {
   if (!response.ok) {
     const detail = obj(body).detail;
     const error = obj(detail);
-    // Do not echo validation inputs, request text, or arbitrary response bodies.
+    // Include provider error messages and locations, not validation input payloads.
     const message =
       typeof detail === "string"
         ? detail
@@ -67,6 +82,8 @@ async function json(response: Response): Promise<unknown> {
       `elevenlabs HTTP ${response.status}: ${message.slice(0, 1000)}`,
     );
   }
+  if (body === null || typeof body !== "object")
+    throw new Error("elevenlabs: expected a JSON object or array");
   return body;
 }
 
@@ -76,7 +93,10 @@ export async function jsonRequest(
   init: RequestInit = {},
   timeoutMs = 60_000,
 ) {
-  return json(await request(ctx, path, init, timeoutMs));
+  return request(ctx, path, init, timeoutMs, async (response) => {
+    if (init.method === "DELETE" && response.status === 204) return null;
+    return json(response);
+  });
 }
 
 export interface AudioOptions {
@@ -90,66 +110,56 @@ export async function audioRequest(
   body: Record<string, unknown> | FormData,
   options: AudioOptions,
 ) {
-  let requestId: string | null = null;
-  try {
-    const format = options.outputFormat ?? "mp3_44100_128";
-    const response = await request(
-      ctx,
-      `${path}?output_format=${encodeURIComponent(format)}`,
-      {
-        method: "POST",
-        body: body instanceof FormData ? body : JSON.stringify(body),
-      },
-      options.timeoutMs ?? 300_000,
-    );
-    requestId = response.headers.get("request-id");
-    if (!response.ok) {
-      await json(response);
-      throw new Error("elevenlabs: unexpected error response");
-    }
-    const mime = response.headers
-      .get("content-type")
-      ?.split(";")[0]
-      .trim()
-      .toLowerCase();
-    if (
-      mime &&
-      !["audio/mpeg", "audio/mp3", "application/octet-stream"].includes(mime)
-    ) {
-      await response.body?.cancel();
-      throw new Error(`elevenlabs: expected MP3 audio, received ${mime}`);
-    }
-    const bytes = await readBoundedBytes(
-      response,
-      AUDIO_LIMIT,
-      "elevenlabs: audio exceeds 100 MiB",
-    );
-    if (!bytes.length) throw new Error("elevenlabs: empty audio response");
-    const audio = writeMediaFile({
-      bytes,
-      mimeType: "audio/mpeg",
-      provider: "elevenlabs",
-      index: 0,
-      saveDir: options.saveDir,
-    });
-    return {
-      provider: "elevenlabs",
-      audio,
-      requestId,
-      songId: response.headers.get("song-id"),
-      note: SEND_FILE_NOTE,
-    };
-  } catch (error) {
-    throw new Error(
-      `${error instanceof Error ? error.message : String(error)}${requestId ? ` (requestId ${requestId})` : ""}. Generation may have been billed; do not retry automatically.`,
-      { cause: error },
-    );
-  }
+  const format = options.outputFormat ?? "mp3_44100_128";
+  return request(
+    ctx,
+    `${path}?output_format=${encodeURIComponent(format)}`,
+    {
+      method: "POST",
+      body: body instanceof FormData ? body : JSON.stringify(body),
+    },
+    options.timeoutMs ?? 300_000,
+    async (response) => {
+      const mime = response.headers
+        .get("content-type")
+        ?.split(";")[0]
+        .trim()
+        .toLowerCase();
+      if (
+        mime &&
+        !["audio/mpeg", "audio/mp3", "application/octet-stream"].includes(mime)
+      ) {
+        await response.body?.cancel();
+        throw new Error(`elevenlabs: expected MP3 audio, received ${mime}`);
+      }
+      const bytes = await readBoundedBytes(
+        response,
+        AUDIO_LIMIT,
+        "elevenlabs: audio exceeds 100 MiB",
+      );
+      if (!bytes.length) throw new Error("elevenlabs: empty audio response");
+      const audio = writeMediaFile({
+        bytes,
+        mimeType: "audio/mpeg",
+        provider: "elevenlabs",
+        index: 0,
+        saveDir: options.saveDir,
+      });
+      return {
+        provider: "elevenlabs",
+        audio,
+        requestId: response.headers.get("request-id"),
+        songId: response.headers.get("song-id"),
+        note: SEND_FILE_NOTE,
+      };
+    },
+  );
 }
 
 /** Bound uploads before allocating; read through the same handle to avoid stat/read races. */
 export async function appendFile(form: FormData, field: string, path: string) {
-  const file = await open(path, "r");
+  // Nonblocking open lets fstat reject FIFOs without waiting for a writer.
+  const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK);
   try {
     const stat = await file.stat();
     if (!stat.isFile() || stat.size === 0 || stat.size > 25 * 1024 * 1024)

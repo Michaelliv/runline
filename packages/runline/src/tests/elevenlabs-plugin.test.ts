@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
   readFileSync,
@@ -363,6 +364,118 @@ describe("elevenlabs plugin", () => {
         /empty audio|expected MP3/,
       );
     }
+  });
+  it("retains request IDs and no-retry guidance for every mutation", async () => {
+    for (const [name, input] of [
+      ["speech.create", { voiceId: "v", text: "hello" }],
+      ["speech.convert", { voiceId: "v", audioPath: source }],
+      ["transcription.create", { filePath: source }],
+      ["voices.clone", { name: "me", audioPaths: [source] }],
+      ["voices.delete", { voiceId: "v" }],
+      ["music.create", { prompt: "ambient", durationMs: 3000 }],
+      ["sound.create", { text: "rain" }],
+    ] as const) {
+      const calls = mock(
+        Response.json(
+          { detail: "unavailable" },
+          {
+            status: 503,
+            headers: { "request-id": "req-failed" },
+          },
+        ),
+      );
+      await assert.rejects(
+        () => run(name, input),
+        /503.*req-failed.*do not retry automatically/,
+      );
+      assert.equal(calls.length, 1);
+    }
+  });
+  it("rejects empty and primitive JSON successes instead of claiming success", async () => {
+    for (const response of [
+      new Response(""),
+      Response.json(null),
+      Response.json("ok"),
+      Response.json(false),
+    ]) {
+      mock(response);
+      await assert.rejects(
+        () => run("models.list"),
+        /expected a JSON object or array/,
+      );
+    }
+  });
+  it("bounds JSON bodies and cancels their readers", async () => {
+    let cancelled = false;
+    mock(
+      new Response(
+        new ReadableStream({
+          pull(c) {
+            c.enqueue(new Uint8Array(1024 * 1024));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      ),
+    );
+    await assert.rejects(() => run("models.list"), /JSON exceeds 8 MiB/);
+    assert.ok(cancelled);
+  });
+  it("keeps the deadline active while consuming audio and JSON bodies", async () => {
+    for (const [name, input] of [
+      ["speech.create", { voiceId: "v", text: "hello" }],
+      ["transcription.create", { filePath: source }],
+    ] as const) {
+      let calls = 0;
+      globalThis.fetch = (async (
+        _url: RequestInfo | URL,
+        init?: RequestInit,
+      ) => {
+        calls++;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener(
+                "abort",
+                () => controller.error(init.signal?.reason),
+                { once: true },
+              );
+            },
+          }),
+          {
+            headers: { "content-type": "audio/mpeg", "request-id": "stalled" },
+          },
+        );
+      }) as typeof fetch;
+      await assert.rejects(
+        () => run(name, { ...input, timeoutMs: 1000 }),
+        /stalled.*do not retry automatically/,
+      );
+      assert.equal(calls, 1);
+    }
+  });
+  it("retains billing context when the local file write fails", async () => {
+    mock(audio());
+    await assert.rejects(
+      () =>
+        run("sound.create", { text: "rain", saveDir: join(dir, "missing") }),
+      /req-1.*do not retry automatically/,
+    );
+  });
+  it("rejects FIFO uploads without waiting for a writer", {
+    skip: process.platform === "win32",
+  }, async () => {
+    const fifo = join(dir, "fifo");
+    execFileSync("mkfifo", [fifo]);
+    const calls = mock();
+    for (const [name, input] of [
+      ["transcription.create", { filePath: fifo }],
+      ["speech.convert", { voiceId: "v", audioPath: fifo }],
+      ["voices.clone", { name: "me", audioPaths: [fifo] }],
+    ] as const)
+      await assert.rejects(() => run(name, input), /regular file/);
+    assert.equal(calls.length, 0);
   });
   it("bounds chunked audio and cancels the reader", async () => {
     let cancelled = false;
