@@ -98,6 +98,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/dropcontact.svg" width="16" height="16" style="vertical-align: middle"> **dropcontact** | 2 | contact | `DROPCONTACT_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/egoi.svg" width="16" height="16" style="vertical-align: middle"> **egoi** | 4 | contact | `EGOI_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/elasticsearch.svg" width="16" height="16" style="vertical-align: middle"> **elasticsearch** | 9 | document, index | `ELASTICSEARCH_URL` |
+| **elevenlabs** | 10 | models, voices, speech, transcription, music, sound | `ELEVENLABS_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/emelia.svg" width="16" height="16" style="vertical-align: middle"> **emelia** | 9 | campaign, contactList | `EMELIA_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/erpnext.svg" width="16" height="16" style="vertical-align: middle"> **erpnext** | 5 | document | `ERPNEXT_HOST`, `ERPNEXT_API_KEY`, `ERPNEXT_API_SECRET` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/facebookGraph.svg" width="16" height="16" style="vertical-align: middle"> **facebookGraph** | 1 | request | `FACEBOOK_ACCESS_TOKEN` |
