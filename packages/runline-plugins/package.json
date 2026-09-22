@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "rrule": "^2.8.1",
-    "typebox": "^1.1.35"
+    "typebox": "^1.1.35",
+    "zod": "^4.2.1"
   }
 }

@@ -5,7 +5,7 @@ import { registerGraphActions } from "./graph.js";
 /**
  * Shift Atlas — the operational graph of a Shift cloud organization:
  * the map of how the business runs. Independent of the shiftLabs
- * plugin the same way shiftCrm is, but authenticated with the same
+ * plugin the same way shiftBwm is, but authenticated with the same
  * Shift cloud API key; the cloud derives the organization from the
  * key, so no organization ID is ever sent (SHFT-852).
  */
