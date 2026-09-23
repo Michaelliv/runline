@@ -2,7 +2,7 @@ import * as t from "typebox";
 
 /**
  * Shared helpers for plugins that talk to the Shift cloud API
- * (shiftWork, shiftPages, shiftTranscription, shiftObjects,
+ * (shiftWork, shiftPages, shiftTranscription, shiftObjects, shiftCrm,
  * shiftOcr, shiftAtlas). One base URL, one bearer-auth request helper,
  * and the common TypeBox schema builders.
  */

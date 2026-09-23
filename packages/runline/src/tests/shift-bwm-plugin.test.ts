@@ -230,6 +230,42 @@ describe("shiftBwm plugin", () => {
     );
   });
 
+  it("refuses redirects, applies a deadline, and bounds response bodies", async () => {
+    globalThis.fetch = (async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      assert.equal(init?.redirect, "error");
+      assert.ok(init?.signal, "every request carries a deadline");
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://evil.test" },
+      });
+    }) as typeof fetch;
+    await assert.rejects(
+      getAction(makeShiftBwm(), "objectTypes.list").execute({}, ctx()),
+      /Refusing a redirect/,
+    );
+
+    let cancelled = false;
+    globalThis.fetch = (async () =>
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(1024 * 1024));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      )) as typeof fetch;
+    await assert.rejects(
+      getAction(makeShiftBwm(), "objectTypes.list").execute({}, ctx()),
+      /response exceeds 16 MiB/,
+    );
+    assert.ok(cancelled);
+  });
+
   it("refuses to run without an apiKey", async () => {
     let calls = 0;
     globalThis.fetch = (async () => {

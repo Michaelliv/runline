@@ -36,6 +36,7 @@
         "proper-lockfile": "^4.1.2",
         "rrule": "^2.8.1",
         "typebox": "^1.1.35",
+        "zod": "^4.2.1",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.4.12",

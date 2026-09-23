@@ -1,5 +1,11 @@
 import * as t from "typebox";
-import { BusinessWorldModelClient, BwmClientError } from "./vendor/client.js";
+import { authedFetch } from "../../_shared/authedFetch.js";
+import { readBounded } from "../../_shared/provider.js";
+import {
+  BusinessWorldModelClient,
+  BwmClientError,
+  type BwmFetch,
+} from "./vendor/client.js";
 import {
   BWM_BUILT_IN_OBJECT_TYPES,
   BWM_LIST_MAX_LIMIT,
@@ -10,6 +16,9 @@ export type Ctx = { connection: { config: Record<string, unknown> } };
 export const DEFAULT_BASE_URL = "https://cloud.shift-labs.ai";
 
 export const STRICT_OBJECT = { additionalProperties: false } as const;
+
+const REQUEST_TIMEOUT_MS = 60_000;
+const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 // ─── client ──────────────────────────────────────────────────────
 
@@ -32,6 +41,28 @@ function apiKey(ctx: Ctx): string {
 }
 
 /**
+ * The client's transport. Requests carry the API key, so redirects are
+ * refused; one deadline covers the whole exchange including the body, and
+ * the body is read with a ceiling before the client parses it.
+ */
+const boundedFetch: BwmFetch = async (input, init) => {
+  const response = await authedFetch(input, {
+    ...init,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  const text = await readBounded(
+    response,
+    MAX_RESPONSE_BYTES,
+    "Shift Business World Model: response exceeds 16 MiB",
+  );
+  return new Response(text || null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+};
+
+/**
  * One client per call. Cheap (prefix + fetch closure), and it lets a
  * create attach its own `Idempotency-Key` without leaking it into the
  * next request.
@@ -42,6 +73,7 @@ export function clientFor(
 ): BusinessWorldModelClient {
   return new BusinessWorldModelClient({
     baseUrl: baseUrl(ctx),
+    fetch: boundedFetch,
     headers: {
       authorization: `Bearer ${apiKey(ctx)}`,
       ...extraHeaders,
