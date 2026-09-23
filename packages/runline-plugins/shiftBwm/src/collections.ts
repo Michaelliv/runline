@@ -5,10 +5,14 @@ import {
   clientFor,
   filtersSchema,
   idempotentClientFor,
+  idOrIds,
   idSchema,
   objectTypeSchema,
   paginationFields,
+  principalSchema,
+  relationshipChangeSchema,
   STRICT_OBJECT,
+  STRICT_UPDATE_OBJECT,
   withConflictRetry,
 } from "./shared.js";
 import type {
@@ -21,25 +25,14 @@ import type {
   BwmUpdateListInput,
 } from "./vendor/models.js";
 
-const idOrIds = t.Union([
-  t.String({ minLength: 1 }),
-  t.Array(t.String({ minLength: 1 })),
-]);
-
-const principalSchema = t.Object(
-  {
-    type: t.Union([t.Literal("user"), t.Literal("service")], {
-      description: "user: a member (see members.list). service: an API key.",
-    }),
-    id: t.String({ minLength: 1 }),
-  },
-  STRICT_OBJECT,
-);
+type ListRecordsChange = NonNullable<
+  BwmUpdateListInput["relationships"]
+>["$records"];
 
 // ─── saved lists ─────────────────────────────────────────────────
 
-export function registerListActions(rl: RunlinePluginAPI) {
-  rl.registerAction("lists.list", {
+export function registerSavedListActions(rl: RunlinePluginAPI) {
+  rl.registerAction("savedList.list", {
     access: "read",
     description:
       "Saved lists: curated sets of records of one object type. Each is { id, fields: { $name, $objectType, $description }, relationships: { $records: { values: [ids] } }, createdAt, updatedAt, archivedAt }.",
@@ -49,17 +42,17 @@ export function registerListActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("lists.get", {
+  rl.registerAction("savedList.get", {
     access: "read",
     description: "Read one saved list envelope by id.",
-    inputSchema: t.Object({ id: idSchema("List id") }, STRICT_OBJECT),
+    inputSchema: t.Object({ id: idSchema("Saved list ID") }, STRICT_OBJECT),
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return call(() => clientFor(ctx).getList(id));
     },
   });
 
-  rl.registerAction("lists.create", {
+  rl.registerAction("savedList.create", {
     access: "write",
     description:
       "Create a saved list of one object type, optionally seeded with record ids. Returns the list envelope.",
@@ -91,44 +84,28 @@ export function registerListActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("lists.update", {
+  rl.registerAction("savedList.update", {
     access: "write",
     description:
       "Rename a list, change its description, add/remove/replace its records, or archive/restore it. records takes { add, remove, replace } or a bare id / id array as replace. Lost races retry once.",
     inputSchema: t.Object(
       {
-        id: idSchema("List id"),
+        id: idSchema("Saved list ID"),
         name: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
         description: t.Optional(
           t.Union([t.String({ maxLength: 2_000 }), t.Null()]),
         ),
-        records: t.Optional(
-          t.Union([
-            idOrIds,
-            t.Object(
-              {
-                add: t.Optional(idOrIds),
-                remove: t.Optional(idOrIds),
-                replace: t.Optional(t.Union([idOrIds, t.Null()])),
-              },
-              STRICT_OBJECT,
-            ),
-          ]),
-        ),
+        records: t.Optional(relationshipChangeSchema),
         archived: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false, minProperties: 2 },
+      STRICT_UPDATE_OBJECT,
     ),
     async execute(input, ctx) {
       const { id, name, description, records, archived } = input as {
         id: string;
         name?: string;
         description?: string | null;
-        records?: BwmUpdateListInput["relationships"] extends infer R
-          ? R extends { $records?: infer V }
-            ? V
-            : never
-          : never;
+        records?: ListRecordsChange;
         archived?: boolean;
       };
       const body: BwmUpdateListInput = {};
@@ -145,13 +122,13 @@ export function registerListActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("lists.records", {
+  rl.registerAction("savedList.records", {
     access: "read",
     description:
-      "The members of a saved list as record envelopes: { data, object: 'list', totalCount }. Accepts the same filters and pagination as records.list.",
+      "The members of a saved list as record envelopes: { data, object: 'list', totalCount }. Accepts the same filters and pagination as record.list.",
     inputSchema: t.Object(
       {
-        id: idSchema("List id"),
+        id: idSchema("Saved list ID"),
         filters: t.Optional(filtersSchema()),
         includeArchived: t.Optional(t.Boolean()),
         ...paginationFields(),
@@ -181,7 +158,7 @@ export function registerListActions(rl: RunlinePluginAPI) {
 // ─── groups ──────────────────────────────────────────────────────
 
 export function registerGroupActions(rl: RunlinePluginAPI) {
-  rl.registerAction("groups.list", {
+  rl.registerAction("group.list", {
     access: "read",
     description:
       "Groups are the subjects of group visibility: { id, slug, name, description, members: [{ type: user | service, id }] }. A record with visibility.mode 'group' is readable by members of its named groups.",
@@ -191,7 +168,7 @@ export function registerGroupActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("groups.create", {
+  rl.registerAction("group.create", {
     access: "write",
     description:
       "Create a group, optionally with initial members. Requires the configure scope.",
@@ -214,19 +191,19 @@ export function registerGroupActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("groups.update", {
+  rl.registerAction("group.update", {
     access: "write",
     description:
       "Rename a group or change its description. Requires the configure scope. Lost races retry once.",
     inputSchema: t.Object(
       {
-        id: idSchema("Group id"),
+        id: idSchema("Group ID"),
         name: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
         description: t.Optional(
           t.Union([t.String({ maxLength: 2_000 }), t.Null()]),
         ),
       },
-      { additionalProperties: false, minProperties: 2 },
+      STRICT_UPDATE_OBJECT,
     ),
     async execute(input, ctx) {
       const { id, ...body } = input as { id: string } & BwmUpdateGroupInput;
@@ -236,17 +213,17 @@ export function registerGroupActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("groups.updateMembers", {
+  rl.registerAction("group.updateMembers", {
     access: "write",
     description:
       "Add and/or remove principals (members or API keys) from a group. Membership changes take effect on the next read. Requires the configure scope.",
     inputSchema: t.Object(
       {
-        id: idSchema("Group id"),
+        id: idSchema("Group ID"),
         add: t.Optional(t.Array(principalSchema)),
         remove: t.Optional(t.Array(principalSchema)),
       },
-      { additionalProperties: false, minProperties: 2 },
+      STRICT_UPDATE_OBJECT,
     ),
     async execute(input, ctx) {
       const { id, ...body } = input as { id: string } & BwmGroupMembersInput;
@@ -254,11 +231,11 @@ export function registerGroupActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("groups.delete", {
+  rl.registerAction("group.delete", {
     access: "write",
     description:
       "Delete a group. Records that named only this group become unreadable to its former members. Requires the configure scope.",
-    inputSchema: t.Object({ id: idSchema("Group id") }, STRICT_OBJECT),
+    inputSchema: t.Object({ id: idSchema("Group ID") }, STRICT_OBJECT),
     async execute(input, ctx) {
       const { id } = input as { id: string };
       await call(() => clientFor(ctx).deleteGroup(id));
@@ -270,7 +247,7 @@ export function registerGroupActions(rl: RunlinePluginAPI) {
 // ─── members ─────────────────────────────────────────────────────
 
 export function registerMemberActions(rl: RunlinePluginAPI) {
-  rl.registerAction("members.list", {
+  rl.registerAction("member.list", {
     access: "read",
     description:
       "The organization's members in envelope form: { data: [{ id, fields: { $name, $email, $role } }], object: 'list', totalCount }. Use the id for $owner, $assignedTo, visibility principals ({ type: 'user', id }), and group members.",
@@ -285,10 +262,10 @@ export function registerMemberActions(rl: RunlinePluginAPI) {
 // ─── files ───────────────────────────────────────────────────────
 
 export function registerFileActions(rl: RunlinePluginAPI) {
-  rl.registerAction("files.createUpload", {
+  rl.registerAction("file.createUpload", {
     access: "write",
     description:
-      "Start a file upload: returns the file ({ id, status: PENDING, ... }) plus a one-time grant { uploadUrl, uploadMethod, uploadHeaders, expiresAt }. PUT the bytes there yourself, then call files.complete, then attach with records.update({ relationships: { $files: { add: fileId } } }).",
+      "Start a file upload: returns the file ({ id, status: PENDING, ... }) plus a one-time grant { uploadUrl, uploadMethod, uploadHeaders, expiresAt }. PUT the bytes there yourself, then call file.complete, then attach with record.update({ relationships: { $files: { add: fileId } } }).",
     inputSchema: t.Object(
       {
         filename: t.String({ minLength: 1, maxLength: 500 }),
@@ -303,23 +280,23 @@ export function registerFileActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("files.complete", {
+  rl.registerAction("file.complete", {
     access: "write",
     description:
       "Finalize an upload after the bytes were PUT to the grant URL. Returns the file with status COMPLETED.",
-    inputSchema: t.Object({ id: idSchema("File id") }, STRICT_OBJECT),
+    inputSchema: t.Object({ id: idSchema("File ID") }, STRICT_OBJECT),
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return call(() => clientFor(ctx).completeFileUpload(id));
     },
   });
 
-  rl.registerAction("records.fileUrl", {
+  rl.registerAction("record.fileUrl", {
     access: "read",
     description:
       "Mint a short-lived download URL for a file attached to a record: { url, expiresAt }. Only succeeds when the caller can see the record.",
     inputSchema: t.Object(
-      { recordId: idSchema("Record id"), fileId: idSchema("File id") },
+      { recordId: idSchema("Record ID"), fileId: idSchema("File ID") },
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {

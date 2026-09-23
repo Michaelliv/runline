@@ -83,7 +83,6 @@ function filesCallingBareFetch(): string[] {
  * on it fails the gate.
  */
 const BARE_FETCH_BACKLOG = new Set([
-  "_shared/shiftCloud.ts",
   "_shared/shiftUpload.ts",
   "actionNetwork/src/index.ts",
   "activeCampaign/src/index.ts",

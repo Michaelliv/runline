@@ -14,7 +14,7 @@
       "name": "pi-runline",
       "version": "0.32.0",
       "dependencies": {
-        "runline": "0.31.0",
+        "runline": "0.32.0",
       },
       "peerDependencies": {
         "@mariozechner/pi-coding-agent": "*",

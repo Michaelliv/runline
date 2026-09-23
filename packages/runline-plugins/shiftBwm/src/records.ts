@@ -13,6 +13,7 @@ import {
   relationshipsCreateSchema,
   relationshipsUpdateSchema,
   STRICT_OBJECT,
+  STRICT_UPDATE_OBJECT,
   visibilitySchema,
   withConflictRetry,
 } from "./shared.js";
@@ -24,10 +25,10 @@ import type {
 } from "./vendor/models.js";
 
 const READ_DEFINITIONS_FIRST =
-  "Read definitions.get for the object type before writing: it lists every field key, its valueType, and the select options. SINGLE_SELECT / MULTI_SELECT accept an option id or its label. $stage accepts a stage id, or a stage label together with a $pipeline hint. Unknown keys fail with unknown_field / unknown_relationship and the error names the offending param (fields.tier, relationships.$owner).";
+  "Read definition.get for the object type before writing: it lists every field key, its valueType, and the select options. SINGLE_SELECT / MULTI_SELECT accept an option id or its label. $stage accepts a stage id, or a stage label together with a $pipeline hint. Unknown keys fail with unknown_field / unknown_relationship and the error names the offending param (fields.tier, relationships.$owner).";
 
 export function registerSchemaActions(rl: RunlinePluginAPI) {
-  rl.registerAction("objectTypes.list", {
+  rl.registerAction("objectType.list", {
     access: "read",
     description:
       "List the organization's object types, built-in (account, contact, opportunity, activity, task, note) and custom. Each has slug, label, pluralLabel, system, path. Use the slug as objectType everywhere else.",
@@ -37,7 +38,7 @@ export function registerSchemaActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("definitions.get", {
+  rl.registerAction("definition.get", {
     access: "read",
     description: `Field and relationship definitions for one object type: everything needed to write, validate, or filter it. fieldDefinitions: { "<key>": { slug, label, valueType, system, readOnly, required, typeConfiguration: { options?: [{ id, label, parentId? }], parentFieldKey?, multipleValues?, unique? } } }. relationshipDefinitions: { "<key>": { label, cardinality: HAS_ONE | HAS_MANY, objectType, inverseKey } }. Value types: TEXT NUMBER CHECKBOX CURRENCY DATE DATETIME EMAIL TELEPHONE URL SOCIAL_HANDLE ADDRESS FULL_NAME MARKDOWN SINGLE_SELECT MULTI_SELECT JSON. Multi-value types (EMAIL, TELEPHONE, URL) take arrays.`,
     inputSchema: t.Object({ objectType: objectTypeSchema() }, STRICT_OBJECT),
@@ -47,10 +48,10 @@ export function registerSchemaActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("pipelines.list", {
+  rl.registerAction("pipeline.list", {
     access: "read",
     description:
-      "List opportunity pipelines with their ordered stages ({ id, key, name, position, outcome: open | won | lost }). The same stages appear as $stage options in definitions.get({ objectType: 'opportunity' }), each with parentId = pipeline id.",
+      "List opportunity pipelines with their ordered stages ({ id, key, name, position, outcome: open | won | lost }). The same stages appear as $stage options in definition.get({ objectType: 'opportunity' }), each with parentId = pipeline id.",
     inputSchema: t.Object({}, STRICT_OBJECT),
     async execute(_input, ctx) {
       return call(() => clientFor(ctx).listPipelines());
@@ -59,7 +60,7 @@ export function registerSchemaActions(rl: RunlinePluginAPI) {
 }
 
 export function registerRecordActions(rl: RunlinePluginAPI) {
-  rl.registerAction("records.list", {
+  rl.registerAction("record.list", {
     access: "read",
     description: `Query records of one object type. Returns { data: [envelopes], object: "list", totalCount }. ${ENVELOPE_DOC} Filters AND together on field or relationship keys; a hidden record is simply absent. Use this to find-or-create: filter on $email / $phone with no operator (multi-value fields reject equal), or $name with equal, then create only when totalCount is 0.`,
     inputSchema: t.Object(
@@ -92,11 +93,11 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("records.get", {
+  rl.registerAction("record.get", {
     access: "read",
     description: `Read one record envelope by id. ${ENVELOPE_DOC} A record the caller cannot see is a 404, same as one that does not exist.`,
     inputSchema: t.Object(
-      { objectType: objectTypeSchema(), id: idSchema("Record id") },
+      { objectType: objectTypeSchema(), id: idSchema("Record ID") },
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
@@ -105,14 +106,14 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("records.create", {
+  rl.registerAction("record.create", {
     access: "write",
     description: `Create a record and return its envelope. ${READ_DEFINITIONS_FIRST} Writes take bare values: fields: { "$name": "Acme", "tier": "Gold" }, relationships: { "$owner": "user_1", "$contact": ["con_1"] }. Visibility defaults to org; the actor who restricts a record is always among its readers. Every create carries an Idempotency-Key.`,
     inputSchema: t.Object(
       {
         objectType: objectTypeSchema(),
         fields: fieldsWriteSchema(
-          "Field key -> bare value. The required display key differs per type: $name on account, contact, opportunity, and custom types; $title on task and note (note body is $content, activity body is $body, both MARKDOWN); activity has no $name and requires $subject plus $type (free text, e.g. call, email, meeting). Contact identities are $email (array), $phone (array, E.164), $whatsapp (array), $linkedIn (a full https://linkedin.com/in/... URL). Required keys are marked required in definitions.get.",
+          "Field key -> bare value. The required display key differs per type: $name on account, contact, opportunity, and custom types; $title on task and note (note body is $content, activity body is $body, both MARKDOWN); activity has no $name and requires $subject plus $type (free text, e.g. call, email, meeting). Contact identities are $email (array), $phone (array, E.164), $whatsapp (array), $linkedIn (a full https://linkedin.com/in/... URL). Required keys are marked required in definition.get.",
         ),
         relationships: t.Optional(relationshipsCreateSchema()),
         externalId: t.Optional(
@@ -136,13 +137,13 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("records.update", {
+  rl.registerAction("record.update", {
     access: "write",
     description: `Update a record and return its envelope. Only named fields change; null clears a nullable field. Relationships take { add, remove, replace } per key, or a bare id / id array as shorthand for replace, or null to clear; HAS_ONE never holds more than one value; at most 25 link changes per request. archived: false restores an archived record. ${READ_DEFINITIONS_FIRST} Updates are compare-and-set; a lost race (409 write_conflict) is retried once automatically.`,
     inputSchema: t.Object(
       {
         objectType: objectTypeSchema(),
-        id: idSchema("Record id"),
+        id: idSchema("Record ID"),
         fields: t.Optional(fieldsWriteSchema("Field key -> bare value")),
         relationships: t.Optional(relationshipsUpdateSchema()),
         externalId: t.Optional(
@@ -153,7 +154,8 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
           t.Boolean({ description: "true archives, false restores" }),
         ),
       },
-      { additionalProperties: false, minProperties: 3 },
+      // objectType and id both route the request, so a change is a third key.
+      { ...STRICT_UPDATE_OBJECT, minProperties: 3 },
     ),
     async execute(input, ctx) {
       const { objectType, id, ...body } = input as {
@@ -168,12 +170,12 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("records.archive", {
+  rl.registerAction("record.archive", {
     access: "write",
     description:
-      "Archive a record (soft delete). It leaves default listings, stays readable with includeArchived, and records.update({ archived: false }) restores it. Nothing is destroyed. Returns the archived envelope.",
+      "Archive a record (soft delete). It leaves default listings, stays readable with includeArchived, and record.update({ archived: false }) restores it. Nothing is destroyed. Returns the archived envelope.",
     inputSchema: t.Object(
-      { objectType: objectTypeSchema(), id: idSchema("Record id") },
+      { objectType: objectTypeSchema(), id: idSchema("Record ID") },
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
@@ -182,14 +184,14 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("records.history", {
+  rl.registerAction("record.history", {
     access: "read",
     description:
       'Values of one field over time, newest first, consecutive duplicates collapsed: { data: [{ value, valueType, displayValue, recordedAt, isCreate }], hasMore, nextCursor }. Every field has history, system and custom alike. Use it for "what changed on X and when".',
     inputSchema: t.Object(
       {
         objectType: objectTypeSchema(),
-        id: idSchema("Record id"),
+        id: idSchema("Record ID"),
         field: t.String({
           minLength: 1,
           description: "Field key, e.g. $name, $stage, tier",
@@ -220,13 +222,13 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("records.links", {
+  rl.registerAction("record.links", {
     access: "read",
     description:
       "Raw edges touching a record: { outbound: [link], inbound: [link] } where link = { id, fromRecordId, toRecordId, fromObjectType, toObjectType, key, role, attributes, declared, createdAt }. declared is false for an edge no definition covers. Edges whose far end the caller cannot see are hidden.",
     inputSchema: t.Object(
       {
-        id: idSchema("Record id"),
+        id: idSchema("Record ID"),
         direction: t.Optional(
           t.Union([t.Literal("in"), t.Literal("out"), t.Literal("both")], {
             description: "Default both",
@@ -244,18 +246,18 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("records.changeEvents", {
+  rl.registerAction("record.changeEvents", {
     access: "read",
     description:
-      "Immutable change events for a record: [{ id, recordId, actor: { type, id }, action: created | updated, before, after, importRunId, createdAt }]. before/after are whole-record snapshots. Prefer records.history when only one field matters.",
-    inputSchema: t.Object({ id: idSchema("Record id") }, STRICT_OBJECT),
+      "Immutable change events for a record: [{ id, recordId, actor: { type, id }, action: created | updated, before, after, importRunId, createdAt }]. before/after are whole-record snapshots. Prefer record.history when only one field matters.",
+    inputSchema: t.Object({ id: idSchema("Record ID") }, STRICT_OBJECT),
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return call(() => clientFor(ctx).listChangeEvents(id));
     },
   });
 
-  rl.registerAction("records.merge", {
+  rl.registerAction("record.merge", {
     access: "write",
     description:
       "Fold a duplicate record into a primary of the same object type in one transaction. Fields keep the primary's value unless it is empty or fieldResolutions names 'duplicate' or a literal { value }; multi-value fields union; every edge, identity, list membership, file, and reader moves to the primary; the duplicate archives with mergedIntoId. Returns { merge: { id, status, summary }, primary, summary }.",
@@ -291,11 +293,11 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     },
   });
 
-  rl.registerAction("merges.get", {
+  rl.registerAction("merge.get", {
     access: "read",
     description:
       "Read a past merge by id: { id, objectType, primaryId, duplicateId, status: done | failed, summary: { fieldWriteCount, repointedCount, warnings }, createdAt }.",
-    inputSchema: t.Object({ id: idSchema("Merge id") }, STRICT_OBJECT),
+    inputSchema: t.Object({ id: idSchema("Merge ID") }, STRICT_OBJECT),
     async execute(input, ctx) {
       const { id } = input as { id: string };
       return call(() => clientFor(ctx).getMerge(id));

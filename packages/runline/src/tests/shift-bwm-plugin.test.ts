@@ -9,33 +9,33 @@ const originalFetch = globalThis.fetch;
 const PREFIX = "/v1/services/business-world-model";
 
 const SHIFT_BWM_ACTIONS = [
-  "definitions.get",
-  "files.complete",
-  "files.createUpload",
-  "groups.create",
-  "groups.delete",
-  "groups.list",
-  "groups.update",
-  "groups.updateMembers",
-  "lists.create",
-  "lists.get",
-  "lists.list",
-  "lists.records",
-  "lists.update",
-  "members.list",
-  "merges.get",
-  "objectTypes.list",
-  "pipelines.list",
-  "records.archive",
-  "records.changeEvents",
-  "records.create",
-  "records.fileUrl",
-  "records.get",
-  "records.history",
-  "records.links",
-  "records.list",
-  "records.merge",
-  "records.update",
+  "definition.get",
+  "file.complete",
+  "file.createUpload",
+  "group.create",
+  "group.delete",
+  "group.list",
+  "group.update",
+  "group.updateMembers",
+  "member.list",
+  "merge.get",
+  "objectType.list",
+  "pipeline.list",
+  "record.archive",
+  "record.changeEvents",
+  "record.create",
+  "record.fileUrl",
+  "record.get",
+  "record.history",
+  "record.links",
+  "record.list",
+  "record.merge",
+  "record.update",
+  "savedList.create",
+  "savedList.get",
+  "savedList.list",
+  "savedList.records",
+  "savedList.update",
 ] as const;
 
 afterEach(() => {
@@ -152,18 +152,18 @@ describe("shiftBwm plugin", () => {
 
   it("teaches the envelope shape and $-prefixed system keys in descriptions", () => {
     const plugin = makeShiftBwm();
-    for (const name of ["records.create", "records.list", "records.get"]) {
+    for (const name of ["record.create", "record.list", "record.get"]) {
       const description = getAction(plugin, name).description ?? "";
       assert.match(description, /\$name/, name);
       assert.match(description, /fields/, name);
       assert.match(description, /relationships/, name);
     }
     assert.match(
-      getAction(plugin, "records.create").description ?? "",
-      /definitions\.get/,
+      getAction(plugin, "record.create").description ?? "",
+      /definition\.get/,
     );
     const fieldsHelp = (
-      getAction(plugin, "records.create").inputSchema as {
+      getAction(plugin, "record.create").inputSchema as {
         properties: { fields: { description: string } };
       }
     ).properties.fields.description;
@@ -174,7 +174,7 @@ describe("shiftBwm plugin", () => {
   });
 
   it("warns that multi-value fields reject the equal filter operator", () => {
-    const schema = getAction(makeShiftBwm(), "records.list").inputSchema as {
+    const schema = getAction(makeShiftBwm(), "record.list").inputSchema as {
       properties: {
         filters: {
           items: { properties: { operator: { description: string } } };
@@ -186,7 +186,7 @@ describe("shiftBwm plugin", () => {
     assert.match(description, /EMAIL, TELEPHONE, URL/);
     assert.match(description, /reject equal/);
     assert.match(
-      getAction(makeShiftBwm(), "records.list").description ?? "",
+      getAction(makeShiftBwm(), "record.list").description ?? "",
       /\$email \/ \$phone with no operator/,
     );
   });
@@ -201,7 +201,7 @@ describe("shiftBwm plugin", () => {
         },
       },
     ]);
-    const result = await getAction(makeShiftBwm(), "definitions.get").execute(
+    const result = await getAction(makeShiftBwm(), "definition.get").execute(
       { objectType: "contact" },
       ctx(),
     );
@@ -218,19 +218,19 @@ describe("shiftBwm plugin", () => {
     });
   });
 
-  it("honours a configured baseUrl and routes custom object types under /objects", async () => {
+  it("routes custom object types under /objects", async () => {
     const seen = mockFetch([{ body: envelope({ objectType: "vendor" }) }]);
-    await getAction(makeShiftBwm(), "records.get").execute(
+    await getAction(makeShiftBwm(), "record.get").execute(
       { objectType: "vendor", id: "rec_9" },
-      ctx({ baseUrl: "http://localhost:3000/" }),
+      ctx(),
     );
     assert.equal(
       seen[0]?.url,
-      `http://localhost:3000${PREFIX}/objects/vendor/rec_9`,
+      `https://cloud.shift-labs.ai${PREFIX}/objects/vendor/rec_9`,
     );
   });
 
-  it("refuses redirects, applies a deadline, and bounds response bodies", async () => {
+  it("uses the shared Shift transport: redirects refused, deadline set", async () => {
     globalThis.fetch = (async (
       _input: RequestInfo | URL,
       init?: RequestInit,
@@ -243,27 +243,9 @@ describe("shiftBwm plugin", () => {
       });
     }) as typeof fetch;
     await assert.rejects(
-      getAction(makeShiftBwm(), "objectTypes.list").execute({}, ctx()),
+      getAction(makeShiftBwm(), "objectType.list").execute({}, ctx()),
       /Refusing a redirect/,
     );
-
-    let cancelled = false;
-    globalThis.fetch = (async () =>
-      new Response(
-        new ReadableStream({
-          pull(controller) {
-            controller.enqueue(new Uint8Array(1024 * 1024));
-          },
-          cancel() {
-            cancelled = true;
-          },
-        }),
-      )) as typeof fetch;
-    await assert.rejects(
-      getAction(makeShiftBwm(), "objectTypes.list").execute({}, ctx()),
-      /response exceeds 16 MiB/,
-    );
-    assert.ok(cancelled);
   });
 
   it("refuses to run without an apiKey", async () => {
@@ -273,11 +255,11 @@ describe("shiftBwm plugin", () => {
       throw new Error("fetch should not run");
     }) as typeof fetch;
     await assert.rejects(
-      getAction(makeShiftBwm(), "objectTypes.list").execute(
+      getAction(makeShiftBwm(), "objectType.list").execute(
         {},
         ctx({ apiKey: "" }),
       ),
-      /SHIFT_BWM_API_KEY/,
+      /apiKey is required/,
     );
     assert.equal(calls, 0);
   });
@@ -286,7 +268,7 @@ describe("shiftBwm plugin", () => {
     const seen = mockFetch([
       { body: { data: [envelope()], object: "list", totalCount: 1 } },
     ]);
-    const result = (await getAction(makeShiftBwm(), "records.list").execute(
+    const result = (await getAction(makeShiftBwm(), "record.list").execute(
       {
         objectType: "contact",
         filters: [
@@ -313,7 +295,7 @@ describe("shiftBwm plugin", () => {
 
   it("creates records with bare values and a fresh Idempotency-Key", async () => {
     const seen = mockFetch([{ body: envelope() }, { body: envelope() }]);
-    const action = getAction(makeShiftBwm(), "records.create");
+    const action = getAction(makeShiftBwm(), "record.create");
     const input = {
       objectType: "contact",
       fields: { $name: "Dana", $email: ["dana@acme.test"] },
@@ -337,7 +319,7 @@ describe("shiftBwm plugin", () => {
 
   it("does not send an Idempotency-Key on reads", async () => {
     const seen = mockFetch([{ body: envelope() }]);
-    await getAction(makeShiftBwm(), "records.get").execute(
+    await getAction(makeShiftBwm(), "record.get").execute(
       { objectType: "contact", id: "rec_1" },
       ctx(),
     );
@@ -357,7 +339,7 @@ describe("shiftBwm plugin", () => {
         }),
       },
     ]);
-    const result = (await getAction(makeShiftBwm(), "records.update").execute(
+    const result = (await getAction(makeShiftBwm(), "record.update").execute(
       { objectType: "contact", id: "rec_1", fields: { $name: "Dana Cohen" } },
       ctx(),
     )) as { fields: { $name: { value: string } } };
@@ -379,7 +361,7 @@ describe("shiftBwm plugin", () => {
     });
     const seen = mockFetch([conflict, { ...conflict }]);
     await assert.rejects(
-      getAction(makeShiftBwm(), "records.update").execute(
+      getAction(makeShiftBwm(), "record.update").execute(
         { objectType: "contact", id: "rec_1", fields: { $name: "X" } },
         ctx(),
       ),
@@ -398,7 +380,7 @@ describe("shiftBwm plugin", () => {
       }),
     ]);
     await assert.rejects(
-      getAction(makeShiftBwm(), "records.create").execute(
+      getAction(makeShiftBwm(), "record.create").execute(
         { objectType: "account", fields: { $name: "Acme", tier: "Gold" } },
         ctx(),
       ),
@@ -418,7 +400,7 @@ describe("shiftBwm plugin", () => {
       apiError(404, { type: "not_found", message: "record not found" }),
     ]);
     await assert.rejects(
-      getAction(makeShiftBwm(), "records.get").execute(
+      getAction(makeShiftBwm(), "record.get").execute(
         { objectType: "note", id: "rec_private" },
         ctx(),
       ),
@@ -446,11 +428,11 @@ describe("shiftBwm plugin", () => {
       },
     ]);
     const plugin = makeShiftBwm();
-    await getAction(plugin, "records.archive").execute(
+    await getAction(plugin, "record.archive").execute(
       { objectType: "activity", id: "act_1" },
       ctx(),
     );
-    await getAction(plugin, "records.history").execute(
+    await getAction(plugin, "record.history").execute(
       {
         objectType: "contact",
         id: "rec_1",
@@ -477,11 +459,11 @@ describe("shiftBwm plugin", () => {
       { body: { changeEvents: [] } },
     ]);
     const plugin = makeShiftBwm();
-    await getAction(plugin, "records.links").execute(
+    await getAction(plugin, "record.links").execute(
       { id: "rec_1", direction: "out" },
       ctx(),
     );
-    await getAction(plugin, "records.changeEvents").execute(
+    await getAction(plugin, "record.changeEvents").execute(
       { id: "rec_1" },
       ctx(),
     );
@@ -508,7 +490,7 @@ describe("shiftBwm plugin", () => {
     const seen = mockFetch([
       { body: { merge, primary: envelope(), summary: merge.summary } },
     ]);
-    await getAction(makeShiftBwm(), "records.merge").execute(
+    await getAction(makeShiftBwm(), "record.merge").execute(
       {
         objectType: "contact",
         primaryId: "rec_1",
@@ -550,11 +532,11 @@ describe("shiftBwm plugin", () => {
     };
     const seen = mockFetch([{ body: list }, { body: list }]);
     const plugin = makeShiftBwm();
-    await getAction(plugin, "lists.create").execute(
+    await getAction(plugin, "savedList.create").execute(
       { name: "Hot leads", objectType: "contact", records: ["rec_1"] },
       ctx(),
     );
-    await getAction(plugin, "lists.update").execute(
+    await getAction(plugin, "savedList.update").execute(
       { id: "lst_1", records: { add: "rec_2" } },
       ctx(),
     );
@@ -584,7 +566,7 @@ describe("shiftBwm plugin", () => {
       { status: 204 },
     ]);
     const plugin = makeShiftBwm();
-    await getAction(plugin, "groups.create").execute(
+    await getAction(plugin, "group.create").execute(
       {
         slug: "sales",
         name: "Sales",
@@ -592,11 +574,11 @@ describe("shiftBwm plugin", () => {
       },
       ctx(),
     );
-    await getAction(plugin, "groups.updateMembers").execute(
+    await getAction(plugin, "group.updateMembers").execute(
       { id: "grp_1", add: [{ type: "user", id: "user_1" }] },
       ctx(),
     );
-    const deleted = await getAction(plugin, "groups.delete").execute(
+    const deleted = await getAction(plugin, "group.delete").execute(
       { id: "grp_1" },
       ctx(),
     );
@@ -621,8 +603,8 @@ describe("shiftBwm plugin", () => {
       },
     ]);
     const plugin = makeShiftBwm();
-    await getAction(plugin, "members.list").execute({ limit: 50 }, ctx());
-    await getAction(plugin, "records.fileUrl").execute(
+    await getAction(plugin, "member.list").execute({ limit: 50 }, ctx());
+    await getAction(plugin, "record.fileUrl").execute(
       { recordId: "rec_1", fileId: "file_1" },
       ctx(),
     );

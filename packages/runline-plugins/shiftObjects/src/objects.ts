@@ -7,6 +7,7 @@ import {
   listParams,
   pathSegment,
   request,
+  STRICT_OBJECT,
   withQuery,
 } from "../../_shared/shiftCloud.js";
 import {
@@ -28,7 +29,6 @@ export const OBJECT_LINK_TARGET = [
   "db_record",
 ] as const;
 
-const STRICT_OBJECT = { additionalProperties: false } as const;
 const Id = t.String({ minLength: 1, pattern: "\\S" });
 
 interface StoredObject {

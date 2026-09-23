@@ -1,79 +1,40 @@
 import * as t from "typebox";
-import { authedFetch } from "../../_shared/authedFetch.js";
-import { readBounded } from "../../_shared/provider.js";
 import {
-  BusinessWorldModelClient,
-  BwmClientError,
-  type BwmFetch,
-} from "./vendor/client.js";
+  apiKey,
+  type Ctx,
+  SHIFT_API_URL,
+  STRICT_OBJECT,
+  shiftFetch,
+} from "../../_shared/shiftCloud.js";
+import { BusinessWorldModelClient, BwmClientError } from "./vendor/client.js";
 import {
   BWM_BUILT_IN_OBJECT_TYPES,
   BWM_LIST_MAX_LIMIT,
 } from "./vendor/contracts.js";
+import { BwmFilterOperator } from "./vendor/models.js";
 
-export type Ctx = { connection: { config: Record<string, unknown> } };
-
-export const DEFAULT_BASE_URL = "https://cloud.shift-labs.ai";
-
-export const STRICT_OBJECT = { additionalProperties: false } as const;
-
-const REQUEST_TIMEOUT_MS = 60_000;
-const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+export {
+  type Ctx,
+  idSchema,
+  STRICT_OBJECT,
+  STRICT_UPDATE_OBJECT,
+} from "../../_shared/shiftCloud.js";
 
 // ─── client ──────────────────────────────────────────────────────
-
-function baseUrl(ctx: Ctx): string {
-  const configured = ctx.connection.config.baseUrl;
-  if (typeof configured === "string" && configured.trim()) {
-    return configured.trim().replace(/\/+$/, "");
-  }
-  return DEFAULT_BASE_URL;
-}
-
-function apiKey(ctx: Ctx): string {
-  const key = ctx.connection.config.apiKey;
-  if (typeof key !== "string" || !key) {
-    throw new Error(
-      "Shift Business World Model apiKey is required (env SHIFT_BWM_API_KEY)",
-    );
-  }
-  return key;
-}
-
-/**
- * The client's transport. Requests carry the API key, so redirects are
- * refused; one deadline covers the whole exchange including the body, and
- * the body is read with a ceiling before the client parses it.
- */
-const boundedFetch: BwmFetch = async (input, init) => {
-  const response = await authedFetch(input, {
-    ...init,
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  const text = await readBounded(
-    response,
-    MAX_RESPONSE_BYTES,
-    "Shift Business World Model: response exceeds 16 MiB",
-  );
-  return new Response(text || null, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-};
 
 /**
  * One client per call. Cheap (prefix + fetch closure), and it lets a
  * create attach its own `Idempotency-Key` without leaking it into the
- * next request.
+ * next request. Transport is the shared Shift one: redirects refused,
+ * one deadline, bounded body.
  */
 export function clientFor(
   ctx: Ctx,
   extraHeaders: Record<string, string> = {},
 ): BusinessWorldModelClient {
   return new BusinessWorldModelClient({
-    baseUrl: baseUrl(ctx),
-    fetch: boundedFetch,
+    baseUrl: SHIFT_API_URL,
+    fetch: shiftFetch,
     headers: {
       authorization: `Bearer ${apiKey(ctx)}`,
       ...extraHeaders,
@@ -140,22 +101,39 @@ export async function withConflictRetry<T>(fn: () => Promise<T>): Promise<T> {
 
 // ─── schema helpers ──────────────────────────────────────────────
 
-export function idSchema(description: string) {
-  return t.String({ minLength: 1, pattern: "\\S", description });
-}
-
-export const BUILT_IN_OBJECT_TYPES = BWM_BUILT_IN_OBJECT_TYPES;
-
 export function objectTypeSchema(
-  description = `Object type: ${BUILT_IN_OBJECT_TYPES.join(" | ")} or a custom type's slug (see objectTypes.list).`,
+  description = `Object type: ${BWM_BUILT_IN_OBJECT_TYPES.join(" | ")} or a custom type's slug (see objectType.list).`,
 ) {
   return t.String({ minLength: 1, pattern: "^[a-z][a-z0-9_]*$", description });
 }
 
-const idOrIds = t.Union([
+export const idOrIds = t.Union([
   t.String({ minLength: 1 }),
   t.Array(t.String({ minLength: 1 })),
 ]);
+
+/** Link changes on one relationship key, as records and lists both take them. */
+export const relationshipChangeSchema = t.Union([
+  idOrIds,
+  t.Object(
+    {
+      add: t.Optional(idOrIds),
+      remove: t.Optional(idOrIds),
+      replace: t.Optional(t.Union([idOrIds, t.Null()])),
+    },
+    STRICT_OBJECT,
+  ),
+]);
+
+export const principalSchema = t.Object(
+  {
+    type: t.Union([t.Literal("user"), t.Literal("service")], {
+      description: "user: a member (see member.list). service: an API key.",
+    }),
+    id: t.String({ minLength: 1 }),
+  },
+  STRICT_OBJECT,
+);
 
 export function fieldsWriteSchema(description: string) {
   return t.Record(t.String(), t.Unknown(), { description });
@@ -169,25 +147,10 @@ export function relationshipsCreateSchema() {
 }
 
 export function relationshipsUpdateSchema() {
-  return t.Record(
-    t.String(),
-    t.Union([
-      idOrIds,
-      t.Null(),
-      t.Object(
-        {
-          add: t.Optional(idOrIds),
-          remove: t.Optional(idOrIds),
-          replace: t.Optional(t.Union([idOrIds, t.Null()])),
-        },
-        STRICT_OBJECT,
-      ),
-    ]),
-    {
-      description:
-        "Relationship key -> { add, remove, replace } ops, or a bare id / id array as shorthand for replace, or null to clear. At most 25 link changes per request.",
-    },
-  );
+  return t.Record(t.String(), t.Union([relationshipChangeSchema, t.Null()]), {
+    description:
+      "Relationship key -> { add, remove, replace } ops, or a bare id / id array as shorthand for replace, or null to clear. At most 25 link changes per request.",
+  });
 }
 
 export function visibilitySchema() {
@@ -201,17 +164,7 @@ export function visibilitySchema() {
         },
       ),
       groups: t.Optional(t.Array(t.String({ minLength: 1 }))),
-      principals: t.Optional(
-        t.Array(
-          t.Object(
-            {
-              type: t.Union([t.Literal("user"), t.Literal("service")]),
-              id: t.String({ minLength: 1 }),
-            },
-            STRICT_OBJECT,
-          ),
-        ),
-      ),
+      principals: t.Optional(t.Array(principalSchema)),
     },
     STRICT_OBJECT,
   );
@@ -230,17 +183,8 @@ export function paginationFields() {
   };
 }
 
-export const FILTER_OPERATORS = [
-  "equal",
-  "startsWith",
-  "contains",
-  "greaterThan",
-  "greaterThanOrEqual",
-  "lessThan",
-  "lessThanOrEqual",
-] as const;
-
 export function filtersSchema() {
+  const operators = BwmFilterOperator.options;
   return t.Array(
     t.Object(
       {
@@ -251,12 +195,9 @@ export function filtersSchema() {
         }),
         operator: t.Optional(
           t.Union(
-            FILTER_OPERATORS.map((op) => t.Literal(op)) as [
-              ReturnType<typeof t.Literal>,
-              ReturnType<typeof t.Literal>,
-            ],
+            operators.map((op) => t.Literal(op)),
             {
-              description: `${FILTER_OPERATORS.join(" | ")}. Omit it and the API picks equal where valid, contains otherwise. Multi-value fields (EMAIL, TELEPHONE, URL) reject equal (unsupported_filter_operator): omit the operator or use contains.`,
+              description: `${operators.join(" | ")}. Omit it and the API picks equal where valid, contains otherwise. Multi-value fields (EMAIL, TELEPHONE, URL) reject equal (unsupported_filter_operator): omit the operator or use contains.`,
             },
           ),
         ),
