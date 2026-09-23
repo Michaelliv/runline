@@ -114,10 +114,7 @@ export async function statUploadFile(
   return file.size;
 }
 
-async function fileBody(
-  path: string,
-  sizeBytes: number,
-): Promise<Blob | Buffer> {
+async function fileBody(path: string, sizeBytes: number): Promise<Blob> {
   try {
     return await openAsBlob(path);
   } catch {
@@ -126,7 +123,7 @@ async function fileBody(
         "This runtime cannot stream uploads and the file is too large to buffer.",
       );
     }
-    return await readFile(path);
+    return new Blob([await readFile(path)]);
   }
 }
 
