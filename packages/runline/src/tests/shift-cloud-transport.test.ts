@@ -28,6 +28,23 @@ describe("shared Shift cloud transport", () => {
     );
   });
 
+  it("aborts a stalled exchange at the per-request deadline", async () => {
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () =>
+              controller.error(init.signal?.reason),
+            );
+          },
+        }),
+      )) as typeof fetch;
+    await assert.rejects(
+      request(ctx, "/v1/services/ocr/extract", { method: "POST" }, 20),
+      /timed out|abort/i,
+    );
+  });
+
   it("refuses a redirect instead of handing the key to another host", async () => {
     globalThis.fetch = (async () =>
       new Response(null, {

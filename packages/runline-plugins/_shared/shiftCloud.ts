@@ -56,22 +56,25 @@ export function baseUrl(): string {
   return `${SHIFT_API_URL}/`;
 }
 
-const REQUEST_TIMEOUT_MS = 60_000;
+/** Default deadline; endpoints that hold the request open pass their own. */
+export const SHIFT_REQUEST_TIMEOUT_MS = 60_000;
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 /**
  * The transport for every request carrying a Shift API key. Redirects are
  * refused so the key never reaches another host; one deadline covers the
- * whole exchange including the body; the body is read with a ceiling and
- * returned buffered, so callers consume it as usual.
+ * whole exchange including the body, in place of any caller signal; the
+ * text body is read with a ceiling and returned buffered, so JSON and text
+ * callers consume it as usual.
  */
 export async function shiftFetch(
   input: string | URL,
   init: RequestInit = {},
+  timeoutMs = SHIFT_REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const response = await authedFetch(input, {
     ...init,
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const text = await readBounded(
     response,
@@ -97,6 +100,7 @@ export async function request<T>(
   ctx: Ctx,
   path: string,
   init: RequestInit = {},
+  timeoutMs = SHIFT_REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${apiKey(ctx)}`);
@@ -105,10 +109,11 @@ export async function request<T>(
     headers.set("content-type", "application/json");
   }
 
-  const response = await shiftFetch(new URL(path, baseUrl()), {
-    ...init,
-    headers,
-  });
+  const response = await shiftFetch(
+    new URL(path, baseUrl()),
+    { ...init, headers },
+    timeoutMs,
+  );
   if (!response.ok) {
     throw new Error(
       `Shift Labs API error ${response.status}: ${await response.text()}`,

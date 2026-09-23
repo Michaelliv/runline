@@ -41,6 +41,9 @@ const DOCUMENT_TYPES: Record<string, string> = {
  */
 const MAX_INLINE_BYTES = 20 * 1024 * 1024;
 
+/** Extraction runs synchronously; a long multi-page PDF takes minutes, not seconds. */
+const EXTRACT_TIMEOUT_MS = 5 * 60_000;
+
 interface OcrDocumentRef {
   type: "image" | "document";
   url: string;
@@ -245,24 +248,29 @@ export default function shiftOcr(rl: RunlinePluginAPI) {
           ? await documentFromPath(ctx as Ctx, fields.path)
           : documentFromUrl(fields.url as string, fields.kind);
 
-      return await request(ctx as Ctx, "/v1/services/ocr/extract", {
-        method: "POST",
-        body: JSON.stringify({
-          document,
-          ...(fields.provider ? { provider: fields.provider } : {}),
-          ...(fields.model ? { model: fields.model } : {}),
-          ...(fields.pages ? { pages: fields.pages } : {}),
-          ...(fields.schema
-            ? {
-                structured: {
-                  name: fields.schemaName ?? "extraction",
-                  schema: fields.schema,
-                  ...(fields.prompt ? { prompt: fields.prompt } : {}),
-                },
-              }
-            : {}),
-        }),
-      });
+      return await request(
+        ctx as Ctx,
+        "/v1/services/ocr/extract",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            document,
+            ...(fields.provider ? { provider: fields.provider } : {}),
+            ...(fields.model ? { model: fields.model } : {}),
+            ...(fields.pages ? { pages: fields.pages } : {}),
+            ...(fields.schema
+              ? {
+                  structured: {
+                    name: fields.schemaName ?? "extraction",
+                    schema: fields.schema,
+                    ...(fields.prompt ? { prompt: fields.prompt } : {}),
+                  },
+                }
+              : {}),
+          }),
+        },
+        EXTRACT_TIMEOUT_MS,
+      );
     },
   });
 

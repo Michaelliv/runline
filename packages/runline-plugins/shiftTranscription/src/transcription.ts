@@ -12,13 +12,14 @@ import {
   enumSchema,
   pathSegment,
   request,
+  SHIFT_REQUEST_TIMEOUT_MS,
+  STRICT_OBJECT,
   TRANSCRIPT_FORMAT,
   TRANSCRIPTION_LANGUAGE,
 } from "./shared.js";
 
 /** Transcript previews returned into the sandbox are capped, not truncated silently. */
 const MAX_TRANSCRIPT_BYTES = 2 * 1024 * 1024;
-const STRICT_OBJECT = { additionalProperties: false } as const;
 const Id = t.String({ minLength: 1, pattern: "\\S" });
 
 export function registerTranscriptionActions(rl: RunlinePluginAPI) {
@@ -131,10 +132,13 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
 
       if (!fields.waitSeconds) return job;
       const timeoutMs = Math.min(Math.max(fields.waitSeconds, 1), 120) * 1000;
+      // The server holds the request open for up to timeoutMs, so the
+      // client deadline is that wait plus the ordinary allowance.
       return request(
         ctx,
         `/v1/services/transcription/jobs/${pathSegment(job.id)}/await?timeoutMs=${timeoutMs}`,
         { method: "POST" },
+        timeoutMs + SHIFT_REQUEST_TIMEOUT_MS,
       );
     },
   });
