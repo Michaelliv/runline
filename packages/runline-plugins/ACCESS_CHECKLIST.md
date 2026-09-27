@@ -224,5 +224,6 @@ Status values: `pending`, `in-progress`, `done`.
 | `zammad` | done | Annotated 22 runtime actions: 10 read (CRUD get/list across 3 resources, ticket get/list, user getSelf/search) and 12 write (CRUD create/update/delete across 3 resources plus ticket create/update/delete). |
 | `zendesk` | done | Annotated 18 actions: 9 read (ticket/user/organization/ticketField get/list/search actions) and 9 write (ticket/user/organization create/update/delete actions). |
 | `zoho` | done | Annotated 60 helper-expanded CRM actions across 10 modules: 20 read (get/list) and 40 write (create/update/delete/upsert). |
+| `zohoMail` | done | Annotated 9 actions: all read (account/folder/label list, message list/search/content, attachment info/content, original message). Read-only plugin — no mutations registered. |
 | `zoom` | done | Annotated 5 actions: 2 read (`meeting.get`, `meeting.list`) and 3 write (`meeting.create`, `meeting.update`, `meeting.delete`). |
 | `zulip` | done | Annotated 15 actions: 5 read (`message.get`, stream list actions, user get/list) and 10 write (message send/update/delete, stream create/update/delete, user create/update/deactivate). |
