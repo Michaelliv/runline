@@ -386,7 +386,8 @@ export default function bambooHr(rl: RunlinePluginAPI) {
       format: {
         type: "string",
         required: false,
-        description: "Format: JSON, CSV, XLS, XML, PDF (default: JSON)",
+        description:
+          "Format: JSON (default, parsed), CSV or XML (returned as text)",
       },
     },
     async execute(input, ctx) {
@@ -394,17 +395,14 @@ export default function bambooHr(rl: RunlinePluginAPI) {
         reportId: string;
         format?: string;
       };
-      return apiRequest(
-        ctx,
-        "GET",
-        `reports/${pathSegment(reportId)}/`,
-        undefined,
-        {
-          format,
-          fd: "true",
-          onlyCurrent: "true",
-        },
-      );
+      if (!["JSON", "CSV", "XML"].includes(format))
+        throw new Error("bambooHr: format must be JSON, CSV, or XML");
+      const res = await credentialOk(ctx, bambooHrCredential, "bambooHr", {
+        target: "api",
+        path: `reports/${pathSegment(reportId)}/`,
+        query: { format, fd: "true", onlyCurrent: "true" },
+      });
+      return format === "JSON" ? jsonAnswer(res) : res.text();
     },
   });
 }
