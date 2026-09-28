@@ -81,7 +81,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["dropcontact", "phase 3: not yet migrated"],
   ["egoi", "phase 3: not yet migrated"],
   ["elasticsearch", "phase 3: not yet migrated"],
-  ["elevenlabs", "phase 3: not yet migrated"],
+  [
+    "elevenlabs",
+    "deadline: audio generation defaults to a 300 s timeout (caller-tunable) and reads up to 100 MiB, past the transport's 120 s and 64 MiB ceilings",
+  ],
   ["emelia", "phase 3: not yet migrated"],
   [
     "erpnext",
