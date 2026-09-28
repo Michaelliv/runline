@@ -419,6 +419,10 @@ describe("answerFailed", () => {
       "x: request failed",
     );
     assert.equal(answerFailed("x", undefined).message, "x: request failed");
+    assert.equal(
+      answerFailed("yourls", "error:keyword").message,
+      "yourls: request failed (error:keyword)",
+    );
   });
 });
 

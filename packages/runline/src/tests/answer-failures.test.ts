@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import slack from "../../../runline-plugins/slack/src/index.js";
 import telegram from "../../../runline-plugins/telegram/src/index.js";
+import yourls from "../../../runline-plugins/yourls/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, RunlinePluginAPI } from "../plugin/types.js";
 
@@ -52,6 +53,25 @@ describe("failures inside a 2xx answer", () => {
         { accessToken: "xoxb" },
       ),
       { message: "slack: request failed (channel_not_found)" },
+    );
+  });
+
+  it("yourls reports its error code, never its message", async () => {
+    globalThis.fetch = (async () =>
+      Response.json({
+        status: "fail",
+        code: "error:keyword",
+        message: "Short URL private-keyword already exists",
+      })) as typeof fetch;
+    await assert.rejects(
+      run(
+        yourls,
+        "yourls",
+        "url.shorten",
+        { url: "https://example.com", keyword: "private-keyword" },
+        { url: "https://sho.rt", signature: "sig" },
+      ),
+      { message: "yourls: request failed (error:keyword)" },
     );
   });
 
