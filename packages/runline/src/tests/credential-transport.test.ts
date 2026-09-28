@@ -579,6 +579,99 @@ describe("constrained credential transport", () => {
     assert.equal(seen.length, 1);
   });
 
+  it("sends WebDAV methods, with COPY and MOVE given a Destination beneath the same target", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.dav = {
+      baseUrl: "https://api.example/dav/",
+      methods: ["MKCOL", "COPY", "MOVE", "DELETE"],
+    };
+    const seen: Array<{
+      url: string;
+      method?: string;
+      destination: string | null;
+    }> = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          url,
+          method: init.method,
+          destination: new Headers(init.headers).get("destination"),
+        });
+        return new Response(null, { status: 201 });
+      }),
+      { key: { secret: "k" } },
+      def,
+    );
+    await h.transport.request(h.binding, {
+      target: "dav",
+      path: "a%20b",
+      method: "MKCOL",
+    });
+    await h.transport.request(h.binding, {
+      target: "dav",
+      path: "a%20b/x.txt",
+      method: "MOVE",
+      destination: "c/y.txt",
+    });
+    assert.deepEqual(seen, [
+      {
+        url: "https://api.example/dav/a%20b",
+        method: "MKCOL",
+        destination: null,
+      },
+      {
+        url: "https://api.example/dav/a%20b/x.txt",
+        method: "MOVE",
+        destination: "https://api.example/dav/c/y.txt",
+      },
+    ]);
+  });
+
+  it("refuses a destination outside the target, with a query, on another method, or set by the caller, before reading credentials", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.dav = {
+      baseUrl: "https://api.example/dav/",
+      methods: ["COPY", "DELETE"],
+    };
+    let reads = 0;
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { secret: "k" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    const copy = { target: "dav", path: "a", method: "COPY" as const };
+    for (const input of [
+      ...[
+        "../outside",
+        "/abs",
+        "https://evil.example/dav/b",
+        "%2e%2e/b",
+        "b?x=1",
+        "b#f",
+        "",
+      ].map((destination) => ({ ...copy, destination })),
+      { ...copy },
+      { target: "dav", path: "a", method: "DELETE" as const, destination: "b" },
+      { ...request, destination: "b" },
+      { ...copy, destination: "b", headers: { Destination: "https://evil/" } },
+      { target: "dav", path: "a", method: "MOVE" as const, destination: "b" },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
   it("places a part only on the targets it is scoped to, so two parts may share a header across targets", async () => {
     const def = definition("bearer");
     def.methods.selected.targets.client = {

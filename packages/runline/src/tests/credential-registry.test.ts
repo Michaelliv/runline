@@ -404,12 +404,30 @@ describe("credential registry", () => {
         const a = d.methods.delegated.authentication;
         if (a.kind === "oauth2") a.renewal = "clientCredentials";
       },
+      // The transport alone sets Destination; a destination gets no path
+      // part, so COPY and MOVE cannot share a target with one.
+      (d) => {
+        d.methods.apiKey.targets.api.allowedHeaders = ["Destination"];
+      },
+      (d) => {
+        d.methods.apiKey.targets.api.methods = ["GET", "MOVE"];
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [{ in: "path", part: "secret" }],
+        );
+      },
     ];
     for (const edit of edits) {
       const def = definition();
       edit(def);
       assert.throws(() => new CredentialRegistry().register(def));
     }
+  });
+
+  it("registers the WebDAV methods a target declares", () => {
+    const def = definition();
+    def.methods.apiKey.targets.api.methods = ["GET", "MKCOL", "COPY", "MOVE"];
+    new CredentialRegistry().register(def);
   });
 
   it("registers HTTP Basic against its structured username/password field", () => {
