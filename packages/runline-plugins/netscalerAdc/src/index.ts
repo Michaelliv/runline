@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { netscalerAdcCredential } from "./credentials.js";
 
 function apiRequest(
@@ -227,13 +227,11 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileName, fileLocation } = input as Record<string, unknown>;
-      const loc = encodeURIComponent(
-        (fileLocation as string) ?? "/nsconfig/ssl/",
-      );
+      const loc = pathSegment(fileLocation ?? "/nsconfig/ssl/");
       await apiRequest(
         ctx,
         "DELETE",
-        `config/systemfile?args=filename:${fileName},filelocation:${loc}`,
+        `config/systemfile?args=filename:${pathSegment(fileName)},filelocation:${loc}`,
       );
       return { success: true };
     },
