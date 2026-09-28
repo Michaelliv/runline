@@ -123,7 +123,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "mailchimp",
     "host from the secret: the datacenter suffix of the apiKey picks the API origin",
   ],
-  ["mailerlite", "phase 3: not yet migrated"],
   ["mailgun", "phase 3: not yet migrated"],
   [
     "mailjet",
