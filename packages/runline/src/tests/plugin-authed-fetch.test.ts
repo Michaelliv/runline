@@ -124,7 +124,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "dhl/src/index.ts",
   "discord/src/index.ts",
   "discourse/src/index.ts",
-  "disqus/src/index.ts",
   "drift/src/index.ts",
   "dropbox/src/index.ts",
   "dropcontact/src/index.ts",
