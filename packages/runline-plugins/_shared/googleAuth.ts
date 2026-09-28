@@ -52,7 +52,12 @@ export async function googleResponse(
   });
 }
 
-export async function googleJsonRequest(
+/**
+ * A Google JSON request. `T` is the caller's statement of the answer's
+ * shape, unchecked; without one the answer is `unknown`. An empty answer is
+ * `{ success: true }`.
+ */
+export async function googleJsonRequest<T = unknown>(
   ctx: ActionContext,
   plugin: string,
   scopes: string[],
@@ -60,7 +65,7 @@ export async function googleJsonRequest(
   url: string,
   body?: unknown,
   query?: Record<string, unknown>,
-): Promise<unknown> {
+): Promise<T> {
   const response = await googleResponse(
     ctx,
     plugin,
@@ -78,10 +83,11 @@ export async function googleJsonRequest(
   );
   if (!response.ok)
     throw new Error(`${plugin}: request failed (HTTP ${response.status})`);
-  if (response.status === 204) return { success: true };
+  const empty = { success: true } as T;
+  if (response.status === 204) return empty;
   const text = await response.text();
   try {
-    return text ? JSON.parse(text) : { success: true };
+    return text ? (JSON.parse(text) as T) : empty;
   } catch {
     throw new AuthError("invalid_response");
   }

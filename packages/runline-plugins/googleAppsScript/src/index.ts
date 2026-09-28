@@ -74,14 +74,14 @@ async function call<T = unknown>(
   url: string,
   payload?: unknown,
 ): Promise<T> {
-  return (await googleJsonRequest(
+  return googleJsonRequest<T>(
     ctx,
     "googleAppsScript",
     SCOPES,
     method,
     url,
     payload,
-  )) as T;
+  );
 }
 
 export default function googleAppsScript(rl: RunlinePluginAPI): void {
