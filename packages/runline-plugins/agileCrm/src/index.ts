@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { agileCrmCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -157,7 +154,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      return apiRequest(ctx, "GET", `api/contacts/${seg(contactId)}`);
+      return apiRequest(ctx, "GET", `api/contacts/${pathSegment(contactId)}`);
     },
   });
 
@@ -274,7 +271,11 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      return apiRequest(ctx, "DELETE", `api/contacts/${seg(contactId)}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `api/contacts/${pathSegment(contactId)}`,
+      );
     },
   });
 
@@ -323,7 +324,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { companyId } = input as { companyId: string };
-      return apiRequest(ctx, "GET", `api/contacts/${seg(companyId)}`);
+      return apiRequest(ctx, "GET", `api/contacts/${pathSegment(companyId)}`);
     },
   });
 
@@ -423,7 +424,11 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { companyId } = input as { companyId: string };
-      return apiRequest(ctx, "DELETE", `api/contacts/${seg(companyId)}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `api/contacts/${pathSegment(companyId)}`,
+      );
     },
   });
 
@@ -489,7 +494,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId } = input as { dealId: string };
-      return apiRequest(ctx, "GET", `api/opportunity/${seg(dealId)}`);
+      return apiRequest(ctx, "GET", `api/opportunity/${pathSegment(dealId)}`);
     },
   });
 
@@ -558,7 +563,11 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId } = input as { dealId: string };
-      return apiRequest(ctx, "DELETE", `api/opportunity/${seg(dealId)}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `api/opportunity/${pathSegment(dealId)}`,
+      );
     },
   });
 }
