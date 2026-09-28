@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { todoistCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -95,7 +92,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `/tasks/${seg((input as Record<string, unknown>).id)}`,
+        `/tasks/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -151,7 +148,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (fields.dueDate) body.due_date = fields.dueDate;
       if (fields.labels) body.labels = fields.labels;
       if (fields.assigneeId) body.assignee_id = fields.assigneeId;
-      return api(ctx, "POST", `/tasks/${seg(id)}`, body);
+      return api(ctx, "POST", `/tasks/${pathSegment(id)}`, body);
     },
   });
 
@@ -163,7 +160,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `/tasks/${seg((input as Record<string, unknown>).id)}/close`,
+        `/tasks/${pathSegment((input as Record<string, unknown>).id)}/close`,
       );
       return { success: true };
     },
@@ -177,7 +174,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `/tasks/${seg((input as Record<string, unknown>).id)}/reopen`,
+        `/tasks/${pathSegment((input as Record<string, unknown>).id)}/reopen`,
       );
       return { success: true };
     },
@@ -191,7 +188,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `/tasks/${seg((input as Record<string, unknown>).id)}`,
+        `/tasks/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -253,7 +250,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `/projects/${seg((input as Record<string, unknown>).id)}`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -284,7 +281,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (fields.color) body.color = fields.color;
       if (fields.isFavorite !== undefined) body.is_favorite = fields.isFavorite;
       if (fields.viewStyle) body.view_style = fields.viewStyle;
-      return api(ctx, "POST", `/projects/${seg(id)}`, body);
+      return api(ctx, "POST", `/projects/${pathSegment(id)}`, body);
     },
   });
 
@@ -296,7 +293,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `/projects/${seg((input as Record<string, unknown>).id)}`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -310,7 +307,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `/projects/${seg((input as Record<string, unknown>).id)}/archive`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}/archive`,
       );
       return { success: true };
     },
@@ -324,7 +321,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `/projects/${seg((input as Record<string, unknown>).id)}/unarchive`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}/unarchive`,
       );
       return { success: true };
     },
@@ -338,7 +335,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `/projects/${seg((input as Record<string, unknown>).id)}/collaborators`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}/collaborators`,
       );
     },
   });
@@ -371,7 +368,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `/sections/${seg((input as Record<string, unknown>).id)}`,
+        `/sections/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -397,7 +394,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `/sections/${seg(p.id)}`, { name: p.name });
+      return api(ctx, "POST", `/sections/${pathSegment(p.id)}`, {
+        name: p.name,
+      });
     },
   });
 
@@ -409,7 +408,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `/sections/${seg((input as Record<string, unknown>).id)}`,
+        `/sections/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -441,7 +440,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `/comments/${seg((input as Record<string, unknown>).id)}`,
+        `/comments/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -471,7 +470,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `/comments/${seg(p.id)}`, { content: p.content });
+      return api(ctx, "POST", `/comments/${pathSegment(p.id)}`, {
+        content: p.content,
+      });
     },
   });
 
@@ -483,7 +484,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `/comments/${seg((input as Record<string, unknown>).id)}`,
+        `/comments/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -518,7 +519,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `/labels/${seg((input as Record<string, unknown>).id)}`,
+        `/labels/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -549,7 +550,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (fields.color) body.color = fields.color;
       if (fields.order) body.order = fields.order;
       if (fields.isFavorite !== undefined) body.is_favorite = fields.isFavorite;
-      return api(ctx, "POST", `/labels/${seg(id)}`, body);
+      return api(ctx, "POST", `/labels/${pathSegment(id)}`, body);
     },
   });
 
@@ -561,7 +562,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `/labels/${seg((input as Record<string, unknown>).id)}`,
+        `/labels/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
