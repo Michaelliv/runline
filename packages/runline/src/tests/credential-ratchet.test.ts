@@ -276,7 +276,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["vercel", "phase 2: not yet migrated"],
   ["vero", "body key: auth_token travels in the form body"],
   ["vonage", "body key: api_key and api_secret travel in the form body"],
-  ["wekan", "phase 2: not yet migrated"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
   ["woocommerce", "phase 3: not yet migrated"],
   ["wordpress", "phase 2: not yet migrated"],

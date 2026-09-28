@@ -261,7 +261,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "vercel/src/shared.ts",
   "vero/src/index.ts",
   "vonage/src/index.ts",
-  "wekan/src/index.ts",
   "woocommerce/src/index.ts",
   "wordpress/src/index.ts",
   "xai/src/index.ts",
