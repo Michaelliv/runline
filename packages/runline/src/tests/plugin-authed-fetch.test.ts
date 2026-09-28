@@ -221,7 +221,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "rocketchat/src/index.ts",
   "rundeck/src/index.ts",
   "salesforce/src/shared.ts",
-  "salesmate/src/index.ts",
   "securityScorecard/src/index.ts",
   "segment/src/index.ts",
   "sendgrid/src/index.ts",

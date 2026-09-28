@@ -216,7 +216,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "salesforce",
     "dynamic host: the API origin comes from the token response's instance_url",
   ],
-  ["salesmate", "phase 2: not yet migrated"],
   ["securityScorecard", "phase 3: not yet migrated"],
   ["segment", "phase 3: not yet migrated"],
   ["sendgrid", "phase 3: not yet migrated"],
