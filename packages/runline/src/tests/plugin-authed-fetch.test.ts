@@ -225,7 +225,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "shiftTranscription/src/transcription.ts",
   "shopify/src/index.ts",
   "signl4/src/index.ts",
-  "slack/src/index.ts",
   "sms77/src/index.ts",
   "splunk/src/index.ts",
   "spotify/src/index.ts",

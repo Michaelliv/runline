@@ -229,7 +229,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["shiftWork", "phase 3: not yet migrated"],
   ["shopify", "phase 3: not yet migrated"],
   ["signl4", "path token: the team secret is the URL path"],
-  ["slack", "phase 2: not yet migrated"],
   ["sms77", "phase 3: not yet migrated"],
   ["splunk", "phase 2: not yet migrated"],
   ["spotify", "phase 2: not yet migrated"],

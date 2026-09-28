@@ -1,30 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { slackCredential } from "./credentials.js";
 
 async function api(
-  token: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`https://slack.com/api${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  const data = (await credentialJson(ctx, slackCredential, "slack", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=utf-8",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Slack HTTP error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  })) as Record<string, unknown>;
   if (data.ok === false) throw new Error(`Slack API error: ${data.error}`);
   return data;
 }
@@ -32,6 +23,7 @@ async function api(
 export default function slack(rl: RunlinePluginAPI) {
   rl.setName("slack");
   rl.setVersion("0.1.0");
+  rl.setCredential(slackCredential);
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -40,9 +32,6 @@ export default function slack(rl: RunlinePluginAPI) {
       env: "SLACK_ACCESS_TOKEN",
     },
   });
-  const t = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
-
   // ── Message ─────────────────────────────────────────
 
   rl.registerAction("message.post", {
@@ -64,7 +53,7 @@ export default function slack(rl: RunlinePluginAPI) {
       if (p.threadTs) body.thread_ts = p.threadTs;
       if (p.replyBroadcast) body.reply_broadcast = true;
       if (p.unfurlLinks !== undefined) body.unfurl_links = p.unfurlLinks;
-      return api(t(ctx), "POST", "/chat.postMessage", body);
+      return api(ctx, "POST", "chat.postMessage", body);
     },
   });
 
@@ -78,12 +67,7 @@ export default function slack(rl: RunlinePluginAPI) {
       blocks: { type: "object", required: false },
     },
     async execute(input, ctx) {
-      return api(
-        t(ctx),
-        "POST",
-        "/chat.update",
-        input as Record<string, unknown>,
-      );
+      return api(ctx, "POST", "chat.update", input as Record<string, unknown>);
     },
   });
 
@@ -95,12 +79,7 @@ export default function slack(rl: RunlinePluginAPI) {
       ts: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      return api(
-        t(ctx),
-        "POST",
-        "/chat.delete",
-        input as Record<string, unknown>,
-      );
+      return api(ctx, "POST", "chat.delete", input as Record<string, unknown>);
     },
   });
 
@@ -113,7 +92,7 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "GET", "/chat.getPermalink", undefined, {
+      return api(ctx, "GET", "chat.getPermalink", undefined, {
         channel: p.channel,
         message_ts: p.messageTs,
       });
@@ -138,9 +117,9 @@ export default function slack(rl: RunlinePluginAPI) {
       if (p.sort) qs.sort = p.sort === "relevance" ? "score" : "timestamp";
       if (p.limit) qs.count = p.limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "POST",
-        "/search.messages",
+        "search.messages",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -159,7 +138,7 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(t(ctx), "POST", "/conversations.create", {
+      const data = (await api(ctx, "POST", "conversations.create", {
         name: p.name,
         is_private: p.isPrivate ?? false,
       })) as Record<string, unknown>;
@@ -172,13 +151,9 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Get channel info",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(
-        t(ctx),
-        "POST",
-        "/conversations.info",
-        undefined,
-        { channel: (input as Record<string, unknown>).channel },
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "POST", "conversations.info", undefined, {
+        channel: (input as Record<string, unknown>).channel,
+      })) as Record<string, unknown>;
       return data.channel;
     },
   });
@@ -203,9 +178,9 @@ export default function slack(rl: RunlinePluginAPI) {
       if (p.limit) qs.limit = p.limit;
       if (p.excludeArchived) qs.exclude_archived = true;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/conversations.list",
+        "conversations.list",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -229,9 +204,9 @@ export default function slack(rl: RunlinePluginAPI) {
       if (p.oldest) qs.oldest = new Date(p.oldest as string).getTime() / 1000;
       if (p.latest) qs.latest = new Date(p.latest as string).getTime() / 1000;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/conversations.history",
+        "conversations.history",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -252,9 +227,9 @@ export default function slack(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { channel: p.channel, ts: p.ts };
       if (p.limit) qs.limit = p.limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/conversations.replies",
+        "conversations.replies",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -275,7 +250,7 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(t(ctx), "POST", "/conversations.invite", {
+      const data = (await api(ctx, "POST", "conversations.invite", {
         channel: p.channel,
         users: p.users,
       })) as Record<string, unknown>;
@@ -292,9 +267,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "POST",
-        "/conversations.kick",
+        "conversations.kick",
         input as Record<string, unknown>,
       );
     },
@@ -305,7 +280,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Join a channel",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(t(ctx), "POST", "/conversations.join", {
+      const data = (await api(ctx, "POST", "conversations.join", {
         channel: (input as Record<string, unknown>).channel,
       })) as Record<string, unknown>;
       return data.channel;
@@ -317,7 +292,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Leave a channel",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/conversations.leave", {
+      return api(ctx, "POST", "conversations.leave", {
         channel: (input as Record<string, unknown>).channel,
       });
     },
@@ -328,7 +303,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Archive a channel",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/conversations.archive", {
+      return api(ctx, "POST", "conversations.archive", {
         channel: (input as Record<string, unknown>).channel,
       });
     },
@@ -339,7 +314,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Unarchive a channel",
     inputSchema: { channel: { type: "string", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/conversations.unarchive", {
+      return api(ctx, "POST", "conversations.unarchive", {
         channel: (input as Record<string, unknown>).channel,
       });
     },
@@ -354,9 +329,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const data = (await api(
-        t(ctx),
+        ctx,
         "POST",
-        "/conversations.rename",
+        "conversations.rename",
         input as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.channel;
@@ -372,9 +347,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const data = (await api(
-        t(ctx),
+        ctx,
         "POST",
-        "/conversations.setTopic",
+        "conversations.setTopic",
         input as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.channel;
@@ -390,9 +365,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const data = (await api(
-        t(ctx),
+        ctx,
         "POST",
-        "/conversations.setPurpose",
+        "conversations.setPurpose",
         input as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.channel;
@@ -411,9 +386,9 @@ export default function slack(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { channel: p.channel };
       if (p.limit) qs.limit = p.limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/conversations.members",
+        "conversations.members",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -437,9 +412,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "POST",
-        "/reactions.add",
+        "reactions.add",
         input as Record<string, unknown>,
       );
     },
@@ -455,9 +430,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "POST",
-        "/reactions.remove",
+        "reactions.remove",
         input as Record<string, unknown>,
       );
     },
@@ -472,9 +447,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        "/reactions.get",
+        "reactions.get",
         undefined,
         input as Record<string, unknown>,
       );
@@ -488,7 +463,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Get user info",
     inputSchema: { user: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(t(ctx), "GET", "/users.info", undefined, {
+      const data = (await api(ctx, "GET", "users.info", undefined, {
         user: (input as Record<string, unknown>).user,
       })) as Record<string, unknown>;
       return data.user;
@@ -504,9 +479,9 @@ export default function slack(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/users.list",
+        "users.list",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -519,7 +494,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Get a user's presence",
     inputSchema: { user: { type: "string", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "GET", "/users.getPresence", undefined, {
+      return api(ctx, "GET", "users.getPresence", undefined, {
         user: (input as Record<string, unknown>).user,
       });
     },
@@ -530,7 +505,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Get a user's profile",
     inputSchema: { user: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(t(ctx), "GET", "/users.profile.get", undefined, {
+      const data = (await api(ctx, "GET", "users.profile.get", undefined, {
         user: (input as Record<string, unknown>).user,
       })) as Record<string, unknown>;
       return data.profile;
@@ -548,7 +523,7 @@ export default function slack(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const data = (await api(t(ctx), "POST", "/users.profile.set", {
+      const data = (await api(ctx, "POST", "users.profile.set", {
         profile: (input as Record<string, unknown>).profile,
       })) as Record<string, unknown>;
       return data.profile;
@@ -567,9 +542,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const data = (await api(
-        t(ctx),
+        ctx,
         "POST",
-        "/usergroups.create",
+        "usergroups.create",
         input as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.usergroup;
@@ -585,9 +560,9 @@ export default function slack(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.includeUsers)
         qs.include_users = true;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/usergroups.list",
+        "usergroups.list",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -606,9 +581,9 @@ export default function slack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const data = (await api(
-        t(ctx),
+        ctx,
         "POST",
-        "/usergroups.update",
+        "usergroups.update",
         input as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.usergroup;
@@ -620,7 +595,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Enable a user group",
     inputSchema: { usergroup: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(t(ctx), "POST", "/usergroups.enable", {
+      const data = (await api(ctx, "POST", "usergroups.enable", {
         usergroup: (input as Record<string, unknown>).usergroup,
       })) as Record<string, unknown>;
       return data.usergroup;
@@ -632,7 +607,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Disable a user group",
     inputSchema: { usergroup: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(t(ctx), "POST", "/usergroups.disable", {
+      const data = (await api(ctx, "POST", "usergroups.disable", {
         usergroup: (input as Record<string, unknown>).usergroup,
       })) as Record<string, unknown>;
       return data.usergroup;
@@ -646,7 +621,7 @@ export default function slack(rl: RunlinePluginAPI) {
     description: "Get file info",
     inputSchema: { file: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(t(ctx), "GET", "/files.info", undefined, {
+      const data = (await api(ctx, "GET", "files.info", undefined, {
         file: (input as Record<string, unknown>).file,
       })) as Record<string, unknown>;
       return data.file;
@@ -668,9 +643,9 @@ export default function slack(rl: RunlinePluginAPI) {
       if (p.limit) qs.count = p.limit;
       if (p.types) qs.types = p.types;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/files.list",
+        "files.list",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -689,12 +664,7 @@ export default function slack(rl: RunlinePluginAPI) {
       file: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      return api(
-        t(ctx),
-        "POST",
-        "/stars.add",
-        input as Record<string, unknown>,
-      );
+      return api(ctx, "POST", "stars.add", input as Record<string, unknown>);
     },
   });
 
@@ -707,12 +677,7 @@ export default function slack(rl: RunlinePluginAPI) {
       file: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      return api(
-        t(ctx),
-        "POST",
-        "/stars.remove",
-        input as Record<string, unknown>,
-      );
+      return api(ctx, "POST", "stars.remove", input as Record<string, unknown>);
     },
   });
 
@@ -725,9 +690,9 @@ export default function slack(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/stars.list",
+        "stars.list",
         undefined,
         qs,
       )) as Record<string, unknown>;
