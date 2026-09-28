@@ -214,12 +214,12 @@ describe("credentialRequest and credentialJson", () => {
 
 describe("pathSegment", () => {
   it("encodes a value as exactly one path segment", () => {
-    assert.equal(pathSegment("a/b?c#d e"), "a%2Fb%3Fc%23d%20e");
+    assert.equal(pathSegment("a?c#d e+f"), "a%3Fc%23d%20e%2Bf");
     assert.equal(pathSegment(42), "42");
   });
 
-  it("refuses an empty value, which would address the parent collection", () => {
-    for (const value of ["", undefined, null])
+  it("refuses a value that is not one segment: empty, dot segments, separators", () => {
+    for (const value of ["", undefined, null, ".", "..", "a/b", "a\\b"])
       assert.throws(() => pathSegment(value), { code: "request_not_allowed" });
   });
 });
