@@ -52,7 +52,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "customerIo",
     "two credentials in one connection: tracking and app keys, used by different actions",
   ],
-  ["demio", "two secrets per request: Api-Key and Api-Secret headers"],
   [
     "elasticsearch",
     "optional credential: username and password are optional, and the empty Basic pair sent today is one the transport refuses",

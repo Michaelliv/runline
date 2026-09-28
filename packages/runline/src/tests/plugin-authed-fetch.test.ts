@@ -62,7 +62,6 @@ const UNBROKERED_FETCH = new Set([
   "coingecko/src/index.ts",
   "convertkit/src/index.ts",
   "customerIo/src/index.ts",
-  "demio/src/index.ts",
   "elasticsearch/src/index.ts",
   "facebookGraph/src/index.ts",
   "ghost/src/index.ts",

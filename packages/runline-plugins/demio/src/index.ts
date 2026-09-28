@@ -1,53 +1,29 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { demioCredential } from "./credentials.js";
 
-const BASE_URL = "https://my.demio.com/api/v1";
-
-async function apiRequest(
-  apiKey: string,
-  apiSecret: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, demioCredential, "demio", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "Api-Key": apiKey,
-      "Api-Secret": apiSecret,
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Demio API error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    apiKey: ctx.connection.config.apiKey as string,
-    apiSecret: ctx.connection.config.apiSecret as string,
-  };
+    query,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function demio(rl: RunlinePluginAPI) {
   rl.setName("demio");
   rl.setVersion("0.1.0");
+  rl.setCredential(demioCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -77,16 +53,14 @@ export default function demio(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { eventId, dateId } = input as { eventId: string; dateId?: string };
-      const { apiKey, apiSecret } = getConn(ctx);
       if (dateId) {
         return apiRequest(
-          apiKey,
-          apiSecret,
+          ctx,
           "GET",
-          `/event/${eventId}/date/${dateId}`,
+          `event/${pathSegment(eventId)}/date/${pathSegment(dateId)}`,
         );
       }
-      return apiRequest(apiKey, apiSecret, "GET", `/event/${eventId}`);
+      return apiRequest(ctx, "GET", `event/${pathSegment(eventId)}`);
     },
   });
 
@@ -103,14 +77,12 @@ export default function demio(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { type, limit } = (input ?? {}) as Record<string, unknown>;
-      const { apiKey, apiSecret } = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (type) qs.type = type;
       const data = (await apiRequest(
-        apiKey,
-        apiSecret,
+        ctx,
         "GET",
-        "/events",
+        "events",
         undefined,
         qs,
       )) as unknown[];
@@ -145,7 +117,6 @@ export default function demio(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { eventId, email, firstName, lastName, dateId, customFields } =
         input as Record<string, unknown>;
-      const { apiKey, apiSecret } = getConn(ctx);
       const body: Record<string, unknown> = {
         id: eventId,
         email,
@@ -154,7 +125,7 @@ export default function demio(rl: RunlinePluginAPI) {
       if (lastName) body.last_name = lastName;
       if (dateId) body.date_id = dateId;
       if (customFields) Object.assign(body, customFields);
-      return apiRequest(apiKey, apiSecret, "PUT", "/event/register", body);
+      return apiRequest(ctx, "PUT", "event/register", body);
     },
   });
 
@@ -175,14 +146,12 @@ export default function demio(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dateId, status } = (input ?? {}) as Record<string, unknown>;
-      const { apiKey, apiSecret } = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (status) qs.status = status;
       const data = (await apiRequest(
-        apiKey,
-        apiSecret,
+        ctx,
         "GET",
-        `/report/${dateId}/participants`,
+        `report/${pathSegment(dateId)}/participants`,
         undefined,
         qs,
       )) as Record<string, unknown>;
