@@ -22,6 +22,7 @@ import {
   resourceUrl,
   TARGET_RESPONSE_LIMIT_BYTES,
   TARGET_TIMEOUT_LIMIT_MS,
+  TRANSPORT_HEADERS,
   targetBase,
 } from "./policy.js";
 import {
@@ -426,8 +427,7 @@ export class CredentialTransport {
         if (
           !allowed.has(normalized) ||
           reserved.includes(normalized) ||
-          normalized === "authorization" ||
-          normalized === "destination" ||
+          TRANSPORT_HEADERS.includes(normalized) ||
           normalized === target.idempotency?.header.toLowerCase() ||
           typeof value !== "string"
         )

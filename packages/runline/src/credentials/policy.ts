@@ -18,6 +18,16 @@ export const HTTP_METHODS: readonly HttpMethod[] = [
   "MOVE",
 ];
 
+/**
+ * Headers only the transport sets, whatever the method signs with: the
+ * credential in Authorization, and a COPY or MOVE Destination held to its
+ * target. No caller, allowed header or idempotency header may claim them.
+ */
+export const TRANSPORT_HEADERS: readonly string[] = [
+  "authorization",
+  "destination",
+];
+
 /** The most any target may declare, and any host may allow, per request. */
 export const TARGET_TIMEOUT_LIMIT_MS = 60 * 60_000;
 export const TARGET_RESPONSE_LIMIT_BYTES = 1024 * 1024 * 1024;

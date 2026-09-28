@@ -14,6 +14,7 @@ import {
   resourceUrl,
   TARGET_RESPONSE_LIMIT_BYTES,
   TARGET_TIMEOUT_LIMIT_MS,
+  TRANSPORT_HEADERS,
   targetBase,
 } from "./policy.js";
 import type {
@@ -284,11 +285,7 @@ function validateMethod(method: CredentialMethod): void {
       throw new AuthError("invalid_definition");
     for (const allowed of target.allowedHeaders ?? []) {
       const header = headerName(allowed);
-      if (
-        injected.includes(header) ||
-        header === "authorization" ||
-        header === "destination"
-      )
+      if (injected.includes(header) || TRANSPORT_HEADERS.includes(header))
         throw new AuthError("invalid_definition");
     }
     // A path part is inserted into the request URL alone; a Destination on
@@ -312,7 +309,7 @@ function validateMethod(method: CredentialMethod): void {
       const header = headerName(target.idempotency.header);
       if (
         injected.includes(header) ||
-        header === "authorization" ||
+        TRANSPORT_HEADERS.includes(header) ||
         !target.idempotency.methods.length ||
         target.idempotency.methods.some(
           (m) => !target.methods.includes(m) || m === "GET" || m === "HEAD",
