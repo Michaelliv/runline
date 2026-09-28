@@ -119,7 +119,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "config split: accountSid is both the Basic username, stored as a secret, and a path segment a brokered config must still hold",
   ],
   ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],
-  ["uptimerobot", "body key: api_key travels in the form body"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 

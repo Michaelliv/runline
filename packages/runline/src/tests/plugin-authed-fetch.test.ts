@@ -83,7 +83,6 @@ const UNBROKERED_FETCH = new Set([
   "travisci/src/index.ts",
   "twilio/src/index.ts",
   "unleashedSoftware/src/index.ts",
-  "uptimerobot/src/index.ts",
 ]);
 
 function pluginSources(): string[] {
