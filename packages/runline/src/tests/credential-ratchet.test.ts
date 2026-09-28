@@ -156,7 +156,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["parallel", "phase 3: not yet migrated"],
   ["paypal", "phase 3: not yet migrated"],
   ["peekalink", "phase 3: not yet migrated"],
-  ["plivo", "phase 3: not yet migrated"],
+  [
+    "plivo",
+    "basic username (authId) is also a URL path segment: a secret-free brokered config cannot address the account",
+  ],
   ["posthog", "body key: api_key travels in the JSON body"],
   ["profitwell", "phase 3: not yet migrated"],
   ["pushover", "body key: token travels in the form body"],
