@@ -159,7 +159,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "pagerduty/src/index.ts",
   "parallel/src/index.ts",
   "paypal/src/index.ts",
-  "peekalink/src/index.ts",
   "phantombuster/src/index.ts",
   "plivo/src/index.ts",
   "postbin/src/index.ts",
