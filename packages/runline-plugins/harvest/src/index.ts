@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { harvestCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function hv(
   ctx: ActionContext,
@@ -72,7 +69,11 @@ function registerCrud(
       id: { type: "number", required: true, description: `${resource} ID` },
     },
     async execute(input, ctx) {
-      return hv(ctx, "GET", `${apiPath}/${seg((input as { id: number }).id)}`);
+      return hv(
+        ctx,
+        "GET",
+        `${apiPath}/${pathSegment((input as { id: number }).id)}`,
+      );
     },
   });
   rl.registerAction(`${resource}.list`, {
@@ -106,7 +107,7 @@ function registerCrud(
         id: number;
         properties: Record<string, unknown>;
       };
-      return hv(ctx, "PATCH", `${apiPath}/${seg(id)}`, properties);
+      return hv(ctx, "PATCH", `${apiPath}/${pathSegment(id)}`, properties);
     },
   });
   rl.registerAction(`${resource}.delete`, {
@@ -119,7 +120,7 @@ function registerCrud(
       await hv(
         ctx,
         "DELETE",
-        `${apiPath}/${seg((input as { id: number }).id)}`,
+        `${apiPath}/${pathSegment((input as { id: number }).id)}`,
       );
       return { success: true };
     },
@@ -234,7 +235,7 @@ export default function harvest(rl: RunlinePluginAPI) {
       return hv(
         ctx,
         "GET",
-        `time_entries/${seg((input as { id: number }).id)}`,
+        `time_entries/${pathSegment((input as { id: number }).id)}`,
       );
     },
   });
@@ -299,7 +300,7 @@ export default function harvest(rl: RunlinePluginAPI) {
         id: number;
         properties: Record<string, unknown>;
       };
-      return hv(ctx, "PATCH", `time_entries/${seg(id)}`, properties);
+      return hv(ctx, "PATCH", `time_entries/${pathSegment(id)}`, properties);
     },
   });
 
@@ -313,7 +314,7 @@ export default function harvest(rl: RunlinePluginAPI) {
       await hv(
         ctx,
         "DELETE",
-        `time_entries/${seg((input as { id: number }).id)}`,
+        `time_entries/${pathSegment((input as { id: number }).id)}`,
       );
       return { success: true };
     },
@@ -329,7 +330,7 @@ export default function harvest(rl: RunlinePluginAPI) {
       return hv(
         ctx,
         "PATCH",
-        `time_entries/${seg((input as { id: number }).id)}/restart`,
+        `time_entries/${pathSegment((input as { id: number }).id)}/restart`,
       );
     },
   });
@@ -344,7 +345,7 @@ export default function harvest(rl: RunlinePluginAPI) {
       return hv(
         ctx,
         "PATCH",
-        `time_entries/${seg((input as { id: number }).id)}/stop`,
+        `time_entries/${pathSegment((input as { id: number }).id)}/stop`,
       );
     },
   });
