@@ -9,6 +9,7 @@ import {
   headerName,
   injectedHeaders,
   injectedParams,
+  injectedPointers,
   placementsFor,
   refuseCredentialParams,
   resourceUrl,
@@ -86,8 +87,8 @@ function identifier(value: string): void {
  * exactly the declared parts, each a string, required unless optional;
  * every placement names a declared part and only declared targets; every
  * part is placed; and on each target at least one placement signs, no
- * header or query parameter is claimed twice, and at most one part takes
- * the one path position.
+ * header, query parameter or JSON pointer is claimed twice, and at most
+ * one part takes the one path position.
  */
 function validateStatic(
   auth: Extract<CredentialAuthentication, { kind: "static" }>,
@@ -157,6 +158,13 @@ function validateStatic(
     } else if (placement.in === "querySignature") {
       place(placement.part);
       headerName(placement.name);
+    } else if (placement.in === "jsonPointer") {
+      place(placement.part);
+      if (
+        typeof placement.pointer !== "string" ||
+        !/^(\/[A-Za-z0-9_.-]+)+$/.test(placement.pointer)
+      )
+        throw new AuthError("invalid_definition");
     } else if (placement.in === "query" || placement.in === "body") {
       place(placement.part);
       identifier(placement.name);
@@ -180,10 +188,12 @@ function validateStatic(
     const params = injectedParams(auth, target).map((name) =>
       name.toLowerCase(),
     );
+    const pointers = injectedPointers(auth, target);
     if (
       !placed.length ||
       new Set(headers).size !== headers.length ||
       new Set(params).size !== params.length ||
+      new Set(pointers).size !== pointers.length ||
       placed.filter((placement) => placement.in === "path").length > 1
     )
       throw new AuthError("invalid_definition");

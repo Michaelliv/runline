@@ -17,7 +17,9 @@ import {
   injectedFields,
   injectedHeaders,
   injectedParams,
+  injectedPointers,
   placementsFor,
+  pointerSlot,
   refuseCredentialParams,
   resourceUrl,
   TARGET_RESPONSE_LIMIT_BYTES,
@@ -278,6 +280,14 @@ function placeStatic(
       return ({ url }) => url.searchParams.append(placement.name, value);
     if (placement.in === "body")
       return (request) => addField(request, placement.name, value);
+    if (placement.in === "jsonPointer")
+      return (request) => {
+        const json: unknown = JSON.parse(String(request.body));
+        const slot = pointerSlot(json, placement.pointer);
+        if (!slot) throw new AuthError("request_not_allowed");
+        slot.holder[slot.key] = value;
+        request.body = Buffer.from(JSON.stringify(json));
+      };
     if (placement.in === "path") {
       const segment = `${placement.prefix ?? ""}${pathPart(value)}`;
       return ({ url, base }) => {
@@ -512,6 +522,15 @@ export class CredentialTransport {
           )
         )
           throw new Error();
+      }
+      const pointers = injectedPointers(auth, input.target);
+      if (pointers.length) {
+        if (!body || bodyFormat(headers) !== "json") throw new Error();
+        const json: unknown = JSON.parse(body.toString());
+        for (const pointer of pointers) {
+          const slot = pointerSlot(json, pointer);
+          if (!slot || slot.holder[slot.key] !== null) throw new Error();
+        }
       }
       if (input.idempotencyKey !== undefined) {
         if (!target.idempotency?.methods.includes(verb)) throw new Error();

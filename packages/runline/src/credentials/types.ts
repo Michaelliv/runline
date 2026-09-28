@@ -71,6 +71,12 @@ export type SecretPlacement = (
    */
   | { in: "body"; part: string; name: string }
   /**
+   * A position deeper in a JSON body, by RFC 6901 pointer (Odoo's
+   * `/params/args/2`); the request carries null there for the transport
+   * to fill.
+   */
+  | { in: "jsonPointer"; part: string; pointer: string }
+  /**
    * The first path segment beneath the target's base, as `<prefix><part>`:
    * Telegram's `bot<token>`, an account ID before its resources.
    */

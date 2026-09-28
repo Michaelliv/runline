@@ -503,6 +503,7 @@ A static placement is one of:
 | `{ in: "header", part, name, prefix? }` | `<name>: <prefix><part>` |
 | `{ in: "query", part, name }` | `?<name>=<part>` |
 | `{ in: "body", part, name }` | a top-level field of a JSON-object or form body; `?<name>=<part>` when the request has no body |
+| `{ in: "jsonPointer", part, pointer }` | the value at an RFC 6901 pointer in a JSON body (`/params/args/2`), where the request carries null for the transport to fill |
 | `{ in: "path", part, prefix? }` | the first path segment beneath the base, `<prefix><part>`; at most one per method. A secret in a URL can reach access logs, so a host may refuse this placement |
 | `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
 | `{ in: "jwt", part, name, prefix?, audience }` | `<name>: <prefix><JWT>`: an HS256 JWT signed per request from a `<key id>:<hex secret>` part, for `audience`, valid five minutes |

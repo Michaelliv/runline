@@ -168,6 +168,44 @@ export function injectedFields(
   );
 }
 
+/** JSON pointers a method's authentication fills on `target`; callers leave null at each. */
+export function injectedPointers(
+  auth: CredentialAuthentication,
+  target: string,
+): string[] {
+  if (auth.kind !== "static") return [];
+  return placementsFor(auth, target).flatMap((placement) =>
+    placement.in === "jsonPointer" ? [placement.pointer] : [],
+  );
+}
+
+/**
+ * The container and key a JSON pointer names in a parsed JSON value, or
+ * undefined when any step does not resolve: a missing key, an array index
+ * out of range, or a scalar in the way.
+ */
+export function pointerSlot(
+  value: unknown,
+  pointer: string,
+): { holder: Record<string, unknown>; key: string } | undefined {
+  const steps = pointer.slice(1).split("/");
+  let current = value;
+  for (const [index, step] of steps.entries()) {
+    if (
+      !current ||
+      typeof current !== "object" ||
+      (Array.isArray(current) &&
+        (!/^\d+$/.test(step) || Number(step) >= current.length)) ||
+      !Object.hasOwn(current, step)
+    )
+      return undefined;
+    const holder = current as Record<string, unknown>;
+    if (index === steps.length - 1) return { holder, key: step };
+    current = holder[step];
+  }
+  return undefined;
+}
+
 /** A request body the transport can add a field to, by its Content-Type. */
 export function bodyFormat(headers: Headers): "json" | "form" | undefined {
   const type = headers.get("content-type")?.split(";")[0].trim().toLowerCase();
