@@ -92,7 +92,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "autopilot/src/index.ts",
   "baserow/src/index.ts",
   "bitwarden/src/index.ts",
-  "brandfetch/src/index.ts",
   "brevo/src/index.ts",
   "bubble/src/index.ts",
   "chargebee/src/index.ts",
