@@ -75,7 +75,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["discourse", "phase 3: not yet migrated"],
   ["drift", "phase 3: not yet migrated"],
   ["dropcontact", "phase 3: not yet migrated"],
-  ["egoi", "phase 3: not yet migrated"],
   ["elasticsearch", "phase 3: not yet migrated"],
   ["elevenlabs", "phase 3: not yet migrated"],
   ["emelia", "phase 3: not yet migrated"],
