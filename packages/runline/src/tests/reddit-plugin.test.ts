@@ -9,13 +9,17 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-function run(action: string, input: Record<string, unknown>) {
+function run(
+  action: string,
+  input: Record<string, unknown>,
+  config: Record<string, unknown> = {},
+) {
   const { api, resolve } = createPluginAPI("reddit");
   reddit(api);
   const found = resolve().actions.find((a) => a.name === action);
   assert.ok(found);
   const ctx: ActionContext = {
-    connection: { name: "rd", plugin: "reddit", config: {} },
+    connection: { name: "rd", plugin: "reddit", config },
     log: { info() {}, warn() {}, error() {} },
     async updateConnection() {},
   };
@@ -48,5 +52,31 @@ describe("reddit without a token", () => {
     await assert.rejects(run("post.delete", { postId: "abc" }), {
       code: "request_not_allowed",
     });
+  });
+});
+
+describe("reddit with a token", () => {
+  it("sends a write's parameters as a form body, never in the URL", async () => {
+    const seen: Array<{ url: string; type: string | null; body: string }> = [];
+    globalThis.fetch = (async (url, init) => {
+      seen.push({
+        url: String(url),
+        type: new Headers(init?.headers).get("content-type"),
+        body: String(init?.body),
+      });
+      return Response.json({ json: { data: { things: [{ data: {} }] } } });
+    }) as typeof fetch;
+    await run(
+      "comment.create",
+      { postId: "abc", text: "hello there" },
+      { accessToken: "tok" },
+    );
+    assert.deepEqual(seen, [
+      {
+        url: "https://oauth.reddit.com/api/comment",
+        type: "application/x-www-form-urlencoded",
+        body: "thing_id=t3_abc&text=hello+there&api_type=json",
+      },
+    ]);
   });
 });
