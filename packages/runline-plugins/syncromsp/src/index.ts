@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { syncromspCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** The transport appends the api_key query parameter when signing. */
 function api(
@@ -108,7 +105,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       const res = (await api(
         ctx,
         "GET",
-        `customers/${seg((input as Record<string, unknown>).id)}`,
+        `customers/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return res.customer ?? res;
     },
@@ -166,7 +163,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       const res = (await api(
         ctx,
         "PUT",
-        `customers/${seg(id)}`,
+        `customers/${pathSegment(id)}`,
         body,
       )) as Record<string, unknown>;
       return res.customer ?? res;
@@ -181,7 +178,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `customers/${seg((input as Record<string, unknown>).id)}`,
+        `customers/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -220,7 +217,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `contacts/${seg((input as Record<string, unknown>).id)}`,
+        `contacts/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -261,7 +258,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (fields.name) body.name = fields.name;
       if (fields.phone) body.phone = fields.phone;
       if (fields.notes) body.notes = fields.notes;
-      return api(ctx, "PUT", `contacts/${seg(id)}`, body);
+      return api(ctx, "PUT", `contacts/${pathSegment(id)}`, body);
     },
   });
 
@@ -273,7 +270,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `contacts/${seg((input as Record<string, unknown>).id)}`,
+        `contacts/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -318,7 +315,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       const res = (await api(
         ctx,
         "GET",
-        `tickets/${seg((input as Record<string, unknown>).id)}`,
+        `tickets/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return res.ticket ?? res;
     },
@@ -370,10 +367,12 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (fields.assetId) body.asset_id = fields.assetId;
       if (fields.dueDate) body.due_date = fields.dueDate;
       if (fields.contactId) body.contact_id = fields.contactId;
-      const res = (await api(ctx, "PUT", `tickets/${seg(id)}`, body)) as Record<
-        string,
-        unknown
-      >;
+      const res = (await api(
+        ctx,
+        "PUT",
+        `tickets/${pathSegment(id)}`,
+        body,
+      )) as Record<string, unknown>;
       return res.ticket ?? res;
     },
   });
@@ -386,7 +385,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `tickets/${seg((input as Record<string, unknown>).id)}`,
+        `tickets/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -421,7 +420,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       const res = (await api(
         ctx,
         "GET",
-        `rmm_alerts/${seg((input as Record<string, unknown>).id)}`,
+        `rmm_alerts/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return res.rmm_alert ?? res;
     },
@@ -464,7 +463,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `rmm_alerts/${seg((input as Record<string, unknown>).id)}`,
+        `rmm_alerts/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -483,7 +482,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `rmm_alerts/${seg(p.id)}/mute`, {
+      return api(ctx, "POST", `rmm_alerts/${pathSegment(p.id)}/mute`, {
         id: p.id,
         mute_for: p.muteFor,
       });
