@@ -60,7 +60,6 @@ export default function chargebee(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const params = (input ?? {}) as Record<string, unknown>;
-      // Chargebee uses form-encoded POST params via query string
       return apiRequest(ctx, "POST", "customers", params);
     },
   });
