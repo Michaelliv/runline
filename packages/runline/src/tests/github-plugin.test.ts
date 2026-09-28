@@ -120,10 +120,7 @@ describe("github plugin commit and branch actions", () => {
 
     mockJsonFetch((url, init) => {
       assert.equal(init?.method, "GET");
-      assert.equal(
-        url.pathname,
-        "/repos/octo/hello/branches/feature/read-api",
-      );
+      assert.equal(url.pathname, "/repos/octo/hello/branches/feature/read-api");
     });
 
     const result = await action.execute(
