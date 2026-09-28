@@ -41,10 +41,6 @@ const NO_CREDENTIAL = new Map<string, string>([
 /** Plugins that carry a credential but do not declare it yet, and why. */
 const UNDECLARED_BACKLOG = new Map<string, string>([
   [
-    "coingecko",
-    "optional credential: a secret-free config cannot say whether to sign",
-  ],
-  [
     "customerIo",
     "two credentials in one connection: tracking and app keys, used by different actions",
   ],
