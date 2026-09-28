@@ -167,7 +167,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "reddit",
     "optional credential: a secret-free config cannot say whether to sign",
   ],
-  ["replicate", "phase 3: not yet migrated"],
   ["rundeck", "phase 3: not yet migrated"],
   [
     "salesforce",

@@ -19,9 +19,16 @@
  */
 
 import { Buffer } from "node:buffer";
-import type { RunlinePluginAPI } from "runline";
-import { readImageInput, type SavedMedia, SEND_FILE_NOTE, writeMediaFile } from "../../_shared/mediaFile.js";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson, pathWithin } from "../../_shared/credentials.js";
+import {
+  readImageInput,
+  type SavedMedia,
+  SEND_FILE_NOTE,
+  writeMediaFile,
+} from "../../_shared/mediaFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
+import { REPLICATE_BASE, replicateCredential } from "./credentials.js";
 
 const POLL_INTERVAL_MS = 2_000;
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -68,36 +75,34 @@ function stringifyError(err: unknown): string {
  * only thing that differs between them is the prediction `input`.
  */
 async function runPrediction(opts: {
-  apiToken: string;
+  ctx: ActionContext;
   model: string;
   input: Record<string, unknown>;
   timeoutMs: number;
   saveDir?: string;
-}): Promise<{ images: SavedMedia[]; failures: Array<{ url: string; reason: string }> }> {
-  const { apiToken, model, input, timeoutMs, saveDir } = opts;
+}): Promise<{
+  images: SavedMedia[];
+  failures: Array<{ url: string; reason: string }>;
+}> {
+  const { ctx, model, input, timeoutMs, saveDir } = opts;
   const deadline = Date.now() + timeoutMs;
 
-  const createRes = await fetch(
-    `https://api.replicate.com/v1/models/${model}/predictions`,
+  // A model id is owner/name: each side is one encoded path segment.
+  const modelPath = model.split("/").map(encodeURIComponent).join("/");
+  let prediction = (await credentialJson(
+    ctx,
+    replicateCredential,
+    "replicate",
     {
+      target: "api",
+      path: `models/${modelPath}/predictions`,
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiToken}`,
-        // `Prefer: wait` lets the server hold the connection open for
-        // fast jobs so we don't have to poll at all on the happy path.
-        Prefer: "wait",
-      },
-      body: JSON.stringify({ input }),
+      // `Prefer: wait` lets the server hold the connection open for
+      // fast jobs so we don't have to poll at all on the happy path.
+      headers: { Prefer: "wait" },
+      json: { input },
     },
-  );
-  if (!createRes.ok) {
-    throw new Error(
-      `Replicate API error ${createRes.status}: ${await createRes.text()}`,
-    );
-  }
-
-  let prediction = (await createRes.json()) as Prediction;
+  )) as Prediction;
   while (
     prediction.status !== "succeeded" &&
     prediction.status !== "failed" &&
@@ -109,15 +114,11 @@ async function runPrediction(opts: {
       );
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-    const pollRes = await fetch(prediction.urls.get, {
-      headers: { Authorization: `Bearer ${apiToken}` },
-    });
-    if (!pollRes.ok) {
-      throw new Error(
-        `Replicate poll error ${pollRes.status}: ${await pollRes.text()}`,
-      );
-    }
-    prediction = (await pollRes.json()) as Prediction;
+    prediction = (await credentialJson(ctx, replicateCredential, "replicate", {
+      target: "api",
+      // The API-returned poll URL, refused unless it stays on the target.
+      path: pathWithin(REPLICATE_BASE, prediction.urls.get),
+    })) as Prediction;
   }
 
   if (prediction.status !== "succeeded") {
@@ -182,6 +183,7 @@ async function runPrediction(opts: {
 export default function replicate(rl: RunlinePluginAPI) {
   rl.setName("replicate");
   rl.setVersion("0.1.0");
+  rl.setCredential(replicateCredential);
 
   rl.setConnectionSchema({
     apiToken: {
@@ -205,7 +207,8 @@ export default function replicate(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -236,12 +239,11 @@ export default function replicate(rl: RunlinePluginAPI) {
         throw new Error("replicate: prompt is required");
       }
 
-      const apiToken = ctx.connection.config.apiToken as string;
       const model = p.model ?? "black-forest-labs/flux-dev";
       const { width, height } = parseSize(p.size, "replicate");
 
       const { images, failures } = await runPrediction({
-        apiToken,
+        ctx,
         model,
         input: {
           prompt: p.prompt,
@@ -284,7 +286,8 @@ export default function replicate(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -312,12 +315,11 @@ export default function replicate(rl: RunlinePluginAPI) {
       }
       const img = readImageInput(p.imagePath, "replicate");
 
-      const apiToken = ctx.connection.config.apiToken as string;
       const model = p.model ?? "black-forest-labs/flux-kontext-pro";
       const imageKey = p.imageInputKey ?? "input_image";
 
       const { images, failures } = await runPrediction({
-        apiToken,
+        ctx,
         model,
         input: {
           prompt: p.prompt,
