@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { Check } from "typebox/value";
 import { AuthError } from "../auth/errors.js";
 import {
@@ -197,6 +197,28 @@ function pathPart(value: string): string {
 /** Applies a credential to one outgoing request. */
 type Signer = (request: Outgoing) => void;
 
+/**
+ * Mints HS256 JWTs from a `<key id>:<hex secret>` key for `audience`,
+ * each issued when minted and valid five minutes. Any other key shape is
+ * refused here, before any IO.
+ */
+function hs256Jwt(key: string, audience: string): () => string {
+  const match = /^([A-Za-z0-9]+):((?:[0-9a-f]{2})+)$/i.exec(key);
+  if (!match) throw new AuthError("invalid_credentials");
+  const secret = Buffer.from(match[2], "hex");
+  const encode = (value: object) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  const header = encode({ alg: "HS256", typ: "JWT", kid: match[1] });
+  return () => {
+    const iat = Math.floor(Date.now() / 1000);
+    const unsigned = `${header}.${encode({ iat, exp: iat + 300, aud: audience })}`;
+    const signature = createHmac("sha256", secret)
+      .update(unsigned)
+      .digest("base64url");
+    return `${unsigned}.${signature}`;
+  };
+}
+
 function bearer(token: string): Signer {
   return ({ headers }) => headers.set("authorization", `Bearer ${token}`);
 }
@@ -226,7 +248,8 @@ function addField(request: Outgoing, name: string, value: string): void {
  * A static secret's signer for one target, every part it places checked
  * before any IO. `parts` has passed the method's schema, which the
  * registry pins to exactly the declared parts, each a string; an optional
- * part the connection lacks refuses the targets that place it.
+ * part the connection lacks refuses the targets that place it. A query
+ * signature runs last, over the query every other placement has written.
  */
 function placeStatic(
   auth: Extract<CredentialAuthentication, { kind: "static" }>,
@@ -238,7 +261,11 @@ function placeStatic(
     if (value === undefined) throw new AuthError("invalid_credentials");
     return value;
   };
-  const steps = placementsFor(auth, target).map((placement): Signer => {
+  const ordered = placementsFor(auth, target).sort(
+    (a, b) =>
+      Number(a.in === "querySignature") - Number(b.in === "querySignature"),
+  );
+  const steps = ordered.map((placement): Signer => {
     if (placement.in === "basic") {
       const value = basicCredentials(
         part(placement.username),
@@ -259,6 +286,19 @@ function placeStatic(
       };
     }
     const name = headerName(placement.name);
+    if (placement.in === "jwt") {
+      const mint = hs256Jwt(value, placement.audience);
+      return ({ headers }) =>
+        headers.set(name, `${placement.prefix ?? ""}${mint()}`);
+    }
+    if (placement.in === "querySignature")
+      return ({ url, headers }) =>
+        headers.set(
+          name,
+          createHmac("sha256", value)
+            .update(url.search.slice(1))
+            .digest("base64"),
+        );
     return ({ headers }) =>
       headers.set(name, `${placement.prefix ?? ""}${value}`);
   });

@@ -139,7 +139,7 @@ function validateStatic(
         placement.targets.some((target) => !targets.includes(target)))
     )
       throw new AuthError("invalid_definition");
-    if (placement.in === "header") {
+    if (placement.in === "header" || placement.in === "jwt") {
       place(placement.part);
       headerName(placement.name);
       if (
@@ -148,6 +148,15 @@ function validateStatic(
           !/^[\x21-\x7e][\x20-\x7e]{0,31}$/.test(placement.prefix))
       )
         throw new AuthError("invalid_definition");
+      if (
+        placement.in === "jwt" &&
+        (typeof placement.audience !== "string" ||
+          !/^[\x21-\x7e]{1,64}$/.test(placement.audience))
+      )
+        throw new AuthError("invalid_definition");
+    } else if (placement.in === "querySignature") {
+      place(placement.part);
+      headerName(placement.name);
     } else if (placement.in === "query" || placement.in === "body") {
       place(placement.part);
       identifier(placement.name);

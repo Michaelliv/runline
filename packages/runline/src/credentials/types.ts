@@ -77,6 +77,24 @@ export type SecretPlacement = (
   | { in: "path"; part: string; prefix?: string }
   /** HTTP Basic in Authorization, from two parts; either may be empty. */
   | { in: "basic"; username: string; password: string }
+  /**
+   * An HS256 JWT signed per request from a `<key id>:<hex secret>` part
+   * (Ghost's Admin API key) for `audience`, valid five minutes, sent as
+   * `<name>: <prefix><token>`.
+   */
+  | {
+      in: "jwt";
+      part: string;
+      name: string;
+      prefix?: string;
+      audience: string;
+    }
+  /**
+   * An HMAC-SHA256 of the request's query string as sent, keyed by the
+   * part, base64 in header `name` (Unleashed); computed after every other
+   * placement, so it signs what goes out.
+   */
+  | { in: "querySignature"; part: string; name: string }
 ) & {
   /**
    * The targets this placement signs; every target when absent. Two

@@ -132,7 +132,9 @@ export function injectedHeaders(
   if (auth.kind === "none") return [];
   if (auth.kind === "oauth2") return ["authorization"];
   return placementsFor(auth, target).flatMap((placement) =>
-    placement.in === "header"
+    placement.in === "header" ||
+    placement.in === "jwt" ||
+    placement.in === "querySignature"
       ? [headerName(placement.name)]
       : placement.in === "basic"
         ? ["authorization"]

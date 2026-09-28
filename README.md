@@ -505,6 +505,8 @@ A static placement is one of:
 | `{ in: "body", part, name }` | a top-level field of a JSON-object or form body; `?<name>=<part>` when the request has no body |
 | `{ in: "path", part, prefix? }` | the first path segment beneath the base, `<prefix><part>`; at most one per method. A secret in a URL can reach access logs, so a host may refuse this placement |
 | `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
+| `{ in: "jwt", part, name, prefix?, audience }` | `<name>: <prefix><JWT>`: an HS256 JWT signed per request from a `<key id>:<hex secret>` part, for `audience`, valid five minutes |
+| `{ in: "querySignature", part, name }` | `<name>: base64(HMAC-SHA256(query))`, keyed by the part, over the query as sent, after every other placement |
 
 Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. A placement may name `targets` it alone signs, so a connection holding two credentials for two APIs keeps them as two parts scoped to their own targets; every target of a static method must be signed by at least one placement. A part listed in `optionalParts` may be missing, which refuses only the targets that place it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`). With `optional: true` the type also declares a `none` method, which a connection selects unless it holds the flat secret fields or says `authenticated: true` in its public config.
 
