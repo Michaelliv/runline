@@ -57,10 +57,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "steel",
     "WebSocket: the key rides in a wss:// CDP URL the transport cannot carry",
   ],
-  [
-    "strapi",
-    "login: password mode mints a JWT; one plugin cannot sign two ways",
-  ],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 

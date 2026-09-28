@@ -43,7 +43,11 @@ describe("strapi with an email and password", () => {
         url: String(url),
         auth: new Headers(init?.headers).get("authorization"),
         body: init?.body
-          ? JSON.parse(new TextDecoder().decode(init.body as Uint8Array))
+          ? JSON.parse(
+              typeof init.body === "string"
+                ? init.body
+                : new TextDecoder().decode(init.body as Uint8Array),
+            )
           : undefined,
       });
       return String(url).endsWith("/auth/local")

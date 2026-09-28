@@ -63,7 +63,6 @@ const UNBROKERED_FETCH = new Set([
   "graphql/src/index.ts",
   "salesforce/src/shared.ts",
   "steel/src/shared.ts",
-  "strapi/src/index.ts",
 ]);
 
 function pluginSources(): string[] {
