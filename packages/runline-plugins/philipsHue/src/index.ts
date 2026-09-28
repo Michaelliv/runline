@@ -1,30 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { philipsHueCredential } from "./credentials.js";
 
-const BASE = "https://api.meethue.com/route";
+/** A bridge username or light ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  accessToken: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const init: RequestInit = {
+  return credentialJson(ctx, philipsHueCredential, "philipsHue", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(`${BASE}${path}`, init);
-  if (!res.ok)
-    throw new Error(`Philips Hue error ${res.status}: ${await res.text()}`);
-  return res.json();
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function philipsHue(rl: RunlinePluginAPI) {
   rl.setName("philipsHue");
   rl.setVersion("0.1.0");
+  rl.setCredential(philipsHueCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -41,11 +39,8 @@ export default function philipsHue(rl: RunlinePluginAPI) {
     },
   });
 
-  function conn(ctx: { connection: { config: Record<string, unknown> } }) {
-    return {
-      token: ctx.connection.config.accessToken as string,
-      user: ctx.connection.config.username as string,
-    };
+  function user(ctx: ActionContext): string {
+    return seg(ctx.connection.config.username);
   }
 
   rl.registerAction("light.get", {
@@ -54,8 +49,7 @@ export default function philipsHue(rl: RunlinePluginAPI) {
     inputSchema: { lightId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { lightId } = input as Record<string, unknown>;
-      const c = conn(ctx);
-      return apiRequest(c.token, "GET", `/api/${c.user}/lights/${lightId}`);
+      return apiRequest(ctx, "GET", `api/${user(ctx)}/lights/${seg(lightId)}`);
     },
   });
 
@@ -64,11 +58,10 @@ export default function philipsHue(rl: RunlinePluginAPI) {
     description: "List all lights",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const c = conn(ctx);
       const data = (await apiRequest(
-        c.token,
+        ctx,
         "GET",
-        `/api/${c.user}/lights`,
+        `api/${user(ctx)}/lights`,
       )) as Record<string, unknown>;
       const lights = Object.entries(data).map(([id, v]) => ({
         id,
@@ -129,7 +122,6 @@ export default function philipsHue(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const c = conn(ctx);
       const body: Record<string, unknown> = { on: p.on };
       if (p.bri !== undefined) body.bri = p.bri;
       if (p.hue !== undefined) body.hue = p.hue;
@@ -141,9 +133,9 @@ export default function philipsHue(rl: RunlinePluginAPI) {
       if (p.alert) body.alert = p.alert;
       if (p.effect) body.effect = p.effect;
       const data = (await apiRequest(
-        c.token,
+        ctx,
         "PUT",
-        `/api/${c.user}/lights/${p.lightId}/state`,
+        `api/${user(ctx)}/lights/${seg(p.lightId)}/state`,
         body,
       )) as Array<Record<string, unknown>>;
       const result: Record<string, unknown> = {};
@@ -160,8 +152,11 @@ export default function philipsHue(rl: RunlinePluginAPI) {
     inputSchema: { lightId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { lightId } = input as Record<string, unknown>;
-      const c = conn(ctx);
-      return apiRequest(c.token, "DELETE", `/api/${c.user}/lights/${lightId}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `api/${user(ctx)}/lights/${seg(lightId)}`,
+      );
     },
   });
 }

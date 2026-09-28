@@ -203,7 +203,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "paypal/src/index.ts",
   "peekalink/src/index.ts",
   "phantombuster/src/index.ts",
-  "philipsHue/src/index.ts",
   "pipedrive/src/index.ts",
   "plivo/src/index.ts",
   "postbin/src/index.ts",
