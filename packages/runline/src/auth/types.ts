@@ -36,6 +36,14 @@ export interface OAuth2TokenEndpoint {
   grantType?: string | null;
   /** Provider-specific fields; cannot replace protocol-owned parameters. */
   parameters?: Record<string, string>;
+  /**
+   * Fixed provider headers (a mobile app's client version, a device id
+   * from public config); cannot claim Authorization, Accept or
+   * Content-Type.
+   */
+  headers?: Record<string, string>;
+  /** Also send the refresh token as the request's bearer, as some mobile APIs require. */
+  refreshTokenBearer?: boolean;
   response?: {
     /** Path to a token object inside a provider envelope. No expression evaluation. */
     path?: string[];

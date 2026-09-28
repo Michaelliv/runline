@@ -2,7 +2,11 @@ import * as t from "typebox";
 import { Check } from "typebox/value";
 import { AuthError } from "../auth/errors.js";
 import { validateOAuth2ExchangePolicy } from "../auth/oauth2.js";
-import { oauthEndpoint, providerParameters } from "../auth/token.js";
+import {
+  oauthEndpoint,
+  providerHeaders,
+  providerParameters,
+} from "../auth/token.js";
 import {
   bounded,
   HTTP_METHODS,
@@ -270,6 +274,16 @@ function validateMethod(method: CredentialMethod): void {
       if (!endpoint) continue;
       oauthEndpoint(endpoint.url);
       providerParameters(endpoint.parameters);
+      providerHeaders(endpoint.headers);
+      if (
+        (endpoint.refreshTokenBearer !== undefined &&
+          typeof endpoint.refreshTokenBearer !== "boolean") ||
+        (endpoint.refreshTokenBearer &&
+          ["client_id_basic", "client_secret_basic"].includes(
+            endpoint.clientAuthentication,
+          ))
+      )
+        throw new AuthError("invalid_definition");
       if (
         ![
           "none",

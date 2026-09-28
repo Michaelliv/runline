@@ -1,3 +1,4 @@
+import { headerName } from "../credentials/policy.js";
 import { AuthError } from "./errors.js";
 import type {
   OAuth2TokenEndpoint,
@@ -32,6 +33,19 @@ export function providerParameters(
       throw new AuthError("invalid_definition");
   }
   return { ...parameters };
+}
+
+/** Headers a token request owns; provider headers cannot replace them. */
+const protocolHeaders = new Set(["authorization", "accept", "content-type"]);
+
+export function providerHeaders(
+  headers: Record<string, string> = {},
+): Record<string, string> {
+  for (const [name, value] of Object.entries(headers)) {
+    if (protocolHeaders.has(headerName(name)) || typeof value !== "string")
+      throw new AuthError("invalid_definition");
+  }
+  return { ...headers };
 }
 
 export function oauthEndpoint(value: string): URL {
@@ -173,7 +187,10 @@ export async function requestOAuth2Token(
       throw new AuthError("invalid_definition");
     fields.grant_type = endpoint.grantType;
   }
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = {
+    ...providerHeaders(endpoint.headers),
+    Accept: "application/json",
+  };
   if (endpoint.clientAuthentication !== "none") {
     if (
       !application ||
@@ -204,6 +221,11 @@ export async function requestOAuth2Token(
         fields.client_secret = application.clientSecret;
       } else throw new AuthError("invalid_definition");
     }
+  }
+  if (endpoint.refreshTokenBearer) {
+    if (headers.Authorization || !fields.refresh_token)
+      throw new AuthError("invalid_definition");
+    headers.Authorization = `Bearer ${fields.refresh_token}`;
   }
   if (
     endpoint.encoding !== undefined &&
