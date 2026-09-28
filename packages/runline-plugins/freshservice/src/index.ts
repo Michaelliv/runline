@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { freshserviceCredential } from "./credentials.js";
 
 function req(
@@ -35,7 +35,6 @@ function registerCrud(
   rl: RunlinePluginAPI,
   resource: string,
   apiPath: string,
-  singularKey: string,
   opts?: {
     extraCreateFields?: Record<
       string,
@@ -73,7 +72,7 @@ function registerCrud(
         await req(
           ctx,
           "GET",
-          `${apiPath}/${encodeURIComponent((input as { id: number }).id)}`,
+          `${apiPath}/${pathSegment((input as { id: number }).id)}`,
         ),
       );
     },
@@ -112,12 +111,7 @@ function registerCrud(
         properties: Record<string, unknown>;
       };
       return unwrap(
-        await req(
-          ctx,
-          "PUT",
-          `${apiPath}/${encodeURIComponent(id)}`,
-          properties,
-        ),
+        await req(ctx, "PUT", `${apiPath}/${pathSegment(id)}`, properties),
       );
     },
   });
@@ -133,7 +127,7 @@ function registerCrud(
         await req(
           ctx,
           "DELETE",
-          `${apiPath}/${encodeURIComponent((input as { id: number }).id)}`,
+          `${apiPath}/${pathSegment((input as { id: number }).id)}`,
         );
         return { success: true };
       },
@@ -161,22 +155,22 @@ export default function freshservice(rl: RunlinePluginAPI) {
     },
   });
 
-  // 16 resources, all CRUD
-  registerCrud(rl, "agent", "agents", "agent");
-  registerCrud(rl, "agentGroup", "groups", "group");
-  registerCrud(rl, "announcement", "announcements", "announcement");
-  registerCrud(rl, "asset", "assets", "asset");
-  registerCrud(rl, "assetType", "asset_types", "asset_type");
-  registerCrud(rl, "change", "changes", "change");
-  registerCrud(rl, "department", "departments", "department");
-  registerCrud(rl, "location", "locations", "location");
-  registerCrud(rl, "problem", "problems", "problem");
-  registerCrud(rl, "product", "products", "product");
-  registerCrud(rl, "release", "releases", "release");
-  registerCrud(rl, "requester", "requesters", "requester");
-  registerCrud(rl, "requesterGroup", "requester_groups", "requester_group");
-  registerCrud(rl, "software", "applications", "application");
-  registerCrud(rl, "ticket", "tickets", "ticket");
+  // 15 resources, all CRUD
+  registerCrud(rl, "agent", "agents");
+  registerCrud(rl, "agentGroup", "groups");
+  registerCrud(rl, "announcement", "announcements");
+  registerCrud(rl, "asset", "assets");
+  registerCrud(rl, "assetType", "asset_types");
+  registerCrud(rl, "change", "changes");
+  registerCrud(rl, "department", "departments");
+  registerCrud(rl, "location", "locations");
+  registerCrud(rl, "problem", "problems");
+  registerCrud(rl, "product", "products");
+  registerCrud(rl, "release", "releases");
+  registerCrud(rl, "requester", "requesters");
+  registerCrud(rl, "requesterGroup", "requester_groups");
+  registerCrud(rl, "software", "applications");
+  registerCrud(rl, "ticket", "tickets");
 
   // agentRole is read-only (get + list only)
   rl.registerAction("agentRole.get", {
@@ -190,7 +184,7 @@ export default function freshservice(rl: RunlinePluginAPI) {
         await req(
           ctx,
           "GET",
-          `roles/${encodeURIComponent((input as { id: number }).id)}`,
+          `roles/${pathSegment((input as { id: number }).id)}`,
         ),
       );
     },
