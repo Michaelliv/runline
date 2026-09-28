@@ -84,7 +84,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "facebookGraph",
     "agent-selected host: hostUrl is a per-call action input, not config",
   ],
-  ["fal", "phase 3: not yet migrated"],
   ["getresponse", "phase 3: not yet migrated"],
   ["gett", "login: phone OTP login and a rotating, device-bound refresh grant"],
   ["ghost", "signature: a JWT is minted per request from the admin key"],

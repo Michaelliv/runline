@@ -384,7 +384,7 @@ describe("fal queue lifecycle", () => {
     assert.ok(calls[0].url.endsWith("/requests/req-1/cancel"), calls[0].url);
   });
 
-  it("preserves the live API's already-completed cancellation status", async () => {
+  it("reports an already-completed cancellation by status alone, without provider text", async () => {
     globalThis.fetch = (async () =>
       Response.json(
         { status: "ALREADY_COMPLETED" },
@@ -396,7 +396,7 @@ describe("fal queue lifecycle", () => {
           { model: "fal-ai/flux/schnell", requestId: "req-1" },
           ctx(),
         ),
-      /fal 400: ALREADY_COMPLETED/,
+      /fal: request failed \(HTTP 400\)/,
     );
   });
 
@@ -626,7 +626,7 @@ describe("fal polling and response safety", () => {
           { model: "fal-ai/flux", input: {} },
           ctx(),
         ),
-      /Refusing a redirect/,
+      /Authenticated request failed/,
     );
   });
 
@@ -722,7 +722,7 @@ describe("fal failure reporting", () => {
     );
   });
 
-  it("reads fal's array-shaped validation errors down to field and type", async () => {
+  it("reports validation failures by status alone, without echoing field detail", async () => {
     globalThis.fetch = (async () =>
       new Response(
         JSON.stringify({
@@ -743,11 +743,11 @@ describe("fal failure reporting", () => {
           { model: "fal-ai/flux/schnell", input: {} },
           ctx(),
         ),
-      /fal 422: body\.prompt: Field required \[missing\]/,
+      /fal: request failed \(HTTP 422\)/,
     );
   });
 
-  it("reads fal's string-shaped infrastructure errors too", async () => {
+  it("reports infrastructure failures by status alone too", async () => {
     globalThis.fetch = (async () =>
       new Response(
         JSON.stringify({
@@ -763,7 +763,7 @@ describe("fal failure reporting", () => {
           { model: "fal-ai/flux/schnell", input: {} },
           ctx(),
         ),
-      /fal 504: Request timed out \[request_timeout\]/,
+      /fal: request failed \(HTTP 504\)/,
     );
   });
 

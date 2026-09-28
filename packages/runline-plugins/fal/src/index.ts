@@ -2,6 +2,7 @@ import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { readImageInput } from "../../_shared/mediaFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
+import { falCredential } from "./credentials.js";
 import {
   assertModelId,
   type Ctx,
@@ -137,6 +138,7 @@ async function generate(
 export default function fal(rl: RunlinePluginAPI): void {
   rl.setName("fal");
   rl.setVersion("0.1.0");
+  rl.setCredential(falCredential);
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({
@@ -205,7 +207,7 @@ export default function fal(rl: RunlinePluginAPI): void {
   rl.registerAction("run", {
     access: "write",
     description:
-      "Run a fal endpoint with its model-specific input (billed), and wait. Returns raw output plus downloaded files from common top-level image/video/audio/file fields. Automatic downloads accept HTTPS fal.media URLs or data URIs only, up to 512 MiB per file; JSON responses are limited to 32 MiB.",
+      "Run a fal endpoint with its model-specific input (billed), and wait. Returns raw output plus downloaded files from common top-level image/video/audio/file fields. Automatic downloads accept HTTPS fal.media URLs or data URIs only, up to 512 MiB per file; JSON responses are limited to 64 MiB.",
     inputSchema: runSchema,
     async execute(input, ctx) {
       const p = input as t.Static<typeof runSchema>;
@@ -248,7 +250,7 @@ export default function fal(rl: RunlinePluginAPI): void {
   rl.registerAction("queue.result", {
     access: "write",
     description:
-      "Retrieve completed output without re-running or re-billing. Writes common image/video/audio/file outputs to disk and returns files[].path. Download limits: HTTPS fal.media URLs or data URIs, 512 MiB per file, 60 seconds per file; JSON responses up to 32 MiB.",
+      "Retrieve completed output without re-running or re-billing. Writes common image/video/audio/file outputs to disk and returns files[].path. Download limits: HTTPS fal.media URLs or data URIs, 512 MiB per file, 60 seconds per file; JSON responses up to 64 MiB.",
     inputSchema: resultInput,
     async execute(input, ctx) {
       const p = input as t.Static<typeof resultInput>;
