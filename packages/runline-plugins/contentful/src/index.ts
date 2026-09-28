@@ -1,9 +1,6 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { contentfulCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -42,7 +39,7 @@ async function paginateAll(
 }
 
 function spaceOf(ctx: ActionContext): string {
-  return seg(ctx.connection.config.spaceId);
+  return pathSegment(ctx.connection.config.spaceId);
 }
 
 export default function contentful(rl: RunlinePluginAPI) {
@@ -108,7 +105,7 @@ export default function contentful(rl: RunlinePluginAPI) {
       const { environmentId, contentTypeId } = input as Record<string, string>;
       return apiRequest(
         ctx,
-        `spaces/${spaceOf(ctx)}/environments/${seg(environmentId)}/content_types/${seg(contentTypeId)}`,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/content_types/${pathSegment(contentTypeId)}`,
       );
     },
   });
@@ -130,7 +127,7 @@ export default function contentful(rl: RunlinePluginAPI) {
       const { environmentId, entryId } = input as Record<string, string>;
       return apiRequest(
         ctx,
-        `spaces/${spaceOf(ctx)}/environments/${seg(environmentId)}/entries/${seg(entryId)}`,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/entries/${pathSegment(entryId)}`,
       );
     },
   });
@@ -172,7 +169,7 @@ export default function contentful(rl: RunlinePluginAPI) {
       if (order) qs.order = order;
       return paginateAll(
         ctx,
-        `spaces/${spaceOf(ctx)}/environments/${seg(environmentId)}/entries`,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/entries`,
         qs,
         limit as number | undefined,
       );
@@ -196,7 +193,7 @@ export default function contentful(rl: RunlinePluginAPI) {
       const { environmentId, assetId } = input as Record<string, string>;
       return apiRequest(
         ctx,
-        `spaces/${spaceOf(ctx)}/environments/${seg(environmentId)}/assets/${seg(assetId)}`,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/assets/${pathSegment(assetId)}`,
       );
     },
   });
@@ -216,7 +213,7 @@ export default function contentful(rl: RunlinePluginAPI) {
       const { environmentId, limit } = (input ?? {}) as Record<string, unknown>;
       return paginateAll(
         ctx,
-        `spaces/${spaceOf(ctx)}/environments/${seg(environmentId)}/assets`,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/assets`,
         undefined,
         limit as number | undefined,
       );
@@ -240,7 +237,7 @@ export default function contentful(rl: RunlinePluginAPI) {
       const { environmentId, limit } = (input ?? {}) as Record<string, unknown>;
       return paginateAll(
         ctx,
-        `spaces/${spaceOf(ctx)}/environments/${seg(environmentId)}/locales`,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/locales`,
         undefined,
         limit as number | undefined,
       );

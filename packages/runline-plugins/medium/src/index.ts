@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { mediumCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -115,7 +112,7 @@ export default function medium(rl: RunlinePluginAPI) {
         const resp = (await apiRequest(
           ctx,
           "POST",
-          `publications/${seg(publicationId)}/posts`,
+          `publications/${pathSegment(publicationId)}/posts`,
           body,
         )) as Record<string, unknown>;
         return resp.data;
@@ -130,7 +127,7 @@ export default function medium(rl: RunlinePluginAPI) {
       const resp = (await apiRequest(
         ctx,
         "POST",
-        `users/${seg(authorId)}/posts`,
+        `users/${pathSegment(authorId)}/posts`,
         body,
       )) as Record<string, unknown>;
       return resp.data;
@@ -151,7 +148,7 @@ export default function medium(rl: RunlinePluginAPI) {
       const resp = (await apiRequest(
         ctx,
         "GET",
-        `users/${seg(userId)}/publications`,
+        `users/${pathSegment(userId)}/publications`,
       )) as Record<string, unknown>;
       let data = resp.data as unknown[];
       if (limit) data = data.slice(0, limit as number);

@@ -2,11 +2,9 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   type CredentialCall,
   credentialJson,
+  pathSegment,
 } from "../../_shared/credentials.js";
 import { stripeCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -92,7 +90,7 @@ export default function stripe(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `customers/${seg((input as Record<string, unknown>).customerId)}`,
+        `customers/${pathSegment((input as Record<string, unknown>).customerId)}`,
       );
     },
   });
@@ -132,7 +130,12 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { customerId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `customers/${seg(customerId)}`, fields);
+      return apiRequest(
+        ctx,
+        "POST",
+        `customers/${pathSegment(customerId)}`,
+        fields,
+      );
     },
   });
 
@@ -144,7 +147,7 @@ export default function stripe(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `customers/${seg((input as Record<string, unknown>).customerId)}`,
+        `customers/${pathSegment((input as Record<string, unknown>).customerId)}`,
       );
     },
   });
@@ -187,7 +190,7 @@ export default function stripe(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `charges/${seg((input as Record<string, unknown>).chargeId)}`,
+        `charges/${pathSegment((input as Record<string, unknown>).chargeId)}`,
       );
     },
   });
@@ -220,7 +223,12 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { chargeId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `charges/${seg(chargeId)}`, fields);
+      return apiRequest(
+        ctx,
+        "POST",
+        `charges/${pathSegment(chargeId)}`,
+        fields,
+      );
     },
   });
 
@@ -287,9 +295,14 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `customers/${seg(p.customerId)}/sources`, {
-        source: p.token,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `customers/${pathSegment(p.customerId)}/sources`,
+        {
+          source: p.token,
+        },
+      );
     },
   });
 
@@ -305,7 +318,7 @@ export default function stripe(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `customers/${seg(p.customerId)}/sources/${seg(p.sourceId)}`,
+        `customers/${pathSegment(p.customerId)}/sources/${pathSegment(p.sourceId)}`,
       );
     },
   });
@@ -322,7 +335,7 @@ export default function stripe(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `customers/${seg(p.customerId)}/sources/${seg(p.cardId)}`,
+        `customers/${pathSegment(p.customerId)}/sources/${pathSegment(p.cardId)}`,
       );
     },
   });
@@ -345,9 +358,14 @@ export default function stripe(rl: RunlinePluginAPI) {
         amount: p.amount,
         currency: p.currency,
       })) as Record<string, unknown>;
-      await apiRequest(ctx, "POST", `customers/${seg(p.customerId)}/sources`, {
-        source: source.id,
-      });
+      await apiRequest(
+        ctx,
+        "POST",
+        `customers/${pathSegment(p.customerId)}/sources`,
+        {
+          source: source.id,
+        },
+      );
       return source;
     },
   });
@@ -360,7 +378,7 @@ export default function stripe(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `sources/${seg((input as Record<string, unknown>).sourceId)}`,
+        `sources/${pathSegment((input as Record<string, unknown>).sourceId)}`,
       );
     },
   });
@@ -377,7 +395,7 @@ export default function stripe(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `customers/${seg(p.customerId)}/sources/${seg(p.sourceId)}`,
+        `customers/${pathSegment(p.customerId)}/sources/${pathSegment(p.sourceId)}`,
       );
     },
   });

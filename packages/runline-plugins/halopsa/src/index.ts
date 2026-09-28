@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { halopsaCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function req(
   ctx: ActionContext,
@@ -52,7 +49,11 @@ function registerCrud(rl: RunlinePluginAPI, resource: string, apiPath: string) {
       id: { type: "number", required: true, description: `${resource} ID` },
     },
     async execute(input, ctx) {
-      return req(ctx, "GET", `${apiPath}/${seg((input as { id: number }).id)}`);
+      return req(
+        ctx,
+        "GET",
+        `${apiPath}/${pathSegment((input as { id: number }).id)}`,
+      );
     },
   });
   rl.registerAction(`${resource}.list`, {
@@ -99,7 +100,7 @@ function registerCrud(rl: RunlinePluginAPI, resource: string, apiPath: string) {
       await req(
         ctx,
         "DELETE",
-        `${apiPath}/${seg((input as { id: number }).id)}`,
+        `${apiPath}/${pathSegment((input as { id: number }).id)}`,
       );
       return { success: true };
     },

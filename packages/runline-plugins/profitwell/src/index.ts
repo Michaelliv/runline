@@ -1,9 +1,6 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { profitwellCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -69,7 +66,7 @@ export default function profitwell(rl: RunlinePluginAPI) {
       if (p.planId) qs.plan_id = p.planId;
       const data = (await apiRequest(
         ctx,
-        `metrics/${seg(p.type)}`,
+        `metrics/${pathSegment(p.type)}`,
         qs,
       )) as Record<string, unknown>;
       return data.data;

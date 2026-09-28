@@ -1,10 +1,8 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { zulipCredential } from "./credentials.js";
 
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
-
+/** Zulip takes form-encoded parameters; nested values are JSON strings. */
 function encodeForm(body: Record<string, unknown>): URLSearchParams {
   const form = new URLSearchParams();
   for (const [k, v] of Object.entries(body)) {
@@ -23,17 +21,18 @@ function apiRequest(
   const form =
     body && Object.keys(body).length > 0 ? encodeForm(body) : undefined;
   // GET parameters ride in the query string; a GET carries no body.
-  const query = method === "GET" ? form : undefined;
   return credentialJson(ctx, zulipCredential, "zulip", {
     target: "api",
-    path: query ? `${path}?${query}` : path,
+    path,
     method,
-    ...(form && !query
-      ? {
-          body: form.toString(),
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        }
-      : {}),
+    ...(form && method === "GET"
+      ? { query: Object.fromEntries(form) }
+      : form
+        ? {
+            body: form.toString(),
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          }
+        : {}),
   });
 }
 
@@ -116,7 +115,7 @@ export default function zulip(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `messages/${seg((input as Record<string, unknown>).messageId)}`,
+        `messages/${pathSegment((input as Record<string, unknown>).messageId)}`,
       );
     },
   });
@@ -131,7 +130,12 @@ export default function zulip(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { messageId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PATCH", `messages/${seg(messageId)}`, fields);
+      return apiRequest(
+        ctx,
+        "PATCH",
+        `messages/${pathSegment(messageId)}`,
+        fields,
+      );
     },
   });
 
@@ -143,7 +147,7 @@ export default function zulip(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `messages/${seg((input as Record<string, unknown>).messageId)}`,
+        `messages/${pathSegment((input as Record<string, unknown>).messageId)}`,
       );
     },
   });
@@ -221,7 +225,7 @@ export default function zulip(rl: RunlinePluginAPI) {
         body.description = JSON.stringify(fields.description);
       if (fields.newName) body.new_name = JSON.stringify(fields.newName);
       if (fields.isPrivate !== undefined) body.is_private = fields.isPrivate;
-      return apiRequest(ctx, "PATCH", `streams/${seg(streamId)}`, body);
+      return apiRequest(ctx, "PATCH", `streams/${pathSegment(streamId)}`, body);
     },
   });
 
@@ -233,7 +237,7 @@ export default function zulip(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `streams/${seg((input as Record<string, unknown>).streamId)}`,
+        `streams/${pathSegment((input as Record<string, unknown>).streamId)}`,
       );
     },
   });
@@ -248,7 +252,7 @@ export default function zulip(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `users/${seg((input as Record<string, unknown>).userId)}`,
+        `users/${pathSegment((input as Record<string, unknown>).userId)}`,
       );
     },
   });
@@ -299,7 +303,7 @@ export default function zulip(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if (fields.fullName) body.full_name = JSON.stringify(fields.fullName);
       if (fields.role !== undefined) body.role = fields.role;
-      return apiRequest(ctx, "PATCH", `users/${seg(userId)}`, body);
+      return apiRequest(ctx, "PATCH", `users/${pathSegment(userId)}`, body);
     },
   });
 
@@ -311,7 +315,7 @@ export default function zulip(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `users/${seg((input as Record<string, unknown>).userId)}`,
+        `users/${pathSegment((input as Record<string, unknown>).userId)}`,
       );
     },
   });

@@ -1,11 +1,8 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { getresponseCredential } from "./credentials.js";
 
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
-
-async function apiRequest(
+function apiRequest(
   ctx: ActionContext,
   method: HttpMethod,
   path: string,
@@ -19,17 +16,13 @@ async function apiRequest(
     method !== "DELETE"
       ? body
       : undefined;
-  const res = await credentialRequest(ctx, getresponseCredential, {
+  return credentialJson(ctx, getresponseCredential, "getresponse", {
     target: "api",
     path,
     method,
     query: qs,
     ...(json !== undefined ? { json } : {}),
   });
-  if (!res.ok)
-    throw new Error(`getresponse: request failed (HTTP ${res.status})`);
-  if (res.status === 204 || res.status === 202) return { success: true };
-  return res.json();
 }
 
 export default function getresponse(rl: RunlinePluginAPI) {
@@ -104,7 +97,7 @@ export default function getresponse(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `contacts/${seg(contactId)}`,
+        `contacts/${pathSegment(contactId)}`,
         undefined,
         qs,
       );
@@ -185,7 +178,12 @@ export default function getresponse(rl: RunlinePluginAPI) {
       if (campaignId) body.campaign = { campaignId };
       if (tags) body.tags = tags;
       if (customFieldValues) body.customFieldValues = customFieldValues;
-      return apiRequest(ctx, "POST", `contacts/${seg(contactId)}`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `contacts/${pathSegment(contactId)}`,
+        body,
+      );
     },
   });
 
@@ -216,7 +214,7 @@ export default function getresponse(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `contacts/${seg(contactId)}`,
+        `contacts/${pathSegment(contactId)}`,
         undefined,
         qs,
       );
