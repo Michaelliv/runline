@@ -122,7 +122,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["lingvanex", "phase 3: not yet migrated"],
   ["lonescale", "phase 3: not yet migrated"],
   ["magento", "phase 3: not yet migrated"],
-  ["mailcheck", "phase 3: not yet migrated"],
   [
     "mailchimp",
     "host from the secret: the datacenter suffix of the apiKey picks the API origin",

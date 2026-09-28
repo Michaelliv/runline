@@ -1,8 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { mailcheckCredential } from "./credentials.js";
 
 export default function mailcheck(rl: RunlinePluginAPI) {
   rl.setName("mailcheck");
   rl.setVersion("0.1.0");
+  rl.setCredential(mailcheckCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -25,19 +28,12 @@ export default function mailcheck(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { email } = input as { email: string };
-      const res = await fetch("https://api.mailcheck.co/v1/singleEmail:check", {
+      return credentialJson(ctx, mailcheckCredential, "mailcheck", {
+        target: "api",
+        path: "v1/singleEmail:check",
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${ctx.connection.config.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
+        json: { email },
       });
-      if (!res.ok)
-        throw new Error(
-          `Mailcheck API error ${res.status}: ${await res.text()}`,
-        );
-      return res.json();
     },
   });
 }

@@ -134,7 +134,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "lingvanex/src/index.ts",
   "lonescale/src/index.ts",
   "magento/src/index.ts",
-  "mailcheck/src/index.ts",
   "mailchimp/src/index.ts",
   "mailerlite/src/index.ts",
   "mailgun/src/index.ts",
