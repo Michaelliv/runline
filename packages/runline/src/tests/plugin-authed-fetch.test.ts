@@ -163,7 +163,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "kobotoolbox/src/index.ts",
   "lemlist/src/index.ts",
   "lingvanex/src/index.ts",
-  "linkedin/src/index.ts",
   "lonescale/src/index.ts",
   "magento/src/index.ts",
   "mailcheck/src/index.ts",
