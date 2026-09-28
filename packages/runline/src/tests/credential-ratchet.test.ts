@@ -1,18 +1,14 @@
 /**
  * Every bundled plugin that carries a credential signs through its declared
- * credential, or is on a written-out list saying why not yet.
- *
- * Each plugin directory is in exactly one of three places:
+ * credential. Each plugin directory is in exactly one of two places:
  *   - it declares its credential (`rl.setCredential`) and has a fixture in
- *     credential-fixtures/, exercised by credential-plugins.test.ts;
- *   - UNDECLARED_BACKLOG, with the specific reason it cannot be declared
- *     with today's authentication kinds;
+ *     credential-fixtures/, exercised by credential-plugins.test.ts, or a
+ *     dedicated suite;
  *   - NO_CREDENTIAL, with the reason it holds no secret at all.
  *
- * Like plugin-authed-fetch.test.ts, this is a ratchet: the backlog may
- * shrink and must never grow, a migrated plugin must leave it, and a new
- * plugin cannot join it. The lists are written out rather than computed,
- * because a computed list would compare itself against itself.
+ * A new plugin that carries a credential declares it; there is no list to
+ * wait on. NO_CREDENTIAL is written out rather than computed, because a
+ * computed list would compare itself against itself.
  */
 
 import assert from "node:assert/strict";
@@ -36,11 +32,6 @@ const NO_CREDENTIAL = new Map<string, string>([
   ["openThesaurus", "public API; empty connection schema"],
   ["postbin", "public API; empty connection schema"],
   ["quickchart", "builds a public chart URL; makes no request"],
-]);
-
-/** Plugins that carry a credential but do not declare it yet, and why. */
-const UNDECLARED_BACKLOG = new Map<string, string>([
-  ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 
 /**
@@ -92,42 +83,37 @@ function fixtures(): string[] {
 }
 
 describe("every credential-bearing plugin declares its credential or says why not", () => {
-  it("places every plugin in exactly one of: declaring, backlog, no credential", () => {
+  it("places every plugin in exactly one of: declaring, no credential", () => {
     const unplaced: string[] = [];
     const doubled: string[] = [];
     for (const plugin of plugins()) {
-      const places = [
-        declares(plugin),
-        UNDECLARED_BACKLOG.has(plugin),
-        NO_CREDENTIAL.has(plugin),
-      ].filter(Boolean).length;
-      if (places === 0) unplaced.push(plugin);
-      if (places > 1) doubled.push(plugin);
+      const declaring = declares(plugin);
+      const listed = NO_CREDENTIAL.has(plugin);
+      if (!declaring && !listed) unplaced.push(plugin);
+      if (declaring && listed) doubled.push(plugin);
     }
     assert.deepEqual(
       unplaced,
       [],
-      "declare these plugins' credentials (rl.setCredential); a new plugin cannot join the backlog",
+      "declare these plugins' credentials (rl.setCredential), or list them in NO_CREDENTIAL with the reason they hold no secret",
     );
     assert.deepEqual(
       doubled,
       [],
-      "these plugins declare their credential; delete their lines from UNDECLARED_BACKLOG",
+      "these plugins declare a credential; delete their lines from NO_CREDENTIAL",
     );
   });
 
   it("lists only plugins that exist", () => {
     const all = new Set(plugins());
-    const gone = [
-      ...UNDECLARED_BACKLOG.keys(),
-      ...NO_CREDENTIAL.keys(),
-      ...DEDICATED_SUITES,
-    ].filter((plugin) => !all.has(plugin));
+    const gone = [...NO_CREDENTIAL.keys(), ...DEDICATED_SUITES].filter(
+      (plugin) => !all.has(plugin),
+    );
     assert.deepEqual(gone, []);
   });
 
   it("gives every listed plugin a reason", () => {
-    for (const [plugin, reason] of [...UNDECLARED_BACKLOG, ...NO_CREDENTIAL])
+    for (const [plugin, reason] of NO_CREDENTIAL)
       assert.ok(reason.trim().length > 10, `${plugin} needs a specific reason`);
   });
 
@@ -144,13 +130,6 @@ describe("every credential-bearing plugin declares its credential or says why no
       [...covered].filter((plugin) => !declared.has(plugin)),
       [],
       "these fixtures or suites name plugins that declare no credential",
-    );
-  });
-
-  it("still has a backlog, so a broken detector cannot look like finished work", () => {
-    assert.ok(
-      UNDECLARED_BACKLOG.size > 0,
-      "an empty backlog means every plugin is migrated: delete this guard with the last entry",
     );
   });
 });

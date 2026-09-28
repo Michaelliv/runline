@@ -260,8 +260,8 @@ export function collectMedia(
 
 /**
  * Restrict automatic downloads to fal's CDN, including every redirect target.
- * These reads carry no credential, so they use neither the broker nor
- * authedFetch: redirects are followed manually, each hop re-validated here.
+ * These reads carry no credential, so they do not use the broker:
+ * redirects are followed manually, each hop re-validated here.
  */
 function mediaUrl(value: string): URL {
   const url = new URL(value);

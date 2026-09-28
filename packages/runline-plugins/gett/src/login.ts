@@ -1,16 +1,10 @@
-import { type ActionContext, AuthError } from "runline";
+import type { ActionContext } from "runline";
+import { refuseUnderHost } from "../../_shared/credentials.js";
 import { readBounded } from "../../_shared/provider.js";
 import { appHeaders, HOST } from "./credentials.js";
 import { bodyOf, endpointOf } from "./shared.js";
 
-/**
- * The owner login runs only where the grant lives: in this process, with a
- * connection it can write. Under a host that keeps the grant, setup is the
- * host's, and every login step refuses before any request.
- */
-export function refuseUnderHost(ctx: ActionContext): void {
-  if (ctx.credentials) throw new AuthError("unsupported_operation");
-}
+export { refuseUnderHost };
 
 /**
  * One unsigned login call. It carries no stored credential — the phone, the

@@ -20,7 +20,6 @@ const PLUGINS = join(here, "..", "..", "..", "runline-plugins");
 
 /** Files whose fetch calls carry no credential, and why. */
 const CREDENTIAL_FREE_FETCH = new Map<string, string>([
-  ["_shared/authedFetch.ts", "the redirect-refusing helper itself"],
   [
     "_shared/shiftUpload.ts",
     "PUTs file bytes to a signed grant URL; the grant is the authority",
@@ -53,6 +52,10 @@ const CREDENTIAL_FREE_FETCH = new Map<string, string>([
     "shiftTranscription/src/transcription.ts",
     "downloads the transcript from a signed URL",
   ],
+  [
+    "wolt/src/public.ts",
+    "the anonymous catalogue and the owner login, whose inputs come from the person logging in; local only",
+  ],
 ]);
 
 function pluginSources(): string[] {
@@ -83,9 +86,8 @@ function pluginSources(): string[] {
   return out.sort();
 }
 
-/** `fetch(` as a call, not `options.fetch`, `authedFetch(` or a `fetch:` property. */
+/** `fetch(` as a call, not `options.fetch` or a `fetch:` property. */
 const CALLS_FETCH = /(?<![.\w$])fetch\s*\(/;
-const IMPORTS_AUTHED_FETCH = /from\s+["'][^"']*authedFetch\.js["']/;
 
 function source(rel: string): string {
   return readFileSync(join(PLUGINS, rel), "utf-8");
@@ -95,59 +97,7 @@ function filesCallingFetch(): string[] {
   return pluginSources().filter((rel) => CALLS_FETCH.test(source(rel)));
 }
 
-/** Plugins whose sources call `rl.setCredential`. */
-function declaringPlugins(): Set<string> {
-  return new Set(
-    pluginSources()
-      .filter((rel) => !rel.startsWith("_shared/"))
-      .filter((rel) => /\bsetCredential\s*\(/.test(source(rel)))
-      .map((rel) => rel.split("/")[0]),
-  );
-}
-
 describe("every plugin fetch is accounted for", () => {
-  it("has a helper that pins the redirect and rejects a redirected response", async () => {
-    const { authedFetch } = await import(
-      "../../../runline-plugins/_shared/authedFetch.js"
-    );
-    const original = globalThis.fetch;
-    try {
-      let seen: RequestInit | undefined;
-      globalThis.fetch = (async (
-        _input: RequestInfo | URL,
-        init?: RequestInit,
-      ) => {
-        seen = init;
-        return new Response("{}", { status: 200 });
-      }) as typeof fetch;
-      await authedFetch("https://example.test/x", {
-        headers: { Authorization: "secret" },
-      });
-      assert.equal(seen?.redirect, "error");
-
-      // Belt to that brace: a fetch that ignores the option must not slip past.
-      globalThis.fetch = (async () => {
-        const redirected = new Response("{}", { status: 200 });
-        Object.defineProperty(redirected, "redirected", { value: true });
-        return redirected;
-      }) as typeof fetch;
-      await assert.rejects(
-        authedFetch("https://example.test/x"),
-        /followed a redirect/,
-      );
-
-      // A 3xx handed back rather than followed is refused on its own terms.
-      globalThis.fetch = (async () =>
-        new Response(null, { status: 302 })) as typeof fetch;
-      await assert.rejects(
-        authedFetch("https://example.test/x"),
-        /Refusing a redirect .*HTTP 302/,
-      );
-    } finally {
-      globalThis.fetch = original;
-    }
-  });
-
   it("accounts for every fetch call", () => {
     const unlisted = filesCallingFetch().filter(
       (rel) => !CREDENTIAL_FREE_FETCH.has(rel),
@@ -168,15 +118,5 @@ describe("every plugin fetch is accounted for", () => {
       (rel) => !calling.has(rel),
     );
     assert.deepEqual(stale, [], "delete these files' lines");
-  });
-
-  it("never gives a brokered plugin a second signing path", () => {
-    const declaring = declaringPlugins();
-    const importing = pluginSources().filter(
-      (rel) =>
-        declaring.has(rel.split("/")[0]) &&
-        IMPORTS_AUTHED_FETCH.test(source(rel)),
-    );
-    assert.deepEqual(importing, []);
   });
 });

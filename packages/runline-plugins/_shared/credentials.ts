@@ -346,6 +346,16 @@ export function credentialRequest(
 }
 
 /**
+ * A step that writes a grant into the connection — an owner login run
+ * against the provider — happens only where the grant lives: this process,
+ * signing with its own connection. Under a host that keeps the grant, setup
+ * is the host's, and the step refuses before any request.
+ */
+export function refuseUnderHost(ctx: ActionContext): void {
+  if (ctx.credentials) throw new AuthError("unsupported_operation");
+}
+
+/**
  * A socket target's URL for this connection, from the broker: signed by
  * the local signer, or a relay the host controls. A broker that serves no
  * sockets refuses as unsupported_operation.

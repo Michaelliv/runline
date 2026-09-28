@@ -13,6 +13,7 @@ import {
   whoami,
 } from "./account.js";
 import { item, menu, nearby, search, venue } from "./catalog.js";
+import { woltCredential } from "./credentials.js";
 import {
   type CartLine,
   cancelOrder,
@@ -24,12 +25,14 @@ import {
   quoteFor,
 } from "./orders.js";
 import {
-  accessToken,
+  authed,
   type Cfg,
   cfgOf,
   DEF_LAT,
   DEF_LON,
   num,
+  RESTAURANT,
+  refuseUnderHost,
 } from "./shared.js";
 
 /**
@@ -164,6 +167,7 @@ function coords(input: Record<string, unknown>, ctx: ActionContext) {
 export default function wolt(rl: RunlinePluginAPI) {
   rl.setName("wolt");
   rl.setVersion("0.1.0");
+  rl.setCredential(woltCredential);
 
   rl.setConnectionSchema(
     t.Object({
@@ -531,10 +535,12 @@ export default function wolt(rl: RunlinePluginAPI) {
   rl.registerAction("account.refresh", {
     access: "write",
     description:
-      "Force a token refresh. Wolt rotates its refresh token on every grant, so an untouched session eventually lapses; a recurring 'call wolt.account.refresh()' every ~12h keeps it alive. Also the cheapest proof that stored credentials still work.",
+      "Force a token refresh and prove it on a live call. Wolt rotates its refresh token on every grant, so an untouched session eventually lapses; a recurring 'call wolt.account.refresh()' every ~12h keeps it alive. Runs where the grant lives: locally, not under a host that keeps it.",
     inputSchema: t.Object({}, STRICT),
     async execute(_input, ctx) {
-      await accessToken(ctx, true);
+      refuseUnderHost(ctx);
+      await ctx.updateConnection({ accessTokenExpiresAt: 1 });
+      await authed(ctx, RESTAURANT, "/v1/user/me");
       const cfg = cfgOf(ctx);
       return {
         refreshed: true,
