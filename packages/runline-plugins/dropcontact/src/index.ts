@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { dropcontactCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -77,7 +77,7 @@ export default function dropcontact(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `batch/${encodeURIComponent(requestId)}`,
+        `batch/${pathSegment(requestId)}`,
       )) as Record<string, unknown>;
       if (!data.success)
         throw new Error(
