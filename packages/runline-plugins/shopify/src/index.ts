@@ -1,7 +1,7 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
-  credentialRequest,
+  credentialOk,
   pathSegment,
   pathWithin,
 } from "../../_shared/credentials.js";
@@ -33,13 +33,11 @@ async function paginate(
   const all: unknown[] = [];
   let nextPath: string | undefined;
   do {
-    const res = await credentialRequest(ctx, shopifyCredential, {
+    const res = await credentialOk(ctx, shopifyCredential, "shopify", {
       target: "api",
       path: nextPath ?? path,
       ...(nextPath === undefined ? { query: qs } : {}),
     });
-    if (!res.ok)
-      throw new Error(`shopify: request failed (HTTP ${res.status})`);
     const data = (await res.json()) as Record<string, unknown>;
     all.push(...((data[propertyName] ?? []) as unknown[]));
     nextPath = undefined;
