@@ -1,95 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { ghostCredential } from "./credentials.js";
 
-async function apiRequest(
-  url: string,
-  adminApiKey: string,
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-): Promise<unknown> {
-  // Ghost Admin API uses JWT. Key format: {id}:{secret}
-  const [id, secret] = adminApiKey.split(":");
-  // Create JWT manually using HMAC-SHA256
-  const header = btoa(
-    JSON.stringify({ alg: "HS256", typ: "JWT", kid: id }),
-  ).replace(/=/g, "");
-  const now = Math.floor(Date.now() / 1000);
-  const payload = btoa(
-    JSON.stringify({ iat: now, exp: now + 300, aud: "/admin/" }),
-  ).replace(/=/g, "");
-  const enc = new TextEncoder();
-  const keyData = new Uint8Array(
-    (secret.match(/.{2}/g) ?? []).map((b) => parseInt(b, 16)),
-  );
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign(
-    "HMAC",
-    cryptoKey,
-    enc.encode(`${header}.${payload}`),
-  );
-  const sigStr = btoa(String.fromCharCode(...new Uint8Array(sig)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-  const token = `${header}.${payload}.${sigStr}`;
-
-  const base = url.replace(/\/$/, "");
-  const fullUrl = new URL(`${base}/ghost/api/v2/admin${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) fullUrl.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Ghost ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(fullUrl.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Ghost API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    url: (ctx.connection.config.url as string).replace(/\/$/, ""),
-    adminApiKey: ctx.connection.config.adminApiKey as string,
-  };
-}
-
+/** A Ghost Admin API call; GET and DELETE carry no body. */
 function req(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { url, adminApiKey } = getConn(ctx);
-  return apiRequest(url, adminApiKey, method, endpoint, body, qs);
+  query?: Record<string, unknown>,
+): Promise<unknown> {
+  return credentialJson(ctx, ghostCredential, "ghost", {
+    target: "admin",
+    path,
+    method,
+    query,
+    ...(body && method !== "GET" && method !== "DELETE" ? { json: body } : {}),
+  });
 }
 
 export default function ghost(rl: RunlinePluginAPI) {
   rl.setName("ghost");
   rl.setVersion("0.1.0");
+  rl.setCredential(ghostCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -179,7 +112,7 @@ export default function ghost(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        "/posts/",
+        "posts/",
         { posts: [post] },
         qs,
       )) as Record<string, unknown>;
@@ -204,8 +137,8 @@ export default function ghost(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (formats) qs.formats = formats;
       let endpoint: string;
-      if (slug) endpoint = `/posts/slug/${slug}/`;
-      else if (id) endpoint = `/posts/${id}/`;
+      if (slug) endpoint = `posts/slug/${pathSegment(slug)}/`;
+      else if (id) endpoint = `posts/${pathSegment(id)}/`;
       else throw new Error("Provide either id or slug");
       const data = (await req(ctx, "GET", endpoint, undefined, qs)) as Record<
         string,
@@ -252,7 +185,7 @@ export default function ghost(rl: RunlinePluginAPI) {
       if (filter) qs.filter = filter;
       if (formats) qs.formats = formats;
       if (order) qs.order = order;
-      const data = (await req(ctx, "GET", "/posts/", undefined, qs)) as Record<
+      const data = (await req(ctx, "GET", "posts/", undefined, qs)) as Record<
         string,
         unknown
       >;
@@ -303,9 +236,15 @@ export default function ghost(rl: RunlinePluginAPI) {
         slug,
       } = input as Record<string, unknown>;
       // Need updated_at for optimistic locking
-      const existing = (await req(ctx, "GET", `/posts/${postId}/`, undefined, {
-        fields: "id,updated_at",
-      })) as Record<string, unknown>;
+      const existing = (await req(
+        ctx,
+        "GET",
+        `posts/${pathSegment(postId)}/`,
+        undefined,
+        {
+          fields: "id,updated_at",
+        },
+      )) as Record<string, unknown>;
       const currentPost = (existing.posts as Array<Record<string, unknown>>)[0];
       const post: Record<string, unknown> = {
         updated_at: currentPost.updated_at,
@@ -328,7 +267,7 @@ export default function ghost(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/posts/${postId}/`,
+        `posts/${pathSegment(postId)}/`,
         { posts: [post] },
         qs,
       )) as Record<string, unknown>;
@@ -346,7 +285,7 @@ export default function ghost(rl: RunlinePluginAPI) {
       await req(
         ctx,
         "DELETE",
-        `/posts/${(input as { postId: string }).postId}/`,
+        `posts/${pathSegment((input as { postId: string }).postId)}/`,
       );
       return { success: true };
     },

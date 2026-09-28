@@ -45,7 +45,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "agent-selected host: hostUrl is a per-call action input, not config",
   ],
   ["gett", "login: phone OTP login and a rotating, device-bound refresh grant"],
-  ["ghost", "signature: a JWT is minted per request from the admin key"],
   [
     "graphql",
     "generic client: arbitrary endpoint and caller-composed auth header",
