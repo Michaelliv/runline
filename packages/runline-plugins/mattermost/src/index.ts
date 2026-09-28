@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { mattermostCredential } from "./credentials.js";
-
-/** An ID, name, or email as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -106,7 +103,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `channels/${seg((input as { channelId: string }).channelId)}`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}`,
       );
     },
   });
@@ -120,9 +117,14 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { channelId, userId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `channels/${seg(channelId)}/members`, {
-        user_id: userId,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `channels/${pathSegment(channelId)}/members`,
+        {
+          user_id: userId,
+        },
+      );
     },
   });
 
@@ -148,12 +150,15 @@ export default function mattermost(rl: RunlinePluginAPI) {
         data = (await apiRequest(
           ctx,
           "GET",
-          `channels/${seg(channelId)}/members`,
+          `channels/${pathSegment(channelId)}/members`,
           undefined,
           { per_page: limit },
         )) as unknown[];
       } else {
-        data = await paginateAll(ctx, `channels/${seg(channelId)}/members`);
+        data = await paginateAll(
+          ctx,
+          `channels/${pathSegment(channelId)}/members`,
+        );
       }
       if (resolveData && data.length > 0) {
         const userIds = (data as Array<Record<string, unknown>>).map(
@@ -173,7 +178,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `channels/${seg((input as { channelId: string }).channelId)}/restore`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}/restore`,
       );
     },
   });
@@ -191,7 +196,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       let data = (await apiRequest(
         ctx,
         "POST",
-        `teams/${seg(teamId)}/channels/search`,
+        `teams/${pathSegment(teamId)}/channels/search`,
         { term },
       )) as unknown[];
       if (limit) data = data.slice(0, limit as number);
@@ -207,7 +212,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `channels/${seg((input as { channelId: string }).channelId)}/stats`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}/stats`,
       );
     },
   });
@@ -251,7 +256,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `posts/${seg((input as { postId: string }).postId)}`,
+        `posts/${pathSegment((input as { postId: string }).postId)}`,
       );
     },
   });
@@ -316,7 +321,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `users/${seg(userId)}/posts/${seg(postId)}/reactions/${seg(name)}`,
+        `users/${pathSegment(userId)}/posts/${pathSegment(postId)}/reactions/${pathSegment(name)}`,
       );
     },
   });
@@ -333,7 +338,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       let data = (await apiRequest(
         ctx,
         "GET",
-        `posts/${seg(postId)}/reactions`,
+        `posts/${pathSegment(postId)}/reactions`,
       )) as unknown[];
       if (data === null) return [];
       if (limit) data = data.slice(0, limit as number);
@@ -406,7 +411,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `users/${seg((input as { userId: string }).userId)}`,
+        `users/${pathSegment((input as { userId: string }).userId)}`,
       );
     },
   });
@@ -458,7 +463,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `users/email/${seg((input as { email: string }).email)}`,
+        `users/email/${pathSegment((input as { email: string }).email)}`,
       );
     },
   });
@@ -502,7 +507,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `teams/${seg(teamId)}/invite/email`,
+        `teams/${pathSegment(teamId)}/invite/email`,
         emails,
       );
     },
