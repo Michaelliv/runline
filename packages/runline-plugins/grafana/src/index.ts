@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { grafanaCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function gf(
   ctx: ActionContext,
@@ -88,7 +85,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "GET",
-        `dashboards/uid/${seg((input as { uid: string }).uid)}`,
+        `dashboards/uid/${pathSegment((input as { uid: string }).uid)}`,
       );
     },
   });
@@ -136,7 +133,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "DELETE",
-        `dashboards/uid/${seg((input as { uid: string }).uid)}`,
+        `dashboards/uid/${pathSegment((input as { uid: string }).uid)}`,
       );
     },
   });
@@ -200,7 +197,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "GET",
-        `teams/${seg((input as { teamId: number }).teamId)}`,
+        `teams/${pathSegment((input as { teamId: number }).teamId)}`,
       );
     },
   });
@@ -243,7 +240,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if (name) body.name = name;
       if (email) body.email = email;
-      return gf(ctx, "PUT", `teams/${seg(teamId)}`, body);
+      return gf(ctx, "PUT", `teams/${pathSegment(teamId)}`, body);
     },
   });
 
@@ -257,7 +254,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "DELETE",
-        `teams/${seg((input as { teamId: number }).teamId)}`,
+        `teams/${pathSegment((input as { teamId: number }).teamId)}`,
       );
     },
   });
@@ -273,7 +270,9 @@ export default function grafana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { teamId, userId } = input as { teamId: number; userId: number };
-      return gf(ctx, "POST", `teams/${seg(teamId)}/members`, { userId });
+      return gf(ctx, "POST", `teams/${pathSegment(teamId)}/members`, {
+        userId,
+      });
     },
   });
 
@@ -290,7 +289,11 @@ export default function grafana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { teamId, userId } = input as { teamId: number; userId: number };
-      return gf(ctx, "DELETE", `teams/${seg(teamId)}/members/${seg(userId)}`);
+      return gf(
+        ctx,
+        "DELETE",
+        `teams/${pathSegment(teamId)}/members/${pathSegment(userId)}`,
+      );
     },
   });
 
@@ -304,7 +307,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "GET",
-        `teams/${seg((input as { teamId: number }).teamId)}/members`,
+        `teams/${pathSegment((input as { teamId: number }).teamId)}/members`,
       );
     },
   });
@@ -356,7 +359,7 @@ export default function grafana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId, role } = input as { userId: number; role: string };
-      return gf(ctx, "PATCH", `org/users/${seg(userId)}`, { role });
+      return gf(ctx, "PATCH", `org/users/${pathSegment(userId)}`, { role });
     },
   });
 
@@ -370,7 +373,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "DELETE",
-        `org/users/${seg((input as { userId: number }).userId)}`,
+        `org/users/${pathSegment((input as { userId: number }).userId)}`,
       );
     },
   });
