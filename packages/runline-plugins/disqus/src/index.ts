@@ -1,34 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { disqusCredential } from "./credentials.js";
 
-const BASE_URL = "https://disqus.com/api/3.0";
-
-async function apiRequest(
-  apiKey: string,
+function apiRequest(
+  ctx: ActionContext,
   endpoint: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}/${endpoint}`);
-  url.searchParams.set("api_key", apiKey);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v === undefined || v === null) continue;
-      if (Array.isArray(v)) {
-        for (const item of v) url.searchParams.append(k, String(item));
-      } else {
-        url.searchParams.set(k, String(v));
-      }
-    }
-  }
-  const res = await fetch(url.toString(), {
-    headers: { Accept: "application/json" },
+  return credentialJson(ctx, disqusCredential, "disqus", {
+    target: "api",
+    path: endpoint,
+    query: qs,
   });
-  if (!res.ok)
-    throw new Error(`Disqus API error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 async function paginate(
-  apiKey: string,
+  ctx: ActionContext,
   endpoint: string,
   qs: Record<string, unknown>,
   limit?: number,
@@ -38,7 +25,7 @@ async function paginate(
   do {
     const q = { ...qs, limit: 100 } as Record<string, unknown>;
     if (cursor) q.cursor = cursor;
-    const data = (await apiRequest(apiKey, endpoint, q)) as Record<
+    const data = (await apiRequest(ctx, endpoint, q)) as Record<
       string,
       unknown
     >;
@@ -58,6 +45,7 @@ async function paginate(
 export default function disqus(rl: RunlinePluginAPI) {
   rl.setName("disqus");
   rl.setVersion("0.1.0");
+  rl.setCredential(disqusCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -90,15 +78,13 @@ export default function disqus(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { forum, related, attach } = input as Record<string, unknown>;
-      const apiKey = ctx.connection.config.apiKey as string;
       const qs: Record<string, unknown> = { forum };
       if (related) qs.related = related;
       if (attach) qs.attach = attach;
-      const data = (await apiRequest(
-        apiKey,
-        "forums/details.json",
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "forums/details.json", qs)) as Record<
+        string,
+        unknown
+      >;
       return data.response;
     },
   });
@@ -143,7 +129,6 @@ export default function disqus(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { forum, limit, order, query, since, related, include, filters } =
         (input ?? {}) as Record<string, unknown>;
-      const apiKey = ctx.connection.config.apiKey as string;
       const qs: Record<string, unknown> = { forum };
       if (order) qs.order = order;
       if (query) qs.query = query;
@@ -152,7 +137,7 @@ export default function disqus(rl: RunlinePluginAPI) {
       if (include) qs.include = include;
       if (filters) qs.filters = filters;
       return paginate(
-        apiKey,
+        ctx,
         "forums/listPosts.json",
         qs,
         limit as number | undefined,
@@ -178,11 +163,10 @@ export default function disqus(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { forum, limit, order } = (input ?? {}) as Record<string, unknown>;
-      const apiKey = ctx.connection.config.apiKey as string;
       const qs: Record<string, unknown> = { forum };
       if (order) qs.order = order;
       return paginate(
-        apiKey,
+        ctx,
         "forums/listCategories.json",
         qs,
         limit as number | undefined,
@@ -229,7 +213,6 @@ export default function disqus(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { forum, limit, order, since, related, include, thread } = (input ??
         {}) as Record<string, unknown>;
-      const apiKey = ctx.connection.config.apiKey as string;
       const qs: Record<string, unknown> = { forum };
       if (order) qs.order = order;
       if (since) qs.since = since;
@@ -237,7 +220,7 @@ export default function disqus(rl: RunlinePluginAPI) {
       if (include) qs.include = include;
       if (thread) qs.thread = thread;
       return paginate(
-        apiKey,
+        ctx,
         "forums/listThreads.json",
         qs,
         limit as number | undefined,
