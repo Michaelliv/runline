@@ -4,33 +4,97 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-/**
- * A plugin request that carries a credential must not follow redirects: a
- * redirect hands the `Authorization` header — or an API key in the query
- * string — to whatever host the response names. The credential registry's own
- * transport refuses redirects for this reason (runline/src/credentials/http.ts);
- * `_shared/authedFetch.ts` is the same guarantee for plugins that hand-roll
- * their calls, which is nearly all of them.
- *
- * This gate is a ratchet, not an audit: it cannot tell which call site in a
- * file carries the credential, so it asks only that a file making requests has
- * the helper in hand. `BARE_FETCH_BACKLOG` lists the files that predate it.
- * The list may shrink and must never grow — a new plugin cannot join it.
- */
-
 const here = dirname(fileURLToPath(import.meta.url));
 const PLUGINS = join(here, "..", "..", "..", "runline-plugins");
 
 /**
- * Registry-backed plugins route through CredentialTransport, which already
- * refuses redirects, and pass `globalThis.fetch` to it by design.
+ * Every `fetch(` in a plugin is accounted for. A request carrying a
+ * credential signs through the plugin's declared credential, whose transport
+ * pins the destination and refuses redirects; a bare fetch never carries one.
+ * So a file may call fetch only if it is on one of two written-out lists:
+ *
+ *   - CREDENTIAL_FREE_FETCH: requests that carry no credential by design
+ *     (signed URLs, public CDNs, public APIs), each with its reason;
+ *   - UNBROKERED_FETCH: plugins still on the credential backlog
+ *     (credential-ratchet.test.ts) that sign their own requests. Each leaves
+ *     this list when it declares its credential.
+ *
+ * The lists are written out rather than computed, because a computed list
+ * would compare itself against itself. UNBROKERED_FETCH may shrink and must
+ * never grow; neither list may hold a file that no longer calls fetch.
  */
-const REGISTRY_BACKED = new Set([
-  "_shared/authedFetch.ts",
-  "_shared/credentialAdapter.ts",
-  "_shared/googleAuth.ts",
-  "_shared/microsoftAuth.ts",
-  "plaud/src/shared.ts",
+
+/** Files whose fetch calls carry no credential, and why. */
+const CREDENTIAL_FREE_FETCH = new Map<string, string>([
+  ["_shared/authedFetch.ts", "the redirect-refusing helper itself"],
+  [
+    "_shared/shiftUpload.ts",
+    "PUTs file bytes to a signed grant URL; the grant is the authority",
+  ],
+  ["airtop/src/index.ts", "file.upload downloads a caller-supplied public URL"],
+  [
+    "fal/src/shared.ts",
+    "downloads generated media from fal's public CDN, re-validating each redirect hop",
+  ],
+  ["hackernews/src/index.ts", "public API; no connection secret"],
+  [
+    "node/src/index.ts",
+    "its fetch action sends caller-supplied requests; no connection secret",
+  ],
+  ["openThesaurus/src/index.ts", "public API; no connection secret"],
+  ["postbin/src/index.ts", "public API; no connection secret"],
+  [
+    "replicate/src/index.ts",
+    "downloads prediction outputs from signed CDN URLs",
+  ],
+  [
+    "shiftObjects/src/objects.ts",
+    "downloads object bytes from a signed grant URL",
+  ],
+  [
+    "shiftTranscription/src/transcription.ts",
+    "downloads the transcript from a signed URL",
+  ],
+]);
+
+/** Credential-backlog files that sign their own requests with bare fetch. */
+const UNBROKERED_FETCH = new Set([
+  "coingecko/src/index.ts",
+  "convertkit/src/index.ts",
+  "customerIo/src/index.ts",
+  "demio/src/index.ts",
+  "elasticsearch/src/index.ts",
+  "facebookGraph/src/index.ts",
+  "ghost/src/index.ts",
+  "gitlab/src/index.ts",
+  "gotify/src/index.ts",
+  "graphql/src/index.ts",
+  "mailjet/src/index.ts",
+  "mandrill/src/index.ts",
+  "mocean/src/index.ts",
+  "nextcloud/src/index.ts",
+  "npm/src/index.ts",
+  "odoo/src/index.ts",
+  "paddle/src/index.ts",
+  "plivo/src/index.ts",
+  "posthog/src/index.ts",
+  "pushover/src/index.ts",
+  "reddit/src/index.ts",
+  "salesforce/src/shared.ts",
+  "sendy/src/index.ts",
+  "signl4/src/index.ts",
+  "steel/src/shared.ts",
+  "storyblok/src/index.ts",
+  "strapi/src/index.ts",
+  "supabase/src/index.ts",
+  "telegram/src/index.ts",
+  "travisci/src/index.ts",
+  "trello/src/index.ts",
+  "twilio/src/index.ts",
+  "unleashedSoftware/src/index.ts",
+  "uptimerobot/src/index.ts",
+  "vero/src/index.ts",
+  "vonage/src/index.ts",
 ]);
 
 function pluginSources(): string[] {
@@ -61,76 +125,29 @@ function pluginSources(): string[] {
   return out.sort();
 }
 
-/** `fetch(` as a call, not `options.fetch` or a `fetch:` property. */
+/** `fetch(` as a call, not `options.fetch`, `authedFetch(` or a `fetch:` property. */
 const CALLS_FETCH = /(?<![.\w$])fetch\s*\(/;
+const IMPORTS_AUTHED_FETCH = /from\s+["'][^"']*authedFetch\.js["']/;
 
-function filesCallingBareFetch(): string[] {
-  return pluginSources().filter((rel) => {
-    if (REGISTRY_BACKED.has(rel)) return false;
-    const text = readFileSync(join(PLUGINS, rel), "utf-8");
-    if (!CALLS_FETCH.test(text)) return false;
-    return !text.includes("authedFetch");
-  });
+function source(rel: string): string {
+  return readFileSync(join(PLUGINS, rel), "utf-8");
 }
 
-/**
- * Files that call `fetch` without the helper in hand, as committed. Most send
- * a credential on at least some of their requests, so most are a redirect away
- * from handing it to another host.
- *
- * Written out rather than computed, because a computed list would compare
- * itself against itself and pass forever. Shrinking it is the work; a file not
- * on it fails the gate.
- */
-const BARE_FETCH_BACKLOG = new Set([
-  "_shared/shiftUpload.ts",
-  "airtop/src/index.ts",
-  "coingecko/src/index.ts",
-  "convertkit/src/index.ts",
-  "customerIo/src/index.ts",
-  "demio/src/index.ts",
-  "elasticsearch/src/index.ts",
-  "facebookGraph/src/index.ts",
-  "ghost/src/index.ts",
-  "gitlab/src/index.ts",
-  "gotify/src/index.ts",
-  "graphql/src/index.ts",
-  "hackernews/src/index.ts",
-  "mailjet/src/index.ts",
-  "mandrill/src/index.ts",
-  "mocean/src/index.ts",
-  "nextcloud/src/index.ts",
-  "node/src/index.ts",
-  "npm/src/index.ts",
-  "odoo/src/index.ts",
-  "openThesaurus/src/index.ts",
-  "paddle/src/index.ts",
-  "plivo/src/index.ts",
-  "postbin/src/index.ts",
-  "posthog/src/index.ts",
-  "pushover/src/index.ts",
-  "reddit/src/index.ts",
-  "replicate/src/index.ts",
-  "salesforce/src/shared.ts",
-  "sendy/src/index.ts",
-  "shiftObjects/src/objects.ts",
-  "shiftTranscription/src/transcription.ts",
-  "signl4/src/index.ts",
-  "steel/src/shared.ts",
-  "storyblok/src/index.ts",
-  "strapi/src/index.ts",
-  "supabase/src/index.ts",
-  "telegram/src/index.ts",
-  "travisci/src/index.ts",
-  "trello/src/index.ts",
-  "twilio/src/index.ts",
-  "unleashedSoftware/src/index.ts",
-  "uptimerobot/src/index.ts",
-  "vero/src/index.ts",
-  "vonage/src/index.ts",
-]);
+function filesCallingFetch(): string[] {
+  return pluginSources().filter((rel) => CALLS_FETCH.test(source(rel)));
+}
 
-describe("plugin requests carrying credentials refuse redirects", () => {
+/** Plugins whose sources call `rl.setCredential`. */
+function declaringPlugins(): Set<string> {
+  return new Set(
+    pluginSources()
+      .filter((rel) => !rel.startsWith("_shared/"))
+      .filter((rel) => /\bsetCredential\s*\(/.test(source(rel)))
+      .map((rel) => rel.split("/")[0]),
+  );
+}
+
+describe("every plugin fetch is accounted for", () => {
   it("has a helper that pins the redirect and rejects a redirected response", async () => {
     const { authedFetch } = await import(
       "../../../runline-plugins/_shared/authedFetch.js"
@@ -173,40 +190,55 @@ describe("plugin requests carrying credentials refuse redirects", () => {
     }
   });
 
-  it("no plugin joins the bare-fetch backlog", () => {
-    const offenders = filesCallingBareFetch().filter(
-      (rel) => !BARE_FETCH_BACKLOG.has(rel),
+  it("accounts for every fetch call on exactly one list", () => {
+    const unlisted = filesCallingFetch().filter(
+      (rel) => !CREDENTIAL_FREE_FETCH.has(rel) && !UNBROKERED_FETCH.has(rel),
     );
     assert.deepEqual(
-      offenders,
+      unlisted,
       [],
-      `These files call fetch without importing authedFetch from _shared/authedFetch.js. ` +
-        `A request carrying a credential must not follow redirects.`,
+      "a credential signs through the plugin's declared credential (credentialRequest); " +
+        "a fetch that carries none belongs on CREDENTIAL_FREE_FETCH with its reason",
+    );
+    const both = [...UNBROKERED_FETCH].filter((rel) =>
+      CREDENTIAL_FREE_FETCH.has(rel),
+    );
+    assert.deepEqual(both, []);
+  });
+
+  it("lists only files that still call fetch", () => {
+    // Without this the lists rot: a brokered file keeps its line, the gate
+    // still passes, and the backlog stops describing the work that is left.
+    const calling = new Set(filesCallingFetch());
+    const stale = [...CREDENTIAL_FREE_FETCH.keys(), ...UNBROKERED_FETCH].filter(
+      (rel) => !calling.has(rel),
+    );
+    assert.deepEqual(stale, [], "delete these files' lines");
+  });
+
+  it("keeps unbrokered fetches to plugins that declare no credential", () => {
+    const declaring = declaringPlugins();
+    assert.deepEqual(
+      [...UNBROKERED_FETCH].filter((rel) => declaring.has(rel.split("/")[0])),
+      [],
+      "a plugin that declares its credential signs through it, not through fetch",
     );
   });
 
-  it("drops a file from the backlog as soon as it is migrated", () => {
-    // Without this the list rots: a migrated file keeps its line, the gate
-    // still passes, and the backlog stops describing the work that is left.
-    const offenders = new Set(filesCallingBareFetch());
-    const stale = [...BARE_FETCH_BACKLOG].filter((rel) => !offenders.has(rel));
-    assert.deepEqual(
-      stale,
-      [],
-      "these files now use authedFetch; delete their lines from BARE_FETCH_BACKLOG",
+  it("never gives a brokered plugin a second signing path", () => {
+    const declaring = declaringPlugins();
+    const importing = pluginSources().filter(
+      (rel) =>
+        declaring.has(rel.split("/")[0]) &&
+        IMPORTS_AUTHED_FETCH.test(source(rel)),
     );
+    assert.deepEqual(importing, []);
   });
 
   it("still has a backlog, so a broken detector cannot look like finished work", () => {
     assert.ok(
-      BARE_FETCH_BACKLOG.size > 0,
-      "a zero-sized backlog means the detector stopped matching, not that the work is done",
+      UNBROKERED_FETCH.size > 0,
+      "an empty backlog means every plugin is brokered: delete this guard with the last entry",
     );
-    for (const rel of BARE_FETCH_BACKLOG) {
-      assert.ok(
-        !REGISTRY_BACKED.has(rel),
-        `${rel} is registry-backed and should not be in the backlog`,
-      );
-    }
   });
 });
