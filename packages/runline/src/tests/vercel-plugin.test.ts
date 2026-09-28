@@ -251,7 +251,7 @@ describe("vercel plugin REST actions", () => {
     );
   });
 
-  it("throws useful Vercel API errors", async () => {
+  it("reports a failure by status alone, without the provider's message", async () => {
     const action = getAction(makeVercel(), "project.get");
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ error: { message: "nope" } }), {
@@ -259,9 +259,8 @@ describe("vercel plugin REST actions", () => {
         headers: { "content-type": "application/json" },
       })) as typeof fetch;
 
-    await assert.rejects(
-      action.execute({ id: "missing" }, ctx()),
-      /vercel: request failed \(HTTP 403\)/,
-    );
+    await assert.rejects(action.execute({ id: "missing" }, ctx()), {
+      message: "vercel: request failed (HTTP 403)",
+    });
   });
 });
