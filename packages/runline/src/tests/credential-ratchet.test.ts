@@ -120,7 +120,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],
   ["uptimerobot", "body key: api_key travels in the form body"],
-  ["vero", "body key: auth_token travels in the form body"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 
