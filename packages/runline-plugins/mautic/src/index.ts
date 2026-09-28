@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { mauticCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function req(
   ctx: ActionContext,
@@ -126,7 +123,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PATCH",
-        `companies/${seg(companyId)}/edit`,
+        `companies/${pathSegment(companyId)}/edit`,
         updateFields as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.company;
@@ -141,7 +138,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `companies/${seg((input as { companyId: string }).companyId)}`,
+        `companies/${pathSegment((input as { companyId: string }).companyId)}`,
       )) as Record<string, unknown>;
       return data.company;
     },
@@ -190,7 +187,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "DELETE",
-        `companies/${seg((input as { companyId: string }).companyId)}/delete`,
+        `companies/${pathSegment((input as { companyId: string }).companyId)}/delete`,
       )) as Record<string, unknown>;
       return data.company;
     },
@@ -258,7 +255,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PATCH",
-        `contacts/${seg(contactId)}/edit`,
+        `contacts/${pathSegment(contactId)}/edit`,
         updateFields as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.contact;
@@ -273,7 +270,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `contacts/${seg((input as { contactId: string }).contactId)}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       )) as Record<string, unknown>;
       return data.contact;
     },
@@ -326,7 +323,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "DELETE",
-        `contacts/${seg((input as { contactId: string }).contactId)}/delete`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}/delete`,
       )) as Record<string, unknown>;
       return data.contact;
     },
@@ -348,7 +345,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `emails/${seg(emailId)}/contact/${seg(contactId)}/send`,
+        `emails/${pathSegment(emailId)}/contact/${pathSegment(contactId)}/send`,
       );
     },
   });
@@ -387,7 +384,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        `contacts/${seg(contactId)}/dnc/${seg(channel)}/${seg(action)}`,
+        `contacts/${pathSegment(contactId)}/dnc/${pathSegment(channel)}/${pathSegment(action)}`,
         body,
       )) as Record<string, unknown>;
       return data.contact;
@@ -412,7 +409,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `contacts/${seg(contactId)}/points/${seg(path)}/${seg(points)}`,
+        `contacts/${pathSegment(contactId)}/points/${pathSegment(path)}/${pathSegment(points)}`,
       );
     },
   });
@@ -431,7 +428,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `segments/${seg(segmentId)}/contact/${seg(contactId)}/add`,
+        `segments/${pathSegment(segmentId)}/contact/${pathSegment(contactId)}/add`,
       );
     },
   });
@@ -448,7 +445,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `segments/${seg(segmentId)}/contact/${seg(contactId)}/remove`,
+        `segments/${pathSegment(segmentId)}/contact/${pathSegment(contactId)}/remove`,
       );
     },
   });
@@ -467,7 +464,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `campaigns/${seg(campaignId)}/contact/${seg(contactId)}/add`,
+        `campaigns/${pathSegment(campaignId)}/contact/${pathSegment(contactId)}/add`,
       );
     },
   });
@@ -484,7 +481,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `campaigns/${seg(campaignId)}/contact/${seg(contactId)}/remove`,
+        `campaigns/${pathSegment(campaignId)}/contact/${pathSegment(contactId)}/remove`,
       );
     },
   });
@@ -503,7 +500,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `companies/${seg(companyId)}/contact/${seg(contactId)}/add`,
+        `companies/${pathSegment(companyId)}/contact/${pathSegment(contactId)}/add`,
       );
     },
   });
@@ -520,7 +517,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `companies/${seg(companyId)}/contact/${seg(contactId)}/remove`,
+        `companies/${pathSegment(companyId)}/contact/${pathSegment(contactId)}/remove`,
       );
     },
   });
@@ -541,7 +538,7 @@ export default function mautic(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `emails/${seg((input as { emailId: string }).emailId)}/send`,
+        `emails/${pathSegment((input as { emailId: string }).emailId)}/send`,
       );
     },
   });
