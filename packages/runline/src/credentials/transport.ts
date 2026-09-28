@@ -175,6 +175,24 @@ function secret(value: unknown): string {
 }
 
 /**
+ * A part sent whole as a header value, such as `Bearer <token>`: printable
+ * ASCII whose interior spaces are part of the value, with no control
+ * character and no space at either end.
+ */
+function headerValue(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    value !== value.trim() ||
+    [...value].some(
+      (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) > 126,
+    )
+  )
+    throw new AuthError("invalid_credentials");
+  return value;
+}
+
+/**
  * RFC 7617 user-pass. A colon in the username, or any byte outside printable
  * ASCII, would make the header ambiguous or encoding-dependent.
  */
@@ -289,7 +307,10 @@ function placeStatic(
       );
       return ({ headers }) => headers.set("authorization", `Basic ${value}`);
     }
-    const value = secret(part(placement.part));
+    const value =
+      placement.in === "header"
+        ? headerValue(part(placement.part))
+        : secret(part(placement.part));
     if (placement.in === "query")
       return ({ url }) => url.searchParams.append(placement.name, value);
     if (placement.in === "body")
