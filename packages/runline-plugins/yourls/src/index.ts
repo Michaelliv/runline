@@ -1,5 +1,5 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { answerFailed, credentialJson } from "../../_shared/credentials.js";
 import { yourlsCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -11,7 +11,7 @@ async function apiRequest(
     path: "yourls-api.php",
     query: { ...qs, format: "json" },
   })) as Record<string, unknown>;
-  if (data.status === "fail") throw new Error(`Yourls error: ${data.message}`);
+  if (data.status === "fail") throw answerFailed("yourls", data.code);
   return data;
 }
 

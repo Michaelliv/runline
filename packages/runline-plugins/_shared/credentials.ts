@@ -351,7 +351,7 @@ export function credentialRequest(
  * data back, and is dropped.
  */
 export function errorIdentifier(value: unknown): string | undefined {
-  return typeof value === "string" && /^[\w.$-]{1,100}$/.test(value)
+  return typeof value === "string" && /^[\w.$:-]{1,100}$/.test(value)
     ? value
     : undefined;
 }
@@ -370,6 +370,16 @@ export function failureMessage(
     .filter(Boolean)
     .join(", ");
   return `${plugin}: request failed (HTTP ${status}${parts ? ` ${parts}` : ""})`;
+}
+
+/**
+ * A successful response whose answer reports failure (Slack's `ok: false`,
+ * an OCS status), by the provider's error code when it is a plain
+ * identifier — never its free-text message.
+ */
+export function answerFailed(plugin: string, code: unknown): Error {
+  const name = errorIdentifier(typeof code === "number" ? String(code) : code);
+  return new Error(`${plugin}: request failed${name ? ` (${name})` : ""}`);
 }
 
 /** A failed request, reported by status alone. */

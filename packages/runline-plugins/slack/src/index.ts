@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { answerFailed, credentialJson } from "../../_shared/credentials.js";
 import { slackCredential } from "./credentials.js";
 
 async function api(
@@ -16,7 +16,7 @@ async function api(
     query,
     ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
   })) as Record<string, unknown>;
-  if (data.ok === false) throw new Error(`Slack API error: ${data.error}`);
+  if (data.ok === false) throw answerFailed("slack", data.error);
   return data;
 }
 

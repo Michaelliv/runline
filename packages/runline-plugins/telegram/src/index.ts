@@ -1,5 +1,5 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { answerFailed, credentialJson } from "../../_shared/credentials.js";
 import { telegramCredential } from "./credentials.js";
 
 /** A call to the Bot API method `name`; an answer that is not ok is a failure. */
@@ -14,7 +14,7 @@ async function apiRequest(
     "telegram",
     { target: "api", path: name, method: "POST", json: body },
   );
-  if (!data.ok) throw new Error(`Telegram API error: ${JSON.stringify(data)}`);
+  if (!data.ok) throw answerFailed("telegram", data.error_code);
   return data.result;
 }
 
