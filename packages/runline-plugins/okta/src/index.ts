@@ -1,9 +1,7 @@
+import { AuthError } from "runline";
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
 import { oktaCredential } from "./credentials.js";
-
-/** An ID or login as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
   ctx: ActionContext,
@@ -21,7 +19,14 @@ async function apiRequest(
   });
   if (!res.ok) throw new Error(`okta: request failed (HTTP ${res.status})`);
   const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
+  let data: unknown = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new AuthError("invalid_response");
+    }
+  }
   return { data, linkHeader: res.headers.get("link") ?? undefined };
 }
 
@@ -132,7 +137,11 @@ export default function okta(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId } = input as Record<string, unknown>;
-      const { data } = await apiRequest(ctx, "GET", `users/${seg(userId)}`);
+      const { data } = await apiRequest(
+        ctx,
+        "GET",
+        `users/${pathSegment(userId)}`,
+      );
       return data;
     },
   });
@@ -179,9 +188,14 @@ export default function okta(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId, profile } = input as Record<string, unknown>;
-      const { data } = await apiRequest(ctx, "POST", `users/${seg(userId)}`, {
-        profile,
-      });
+      const { data } = await apiRequest(
+        ctx,
+        "POST",
+        `users/${pathSegment(userId)}`,
+        {
+          profile,
+        },
+      );
       return data;
     },
   });
@@ -194,7 +208,7 @@ export default function okta(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId } = input as Record<string, unknown>;
-      await apiRequest(ctx, "DELETE", `users/${seg(userId)}`);
+      await apiRequest(ctx, "DELETE", `users/${pathSegment(userId)}`);
       return { success: true };
     },
   });
