@@ -163,7 +163,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "plivo/src/index.ts",
   "postbin/src/index.ts",
   "posthog/src/index.ts",
-  "profitwell/src/index.ts",
   "pushover/src/index.ts",
   "recraft/src/index.ts",
   "reddit/src/index.ts",

@@ -1,29 +1,26 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { profitwellCredential } from "./credentials.js";
 
-const BASE = "https://api.profitwell.com/v2";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  token: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: token },
+  return credentialJson(ctx, profitwellCredential, "profitwell", {
+    target: "api",
+    path,
+    query: qs,
   });
-  if (!res.ok)
-    throw new Error(`ProfitWell error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function profitwell(rl: RunlinePluginAPI) {
   rl.setName("profitwell");
   rl.setVersion("0.1.0");
+  rl.setCredential(profitwellCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -34,15 +31,12 @@ export default function profitwell(rl: RunlinePluginAPI) {
     },
   });
 
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
-
   rl.registerAction("company.getSettings", {
     access: "read",
     description: "Get company settings",
     inputSchema: {},
     async execute(_input, ctx) {
-      return apiRequest(key(ctx), "/company/settings/");
+      return apiRequest(ctx, "company/settings/");
     },
   });
 
@@ -74,8 +68,8 @@ export default function profitwell(rl: RunlinePluginAPI) {
       if (p.metrics) qs.metrics = p.metrics;
       if (p.planId) qs.plan_id = p.planId;
       const data = (await apiRequest(
-        key(ctx),
-        `/metrics/${p.type}`,
+        ctx,
+        `metrics/${seg(p.type)}`,
         qs,
       )) as Record<string, unknown>;
       return data.data;
