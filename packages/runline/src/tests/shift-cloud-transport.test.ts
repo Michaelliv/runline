@@ -1,6 +1,22 @@
+/**
+ * Shift requests that outlive the transport defaults. A Shift service that
+ * holds a request open (synchronous OCR extraction, transcription's /await
+ * long poll) declares the deadline on its credential's target, and the
+ * transport enforces exactly that declaration — the deadline and the
+ * response ceiling reach sendResource as the target's own limits.
+ *
+ * Redirect refusal, dropped provider text, and 204 answering no value are
+ * covered by the plugins' credential fixtures and shift-credentials.test.ts.
+ */
+
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { request } from "../../../runline-plugins/_shared/shiftCloud.js";
+import {
+  shiftCredential,
+  shiftRequest,
+} from "../../../runline-plugins/_shared/shiftCredentials.js";
+import { shiftOcrCredential } from "../../../runline-plugins/shiftOcr/src/credentials.js";
+import { shiftTranscriptionCredential } from "../../../runline-plugins/shiftTranscription/src/shared.js";
 import type { ActionContext } from "../plugin/types.js";
 
 const originalFetch = globalThis.fetch;
@@ -18,26 +34,20 @@ const ctx: ActionContext = {
   async updateConnection() {},
 };
 
-describe("shared Shift cloud transport", () => {
-  it("sends the key with redirects refused and a deadline", async () => {
-    let seen: RequestInit | undefined;
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
-      seen = init;
-      return Response.json({ ok: true });
-    }) as typeof fetch;
-    assert.deepEqual(await request(ctx, "/v1/crm/accounts"), { ok: true });
-    assert.equal(seen?.redirect, "error");
-    assert.ok(seen?.signal);
-    assert.equal(
-      new Headers(seen?.headers).get("authorization"),
-      "Bearer sk_live_test",
-    );
+function target(declaration: typeof shiftOcrCredential) {
+  const { type, method } = declaration({});
+  return type.methods[method].targets.api;
+}
+
+describe("Shift targets that hold requests open", () => {
+  it("declare the long deadline on the target the transport enforces", () => {
+    // shiftOcr's synchronous extraction: 5 minutes.
+    assert.equal(target(shiftOcrCredential).timeoutMs, 5 * 60_000);
+    // shiftTranscription's /await: the 120 s server-held wait plus 60 s.
+    assert.equal(target(shiftTranscriptionCredential).timeoutMs, 180_000);
   });
 
-  it("aborts a stalled exchange at the per-request deadline", async () => {
+  it("abort a stalled exchange at the target's declared deadline", async () => {
     globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) =>
       new Response(
         new ReadableStream({
@@ -49,66 +59,39 @@ describe("shared Shift cloud transport", () => {
         }),
       )) as typeof fetch;
     await assert.rejects(
-      request(ctx, "/v1/services/ocr/extract", { method: "POST" }, 20),
-      /timed out|abort/i,
+      shiftRequest(
+        ctx,
+        shiftCredential({ timeoutMs: 20 }),
+        "shiftOcr",
+        "/v1/services/ocr/extract",
+        { method: "POST" },
+      ),
+      { code: "transport_failed" },
     );
   });
 
-  it("refuses a redirect instead of handing the key to another host", async () => {
-    globalThis.fetch = (async () =>
-      new Response(null, {
-        status: 302,
-        headers: { location: "https://evil.test" },
-      })) as typeof fetch;
-    await assert.rejects(
-      request(ctx, "/v1/crm/accounts"),
-      /Refusing a redirect/,
-    );
-  });
-
-  it("reports a failure with the service code and param, never its message", async () => {
-    globalThis.fetch = (async () =>
-      Response.json(
-        {
-          error: {
-            type: "invalid_request",
-            code: "file_too_large",
-            param: "file",
-            message: "private-provider-detail",
-          },
-        },
-        { status: 413 },
-      )) as typeof fetch;
-    await assert.rejects(
-      request(ctx, "/v1/services/ocr/extract", { method: "POST" }),
-      {
-        message:
-          "shiftOcr: request failed (HTTP 413 file_too_large, param: file)",
-      },
-    );
-  });
-
-  it("bounds the response body and still returns 204 as undefined", async () => {
+  it("bound the response body at the target's declared ceiling", async () => {
     let cancelled = false;
     globalThis.fetch = (async () =>
       new Response(
         new ReadableStream({
           pull(controller) {
-            controller.enqueue(new Uint8Array(1024 * 1024));
+            controller.enqueue(new Uint8Array(1024));
           },
           cancel() {
             cancelled = true;
           },
         }),
       )) as typeof fetch;
-    await assert.rejects(request(ctx, "/v1/crm/accounts"), /exceeds 16 MiB/);
-    assert.ok(cancelled);
-
-    globalThis.fetch = (async () =>
-      new Response(null, { status: 204 })) as typeof fetch;
-    assert.equal(
-      await request(ctx, "/v1/crm/accounts/a", { method: "DELETE" }),
-      undefined,
+    await assert.rejects(
+      shiftRequest(
+        ctx,
+        shiftCredential({ maxResponseBytes: 4096 }),
+        "shiftOcr",
+        "/v1/services/ocr/providers",
+      ),
+      { code: "response_too_large" },
     );
+    assert.ok(cancelled);
   });
 });

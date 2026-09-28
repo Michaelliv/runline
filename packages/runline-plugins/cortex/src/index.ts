@@ -1,50 +1,32 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { cortexCredential, MAX_WAIT_SECONDS } from "./credentials.js";
 
-async function apiRequest(
-  host: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
+  options: {
+    target?: "api" | "wait";
+    json?: Record<string, unknown>;
+    query?: Record<string, unknown>;
+  } = {},
 ): Promise<unknown> {
-  const url = new URL(`${host}/api${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, cortexCredential, "cortex", {
+    target: options.target ?? "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Cortex API error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    host: (ctx.connection.config.host as string).replace(/\/$/, ""),
-    apiKey: ctx.connection.config.apiKey as string,
-  };
+    query: options.query,
+    ...(options.json && Object.keys(options.json).length > 0
+      ? { json: options.json }
+      : {}),
+  });
 }
 
 export default function cortex(rl: RunlinePluginAPI) {
   rl.setName("cortex");
   rl.setVersion("0.1.0");
+  rl.setCredential(cortexCredential);
 
   rl.setConnectionSchema({
     host: {
@@ -89,7 +71,8 @@ export default function cortex(rl: RunlinePluginAPI) {
         type: "number",
         required: false,
         description:
-          "Wait for report (seconds). If set, blocks until report is ready.",
+          "Wait for report (seconds, at most 540). If set, blocks until " +
+          "the report is ready.",
       },
     },
     async execute(input, ctx) {
@@ -101,33 +84,25 @@ export default function cortex(rl: RunlinePluginAPI) {
         force,
         timeout,
       } = input as Record<string, unknown>;
-      const { host, apiKey } = getConn(ctx);
-      const qs: Record<string, unknown> = {};
-      if (force) qs.force = true;
 
       const result = (await apiRequest(
-        host,
-        apiKey,
+        ctx,
         "POST",
-        `/analyzer/${analyzerId}/run`,
+        `analyzer/${pathSegment(analyzerId)}/run`,
         {
-          dataType,
-          data,
-          tlp,
+          json: { dataType, data, tlp },
+          ...(force ? { query: { force: true } } : {}),
         },
-        qs,
       )) as Record<string, unknown>;
 
       if (timeout && result.id) {
+        // The wait target's declared deadline covers the longest atMost.
+        const atMost = Math.min(Number(timeout), MAX_WAIT_SECONDS);
         return apiRequest(
-          host,
-          apiKey,
+          ctx,
           "GET",
-          `/job/${result.id}/waitreport`,
-          undefined,
-          {
-            atMost: `${timeout}second`,
-          },
+          `job/${pathSegment(result.id)}/waitreport`,
+          { target: "wait", query: { atMost: `${atMost}second` } },
         );
       }
       return result;
@@ -144,8 +119,7 @@ export default function cortex(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { jobId } = input as { jobId: string };
-      const { host, apiKey } = getConn(ctx);
-      return apiRequest(host, apiKey, "GET", `/job/${jobId}`);
+      return apiRequest(ctx, "GET", `job/${pathSegment(jobId)}`);
     },
   });
 
@@ -157,8 +131,7 @@ export default function cortex(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { jobId } = input as { jobId: string };
-      const { host, apiKey } = getConn(ctx);
-      return apiRequest(host, apiKey, "GET", `/job/${jobId}/report`);
+      return apiRequest(ctx, "GET", `job/${pathSegment(jobId)}/report`);
     },
   });
 
@@ -206,7 +179,6 @@ export default function cortex(rl: RunlinePluginAPI) {
         pap = 2,
         message,
       } = input as Record<string, unknown>;
-      const { host, apiKey } = getConn(ctx);
       const entityData = {
         _type: entityType,
         ...(data as Record<string, unknown>),
@@ -244,11 +216,12 @@ export default function cortex(rl: RunlinePluginAPI) {
       body.label = label;
 
       return apiRequest(
-        host,
-        apiKey,
+        ctx,
         "POST",
-        `/responder/${responderId}/run`,
-        body,
+        `responder/${pathSegment(responderId)}/run`,
+        {
+          json: body,
+        },
       );
     },
   });

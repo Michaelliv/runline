@@ -348,7 +348,7 @@ describe("shiftOcr plugin", () => {
         String(input),
         "https://cloud.shift-labs.ai/v1/services/ocr/providers",
       );
-      assert.equal(init?.method, undefined);
+      assert.equal(init?.method, "GET");
       return {
         providers: [{ id: "mistral-ocr", defaultModel: "mistral-ocr-latest" }],
       };

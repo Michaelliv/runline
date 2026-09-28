@@ -8,13 +8,30 @@ import { credentialBroker } from "./credentialAdapter.js";
 import { staticCredential } from "./credentials.js";
 import { SHIFT_API_URL, shiftError } from "./shiftCloud.js";
 
+export interface ShiftCredentialOptions {
+  /** Fixed GET beneath /v1/ proving the key reaches the plugin's service. */
+  probe?: string;
+  /**
+   * Deadline for the Shift target, for services that hold a request open
+   * longer than the transport default (synchronous extraction, /await
+   * long polls). Capped by the host.
+   */
+  timeoutMs?: number;
+  /** Response ceiling for the Shift target, when its answers are larger. */
+  maxResponseBytes?: number;
+}
+
 /**
  * The Shift family (shiftAtlas, shiftBwm, shiftCrm, shiftObjects,
  * shiftPages, shiftWork) signs with one Shift API key, as a bearer, beneath
  * the cloud API's /v1 surface. Each plugin may name its own probe: not every
- * key reaches every service.
+ * key reaches every service. Plugins whose service holds requests open
+ * (shiftOcr, shiftTranscription) declare the target's own deadline.
  */
-export function shiftCredential(probe?: string): CredentialDeclaration {
+export function shiftCredential(
+  options: ShiftCredentialOptions = {},
+): CredentialDeclaration {
+  const { probe, timeoutMs, maxResponseBytes } = options;
   return staticCredential({
     id: "shift",
     auth: { kind: "bearer" },
@@ -24,6 +41,8 @@ export function shiftCredential(probe?: string): CredentialDeclaration {
         baseUrl: `${SHIFT_API_URL}/v1/`,
         methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
         allowedHeaders: ["Idempotency-Key"],
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+        ...(maxResponseBytes !== undefined ? { maxResponseBytes } : {}),
       },
     },
     ...(probe
@@ -49,8 +68,8 @@ export function shiftPath(route: string): string {
  * A Shift plugin's credential and its request function, bound together so
  * a plugin cannot sign with one declaration and declare another.
  */
-export function shiftClient(plugin: string, probe?: string) {
-  const credential = shiftCredential(probe);
+export function shiftClient(plugin: string, options?: ShiftCredentialOptions) {
+  const credential = shiftCredential(options);
   return {
     credential,
     request: <T>(

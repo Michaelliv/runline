@@ -49,10 +49,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "body key: api_secret travels in the JSON body of every write",
   ],
   [
-    "cortex",
-    "deadline: analyzer.execute holds /job/{id}/waitreport for a caller-chosen atMost timeout beyond the transport's 120 s ceiling",
-  ],
-  [
     "customerIo",
     "two credentials in one connection: tracking and app keys, used by different actions",
   ],
@@ -60,10 +56,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   [
     "elasticsearch",
     "optional credential: username and password are optional, and the empty Basic pair sent today is one the transport refuses",
-  ],
-  [
-    "elevenlabs",
-    "deadline: audio generation defaults to a 300 s timeout (caller-tunable) and reads up to 100 MiB, past the transport's 120 s and 64 MiB ceilings",
   ],
   [
     "facebookGraph",
@@ -117,14 +109,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "dynamic host: the API origin comes from the token response's instance_url",
   ],
   ["sendy", "body key: api_key travels in the form body"],
-  [
-    "shiftOcr",
-    "deadline: extraction runs up to 5 minutes, beyond the transport's 120 s ceiling",
-  ],
-  [
-    "shiftTranscription",
-    "deadline: transcribe waits on /await for up to 120 s plus response time, past the transport's 120 s ceiling",
-  ],
   ["signl4", "path token: the team secret is the URL path"],
   [
     "steel",

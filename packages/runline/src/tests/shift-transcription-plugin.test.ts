@@ -298,7 +298,7 @@ describe("shiftTranscription plugin", () => {
         String(input),
         "https://cloud.shift-labs.ai/v1/services/transcription/jobs/job_1/artifacts",
       );
-      assert.equal(init?.method, undefined);
+      assert.equal(init?.method, "GET");
       return { artifacts: [{ id: "artifact_1", format: "txt" }] };
     });
 

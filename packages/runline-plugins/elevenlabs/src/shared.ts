@@ -1,41 +1,84 @@
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import { basename } from "node:path";
+import type { ActionContext } from "runline";
 import * as t from "typebox";
 import { Check } from "typebox/value";
-import { authedFetch } from "../../_shared/authedFetch.js";
-import { pathSegment } from "../../_shared/credentials.js";
+import { credentialBroker } from "../../_shared/credentialAdapter.js";
+import { multipartBody, pathSegment } from "../../_shared/credentials.js";
 import { SEND_FILE_NOTE, writeMediaFile } from "../../_shared/mediaFile.js";
 import { obj, readBounded, readBoundedBytes } from "../../_shared/provider.js";
+import { elevenlabsCredential } from "./credentials.js";
 
-export type Ctx = { connection: { config: Record<string, unknown> } };
+export type Ctx = ActionContext;
 export const voicePath = (id: string) => pathSegment(id);
 const JSON_LIMIT = 8 * 1024 * 1024;
 const AUDIO_LIMIT = 100 * 1024 * 1024;
 
-/** A fixed origin, no redirects or retries, and one deadline through body consumption. */
+type Target = "api" | "audio";
+
+export interface RequestOptions {
+  method?: "GET" | "POST" | "DELETE";
+  body?: string | FormData;
+}
+
+/**
+ * The caller-tunable deadline over a brokered exchange. The transport
+ * buffers the body, so the race bounds the whole exchange; on timeout the
+ * brokered call runs on to the target's own deadline, and its late outcome
+ * is observed so it cannot become an unhandled rejection.
+ */
+async function withDeadline(
+  work: Promise<Response>,
+  timeoutMs: number,
+): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          work.catch(() => {});
+          reject(new Error("elevenlabs: request timed out"));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Every credential-bearing request signs through the declared credential. */
 async function request<T>(
   ctx: Ctx,
+  target: Target,
   path: string,
-  init: RequestInit,
+  init: RequestOptions,
   timeoutMs: number,
   consume: (response: Response) => Promise<T>,
 ): Promise<T> {
-  const key = ctx.connection.config.apiKey;
-  if (typeof key !== "string" || !key.trim())
-    throw new Error("Missing ELEVENLABS_API_KEY");
   let requestId: string | null = null;
   try {
-    const response = await authedFetch(`https://api.elevenlabs.io${path}`, {
-      ...init,
-      headers: {
-        "xi-api-key": key.trim(),
-        ...(typeof init.body === "string"
-          ? { "content-type": "application/json" }
-          : {}),
-      },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    const headers: Record<string, string> = {};
+    let body: string | Uint8Array | undefined;
+    if (typeof init.body === "string") {
+      body = init.body;
+      headers["content-type"] = "application/json";
+    } else if (init.body !== undefined) {
+      const multipart = await multipartBody(init.body);
+      body = multipart.body;
+      headers["content-type"] = multipart.contentType;
+    }
+    const response = await withDeadline(
+      credentialBroker(ctx, elevenlabsCredential).request({
+        target,
+        path: path.replace(/^\//, ""),
+        method: init.method ?? "GET",
+        headers,
+        ...(body !== undefined ? { body } : {}),
+      }),
+      timeoutMs,
+    );
     requestId = response.headers.get("request-id");
     // Both JSON and audio errors use the provider's JSON error envelope.
     if (!response.ok) await json(response);
@@ -134,10 +177,11 @@ export async function jsonRequest(
   ctx: Ctx,
   path: string,
   expected: keyof typeof responses,
-  init: RequestInit = {},
+  init: RequestOptions = {},
   timeoutMs = 60_000,
+  target: Target = "api",
 ) {
-  return request(ctx, path, init, timeoutMs, async (response) => {
+  return request(ctx, target, path, init, timeoutMs, async (response) => {
     const body = await json(response);
     if (!Check(responses[expected], body))
       throw new Error(`elevenlabs: invalid ${expected} response`);
@@ -240,11 +284,12 @@ export async function audioRequest(
 export async function binaryRequest(
   ctx: Ctx,
   path: string,
-  init: RequestInit,
+  init: RequestOptions,
   options: AudioOptions,
 ) {
   return request(
     ctx,
+    "audio",
     path,
     init,
     options.timeoutMs ?? 300_000,
