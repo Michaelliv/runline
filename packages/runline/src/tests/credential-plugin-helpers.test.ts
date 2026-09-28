@@ -244,29 +244,45 @@ describe("pathSegment", () => {
 });
 
 describe("pathWithin", () => {
-  it("turns an API-returned absolute URL back into a path under the target", () => {
+  // The target's base comes from the declaration, config-derived host included.
+  const { ctx } = brokered(null);
+  ctx.connection.config = { url: "https://tenant.example.com" };
+
+  it("turns an API-returned absolute URL back into a path under the declared target", () => {
     assert.equal(
       pathWithin(
-        "https://api.example/v1/",
-        "https://api.example/v1/items?page=2",
+        ctx,
+        example,
+        "api",
+        "https://tenant.example.com/api/v1/items?page=2",
       ),
       "items?page=2",
     );
   });
 
-  it("refuses URLs outside the target: other hosts, schemes, ports, prefixes, credentials", () => {
+  it("refuses URLs outside the target, and targets the declaration lacks", () => {
     for (const url of [
-      "https://evil.example/v1/items",
-      "http://api.example/v1/items",
-      "https://api.example:8443/v1/items",
-      "https://api.example/v2/items",
-      "https://user:pw@api.example/v1/items",
-      "https://api.example/v1/items#frag",
+      "https://evil.example/api/v1/items",
+      "http://tenant.example.com/api/v1/items",
+      "https://tenant.example.com:8443/api/v1/items",
+      "https://tenant.example.com/api/v2/items",
+      "https://user:pw@tenant.example.com/api/v1/items",
+      "https://tenant.example.com/api/v1/items#frag",
       "not a url",
     ])
-      assert.throws(() => pathWithin("https://api.example/v1/", url), {
+      assert.throws(() => pathWithin(ctx, example, "api", url), {
         code: "request_not_allowed",
       });
+    assert.throws(
+      () =>
+        pathWithin(
+          ctx,
+          example,
+          "other",
+          "https://tenant.example.com/api/v1/items",
+        ),
+      { code: "request_not_allowed" },
+    );
   });
 });
 
