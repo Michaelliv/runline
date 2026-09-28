@@ -143,7 +143,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "gotowebinar/src/index.ts",
   "grafana/src/index.ts",
   "graphql/src/index.ts",
-  "grist/src/index.ts",
   "hackernews/src/index.ts",
   "halopsa/src/index.ts",
   "harvest/src/index.ts",
