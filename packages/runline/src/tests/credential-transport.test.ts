@@ -787,6 +787,47 @@ describe("constrained credential transport", () => {
     assert.deepEqual(refreshes.sort(), ["alice", "bob"]);
   });
 
+  it("gives a target its declared deadline and response ceiling, capped by the host's", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.slow = {
+      baseUrl: "https://api.example/slow/",
+      methods: ["GET"],
+      timeoutMs: 60,
+      maxResponseBytes: 16,
+    };
+    const stalled = mock(
+      () =>
+        new Promise<Response>((resolve) =>
+          setTimeout(() => resolve(new Response("0123456789")), 30),
+        ),
+    );
+    const h = await harness(stalled, { key: { secret: "k" } }, def);
+    const transport = new CredentialTransport(h.registry, {
+      fetch: stalled,
+      timeoutMs: 10,
+      maxResponseBytes: 4,
+    });
+    // The default target keeps the host defaults; the slow one gets its own.
+    await assert.rejects(
+      transport.request(h.binding, request),
+      errorCode("transport_failed"),
+    );
+    assert.equal(
+      await (
+        await transport.request(h.binding, { target: "slow", path: "x" })
+      ).text(),
+      "0123456789",
+    );
+    const capped = new CredentialTransport(h.registry, {
+      fetch: stalled,
+      maxTimeoutMs: 20,
+    });
+    await assert.rejects(
+      capped.request(h.binding, { target: "slow", path: "x" }),
+      errorCode("transport_failed"),
+    );
+  });
+
   it("cancels a stalled response body on timeout", async () => {
     let cancelled = false;
     const fetch = mock(

@@ -173,6 +173,16 @@ describe("credential registry", () => {
       (d) => {
         d.methods.apiKey.authentication = { kind: "basic", field: "missing" };
       },
+      ...[0, -1, 1.5, 3_600_001, "60000"].map(
+        (timeoutMs) => (d: CredentialType) => {
+          d.methods.apiKey.targets.api.timeoutMs = timeoutMs as number;
+        },
+      ),
+      ...[0, 1.5, 1024 * 1024 * 1024 + 1].map(
+        (maxResponseBytes) => (d: CredentialType) => {
+          d.methods.apiKey.targets.api.maxResponseBytes = maxResponseBytes;
+        },
+      ),
       ...["", "api key", "key&x", "key=", 7].map(
         (param) => (d: CredentialType) => {
           d.methods.apiKey.authentication = {
