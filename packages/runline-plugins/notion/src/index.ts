@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { NOTION_VERSION, notionCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -50,7 +47,7 @@ export default function notion(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "PATCH", `blocks/${seg(p.blockId)}/children`, {
+      return api(ctx, "PATCH", `blocks/${pathSegment(p.blockId)}/children`, {
         children: p.children,
       });
     },
@@ -70,7 +67,7 @@ export default function notion(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `blocks/${seg(p.blockId)}/children`,
+        `blocks/${pathSegment(p.blockId)}/children`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -86,7 +83,7 @@ export default function notion(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `blocks/${seg((input as Record<string, unknown>).blockId)}`,
+        `blocks/${pathSegment((input as Record<string, unknown>).blockId)}`,
       );
     },
   });
@@ -101,7 +98,7 @@ export default function notion(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `databases/${seg((input as Record<string, unknown>).databaseId)}`,
+        `databases/${pathSegment((input as Record<string, unknown>).databaseId)}`,
       );
     },
   });
@@ -150,7 +147,7 @@ export default function notion(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "POST",
-        `databases/${seg(p.databaseId)}/query`,
+        `databases/${pathSegment(p.databaseId)}/query`,
         body,
       )) as Record<string, unknown>;
       return data.results;
@@ -193,7 +190,7 @@ export default function notion(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `pages/${seg((input as Record<string, unknown>).pageId)}`,
+        `pages/${pathSegment((input as Record<string, unknown>).pageId)}`,
       );
     },
   });
@@ -209,7 +206,7 @@ export default function notion(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { pageId, ...body } = input as Record<string, unknown>;
-      return api(ctx, "PATCH", `pages/${seg(pageId)}`, body);
+      return api(ctx, "PATCH", `pages/${pathSegment(pageId)}`, body);
     },
   });
 
@@ -221,7 +218,7 @@ export default function notion(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PATCH",
-        `pages/${seg((input as Record<string, unknown>).pageId)}`,
+        `pages/${pathSegment((input as Record<string, unknown>).pageId)}`,
         { archived: true },
       );
     },
@@ -257,7 +254,7 @@ export default function notion(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `users/${seg((input as Record<string, unknown>).userId)}`,
+        `users/${pathSegment((input as Record<string, unknown>).userId)}`,
       );
     },
   });
