@@ -121,7 +121,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "plain-http target: ssl defaults to false for LAN hosts, which the HTTPS-only broker refuses",
   ],
   ["hubspot", "phase 3: not yet migrated"],
-  ["humanticAi", "phase 3: not yet migrated"],
   ["hunter", "phase 3: not yet migrated"],
   ["intercom", "phase 3: not yet migrated"],
   ["iterable", "phase 3: not yet migrated"],
