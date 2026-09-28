@@ -174,7 +174,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "sendy/src/index.ts",
   "shiftObjects/src/objects.ts",
   "shiftTranscription/src/transcription.ts",
-  "shopify/src/index.ts",
   "signl4/src/index.ts",
   "sms77/src/index.ts",
   "steel/src/shared.ts",

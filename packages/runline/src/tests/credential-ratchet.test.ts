@@ -191,7 +191,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "deadline: transcribe waits on /await for up to 120 s plus response time, past the transport's 120 s ceiling",
   ],
   ["shiftWork", "phase 3: not yet migrated"],
-  ["shopify", "phase 3: not yet migrated"],
   ["signl4", "path token: the team secret is the URL path"],
   ["sms77", "phase 3: not yet migrated"],
   [
