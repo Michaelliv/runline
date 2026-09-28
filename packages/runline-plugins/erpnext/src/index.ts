@@ -1,65 +1,33 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { erpnextCredential } from "./credentials.js";
 
-async function apiRequest(
-  host: string,
-  apiKey: string,
-  apiSecret: string,
-  method: string,
+/** One ERPNext call: every endpoint is a path beneath the instance's /api/. */
+function req(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${host}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, erpnextCredential, "erpnext", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `token ${apiKey}:${apiSecret}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`ERPNext API error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  return {
-    host: (cfg.host as string).replace(/\/$/, ""),
-    apiKey: cfg.apiKey as string,
-    apiSecret: cfg.apiSecret as string,
-  };
-}
-
-function req(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { host, apiKey, apiSecret } = getConn(ctx);
-  return apiRequest(host, apiKey, apiSecret, method, endpoint, body, qs);
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function erpnext(rl: RunlinePluginAPI) {
   rl.setName("erpnext");
   rl.setVersion("0.1.0");
+  rl.setCredential(erpnextCredential);
 
   rl.setConnectionSchema({
     host: {
@@ -105,7 +73,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/api/resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
+        `resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
       )) as Record<string, unknown>;
       return data.data;
     },
@@ -150,7 +118,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/api/resource/${encodeURIComponent(docType as string)}`,
+        `resource/${encodeURIComponent(docType as string)}`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -177,7 +145,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        `/api/resource/${encodeURIComponent(docType)}`,
+        `resource/${encodeURIComponent(docType)}`,
         properties,
       )) as Record<string, unknown>;
       return data.data;
@@ -209,7 +177,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/api/resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
+        `resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
         properties,
       )) as Record<string, unknown>;
       return data.data;
@@ -235,7 +203,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       await req(
         ctx,
         "DELETE",
-        `/api/resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
+        `resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
       );
       return { success: true };
     },

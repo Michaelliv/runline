@@ -83,10 +83,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["elevenlabs", "phase 3: not yet migrated"],
   ["emelia", "phase 3: not yet migrated"],
   [
-    "erpnext",
-    "composite secret: Authorization: token {apiKey}:{apiSecret} joins two fields",
-  ],
-  [
     "facebookGraph",
     "agent-selected host: hostUrl is a per-call action input, not config",
   ],
