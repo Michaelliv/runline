@@ -25,7 +25,6 @@ import microsoftCalendar from "../../../runline-plugins/microsoftCalendar/src/in
 import microsoftFiles from "../../../runline-plugins/microsoftFiles/src/index.js";
 import microsoftMail from "../../../runline-plugins/microsoftMail/src/index.js";
 import plaud from "../../../runline-plugins/plaud/src/index.js";
-import trello from "../../../runline-plugins/trello/src/index.js";
 import type { CredentialDeclaration } from "../credentials/types.js";
 import { createPluginAPI, type PluginFunction } from "../plugin/api.js";
 import type { PluginDef } from "../plugin/types.js";
@@ -52,9 +51,10 @@ describe("the plugin API carries a credential declaration", () => {
     assert.equal(resolve().credential, declaration);
   });
 
-  it("a plugin that signs its own requests declares none", () => {
-    // Trello signs its own requests: two query secrets have no declarable kind.
-    assert.equal(definition(trello).credential, undefined);
+  it("a plugin that never calls setCredential declares none", () => {
+    const { api, resolve } = createPluginAPI("probe");
+    api.setName("probe");
+    assert.equal(resolve().credential, undefined);
   });
 });
 
