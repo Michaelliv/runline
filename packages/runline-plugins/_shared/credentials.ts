@@ -193,16 +193,30 @@ export function credentialRequest(
 }
 
 /**
- * How a failed request reads: the status, and optionally identifiers the
- * provider returns for correcting the call (never its free text, which can
- * echo request data back).
+ * A provider error identifier worth handing back — an error code, a field
+ * path — as a plain name. Anything else is free text, which can echo request
+ * data back, and is dropped.
+ */
+export function errorIdentifier(value: unknown): string | undefined {
+  return typeof value === "string" && /^[\w.$-]{1,100}$/.test(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * How a failed request reads: the status, and the identifiers a provider
+ * returns for correcting the call — its error `code` and the offending
+ * `param` — never its free-text message.
  */
 export function failureMessage(
   plugin: string,
   status: number,
-  detail?: string,
+  detail: { code?: string; param?: string } = {},
 ): string {
-  return `${plugin}: request failed (HTTP ${status}${detail ? ` ${detail}` : ""})`;
+  const parts = [detail.code, detail.param && `param: ${detail.param}`]
+    .filter(Boolean)
+    .join(", ");
+  return `${plugin}: request failed (HTTP ${status}${parts ? ` ${parts}` : ""})`;
 }
 
 /** A failed request, reported by status alone. */

@@ -1,12 +1,8 @@
 import { type ActionContext, AuthError, type HttpMethod } from "runline";
 import * as t from "typebox";
 import { credentialBroker } from "../../_shared/credentialAdapter.js";
-import {
-  SHIFT_API_URL,
-  STRICT_OBJECT,
-  shiftErrorMessage,
-  shiftIdentifier,
-} from "../../_shared/shiftCloud.js";
+import { errorIdentifier, failureMessage } from "../../_shared/credentials.js";
+import { SHIFT_API_URL, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
 import { shiftCredential, shiftPath } from "../../_shared/shiftCredentials.js";
 import {
   BusinessWorldModelClient,
@@ -86,10 +82,10 @@ export function idempotentClientFor(ctx: Ctx): BusinessWorldModelClient {
  */
 export function describeError(err: unknown): Error {
   if (err instanceof BwmClientError) {
-    const code = shiftIdentifier(err.code);
-    const param = shiftIdentifier(err.param);
+    const code = errorIdentifier(err.code);
+    const param = errorIdentifier(err.param);
     const error = new Error(
-      shiftErrorMessage("shiftBwm", err.status, code, param),
+      failureMessage("shiftBwm", err.status, { code, param }),
     ) as Error & {
       status: number;
       type?: string;
@@ -97,7 +93,7 @@ export function describeError(err: unknown): Error {
       param?: string;
     };
     error.status = err.status;
-    error.type = shiftIdentifier(err.type);
+    error.type = errorIdentifier(err.type);
     error.code = code;
     error.param = param;
     return error;

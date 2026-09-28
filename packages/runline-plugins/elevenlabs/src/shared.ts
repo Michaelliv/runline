@@ -1,11 +1,16 @@
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 import { basename } from "node:path";
-import type { ActionContext } from "runline";
+import { type ActionContext, AuthError } from "runline";
 import * as t from "typebox";
 import { Check } from "typebox/value";
 import { credentialBroker } from "../../_shared/credentialAdapter.js";
-import { multipartBody, pathSegment } from "../../_shared/credentials.js";
+import {
+  errorIdentifier,
+  failureMessage,
+  multipartBody,
+  pathSegment,
+} from "../../_shared/credentials.js";
 import { SEND_FILE_NOTE, writeMediaFile } from "../../_shared/mediaFile.js";
 import { obj, readBounded, readBoundedBytes } from "../../_shared/provider.js";
 import { elevenlabsCredential } from "./credentials.js";
@@ -84,11 +89,15 @@ async function request<T>(
     if (!response.ok) await json(response);
     return await consume(response);
   } catch (error) {
+    // The request id and retry guidance join the message; a transport
+    // failure keeps its code, so callers can still tell why it failed.
     const mutation = init.method && init.method !== "GET";
-    throw new Error(
+    const wrapped: Error & { code?: string } = new Error(
       `${error instanceof Error ? error.message : String(error)}${requestId ? ` (requestId ${requestId})` : ""}${mutation ? ". Request may have been applied or billed; do not retry automatically." : ""}`,
       { cause: error },
     );
+    if (error instanceof AuthError) wrapped.code = error.code;
+    throw wrapped;
   }
 }
 
@@ -102,25 +111,27 @@ async function json(response: Response, limit = JSON_LIMIT): Promise<unknown> {
   try {
     body = text ? JSON.parse(text) : null;
   } catch {
-    throw new Error(`elevenlabs HTTP ${response.status}: non-JSON response`);
+    if (!response.ok)
+      throw new Error(failureMessage("elevenlabs", response.status));
+    throw new Error("elevenlabs: non-JSON response");
   }
   if (!response.ok) {
+    // The error `status` code and the offending field paths, never the
+    // provider's messages or the validated input.
     const detail = obj(body).detail;
-    const error = obj(detail);
-    // Include provider error messages and locations, not validation input payloads.
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail
-              .map((v) => {
-                const e = obj(v);
-                return `${Array.isArray(e.loc) ? e.loc.join(".") : "body"}: ${e.msg ?? "invalid"}`;
-              })
-              .join("; ")
-          : `${error.status ?? "request failed"}: ${error.message ?? ""}`;
+    const params = Array.isArray(detail)
+      ? detail
+          .map((v) => {
+            const loc = obj(v).loc;
+            return errorIdentifier(Array.isArray(loc) ? loc.join(".") : loc);
+          })
+          .filter((param): param is string => param !== undefined)
+      : [];
     throw new Error(
-      `elevenlabs HTTP ${response.status}: ${message.slice(0, 1000)}`,
+      failureMessage("elevenlabs", response.status, {
+        code: errorIdentifier(obj(detail).status) ?? errorIdentifier(detail),
+        param: params.length ? params.join(", ") : undefined,
+      }),
     );
   }
   if (body === null || typeof body !== "object")

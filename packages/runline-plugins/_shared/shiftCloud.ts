@@ -1,7 +1,6 @@
 import type { ActionContext } from "runline";
 import * as t from "typebox";
-
-import { failureMessage } from "./credentials.js";
+import { errorIdentifier, failureMessage } from "./credentials.js";
 
 export { pathSegment } from "./credentials.js";
 
@@ -59,29 +58,10 @@ export function baseUrl(): string {
   return `${SHIFT_API_URL}/`;
 }
 
-/** A Shift error identifier worth handing back: a plain name, never text. */
-export function shiftIdentifier(value: unknown): string | undefined {
-  return typeof value === "string" && /^[\w.$-]{1,100}$/.test(value)
-    ? value
-    : undefined;
-}
-
 /**
- * The status, with the service's `code` and the offending `param`. Those
- * name what to correct; the free-text `message` can echo request data and
- * is never part of it.
+ * A failed response, read as a Shift error envelope when it is one: the
+ * service's `code` (else its `type`) and the offending `param`.
  */
-export function shiftErrorMessage(
-  plugin: string,
-  status: number,
-  code?: string,
-  param?: string,
-): string {
-  const detail = [code, param && `param: ${param}`].filter(Boolean).join(", ");
-  return failureMessage(plugin, status, detail);
-}
-
-/** A failed response, read as a Shift error envelope when it is one. */
 export async function shiftError(
   plugin: string,
   response: Response,
@@ -90,16 +70,16 @@ export async function shiftError(
   let param: string | undefined;
   try {
     const error = ((await response.json()) as { error?: unknown }).error;
-    if (typeof error === "string") code = shiftIdentifier(error);
+    if (typeof error === "string") code = errorIdentifier(error);
     else if (error && typeof error === "object") {
       const shaped = error as Record<string, unknown>;
-      code = shiftIdentifier(shaped.code) ?? shiftIdentifier(shaped.type);
-      param = shiftIdentifier(shaped.param);
+      code = errorIdentifier(shaped.code) ?? errorIdentifier(shaped.type);
+      param = errorIdentifier(shaped.param);
     }
   } catch {
     // Not an error envelope: the status alone.
   }
-  return new Error(shiftErrorMessage(plugin, response.status, code, param));
+  return new Error(failureMessage(plugin, response.status, { code, param }));
 }
 
 export function listParams(input: unknown): URLSearchParams {

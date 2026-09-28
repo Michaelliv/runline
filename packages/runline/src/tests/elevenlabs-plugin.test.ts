@@ -474,11 +474,13 @@ describe("elevenlabs plugin", () => {
     );
     await assert.rejects(
       () => run("speech.create", { voiceId: "v", text: "hello" }),
-      /401.*quota_exceeded.*do not retry/,
+      (error: Error) =>
+        /401 quota_exceeded.*do not retry/.test(error.message) &&
+        !error.message.includes("Insufficient credits"),
     );
     assert.equal(calls.length, 1);
   });
-  it("reports validation fields without echoing their input", async () => {
+  it("reports validation field paths without the provider's messages or the input", async () => {
     mock(
       Response.json(
         {
@@ -489,12 +491,9 @@ describe("elevenlabs plugin", () => {
         { status: 422 },
       ),
     );
-    await assert.rejects(
-      () => run("models.list"),
-      (error: Error) =>
-        error.message.includes("body.text: Field required") &&
-        !error.message.includes("private"),
-    );
+    await assert.rejects(() => run("models.list"), {
+      message: "elevenlabs: request failed (HTTP 422 param: body.text)",
+    });
   });
   it("rejects empty audio and unexpected JSON successes", async () => {
     for (const response of [
