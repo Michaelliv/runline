@@ -241,7 +241,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["sms77", "phase 3: not yet migrated"],
   ["splunk", "phase 2: not yet migrated"],
   ["spotify", "phase 2: not yet migrated"],
-  ["stackby", "phase 2: not yet migrated"],
   [
     "steel",
     "WebSocket: the key rides in a wss:// CDP URL the transport cannot carry",
