@@ -201,7 +201,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "urlscanio/src/index.ts",
   "vero/src/index.ts",
   "vonage/src/index.ts",
-  "woocommerce/src/index.ts",
   "xai/src/index.ts",
   "yourls/src/index.ts",
   "zammad/src/index.ts",
