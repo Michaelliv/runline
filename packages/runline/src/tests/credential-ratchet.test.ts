@@ -188,7 +188,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["peekalink", "phase 3: not yet migrated"],
   ["phantombuster", "phase 3: not yet migrated"],
   ["philipsHue", "phase 2: not yet migrated"],
-  ["pipedrive", "phase 2: not yet migrated"],
   ["plivo", "phase 3: not yet migrated"],
   ["posthog", "body key: api_key travels in the JSON body"],
   ["profitwell", "phase 3: not yet migrated"],
