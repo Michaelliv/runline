@@ -196,7 +196,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "openThesaurus/src/index.ts",
   "openai/src/index.ts",
   "openweathermap/src/index.ts",
-  "oura/src/index.ts",
   "paddle/src/index.ts",
   "pagerduty/src/index.ts",
   "parallel/src/index.ts",

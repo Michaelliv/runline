@@ -1,22 +1,17 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { ouraCredential } from "./credentials.js";
 
-const BASE = "https://api.ouraring.com/v2";
-
-async function apiRequest(
-  token: string,
+function apiRequest(
+  ctx: ActionContext,
   endpoint: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  for (const [k, v] of Object.entries(qs)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-  }
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
+  return credentialJson(ctx, ouraCredential, "oura", {
+    target: "api",
+    path: endpoint,
+    query: qs,
   });
-  if (!res.ok)
-    throw new Error(`Oura API error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 function formatDate(d?: unknown): string | undefined {
@@ -27,6 +22,7 @@ function formatDate(d?: unknown): string | undefined {
 export default function oura(rl: RunlinePluginAPI) {
   rl.setName("oura");
   rl.setVersion("0.1.0");
+  rl.setCredential(ouraCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -37,32 +33,29 @@ export default function oura(rl: RunlinePluginAPI) {
     },
   });
 
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
-
   rl.registerAction("profile.get", {
     access: "read",
     description: "Get the user's personal information",
     inputSchema: {},
     async execute(_input, ctx) {
-      return apiRequest(key(ctx), "/usercollection/personal_info");
+      return apiRequest(ctx, "usercollection/personal_info");
     },
   });
 
   const summaryEndpoints = [
     {
       name: "summary.activity",
-      path: "/usercollection/daily_activity",
+      path: "usercollection/daily_activity",
       description: "Get daily activity summary",
     },
     {
       name: "summary.readiness",
-      path: "/usercollection/daily_readiness",
+      path: "usercollection/daily_readiness",
       description: "Get daily readiness summary",
     },
     {
       name: "summary.sleep",
-      path: "/usercollection/daily_sleep",
+      path: "usercollection/daily_sleep",
       description: "Get daily sleep summary",
     },
   ];
@@ -93,7 +86,7 @@ export default function oura(rl: RunlinePluginAPI) {
         const qs: Record<string, unknown> = {};
         if (p.startDate) qs.start_date = formatDate(p.startDate);
         if (p.endDate) qs.end_date = formatDate(p.endDate);
-        const data = (await apiRequest(key(ctx), ep.path, qs)) as Record<
+        const data = (await apiRequest(ctx, ep.path, qs)) as Record<
           string,
           unknown
         >;

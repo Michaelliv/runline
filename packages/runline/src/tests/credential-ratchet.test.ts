@@ -186,7 +186,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["onfleet", "phase 3: not yet migrated"],
   ["openai", "phase 3: not yet migrated"],
   ["openweathermap", "phase 3: not yet migrated"],
-  ["oura", "phase 2: not yet migrated"],
   ["paddle", "body key: vendor_auth_code travels in the JSON body"],
   ["pagerduty", "phase 3: not yet migrated"],
   ["parallel", "phase 3: not yet migrated"],
