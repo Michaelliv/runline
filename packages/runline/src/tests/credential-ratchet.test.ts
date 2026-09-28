@@ -74,7 +74,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "mailjet",
     "two credentials in one connection: basic pair for email, bearer for SMS",
   ],
-  ["mandrill", "body key: key travels in the JSON body of every call"],
   [
     "mocean",
     "body key: mocean-api-key and mocean-api-secret travel in the form body",

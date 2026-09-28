@@ -68,7 +68,6 @@ const UNBROKERED_FETCH = new Set([
   "gotify/src/index.ts",
   "graphql/src/index.ts",
   "mailjet/src/index.ts",
-  "mandrill/src/index.ts",
   "mocean/src/index.ts",
   "nextcloud/src/index.ts",
   "npm/src/index.ts",

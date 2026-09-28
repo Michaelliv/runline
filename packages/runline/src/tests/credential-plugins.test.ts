@@ -199,6 +199,16 @@ for (const fixture of fixtures) {
         const [name, value] = fixture.wire.header;
         assert.equal(new Headers(seen[0].init.headers).get(name), value);
       }
+      if (fixture.wire.field) {
+        const [name, value] = fixture.wire.field;
+        const body = Buffer.from(seen[0].init.body as Uint8Array).toString();
+        const fields = new Headers(seen[0].init.headers)
+          .get("content-type")
+          ?.includes("json")
+          ? (JSON.parse(body) as Record<string, unknown>)
+          : Object.fromEntries(new URLSearchParams(body));
+        assert.equal(fields[name], value);
+      }
     });
 
     it("locally: refuses a redirect and does not follow it", async () => {

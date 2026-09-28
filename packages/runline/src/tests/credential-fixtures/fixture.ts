@@ -23,7 +23,12 @@ export interface CredentialFixture {
   /**
    * The first request's wire shape under the local signer — the same
    * destination and auth header the plugin sent before it was brokered.
-   * A query key appears in `url`.
+   * A query key appears in `url`; a body key in `field`, a top-level
+   * field of the JSON or form body.
    */
-  wire: { url: string; header?: [name: string, value: string] };
+  wire: {
+    url: string;
+    header?: [name: string, value: string];
+    field?: [name: string, value: string];
+  };
 }
