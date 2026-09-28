@@ -4,8 +4,7 @@ import {
   type CredentialDeclaration,
   type HttpMethod,
 } from "runline";
-import { credentialBroker } from "./credentialAdapter.js";
-import { staticCredential } from "./credentials.js";
+import { credentialRequest, staticCredential } from "./credentials.js";
 import { SHIFT_API_URL, shiftError } from "./shiftCloud.js";
 
 export interface ShiftCredentialOptions {
@@ -72,7 +71,7 @@ export function shiftClient(plugin: string, options?: ShiftCredentialOptions) {
   const credential = shiftCredential(options);
   return {
     credential,
-    request: <T>(
+    request: <T = unknown>(
       ctx: ActionContext,
       route: string,
       init?: { method?: string; body?: string },
@@ -81,28 +80,24 @@ export function shiftClient(plugin: string, options?: ShiftCredentialOptions) {
 }
 
 /**
- * One Shift API call through the declared credential. A JSON body is sent
- * as JSON; 204 answers no value.
+ * One Shift API call through the declared credential. A body is JSON text;
+ * an empty answer, as the Shift API contract has it, is no value. `T` is the
+ * caller's statement of the answer's shape, unchecked.
  */
-export async function shiftRequest<T>(
+export async function shiftRequest<T = unknown>(
   ctx: ActionContext,
   declaration: CredentialDeclaration,
   plugin: string,
   route: string,
   init: { method?: string; body?: string } = {},
 ): Promise<T> {
-  const path = shiftPath(route);
-  const response = await credentialBroker(ctx, declaration).request({
+  const response = await credentialRequest(ctx, declaration, {
     target: "api",
-    path,
+    path: shiftPath(route),
     method: (init.method ?? "GET") as HttpMethod,
-    headers: {
-      Accept: "application/json",
-      ...(init.body !== undefined
-        ? { "Content-Type": "application/json" }
-        : {}),
-    },
-    ...(init.body !== undefined ? { body: init.body } : {}),
+    ...(init.body !== undefined
+      ? { body: init.body, headers: { "Content-Type": "application/json" } }
+      : {}),
   });
   if (!response.ok) throw await shiftError(plugin, response);
   if (response.status === 204) return undefined as T;

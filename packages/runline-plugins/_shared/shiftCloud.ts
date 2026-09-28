@@ -1,6 +1,8 @@
 import type { ActionContext } from "runline";
 import * as t from "typebox";
 
+import { failureMessage } from "./credentials.js";
+
 export { pathSegment } from "./credentials.js";
 
 /**
@@ -76,7 +78,7 @@ export function shiftErrorMessage(
   param?: string,
 ): string {
   const detail = [code, param && `param: ${param}`].filter(Boolean).join(", ");
-  return `${plugin}: request failed (HTTP ${status}${detail ? ` ${detail}` : ""})`;
+  return failureMessage(plugin, status, detail);
 }
 
 /** A failed response, read as a Shift error envelope when it is one. */

@@ -193,11 +193,21 @@ export function credentialRequest(
 }
 
 /**
- * A failed request, reported by status alone: provider error text can echo
- * request data back and is not returned to the caller.
+ * How a failed request reads: the status, and optionally identifiers the
+ * provider returns for correcting the call (never its free text, which can
+ * echo request data back).
  */
+export function failureMessage(
+  plugin: string,
+  status: number,
+  detail?: string,
+): string {
+  return `${plugin}: request failed (HTTP ${status}${detail ? ` ${detail}` : ""})`;
+}
+
+/** A failed request, reported by status alone. */
 export function requestFailed(plugin: string, status: number): Error {
-  return new Error(`${plugin}: request failed (HTTP ${status})`);
+  return new Error(failureMessage(plugin, status));
 }
 
 /** A request that must succeed, for callers that read the Response itself (headers, text, bytes). */

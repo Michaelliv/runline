@@ -1,6 +1,6 @@
 /**
  * Provider helpers: total readers for unshaped JSON, and bounded text or
- * binary body reads. Path segments go through `pathSegment` in credentials.ts.
+ * binary body reads.
  *
  * The readers are total by design. These payloads are deep and change without
  * notice, so a missing or wrongly-typed field yields the empty value for its
