@@ -176,6 +176,35 @@ describe("staticCredential", () => {
     new CredentialRegistry().register(unsigned.type);
   });
 
+  it("an optional credential's unsigned method may have targets of its own", () => {
+    const reddit = staticCredential({
+      id: "reddit",
+      auth: { kind: "bearer" },
+      local: { secret: "accessToken" },
+      optional: {
+        targets: {
+          api: { baseUrl: "https://www.reddit.com/", methods: ["GET"] },
+        },
+      },
+      targets: {
+        api: { baseUrl: "https://oauth.reddit.com/", methods: ["GET", "POST"] },
+      },
+    });
+    const signed = reddit({ accessToken: "t" });
+    assert.equal(signed.method, "bearer");
+    assert.equal(
+      signed.type.methods.bearer.targets.api.baseUrl,
+      "https://oauth.reddit.com/",
+    );
+    const unsigned = reddit({});
+    assert.equal(unsigned.method, "none");
+    assert.equal(
+      unsigned.type.methods.none.targets.api.baseUrl,
+      "https://www.reddit.com/",
+    );
+    new CredentialRegistry().register(unsigned.type);
+  });
+
   it("bearer and query-key shorthands place one secret part", () => {
     const targets = {
       api: { baseUrl: "https://api.example/", methods: ["GET" as const] },
