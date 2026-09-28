@@ -165,7 +165,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "posthog/src/index.ts",
   "profitwell/src/index.ts",
   "pushover/src/index.ts",
-  "recraft/src/index.ts",
   "reddit/src/index.ts",
   "replicate/src/index.ts",
   "rundeck/src/index.ts",

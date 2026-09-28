@@ -168,7 +168,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["posthog", "body key: api_key travels in the JSON body"],
   ["profitwell", "phase 3: not yet migrated"],
   ["pushover", "body key: token travels in the form body"],
-  ["recraft", "phase 3: not yet migrated"],
   [
     "reddit",
     "optional credential: a secret-free config cannot say whether to sign",

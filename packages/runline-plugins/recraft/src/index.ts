@@ -15,10 +15,13 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
-import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/mediaFile.js";
-
-const ENDPOINT = "https://external.api.recraft.ai/v1/images/generations";
-const EDIT_ENDPOINT = "https://external.api.recraft.ai/v1/images/imageToImage";
+import { credentialJson, multipartBody } from "../../_shared/credentials.js";
+import {
+  readImageInput,
+  SEND_FILE_NOTE,
+  writeImageFile,
+} from "../../_shared/mediaFile.js";
+import { recraftCredential } from "./credentials.js";
 
 interface CreateInput {
   prompt: string;
@@ -48,6 +51,7 @@ interface EditInput {
 export default function recraft(rl: RunlinePluginAPI) {
   rl.setName("recraft");
   rl.setVersion("0.1.0");
+  rl.setCredential(recraftCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -71,7 +75,8 @@ export default function recraft(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -107,7 +112,6 @@ export default function recraft(rl: RunlinePluginAPI) {
         throw new Error("recraft: prompt is required");
       }
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const model = p.model ?? "recraftv3";
 
       const body: Record<string, unknown> = {
@@ -120,22 +124,22 @@ export default function recraft(rl: RunlinePluginAPI) {
       if (p.style) body.style = p.style;
       if (p.styleId) body.style_id = p.styleId;
 
-      const res = await fetch(ENDPOINT, {
+      const data = (await credentialJson(ctx, recraftCredential, "recraft", {
+        target: "images",
+        path: "generations",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        throw new Error(`Recraft API error ${res.status}: ${await res.text()}`);
-      }
-
-      const data = (await res.json()) as { data?: RecraftImage[] };
+        json: body,
+      })) as { data?: RecraftImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) =>
-        writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "recraft", index: i, saveDir: p.saveDir, stamp }),
+        writeImageFile({
+          base64: d.b64_json,
+          mimeType: "image/png",
+          provider: "recraft",
+          index: i,
+          saveDir: p.saveDir,
+          stamp,
+        }),
       );
       return { provider: "recraft", model, images, note: SEND_FILE_NOTE };
     },
@@ -154,7 +158,8 @@ export default function recraft(rl: RunlinePluginAPI) {
       imagePath: {
         type: "string",
         required: true,
-        description: "Path to the source image file (PNG, JPG, WEBP, or SVG; max 10 MB)",
+        description:
+          "Path to the source image file (PNG, JPG, WEBP, or SVG; max 10 MB)",
       },
       strength: {
         type: "number",
@@ -165,7 +170,8 @@ export default function recraft(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -197,10 +203,12 @@ export default function recraft(rl: RunlinePluginAPI) {
       }
       const img = readImageInput(p.imagePath, "recraft");
 
-      const apiKey = ctx.connection.config.apiKey as string;
-
       const form = new FormData();
-      form.append("image", new Blob([img.bytes], { type: img.mimeType }), img.fileName);
+      form.append(
+        "image",
+        new Blob([img.bytes], { type: img.mimeType }),
+        img.fileName,
+      );
       form.append("prompt", p.prompt);
       form.append("strength", String(p.strength ?? 0.2));
       form.append("response_format", "b64_json");
@@ -209,22 +217,32 @@ export default function recraft(rl: RunlinePluginAPI) {
       if (p.style) form.append("style", p.style);
       if (p.styleId) form.append("style_id", p.styleId);
 
-      const res = await fetch(EDIT_ENDPOINT, {
+      const { body, contentType } = await multipartBody(form);
+      const data = (await credentialJson(ctx, recraftCredential, "recraft", {
+        target: "images",
+        path: "imageToImage",
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: form,
-      });
-      if (!res.ok) {
-        throw new Error(`Recraft API error ${res.status}: ${await res.text()}`);
-      }
-
-      const data = (await res.json()) as { data?: RecraftImage[] };
+        body,
+        headers: { "Content-Type": contentType },
+      })) as { data?: RecraftImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) =>
-        writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "recraft", index: i, saveDir: p.saveDir, stamp }),
+        writeImageFile({
+          base64: d.b64_json,
+          mimeType: "image/png",
+          provider: "recraft",
+          index: i,
+          saveDir: p.saveDir,
+          stamp,
+        }),
       );
       // The imageToImage endpoint's own default model is recraftv4_1.
-      return { provider: "recraft", model: p.model ?? "recraftv4_1", images, note: SEND_FILE_NOTE };
+      return {
+        provider: "recraft",
+        model: p.model ?? "recraftv4_1",
+        images,
+        note: SEND_FILE_NOTE,
+      };
     },
   });
 }
