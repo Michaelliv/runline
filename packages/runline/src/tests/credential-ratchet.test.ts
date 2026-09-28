@@ -251,7 +251,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "strapi",
     "login: password mode mints a JWT; one plugin cannot sign two ways",
   ],
-  ["strava", "phase 2: not yet migrated"],
   ["stripe", "phase 3: not yet migrated"],
   ["supabase", "one secret injected twice: apikey header and bearer"],
   ["syncromsp", "phase 3: not yet migrated"],
