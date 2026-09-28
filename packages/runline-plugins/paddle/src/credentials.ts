@@ -20,7 +20,7 @@ export const paddleCredential = staticCredential({
   targets: (config) => ({
     api: {
       baseUrl:
-        config.sandbox === true
+        config.sandbox === true || config.sandbox === "true"
           ? "https://sandbox-vendors.paddle.com/api/"
           : "https://vendors.paddle.com/api/",
       methods: ["POST"],

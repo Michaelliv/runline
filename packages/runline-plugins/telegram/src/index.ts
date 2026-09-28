@@ -2,17 +2,17 @@ import type { ActionContext, RunlinePluginAPI } from "runline";
 import { credentialJson } from "../../_shared/credentials.js";
 import { telegramCredential } from "./credentials.js";
 
-/** A Bot API method call; an answer that is not ok is a failure. */
+/** A call to the Bot API method `name`; an answer that is not ok is a failure. */
 async function apiRequest(
   ctx: ActionContext,
-  method: string,
+  name: string,
   body: Record<string, unknown> = {},
 ): Promise<unknown> {
   const data = await credentialJson<Record<string, unknown>>(
     ctx,
     telegramCredential,
     "telegram",
-    { target: "api", path: method, method: "POST", json: body },
+    { target: "api", path: name, method: "POST", json: body },
   );
   if (!data.ok) throw new Error(`Telegram API error: ${JSON.stringify(data)}`);
   return data.result;
