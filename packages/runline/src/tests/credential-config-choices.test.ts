@@ -9,7 +9,11 @@ import { describe, it } from "node:test";
 import { configChoice } from "../../../runline-plugins/_shared/credentials.js";
 import { bitwardenCredential } from "../../../runline-plugins/bitwarden/src/credentials.js";
 import { bubbleCredential } from "../../../runline-plugins/bubble/src/credentials.js";
+import { contentfulCredential } from "../../../runline-plugins/contentful/src/credentials.js";
 import { customerIoCredential } from "../../../runline-plugins/customerIo/src/credentials.js";
+import { deeplCredential } from "../../../runline-plugins/deepl/src/credentials.js";
+import { gristCredential } from "../../../runline-plugins/grist/src/credentials.js";
+import { halopsaCredential } from "../../../runline-plugins/halopsa/src/credentials.js";
 import { mailgunRegion } from "../../../runline-plugins/mailgun/src/credentials.js";
 import { paypalCredential } from "../../../runline-plugins/paypal/src/credentials.js";
 
@@ -44,6 +48,16 @@ describe("plugins choosing hosts from config", () => {
       () => paypalCredential({ env: "production" }),
       () => customerIoCredential({ region: "eu" }),
       () => mailgunRegion({ apiDomain: "api.mailgun.org" }),
+      () => contentfulCredential({ source: "Preview" }),
+      () => deeplCredential({ plan: "professional" }),
+      () => gristCredential({ planType: "team", subdomain: "acme" }),
+      () =>
+        halopsaCredential({
+          hostingType: "onPremise",
+          appUrl: "https://halo.example.com",
+          authUrl: "https://auth.halo.example.com",
+          resourceApiUrl: "https://halo.example.com/api",
+        }),
     ];
     for (const run of cases) assert.throws(run, refused);
   });
