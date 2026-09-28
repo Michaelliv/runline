@@ -106,15 +106,19 @@ function mockSteel(
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     assert.equal(url.origin, "https://api.steel.dev");
-    assert.equal(
-      init?.headers?.["steel-api-key" as keyof HeadersInit],
-      "ste_test",
-    );
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("steel-api-key"), "ste_test");
+    const type = headers.get("content-type") ?? "";
     let body: unknown;
-    if (init?.body instanceof FormData) {
-      body = Object.fromEntries(init.body.entries());
+    if (init?.body && type.startsWith("multipart/form-data")) {
+      const form = await new Response(init.body, {
+        headers: { "content-type": type },
+      }).formData();
+      body = Object.fromEntries(form.entries());
     } else {
-      body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      body = init?.body
+        ? JSON.parse(new TextDecoder().decode(init.body as Uint8Array))
+        : undefined;
     }
     const data = assertRequest({ url, init, body });
     return new Response(JSON.stringify(data), {
@@ -199,18 +203,28 @@ describe("steel plugin REST actions", () => {
     );
   });
 
-  it("builds CDP URLs without exposing process env", async () => {
+  it("gets the CDP URL from the broker: signed locally, a host's relay otherwise", async () => {
     const action = getAction(makeSteel(), "session.cdpUrl");
     assert.deepEqual(await action.execute({ id: "sess_1" }, ctx()), {
-      cdpUrl: "wss://connect.steel.dev?apiKey=ste_test&sessionId=sess_1",
+      cdpUrl: "wss://connect.steel.dev/?sessionId=sess_1&apiKey=ste_test",
     });
-    assert.deepEqual(
-      await action.execute(
-        { id: "sess_1", websocketUrl: "wss://custom?sessionId=sess_1" },
-        ctx(),
-      ),
-      { cdpUrl: "wss://custom?sessionId=sess_1&apiKey=ste_test" },
-    );
+    const hosted = ctx();
+    hosted.connection.config = {};
+    hosted.credentials = {
+      request: async () => new Response(null),
+      probe: async () => ({ outcome: "unverified" }),
+      socketUrl: async () => "wss://relay.host/abc",
+    };
+    assert.deepEqual(await action.execute({ id: "sess_1" }, hosted), {
+      cdpUrl: "wss://relay.host/abc",
+    });
+    hosted.credentials = {
+      request: async () => new Response(null),
+      probe: async () => ({ outcome: "unverified" }),
+    };
+    await assert.rejects(action.execute({ id: "sess_1" }, hosted), {
+      code: "unsupported_operation",
+    });
   });
 
   it("manages files, credentials, profiles, extensions, captchas, and traces", async () => {
@@ -295,16 +309,36 @@ describe("steel plugin REST actions", () => {
     );
   });
 
-  it("throws useful Steel API errors", async () => {
+  it("reports a failed request by its status", async () => {
     const action = getAction(makeSteel(), "session.get");
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ error: "nope" }), {
         status: 401,
         headers: { "content-type": "application/json" },
       })) as typeof fetch;
-    await assert.rejects(
-      action.execute({ id: "missing" }, ctx()),
-      /Steel API error 401/,
+    await assert.rejects(action.execute({ id: "missing" }, ctx()), {
+      message: "steel: request failed (HTTP 401)",
+    });
+  });
+
+  it("addresses a session file path segment by segment", async () => {
+    const action = getAction(makeSteel(), "sessionFile.download");
+    const urls: string[] = [];
+    globalThis.fetch = (async (url: RequestInfo | URL) => {
+      urls.push(String(url));
+      return new Response("csv,data", {
+        headers: { "content-type": "text/csv" },
+      });
+    }) as typeof fetch;
+    assert.equal(
+      await action.execute(
+        { sessionId: "s 1", path: "/files/dir/a b.csv" },
+        ctx(),
+      ),
+      "csv,data",
     );
+    assert.deepEqual(urls, [
+      "https://api.steel.dev/v1/sessions/s%201/files/dir/a%20b.csv",
+    ]);
   });
 });
