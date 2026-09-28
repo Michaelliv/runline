@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
 import { helpscoutCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
   ctx: ActionContext,
@@ -116,7 +113,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `conversations/${seg((input as { conversationId: number }).conversationId)}`,
+        `conversations/${pathSegment((input as { conversationId: number }).conversationId)}`,
       );
     },
   });
@@ -169,7 +166,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `conversations/${seg((input as { conversationId: number }).conversationId)}`,
+        `conversations/${pathSegment((input as { conversationId: number }).conversationId)}`,
       );
       return { success: true };
     },
@@ -217,7 +214,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `customers/${seg((input as { customerId: number }).customerId)}`,
+        `customers/${pathSegment((input as { customerId: number }).customerId)}`,
       );
     },
   });
@@ -261,7 +258,12 @@ export default function helpscout(rl: RunlinePluginAPI) {
         customerId: number;
         properties: Record<string, unknown>;
       };
-      return apiRequest(ctx, "PUT", `customers/${seg(customerId)}`, properties);
+      return apiRequest(
+        ctx,
+        "PUT",
+        `customers/${pathSegment(customerId)}`,
+        properties,
+      );
     },
   });
 
@@ -279,7 +281,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `customers/${seg((input as { customerId: number }).customerId)}/properties`,
+        `customers/${pathSegment((input as { customerId: number }).customerId)}/properties`,
       );
     },
   });
@@ -296,7 +298,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `mailboxes/${seg((input as { mailboxId: number }).mailboxId)}`,
+        `mailboxes/${pathSegment((input as { mailboxId: number }).mailboxId)}`,
       );
     },
   });
@@ -349,7 +351,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `conversations/${seg(conversationId)}/reply`,
+        `conversations/${pathSegment(conversationId)}/reply`,
         body,
       );
     },
@@ -370,7 +372,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
         await apiRequest(
           ctx,
           "GET",
-          `conversations/${seg((input as { conversationId: number }).conversationId)}/threads`,
+          `conversations/${pathSegment((input as { conversationId: number }).conversationId)}/threads`,
         ),
         "threads",
       );
