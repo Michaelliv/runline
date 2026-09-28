@@ -1,7 +1,7 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
-  credentialRequest,
+  credentialOk,
   pathSegment,
   pathWithin,
 } from "../../_shared/credentials.js";
@@ -43,13 +43,11 @@ async function paginateAll(
   };
 
   while (true) {
-    const res = await credentialRequest(ctx, ciscoWebexCredential, {
+    const res = await credentialOk(ctx, ciscoWebexCredential, "ciscoWebex", {
       target: "api",
       path: next.path,
       query: next.query,
     });
-    if (!res.ok)
-      throw new Error(`ciscoWebex: request failed (HTTP ${res.status})`);
     const data = (await res.json()) as Record<string, unknown>;
     results.push(...((data[property] as unknown[]) ?? []));
 
