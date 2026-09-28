@@ -1,3 +1,4 @@
+import { AuthError } from "runline";
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { credentialRequest } from "../../_shared/credentials.js";
@@ -6,10 +7,9 @@ import { vercelCredential } from "./credentials.js";
 export type Ctx = ActionContext;
 
 export type RequestOptions = {
-  method?: string;
+  method?: HttpMethod;
   query?: Record<string, unknown>;
   body?: unknown;
-  headers?: Record<string, string>;
 };
 
 export async function api(
@@ -29,9 +29,8 @@ export async function api(
   const res = await credentialRequest(ctx, vercelCredential, {
     target: "api",
     path: path.replace(/^\/+/, ""),
-    method: (options.method ?? "GET") as HttpMethod,
+    method: options.method ?? "GET",
     query,
-    ...(options.headers ? { headers: options.headers } : {}),
     ...(options.body !== undefined ? { json: options.body } : {}),
   });
   const text = await res.text();
@@ -45,7 +44,11 @@ export async function api(
     text.startsWith("{") ||
     text.startsWith("[")
   ) {
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new AuthError("invalid_response");
+    }
   }
   return text;
 }
