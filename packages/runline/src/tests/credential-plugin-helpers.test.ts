@@ -12,6 +12,7 @@ import {
   credentialJson,
   credentialOk,
   credentialRequest,
+  graphqlFailed,
   hostLabel,
   httpsBase,
   jsonOrAcknowledged,
@@ -405,23 +406,55 @@ describe("credentialRequest and credentialJson", () => {
 });
 
 describe("answerFailed", () => {
-  it("names a provider's error code, never its free text", () => {
+  it("reads a failure inside a 2xx answer by its code, field and message", () => {
     assert.equal(
-      answerFailed("slack", "channel_not_found").message,
+      answerFailed("slack", { code: "channel_not_found" }).message,
       "slack: request failed (channel_not_found)",
     );
     assert.equal(
-      answerFailed("nextcloud", 102).message,
-      "nextcloud: request failed (102)",
+      answerFailed("nextcloud", { code: 102, message: "User already exists" })
+        .message,
+      "nextcloud: request failed (102): User already exists",
     );
     assert.equal(
-      answerFailed("x", "Bad Request: <private> text").message,
+      answerFailed("yourls", { code: "error:keyword", message: "taken" })
+        .message,
+      "yourls: request failed (error:keyword): taken",
+    );
+    assert.equal(answerFailed("x", {}).message, "x: request failed");
+  });
+
+  it("drops a code that is not a plain identifier, and tidies and caps the message", () => {
+    assert.equal(
+      answerFailed("x", { code: "not a code", message: "line\none\t\u0000two" })
+        .message,
+      "x: request failed: line one two",
+    );
+    const long = answerFailed("x", { message: "a".repeat(1000) }).message;
+    assert.equal(long, `x: request failed: ${"a".repeat(300)}…`);
+  });
+});
+
+describe("graphqlFailed", () => {
+  it("reads the first GraphQL error by its code, field path and message", () => {
+    assert.equal(
+      graphqlFailed("linear", [
+        {
+          message: "Argument Validation Error",
+          path: ["issueCreate", "title"],
+          extensions: { code: "INVALID_INPUT" },
+        },
+        { message: "second", extensions: { code: "OTHER" } },
+      ]).message,
+      "linear: request failed (INVALID_INPUT, param: issueCreate.title): Argument Validation Error",
+    );
+    assert.equal(
+      graphqlFailed("monday", [{ message: "Bad board" }]).message,
+      "monday: request failed: Bad board",
+    );
+    assert.equal(
+      graphqlFailed("x", "not an array").message,
       "x: request failed",
-    );
-    assert.equal(answerFailed("x", undefined).message, "x: request failed");
-    assert.equal(
-      answerFailed("yourls", "error:keyword").message,
-      "yourls: request failed (error:keyword)",
     );
   });
 });

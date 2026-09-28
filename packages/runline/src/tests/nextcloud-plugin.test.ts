@@ -110,14 +110,14 @@ describe("nextcloud", () => {
     ]);
   });
 
-  it("reports an OCS failure by its status code, never its message", async () => {
+  it("reports an OCS failure by its status code and message", async () => {
     capture(() =>
       Response.json({
         ocs: {
           meta: {
             status: "failure",
             statuscode: 102,
-            message: "private user exists",
+            message: "User already exists",
           },
         },
       }),
@@ -125,7 +125,7 @@ describe("nextcloud", () => {
     await assert.rejects(
       run("user.create", { userId: "jane", email: "j@x.io" }),
       {
-        message: "nextcloud: request failed (102)",
+        message: "nextcloud: request failed (102): User already exists",
       },
     );
   });
