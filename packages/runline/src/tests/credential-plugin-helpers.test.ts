@@ -154,6 +154,27 @@ describe("staticCredential", () => {
       );
   });
 
+  it("an optional credential signs when the connection holds it, or says so publicly, and otherwise sends unsigned", () => {
+    const optional = staticCredential({
+      id: "coingecko",
+      auth: { kind: "apiKey", header: "x-cg-demo-api-key" },
+      local: { secret: "apiKey" },
+      optional: true,
+      targets: {
+        api: { baseUrl: "https://api.coingecko.com/api/v3/", methods: ["GET"] },
+      },
+    });
+    assert.equal(optional({ apiKey: "k" }).method, "apiKey");
+    assert.equal(optional({ authenticated: true }).method, "apiKey");
+    const unsigned = optional({});
+    assert.equal(unsigned.method, "none");
+    assert.equal(unsigned.localSecret, undefined);
+    assert.deepEqual(unsigned.type.methods.none.authentication, {
+      kind: "none",
+    });
+    new CredentialRegistry().register(unsigned.type);
+  });
+
   it("bearer and query-key shorthands place one secret part", () => {
     const targets = {
       api: { baseUrl: "https://api.example/", methods: ["GET" as const] },

@@ -504,6 +504,35 @@ describe("constrained credential transport", () => {
     }
   });
 
+  it("sends an unsigned method's requests with no credential, still held to its targets", async () => {
+    const def = definition("bearer");
+    def.methods.selected.schema = t.Object({}, { additionalProperties: false });
+    def.methods.selected.authentication = { kind: "none" };
+    const seen: Array<{ url: string; auth: string | null }> = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          url,
+          auth: new Headers(init.headers).get("authorization"),
+        });
+        return Response.json({});
+      }),
+      {},
+      def,
+    );
+    await h.transport.request(h.binding, request);
+    assert.deepEqual(seen, [
+      { url: "https://api.example/v1/items", auth: null },
+    ]);
+    await assert.rejects(
+      h.transport.request(h.binding, {
+        ...request,
+        path: "https://evil.example/",
+      }),
+      errorCode("request_not_allowed"),
+    );
+  });
+
   it("refuses an empty part in a header or query placement, before any IO", async () => {
     const def = definition("bearer");
     placed(
