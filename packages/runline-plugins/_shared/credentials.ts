@@ -126,6 +126,16 @@ export function hostLabel(value: unknown): string {
   return value;
 }
 
+/**
+ * An ID or name as exactly one path segment. An empty value is refused: it
+ * would turn `items/{id}` into the `items/` collection itself.
+ */
+export function pathSegment(value: unknown): string {
+  if (value === undefined || value === null || value === "")
+    throw new AuthError("request_not_allowed");
+  return encodeURIComponent(String(value));
+}
+
 export interface CredentialCall {
   target: string;
   /** Relative to the target's base URL; may carry its own query. */
