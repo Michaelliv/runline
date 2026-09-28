@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { thehiveCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function api(
   ctx: ActionContext,
@@ -72,7 +69,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `alert/${seg((input as Record<string, unknown>).id)}`,
+        `alert/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -105,7 +102,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PATCH",
-        `alert/${seg(p.id)}`,
+        `alert/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -119,7 +116,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `alert/${seg((input as Record<string, unknown>).id)}/markAsRead`,
+        `alert/${pathSegment((input as Record<string, unknown>).id)}/markAsRead`,
       );
     },
   });
@@ -132,7 +129,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `alert/${seg((input as Record<string, unknown>).id)}/markAsUnread`,
+        `alert/${pathSegment((input as Record<string, unknown>).id)}/markAsUnread`,
       );
     },
   });
@@ -145,7 +142,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `alert/${seg((input as Record<string, unknown>).id)}/createCase`,
+        `alert/${pathSegment((input as Record<string, unknown>).id)}/createCase`,
       );
     },
   });
@@ -159,7 +156,11 @@ export default function thehive(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `alert/${seg(p.alertId)}/merge/${seg(p.caseId)}`);
+      return api(
+        ctx,
+        "POST",
+        `alert/${pathSegment(p.alertId)}/merge/${pathSegment(p.caseId)}`,
+      );
     },
   });
 
@@ -193,7 +194,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `case/${seg((input as Record<string, unknown>).id)}`,
+        `case/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -226,7 +227,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PATCH",
-        `case/${seg(p.id)}`,
+        `case/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -248,7 +249,7 @@ export default function thehive(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { caseId, ...body } = input as Record<string, unknown>;
-      return api(ctx, "POST", `case/${seg(caseId)}/artifact`, body);
+      return api(ctx, "POST", `case/${pathSegment(caseId)}/artifact`, body);
     },
   });
 
@@ -309,7 +310,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PATCH",
-        `case/artifact/${seg(p.id)}`,
+        `case/artifact/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -332,7 +333,7 @@ export default function thehive(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { caseId, ...body } = input as Record<string, unknown>;
-      return api(ctx, "POST", `case/${seg(caseId)}/task`, body);
+      return api(ctx, "POST", `case/${pathSegment(caseId)}/task`, body);
     },
   });
 
@@ -390,7 +391,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PATCH",
-        `case/task/${seg(p.id)}`,
+        `case/task/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -409,7 +410,7 @@ export default function thehive(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { taskId, ...body } = input as Record<string, unknown>;
       (body as Record<string, unknown>).startDate = Date.now();
-      return api(ctx, "POST", `case/task/${seg(taskId)}/log`, body);
+      return api(ctx, "POST", `case/task/${pathSegment(taskId)}/log`, body);
     },
   });
 
