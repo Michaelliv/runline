@@ -92,7 +92,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "plivo",
     "config split: authId is both the Basic username, stored as a secret, and a path segment a brokered config must still hold",
   ],
-  ["posthog", "body key: api_key travels in the JSON body"],
   ["pushover", "body key: token travels in the form body"],
   [
     "reddit",

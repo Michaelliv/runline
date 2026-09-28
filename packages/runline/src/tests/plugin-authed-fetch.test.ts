@@ -74,7 +74,6 @@ const UNBROKERED_FETCH = new Set([
   "odoo/src/index.ts",
   "paddle/src/index.ts",
   "plivo/src/index.ts",
-  "posthog/src/index.ts",
   "pushover/src/index.ts",
   "reddit/src/index.ts",
   "salesforce/src/shared.ts",
