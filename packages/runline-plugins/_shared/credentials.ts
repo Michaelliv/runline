@@ -31,11 +31,15 @@ export interface StaticCredentialSpec {
   id: string;
   auth: StaticAuth | { kind: "basic" };
   /** Where a CLI connection keeps the secret: `secret` for key kinds, `username` and `password` for basic. */
-  local: { secret: LocalSource } | { username: LocalSource; password: LocalSource };
+  local:
+    | { secret: LocalSource }
+    | { username: LocalSource; password: LocalSource };
   /** Fixed targets, or targets built from public config (hosts, account paths). */
   targets:
     | Record<string, CredentialTarget>
-    | ((config: Readonly<Record<string, unknown>>) => Record<string, CredentialTarget>);
+    | ((
+        config: Readonly<Record<string, unknown>>,
+      ) => Record<string, CredentialTarget>);
   probe?: CredentialProbe;
 }
 
@@ -46,7 +50,9 @@ export interface StaticCredentialSpec {
  * same shape. A host stores the structured field; the CLI's flat fields are
  * named by `local`.
  */
-export function staticCredential(spec: StaticCredentialSpec): CredentialDeclaration {
+export function staticCredential(
+  spec: StaticCredentialSpec,
+): CredentialDeclaration {
   const field = "credential";
   const localSecret = Object.fromEntries(
     Object.entries(spec.local).map(([key, source]: [string, LocalSource]) => [
@@ -61,13 +67,16 @@ export function staticCredential(spec: StaticCredentialSpec): CredentialDeclarat
         [spec.auth.kind]: {
           schema: t.Object(
             {
-              [field]: spec.auth.kind === "basic" ? BasicSecretSchema : SecretSchema,
+              [field]:
+                spec.auth.kind === "basic" ? BasicSecretSchema : SecretSchema,
             },
             { additionalProperties: false },
           ),
           authentication: { ...spec.auth, field },
           targets:
-            typeof spec.targets === "function" ? spec.targets(config) : spec.targets,
+            typeof spec.targets === "function"
+              ? spec.targets(config)
+              : spec.targets,
           ...(spec.probe ? { probe: spec.probe } : {}),
         },
       },
@@ -126,7 +135,10 @@ export interface CredentialCall {
   headers?: Record<string, string>;
 }
 
-function withQuery(path: string, query: Record<string, unknown> | undefined): string {
+function withQuery(
+  path: string,
+  query: Record<string, unknown> | undefined,
+): string {
   if (!query) return path;
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
