@@ -1,8 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { uprocCredential } from "./credentials.js";
 
 export default function uproc(rl: RunlinePluginAPI) {
   rl.setName("uproc");
   rl.setVersion("0.1.0");
+  rl.setCredential(uprocCredential);
   rl.setConnectionSchema({
     email: {
       type: "string",
@@ -39,24 +42,18 @@ export default function uproc(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const c = ctx.connection.config;
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = {
         processor: p.processor,
         params: p.params,
       };
       if (p.dataWebhook) body.callback = { data: p.dataWebhook };
-      const res = await fetch("https://api.uproc.io/api/v2/process", {
+      return credentialJson(ctx, uprocCredential, "uproc", {
+        target: "api",
+        path: "process",
         method: "POST",
-        headers: {
-          Authorization: `Basic ${btoa(`${c.email}:${c.apiKey}`)}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
+        json: body,
       });
-      if (!res.ok)
-        throw new Error(`uProc error ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 }
