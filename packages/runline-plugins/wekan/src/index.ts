@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { wekanCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -60,7 +57,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `boards/${seg((input as Record<string, unknown>).boardId)}`,
+        `boards/${pathSegment((input as Record<string, unknown>).boardId)}`,
       );
     },
   });
@@ -77,7 +74,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `users/${seg(p.userId)}/boards`,
+        `users/${pathSegment(p.userId)}/boards`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -91,7 +88,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `boards/${seg((input as Record<string, unknown>).boardId)}`,
+        `boards/${pathSegment((input as Record<string, unknown>).boardId)}`,
       );
     },
   });
@@ -107,7 +104,7 @@ export default function wekan(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `boards/${seg(p.boardId)}/lists`, {
+      return api(ctx, "POST", `boards/${pathSegment(p.boardId)}/lists`, {
         title: p.title,
       });
     },
@@ -122,7 +119,11 @@ export default function wekan(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "GET", `boards/${seg(p.boardId)}/lists/${seg(p.listId)}`);
+      return api(
+        ctx,
+        "GET",
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}`,
+      );
     },
   });
 
@@ -138,7 +139,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `boards/${seg(p.boardId)}/lists`,
+        `boards/${pathSegment(p.boardId)}/lists`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -156,7 +157,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `boards/${seg(p.boardId)}/lists/${seg(p.listId)}`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}`,
       );
     },
   });
@@ -179,7 +180,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `boards/${seg(boardId)}/lists/${seg(listId)}/cards`,
+        `boards/${pathSegment(boardId)}/lists/${pathSegment(listId)}/cards`,
         body,
       );
     },
@@ -198,7 +199,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `boards/${seg(p.boardId)}/lists/${seg(p.listId)}/cards/${seg(p.cardId)}`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}/cards/${pathSegment(p.cardId)}`,
       );
     },
   });
@@ -216,7 +217,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `boards/${seg(p.boardId)}/lists/${seg(p.listId)}/cards`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}/cards`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -236,7 +237,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PUT",
-        `boards/${seg(p.boardId)}/lists/${seg(p.listId)}/cards/${seg(p.cardId)}`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}/cards/${pathSegment(p.cardId)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -255,7 +256,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `boards/${seg(p.boardId)}/lists/${seg(p.listId)}/cards/${seg(p.cardId)}`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}/cards/${pathSegment(p.cardId)}`,
       );
     },
   });
@@ -276,7 +277,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/comments`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/comments`,
         { authorId: p.authorId, comment: p.comment },
       );
     },
@@ -295,7 +296,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/comments/${seg(p.commentId)}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/comments/${pathSegment(p.commentId)}`,
       );
     },
   });
@@ -312,7 +313,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/comments`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/comments`,
       );
     },
   });
@@ -330,7 +331,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/comments/${seg(p.commentId)}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/comments/${pathSegment(p.commentId)}`,
       );
     },
   });
@@ -355,7 +356,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/checklists`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists`,
         { title: p.title, items: p.items },
       );
     },
@@ -374,7 +375,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/checklists/${seg(p.checklistId)}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}`,
       );
     },
   });
@@ -391,7 +392,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/checklists`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists`,
       );
     },
   });
@@ -409,7 +410,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/checklists/${seg(p.checklistId)}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}`,
       );
     },
   });
@@ -430,7 +431,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/checklists/${seg(p.checklistId)}/items/${seg(p.itemId)}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}/items/${pathSegment(p.itemId)}`,
       );
     },
   });
@@ -450,7 +451,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PUT",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/checklists/${seg(p.checklistId)}/items/${seg(p.itemId)}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}/items/${pathSegment(p.itemId)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -470,7 +471,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `boards/${seg(p.boardId)}/cards/${seg(p.cardId)}/checklists/${seg(p.checklistId)}/items/${seg(p.itemId)}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}/items/${pathSegment(p.itemId)}`,
       );
     },
   });

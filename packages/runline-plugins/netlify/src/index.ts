@@ -2,11 +2,9 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
   credentialRequest,
+  pathSegment,
 } from "../../_shared/credentials.js";
 import { netlifyCredential } from "./credentials.js";
-
-/** A site or deploy ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -74,7 +72,7 @@ export default function netlify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { deployId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `deploys/${seg(deployId)}/cancel`);
+      return apiRequest(ctx, "POST", `deploys/${pathSegment(deployId)}/cancel`);
     },
   });
 
@@ -96,7 +94,13 @@ export default function netlify(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (branch) body.branch = branch;
       if (title) qs.title = title;
-      return apiRequest(ctx, "POST", `sites/${seg(siteId)}/deploys`, body, qs);
+      return apiRequest(
+        ctx,
+        "POST",
+        `sites/${pathSegment(siteId)}/deploys`,
+        body,
+        qs,
+      );
     },
   });
 
@@ -112,7 +116,7 @@ export default function netlify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `sites/${seg(siteId)}/deploys/${seg(deployId)}`,
+        `sites/${pathSegment(siteId)}/deploys/${pathSegment(deployId)}`,
       );
     },
   });
@@ -134,14 +138,14 @@ export default function netlify(rl: RunlinePluginAPI) {
         return apiRequest(
           ctx,
           "GET",
-          `sites/${seg(siteId)}/deploys`,
+          `sites/${pathSegment(siteId)}/deploys`,
           undefined,
           {
             per_page: limit,
           },
         );
       }
-      return paginate(ctx, `sites/${seg(siteId)}/deploys`);
+      return paginate(ctx, `sites/${pathSegment(siteId)}/deploys`);
     },
   });
 
@@ -155,7 +159,7 @@ export default function netlify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { siteId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "DELETE", `sites/${seg(siteId)}`);
+      return apiRequest(ctx, "DELETE", `sites/${pathSegment(siteId)}`);
     },
   });
 
@@ -167,7 +171,7 @@ export default function netlify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { siteId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "GET", `sites/${seg(siteId)}`);
+      return apiRequest(ctx, "GET", `sites/${pathSegment(siteId)}`);
     },
   });
 

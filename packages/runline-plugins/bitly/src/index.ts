@@ -1,10 +1,13 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { bitlyCredential } from "./credentials.js";
 
-/** A bitlink ID such as "bit.ly/22u3ypK": each of its segments encoded, its slash kept. */
+/**
+ * A bitlink ID such as "bit.ly/22u3ypK": each of its segments encoded, its
+ * slash kept. An empty segment is refused — it would address a collection.
+ */
 const bitlinkPath = (value: unknown) =>
-  String(value).split("/").map(encodeURIComponent).join("/");
+  String(value).split("/").map(pathSegment).join("/");
 
 function apiRequest(
   ctx: ActionContext,

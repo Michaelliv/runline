@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { metabaseCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -54,7 +51,7 @@ export default function metabase(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `card/${seg((input as { questionId: number }).questionId)}`,
+        `card/${pathSegment((input as { questionId: number }).questionId)}`,
       );
     },
   });
@@ -84,7 +81,7 @@ export default function metabase(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `card/${seg(questionId)}/query/${seg(format)}`,
+        `card/${pathSegment(questionId)}/query/${pathSegment(format)}`,
       );
     },
   });
@@ -99,7 +96,7 @@ export default function metabase(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `alert/${seg((input as { alertId: number }).alertId)}`,
+        `alert/${pathSegment((input as { alertId: number }).alertId)}`,
       );
     },
   });
@@ -134,7 +131,7 @@ export default function metabase(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `database/${seg((input as { databaseId: number }).databaseId)}/fields`,
+        `database/${pathSegment((input as { databaseId: number }).databaseId)}/fields`,
       );
     },
   });
@@ -208,7 +205,7 @@ export default function metabase(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `metric/${seg((input as { metricId: number }).metricId)}`,
+        `metric/${pathSegment((input as { metricId: number }).metricId)}`,
       );
     },
   });

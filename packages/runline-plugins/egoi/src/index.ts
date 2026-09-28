@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { egoiCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -115,7 +112,7 @@ export default function egoi(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `lists/${seg(listId)}/contacts`,
+        `lists/${pathSegment(listId)}/contacts`,
         body,
       )) as Record<string, unknown>;
       const contactId = data.contact_id;
@@ -124,7 +121,7 @@ export default function egoi(rl: RunlinePluginAPI) {
           await apiRequest(
             ctx,
             "POST",
-            `lists/${seg(listId)}/contacts/actions/attach-tag`,
+            `lists/${pathSegment(listId)}/contacts/actions/attach-tag`,
             {
               tag_id: tag,
               contacts: [contactId],
@@ -135,7 +132,7 @@ export default function egoi(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `lists/${seg(listId)}/contacts/${seg(contactId)}`,
+        `lists/${pathSegment(listId)}/contacts/${pathSegment(contactId)}`,
       );
     },
   });
@@ -161,13 +158,13 @@ export default function egoi(rl: RunlinePluginAPI) {
         return apiRequest(
           ctx,
           "GET",
-          `lists/${seg(listId)}/contacts/${seg(contactId)}`,
+          `lists/${pathSegment(listId)}/contacts/${pathSegment(contactId)}`,
         );
       if (email)
         return apiRequest(
           ctx,
           "GET",
-          `lists/${seg(listId)}/contacts`,
+          `lists/${pathSegment(listId)}/contacts`,
           undefined,
           { email: email as string },
         );
@@ -186,7 +183,7 @@ export default function egoi(rl: RunlinePluginAPI) {
       const { listId, limit } = (input ?? {}) as Record<string, unknown>;
       return paginate(
         ctx,
-        `lists/${seg(listId)}/contacts`,
+        `lists/${pathSegment(listId)}/contacts`,
         {},
         limit as number | undefined,
       );
@@ -244,7 +241,7 @@ export default function egoi(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "PATCH",
-        `lists/${seg(listId)}/contacts/${seg(contactId)}`,
+        `lists/${pathSegment(listId)}/contacts/${pathSegment(contactId)}`,
         body,
       );
       if (tagIds && Array.isArray(tagIds)) {
@@ -252,7 +249,7 @@ export default function egoi(rl: RunlinePluginAPI) {
           await apiRequest(
             ctx,
             "POST",
-            `lists/${seg(listId)}/contacts/actions/attach-tag`,
+            `lists/${pathSegment(listId)}/contacts/actions/attach-tag`,
             {
               tag_id: tag,
               contacts: [contactId],
@@ -263,7 +260,7 @@ export default function egoi(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `lists/${seg(listId)}/contacts/${seg(contactId)}`,
+        `lists/${pathSegment(listId)}/contacts/${pathSegment(contactId)}`,
       );
     },
   });

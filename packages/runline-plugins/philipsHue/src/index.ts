@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { philipsHueCredential } from "./credentials.js";
-
-/** A bridge username or light ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -40,7 +37,7 @@ export default function philipsHue(rl: RunlinePluginAPI) {
   });
 
   function user(ctx: ActionContext): string {
-    return seg(ctx.connection.config.username);
+    return pathSegment(ctx.connection.config.username);
   }
 
   rl.registerAction("light.get", {
@@ -49,7 +46,11 @@ export default function philipsHue(rl: RunlinePluginAPI) {
     inputSchema: { lightId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { lightId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "GET", `api/${user(ctx)}/lights/${seg(lightId)}`);
+      return apiRequest(
+        ctx,
+        "GET",
+        `api/${user(ctx)}/lights/${pathSegment(lightId)}`,
+      );
     },
   });
 
@@ -135,7 +136,7 @@ export default function philipsHue(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `api/${user(ctx)}/lights/${seg(p.lightId)}/state`,
+        `api/${user(ctx)}/lights/${pathSegment(p.lightId)}/state`,
         body,
       )) as Array<Record<string, unknown>>;
       const result: Record<string, unknown> = {};
@@ -155,7 +156,7 @@ export default function philipsHue(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `api/${user(ctx)}/lights/${seg(lightId)}`,
+        `api/${user(ctx)}/lights/${pathSegment(lightId)}`,
       );
     },
   });
