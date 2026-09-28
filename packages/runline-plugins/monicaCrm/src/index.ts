@@ -1,47 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { monicaCrmCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  const base = ((c.url as string) || "https://app.monicahq.com").replace(
-    /\/$/,
-    "",
-  );
-  return { url: base, token: c.apiToken as string };
-}
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function api(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.url}/api${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, monicaCrmCredential, "monicaCrm", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${conn.token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Monica CRM error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 function registerCrud(
   rl: RunlinePluginAPI,
   resource: string,
   plural: string,
-  conn: typeof getConn,
   createSchema: Record<
     string,
     { type: string; required: boolean; description?: string }
@@ -53,9 +36,9 @@ function registerCrud(
     inputSchema: createSchema,
     async execute(input, ctx) {
       const data = (await api(
-        conn(ctx),
+        ctx,
         "POST",
-        `/${plural}`,
+        plural,
         input as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.data;
@@ -68,9 +51,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        conn(ctx),
+        ctx,
         "GET",
-        `/${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.data;
     },
@@ -84,13 +67,10 @@ function registerCrud(
       const qs: Record<string, unknown> = {
         limit: ((input ?? {}) as Record<string, unknown>).limit ?? 100,
       };
-      const data = (await api(
-        conn(ctx),
-        "GET",
-        `/${plural}`,
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", plural, undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return data.data;
     },
   });
@@ -105,9 +85,9 @@ function registerCrud(
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await api(
-        conn(ctx),
+        ctx,
         "PUT",
-        `/${plural}/${p.id}`,
+        `${plural}/${seg(p.id)}`,
         p.data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.data;
@@ -120,9 +100,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        conn(ctx),
+        ctx,
         "DELETE",
-        `/${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -132,6 +112,7 @@ function registerCrud(
 export default function monicaCrm(rl: RunlinePluginAPI) {
   rl.setName("monicaCrm");
   rl.setVersion("0.1.0");
+  rl.setCredential(monicaCrmCredential);
   rl.setConnectionSchema({
     apiToken: {
       type: "string",
@@ -147,32 +128,32 @@ export default function monicaCrm(rl: RunlinePluginAPI) {
     },
   });
 
-  registerCrud(rl, "contact", "contacts", getConn, {
+  registerCrud(rl, "contact", "contacts", {
     first_name: { type: "string", required: true },
     last_name: { type: "string", required: false },
     gender_id: { type: "number", required: false },
   });
-  registerCrud(rl, "activity", "activities", getConn, {
+  registerCrud(rl, "activity", "activities", {
     summary: { type: "string", required: true },
     description: { type: "string", required: false },
     activity_type_id: { type: "number", required: false },
   });
-  registerCrud(rl, "note", "notes", getConn, {
+  registerCrud(rl, "note", "notes", {
     contact_id: { type: "number", required: true },
     body: { type: "string", required: true },
   });
-  registerCrud(rl, "task", "tasks", getConn, {
+  registerCrud(rl, "task", "tasks", {
     title: { type: "string", required: true },
     contact_id: { type: "number", required: false },
   });
-  registerCrud(rl, "tag", "tags", getConn, {
+  registerCrud(rl, "tag", "tags", {
     name: { type: "string", required: true },
   });
-  registerCrud(rl, "journalEntry", "journal", getConn, {
+  registerCrud(rl, "journalEntry", "journal", {
     title: { type: "string", required: true },
     post: { type: "string", required: true },
   });
-  registerCrud(rl, "reminder", "reminders", getConn, {
+  registerCrud(rl, "reminder", "reminders", {
     contact_id: { type: "number", required: true },
     title: { type: "string", required: true },
     initial_date: { type: "string", required: true },
@@ -182,12 +163,12 @@ export default function monicaCrm(rl: RunlinePluginAPI) {
       description: "one_time, week, month, year",
     },
   });
-  registerCrud(rl, "call", "calls", getConn, {
+  registerCrud(rl, "call", "calls", {
     contact_id: { type: "number", required: true },
     content: { type: "string", required: false },
     called_at: { type: "string", required: false },
   });
-  registerCrud(rl, "conversation", "conversations", getConn, {
+  registerCrud(rl, "conversation", "conversations", {
     contact_id: { type: "number", required: true },
     contact_field_type_id: { type: "number", required: true },
     happened_at: { type: "string", required: true },

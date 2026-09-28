@@ -181,7 +181,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "misp/src/index.ts",
   "mocean/src/index.ts",
   "monday/src/index.ts",
-  "monicaCrm/src/index.ts",
   "msg91/src/index.ts",
   "nasa/src/index.ts",
   "netlify/src/index.ts",
