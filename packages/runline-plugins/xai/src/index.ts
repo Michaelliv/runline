@@ -10,10 +10,14 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
-import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/mediaFile.js";
+import { credentialJson } from "../../_shared/credentials.js";
+import {
+  readImageInput,
+  SEND_FILE_NOTE,
+  writeImageFile,
+} from "../../_shared/mediaFile.js";
+import { xaiCredential } from "./credentials.js";
 
-const ENDPOINT = "https://api.x.ai/v1/images/generations";
-const EDIT_ENDPOINT = "https://api.x.ai/v1/images/edits";
 const MODEL = "grok-imagine-image";
 const EDIT_MODEL = "grok-imagine-image-2.0";
 
@@ -41,6 +45,7 @@ interface XaiImage {
 export default function xai(rl: RunlinePluginAPI) {
   rl.setName("xai");
   rl.setVersion("0.1.0");
+  rl.setCredential(xaiCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -64,7 +69,8 @@ export default function xai(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       aspectRatio: {
         type: "string",
@@ -84,7 +90,6 @@ export default function xai(rl: RunlinePluginAPI) {
         throw new Error("xai: prompt is required");
       }
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const body: Record<string, unknown> = {
         model: MODEL,
         prompt: p.prompt,
@@ -93,22 +98,22 @@ export default function xai(rl: RunlinePluginAPI) {
       };
       if (p.aspectRatio) body.aspect_ratio = p.aspectRatio;
 
-      const res = await fetch(ENDPOINT, {
+      const data = (await credentialJson(ctx, xaiCredential, "xai", {
+        target: "api",
+        path: "images/generations",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        throw new Error(`xAI API error ${res.status}: ${await res.text()}`);
-      }
-
-      const data = (await res.json()) as { data?: XaiImage[] };
+        json: body,
+      })) as { data?: XaiImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) => ({
-        ...writeImageFile({ base64: d.b64_json, mimeType: d.mime_type ?? "image/jpeg", provider: "xai", index: i, saveDir: p.saveDir, stamp }),
+        ...writeImageFile({
+          base64: d.b64_json,
+          mimeType: d.mime_type ?? "image/jpeg",
+          provider: "xai",
+          index: i,
+          saveDir: p.saveDir,
+          stamp,
+        }),
         ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
       }));
       return { provider: "xai", model: MODEL, images, note: SEND_FILE_NOTE };
@@ -133,7 +138,8 @@ export default function xai(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -153,31 +159,30 @@ export default function xai(rl: RunlinePluginAPI) {
       }
       const img = readImageInput(p.imagePath, "xai");
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const model = p.model ?? EDIT_MODEL;
 
-      const res = await fetch(EDIT_ENDPOINT, {
+      const data = (await credentialJson(ctx, xaiCredential, "xai", {
+        target: "api",
+        path: "images/edits",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
+        json: {
           model,
           prompt: p.prompt,
           image: { url: img.dataUri },
           n: Math.min(p.n ?? 1, 10),
           response_format: "b64_json",
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(`xAI API error ${res.status}: ${await res.text()}`);
-      }
-
-      const data = (await res.json()) as { data?: XaiImage[] };
+        },
+      })) as { data?: XaiImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) => ({
-        ...writeImageFile({ base64: d.b64_json, mimeType: d.mime_type ?? "image/jpeg", provider: "xai", index: i, saveDir: p.saveDir, stamp }),
+        ...writeImageFile({
+          base64: d.b64_json,
+          mimeType: d.mime_type ?? "image/jpeg",
+          provider: "xai",
+          index: i,
+          saveDir: p.saveDir,
+          stamp,
+        }),
         ...(d.revised_prompt ? { revisedPrompt: d.revised_prompt } : {}),
       }));
       return { provider: "xai", model, images, note: SEND_FILE_NOTE };

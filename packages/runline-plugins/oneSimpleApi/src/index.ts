@@ -1,27 +1,23 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { oneSimpleApiCredential } from "./credentials.js";
 
-const BASE = "https://onesimpleapi.com/api";
-
-async function apiRequest(
-  token: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  url.searchParams.set("token", token);
-  url.searchParams.set("output", "json");
-  for (const [k, v] of Object.entries(qs)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-  }
-  const res = await fetch(url.toString());
-  if (!res.ok)
-    throw new Error(`OneSimpleAPI error ${res.status}: ${await res.text()}`);
-  return res.json();
+  return credentialJson(ctx, oneSimpleApiCredential, "oneSimpleApi", {
+    target: "api",
+    path,
+    query: { output: "json", ...qs },
+  });
 }
 
 export default function oneSimpleApi(rl: RunlinePluginAPI) {
   rl.setName("oneSimpleApi");
   rl.setVersion("0.1.0");
+  rl.setCredential(oneSimpleApiCredential);
 
   rl.setConnectionSchema({
     apiToken: {
@@ -31,9 +27,6 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
       env: "ONE_SIMPLE_API_TOKEN",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiToken as string;
 
   // ── Website ─────────────────────────────────────────
 
@@ -58,7 +51,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { url: p.url };
       if (p.page) qs.page = p.page;
       qs.force = p.force ? "yes" : "no";
-      return apiRequest(key(ctx), "/pdf", qs);
+      return apiRequest(ctx, "pdf", qs);
     },
   });
 
@@ -90,7 +83,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
       if (p.screen) qs.screen = p.screen;
       qs.fullpage = p.fullpage ? "yes" : "no";
       qs.force = p.force ? "yes" : "no";
-      return apiRequest(key(ctx), "/screenshot", qs);
+      return apiRequest(ctx, "screenshot", qs);
     },
   });
 
@@ -109,7 +102,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { url: p.url };
       if (p.headers) qs.headers = "yes";
-      return apiRequest(key(ctx), "/page_info", qs);
+      return apiRequest(ctx, "page_info", qs);
     },
   });
 
@@ -127,7 +120,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { profile } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "/instagram_profile", { profile });
+      return apiRequest(ctx, "instagram_profile", { profile });
     },
   });
 
@@ -143,7 +136,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { profile } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "/spotify_profile", { profile });
+      return apiRequest(ctx, "spotify_profile", { profile });
     },
   });
 
@@ -174,7 +167,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      return apiRequest(key(ctx), "/exchange_rate", {
+      return apiRequest(ctx, "exchange_rate", {
         from_value: value,
         from_currency: fromCurrency,
         to_currency: toCurrency,
@@ -190,7 +183,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { url } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "/image_info", { url, raw: true });
+      return apiRequest(ctx, "image_info", { url, raw: true });
     },
   });
 
@@ -208,7 +201,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { email } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "/email", { email });
+      return apiRequest(ctx, "email", { email });
     },
   });
 
@@ -220,7 +213,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { url } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "/unshorten", { url });
+      return apiRequest(ctx, "unshorten", { url });
     },
   });
 
@@ -249,7 +242,7 @@ export default function oneSimpleApi(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { message: p.message };
       if (p.size) qs.size = p.size;
       if (p.format) qs.format = p.format;
-      return apiRequest(key(ctx), "/qr_code", qs);
+      return apiRequest(ctx, "qr_code", qs);
     },
   });
 }

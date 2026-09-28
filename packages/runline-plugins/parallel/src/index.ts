@@ -13,6 +13,8 @@
  *   await parallel.search({ search_queries: ["tel aviv office vacancy rate 2026"], processor: "pro" })
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { parallelCredential } from "./credentials.js";
 
 const NAME = "parallel";
 const DEFAULT_BASE = "https://api.parallel.ai";
@@ -22,13 +24,15 @@ type Ctx = ActionContext;
 export default function parallel(rl: RunlinePluginAPI): void {
   rl.setName(NAME);
   rl.setVersion("0.1.0");
+  rl.setCredential(parallelCredential);
 
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
       required: true,
       env: "PARALLEL_API_KEY",
-      description: "Parallel.ai API key (sent as the x-api-key header). Store only in secrets.",
+      description:
+        "Parallel.ai API key (sent as the x-api-key header). Store only in secrets.",
     },
     baseUrl: {
       type: "string",
@@ -47,12 +51,14 @@ export default function parallel(rl: RunlinePluginAPI): void {
       objective: {
         type: "string",
         required: false,
-        description: "Natural-language description of what you're trying to find. Recommended; can be used with or instead of search_queries.",
+        description:
+          "Natural-language description of what you're trying to find. Recommended; can be used with or instead of search_queries.",
       },
       search_queries: {
         type: "array",
         required: false,
-        description: "Optional explicit query strings to run (e.g. [\"x vacancy rate 2026\"]). Provide objective and/or this.",
+        description:
+          'Optional explicit query strings to run (e.g. ["x vacancy rate 2026"]). Provide objective and/or this.',
       },
       processor: {
         type: "string",
@@ -73,14 +79,12 @@ export default function parallel(rl: RunlinePluginAPI): void {
       },
     },
     async execute(input: any, ctx: Ctx) {
-      const cfg = (ctx.connection.config ?? {}) as Record<string, string>;
-      const apiKey = cfg.apiKey;
-      if (!apiKey) throw new Error("Missing PARALLEL_API_KEY. Configure it before using the parallel plugin.");
-      const baseUrl = (cfg.baseUrl || DEFAULT_BASE).replace(/\/+$/, "");
-
-      const objective = typeof input.objective === "string" ? input.objective.trim() : "";
+      const objective =
+        typeof input.objective === "string" ? input.objective.trim() : "";
       const queries = Array.isArray(input.search_queries)
-        ? input.search_queries.map((q: unknown) => String(q)).filter((q: string) => q.trim())
+        ? input.search_queries
+            .map((q: unknown) => String(q))
+            .filter((q: string) => q.trim())
         : [];
       if (!objective && !queries.length) {
         throw new Error("Provide objective and/or search_queries");
@@ -88,24 +92,25 @@ export default function parallel(rl: RunlinePluginAPI): void {
 
       const body: Record<string, unknown> = {
         processor: String(input.processor || "base"),
-        max_results: Number(input.max_results) > 0 ? Math.floor(Number(input.max_results)) : 5,
+        max_results:
+          Number(input.max_results) > 0
+            ? Math.floor(Number(input.max_results))
+            : 5,
       };
       if (objective) body.objective = objective;
       if (queries.length) body.search_queries = queries;
       if (Number(input.max_chars_per_result) > 0) {
-        body.max_chars_per_result = Math.floor(Number(input.max_chars_per_result));
+        body.max_chars_per_result = Math.floor(
+          Number(input.max_chars_per_result),
+        );
       }
 
-      const res = await fetch(`${baseUrl}/v1beta/search`, {
+      const data = await credentialJson(ctx, parallelCredential, NAME, {
+        target: "api",
+        path: "search",
         method: "POST",
-        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        json: body,
       });
-      const text = await res.text();
-      if (!res.ok) {
-        throw new Error(`Parallel search -> ${res.status}: ${text.slice(0, 300)}`);
-      }
-      const data = text ? JSON.parse(text) : {};
       const results = (data.results ?? []).map((r: any) => ({
         url: r.url,
         title: r.title,

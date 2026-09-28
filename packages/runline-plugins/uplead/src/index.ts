@@ -1,28 +1,24 @@
-import type { RunlinePluginAPI } from "runline";
-
-const BASE = "https://api.uplead.com/v2";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { upleadCredential } from "./credentials.js";
 
 async function apiRequest(
-  apiKey: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   qs: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  for (const [k, v] of Object.entries(qs)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-  }
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: apiKey },
-  });
-  if (!res.ok)
-    throw new Error(`Uplead error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
+  const data = (await credentialJson(ctx, upleadCredential, "uplead", {
+    target: "api",
+    path,
+    query: qs,
+  })) as Record<string, unknown>;
   return data.data;
 }
 
 export default function uplead(rl: RunlinePluginAPI) {
   rl.setName("uplead");
   rl.setVersion("0.1.0");
+  rl.setCredential(upleadCredential);
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -31,9 +27,6 @@ export default function uplead(rl: RunlinePluginAPI) {
       env: "UPLEAD_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("person.enrich", {
     access: "write",
@@ -51,7 +44,7 @@ export default function uplead(rl: RunlinePluginAPI) {
       if (p.firstName) qs.first_name = p.firstName;
       if (p.lastName) qs.last_name = p.lastName;
       if (p.domain) qs.domain = p.domain;
-      return apiRequest(key(ctx), "/person-search", qs);
+      return apiRequest(ctx, "person-search", qs);
     },
   });
 
@@ -67,7 +60,7 @@ export default function uplead(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.domain) qs.domain = p.domain;
       if (p.company) qs.company = p.company;
-      return apiRequest(key(ctx), "/company-search", qs);
+      return apiRequest(ctx, "company-search", qs);
     },
   });
 }

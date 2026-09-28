@@ -1,6 +1,6 @@
-import type { RunlinePluginAPI } from "runline";
-
-const BASE = "https://api.openweathermap.org/data/2.5";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { openweathermapCredential } from "./credentials.js";
 
 const locationSchema = {
   cityName: {
@@ -32,26 +32,36 @@ const locationSchema = {
   },
 };
 
-function buildQs(
-  apiKey: string,
-  input: Record<string, unknown>,
-): URLSearchParams {
-  const qs = new URLSearchParams();
-  qs.set("APPID", apiKey);
-  qs.set("units", (input.units as string) ?? "metric");
-  if (input.cityName) qs.set("q", input.cityName as string);
-  else if (input.cityId) qs.set("id", String(input.cityId));
+function buildQs(input: Record<string, unknown>): Record<string, unknown> {
+  const qs: Record<string, unknown> = {
+    units: (input.units as string) ?? "metric",
+  };
+  if (input.cityName) qs.q = input.cityName;
+  else if (input.cityId) qs.id = String(input.cityId);
   else if (input.lat && input.lon) {
-    qs.set("lat", input.lat as string);
-    qs.set("lon", input.lon as string);
-  } else if (input.zip) qs.set("zip", input.zip as string);
-  if (input.lang) qs.set("lang", input.lang as string);
+    qs.lat = input.lat;
+    qs.lon = input.lon;
+  } else if (input.zip) qs.zip = input.zip;
+  if (input.lang) qs.lang = input.lang;
   return qs;
+}
+
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
+  query: Record<string, unknown>,
+): Promise<unknown> {
+  return credentialJson(ctx, openweathermapCredential, "openweathermap", {
+    target: "api",
+    path,
+    query,
+  });
 }
 
 export default function openWeatherMap(rl: RunlinePluginAPI) {
   rl.setName("openweathermap");
   rl.setVersion("0.1.0");
+  rl.setCredential(openweathermapCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -62,22 +72,13 @@ export default function openWeatherMap(rl: RunlinePluginAPI) {
     },
   });
 
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
-
   rl.registerAction("weather.current", {
     access: "read",
     description: "Get current weather data for a location",
     inputSchema: locationSchema,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const qs = buildQs(key(ctx), p);
-      const res = await fetch(`${BASE}/weather?${qs.toString()}`);
-      if (!res.ok)
-        throw new Error(
-          `OpenWeatherMap error ${res.status}: ${await res.text()}`,
-        );
-      return res.json();
+      return apiRequest(ctx, "weather", buildQs(p));
     },
   });
 
@@ -87,13 +88,7 @@ export default function openWeatherMap(rl: RunlinePluginAPI) {
     inputSchema: locationSchema,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const qs = buildQs(key(ctx), p);
-      const res = await fetch(`${BASE}/forecast?${qs.toString()}`);
-      if (!res.ok)
-        throw new Error(
-          `OpenWeatherMap error ${res.status}: ${await res.text()}`,
-        );
-      return res.json();
+      return apiRequest(ctx, "forecast", buildQs(p));
     },
   });
 }
