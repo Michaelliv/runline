@@ -1,66 +1,35 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { jiraCredential } from "./credentials.js";
 
-async function apiRequest(
-  domain: string,
-  email: string,
-  apiToken: string,
-  method: string,
-  endpoint: string,
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+function jr(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${domain}/rest${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, jiraCredential, "jira", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${email}:${apiToken}`)}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Jira API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("json")) return res.json();
-  return { success: true };
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    domain: (ctx.connection.config.domain as string).replace(/\/$/, ""),
-    email: ctx.connection.config.email as string,
-    apiToken: ctx.connection.config.apiToken as string,
-  };
-}
-
-function jr(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { domain, email, apiToken } = getConn(ctx);
-  return apiRequest(domain, email, apiToken, method, endpoint, body, qs);
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function jira(rl: RunlinePluginAPI) {
   rl.setName("jira");
   rl.setVersion("0.1.0");
+  rl.setCredential(jiraCredential);
 
   rl.setConnectionSchema({
     domain: {
@@ -150,7 +119,7 @@ export default function jira(rl: RunlinePluginAPI) {
       if (labels) fields.labels = labels;
       if (parentKey) fields.parent = { key: parentKey };
       if (customFields) Object.assign(fields, customFields);
-      return jr(ctx, "POST", "/api/2/issue", { fields });
+      return jr(ctx, "POST", "api/2/issue", { fields });
     },
   });
 
@@ -182,7 +151,7 @@ export default function jira(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
       if (expand) qs.expand = expand;
-      return jr(ctx, "GET", `/api/2/issue/${issueKey}`, undefined, qs);
+      return jr(ctx, "GET", `api/2/issue/${seg(issueKey)}`, undefined, qs);
     },
   });
 
@@ -230,7 +199,7 @@ export default function jira(rl: RunlinePluginAPI) {
       // Atlassian removed POST /rest/api/2|3/search (CHANGE-2046).
       // The replacement endpoint is POST /rest/api/3/search/jql with
       // cursor-based pagination.
-      return jr(ctx, "POST", "/api/3/search/jql", body);
+      return jr(ctx, "POST", "api/3/search/jql", body);
     },
   });
 
@@ -260,7 +229,7 @@ export default function jira(rl: RunlinePluginAPI) {
       if (fields) body.fields = fields;
       if (update) body.update = update;
       if (transition) body.transition = transition;
-      return jr(ctx, "PUT", `/api/2/issue/${issueKey}`, body);
+      return jr(ctx, "PUT", `api/2/issue/${seg(issueKey)}`, body);
     },
   });
 
@@ -274,7 +243,7 @@ export default function jira(rl: RunlinePluginAPI) {
       await jr(
         ctx,
         "DELETE",
-        `/api/2/issue/${(input as { issueKey: string }).issueKey}`,
+        `api/2/issue/${seg((input as { issueKey: string }).issueKey)}`,
       );
       return { success: true };
     },
@@ -305,7 +274,7 @@ export default function jira(rl: RunlinePluginAPI) {
         transition: { id: transitionId },
       };
       if (comment) body.update = { comment: [{ add: { body: comment } }] };
-      return jr(ctx, "POST", `/api/2/issue/${issueKey}/transitions`, body);
+      return jr(ctx, "POST", `api/2/issue/${seg(issueKey)}/transitions`, body);
     },
   });
 
@@ -319,7 +288,7 @@ export default function jira(rl: RunlinePluginAPI) {
       return jr(
         ctx,
         "GET",
-        `/api/2/issue/${(input as { issueKey: string }).issueKey}/transitions`,
+        `api/2/issue/${seg((input as { issueKey: string }).issueKey)}/transitions`,
       );
     },
   });
@@ -334,7 +303,7 @@ export default function jira(rl: RunlinePluginAPI) {
       return jr(
         ctx,
         "GET",
-        `/api/2/issue/${(input as { issueKey: string }).issueKey}/changelog`,
+        `api/2/issue/${seg((input as { issueKey: string }).issueKey)}/changelog`,
       );
     },
   });
@@ -357,7 +326,7 @@ export default function jira(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      return jr(ctx, "POST", `/api/2/issue/${issueKey}/notify`, {
+      return jr(ctx, "POST", `api/2/issue/${seg(issueKey)}/notify`, {
         subject,
         htmlBody,
         to,
@@ -376,7 +345,7 @@ export default function jira(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { issueKey, body: commentBody } = input as Record<string, unknown>;
-      return jr(ctx, "POST", `/api/2/issue/${issueKey}/comment`, {
+      return jr(ctx, "POST", `api/2/issue/${seg(issueKey)}/comment`, {
         body: commentBody,
       });
     },
@@ -391,7 +360,11 @@ export default function jira(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { issueKey, commentId } = input as Record<string, unknown>;
-      return jr(ctx, "GET", `/api/2/issue/${issueKey}/comment/${commentId}`);
+      return jr(
+        ctx,
+        "GET",
+        `api/2/issue/${seg(issueKey)}/comment/${seg(commentId)}`,
+      );
     },
   });
 
@@ -405,7 +378,7 @@ export default function jira(rl: RunlinePluginAPI) {
       return jr(
         ctx,
         "GET",
-        `/api/2/issue/${(input as { issueKey: string }).issueKey}/comment`,
+        `api/2/issue/${seg((input as { issueKey: string }).issueKey)}/comment`,
       );
     },
   });
@@ -420,9 +393,14 @@ export default function jira(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { issueKey, commentId, body: b } = input as Record<string, unknown>;
-      return jr(ctx, "PUT", `/api/2/issue/${issueKey}/comment/${commentId}`, {
-        body: b,
-      });
+      return jr(
+        ctx,
+        "PUT",
+        `api/2/issue/${seg(issueKey)}/comment/${seg(commentId)}`,
+        {
+          body: b,
+        },
+      );
     },
   });
 
@@ -435,7 +413,11 @@ export default function jira(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { issueKey, commentId } = input as Record<string, unknown>;
-      await jr(ctx, "DELETE", `/api/2/issue/${issueKey}/comment/${commentId}`);
+      await jr(
+        ctx,
+        "DELETE",
+        `api/2/issue/${seg(issueKey)}/comment/${seg(commentId)}`,
+      );
       return { success: true };
     },
   });
@@ -449,7 +431,7 @@ export default function jira(rl: RunlinePluginAPI) {
       accountId: { type: "string", required: true, description: "Account ID" },
     },
     async execute(input, ctx) {
-      return jr(ctx, "GET", "/api/2/user", undefined, {
+      return jr(ctx, "GET", "api/2/user", undefined, {
         accountId: (input as { accountId: string }).accountId,
       });
     },
@@ -470,7 +452,7 @@ export default function jira(rl: RunlinePluginAPI) {
       const { query, maxResults } = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { query };
       if (maxResults) qs.maxResults = maxResults;
-      return jr(ctx, "GET", "/api/2/user/search", undefined, qs);
+      return jr(ctx, "GET", "api/2/user/search", undefined, qs);
     },
   });
 }
