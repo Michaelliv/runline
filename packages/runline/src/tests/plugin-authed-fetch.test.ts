@@ -87,7 +87,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "actionNetwork/src/index.ts",
   "activeCampaign/src/index.ts",
   "adalo/src/index.ts",
-  "affinity/src/index.ts",
   "agileCrm/src/index.ts",
   "airtable/src/index.ts",
   "airtop/src/index.ts",

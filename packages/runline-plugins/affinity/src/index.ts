@@ -1,43 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { affinityCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.affinity.co";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  apiKey: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, affinityCredential, "affinity", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Basic ${btoa(`:${apiKey}`)}`,
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Affinity API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 async function paginateAll(
-  apiKey: string,
+  ctx: ActionContext,
   path: string,
   dataKey: string,
   limit?: number,
@@ -49,13 +34,10 @@ async function paginateAll(
     const qs: Record<string, unknown> = { page_size: 500 };
     if (pageToken) qs.page_token = pageToken;
 
-    const data = (await apiRequest(
-      apiKey,
-      "GET",
-      path,
-      undefined,
-      qs,
-    )) as Record<string, unknown>;
+    const data = (await apiRequest(ctx, "GET", path, undefined, qs)) as Record<
+      string,
+      unknown
+    >;
     const items = (data[dataKey] as unknown[]) ?? [];
     results.push(...items);
 
@@ -68,15 +50,10 @@ async function paginateAll(
   return results;
 }
 
-function getKey(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
-}
-
 export default function affinity(rl: RunlinePluginAPI) {
   rl.setName("affinity");
   rl.setVersion("0.1.0");
+  rl.setCredential(affinityCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -97,7 +74,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { listId } = input as { listId: string };
-      return apiRequest(getKey(ctx), "GET", `/lists/${listId}`);
+      return apiRequest(ctx, "GET", `lists/${seg(listId)}`);
     },
   });
 
@@ -113,11 +90,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const data = (await apiRequest(
-        getKey(ctx),
-        "GET",
-        "/lists",
-      )) as unknown[];
+      const data = (await apiRequest(ctx, "GET", "lists")) as unknown[];
       if (limit) return data.slice(0, limit);
       return data;
     },
@@ -138,7 +111,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { listId, entityId, ...rest } = input as Record<string, unknown>;
-      return apiRequest(getKey(ctx), "POST", `/lists/${listId}/list-entries`, {
+      return apiRequest(ctx, "POST", `lists/${seg(listId)}/list-entries`, {
         entity_id: entityId,
         ...rest,
       });
@@ -162,9 +135,9 @@ export default function affinity(rl: RunlinePluginAPI) {
         listEntryId: string;
       };
       return apiRequest(
-        getKey(ctx),
+        ctx,
         "GET",
-        `/lists/${listId}/list-entries/${listEntryId}`,
+        `lists/${seg(listId)}/list-entries/${seg(listEntryId)}`,
       );
     },
   });
@@ -183,8 +156,8 @@ export default function affinity(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { listId, limit } = input as { listId: string; limit?: number };
       return paginateAll(
-        getKey(ctx),
-        `/lists/${listId}/list-entries`,
+        ctx,
+        `lists/${seg(listId)}/list-entries`,
         "list_entries",
         limit,
       );
@@ -208,9 +181,9 @@ export default function affinity(rl: RunlinePluginAPI) {
         listEntryId: string;
       };
       return apiRequest(
-        getKey(ctx),
+        ctx,
         "DELETE",
-        `/lists/${listId}/list-entries/${listEntryId}`,
+        `lists/${seg(listId)}/list-entries/${seg(listEntryId)}`,
       );
     },
   });
@@ -245,7 +218,7 @@ export default function affinity(rl: RunlinePluginAPI) {
         emails,
       };
       if (organizationIds) body.organization_ids = organizationIds;
-      return apiRequest(getKey(ctx), "POST", "/persons", body);
+      return apiRequest(ctx, "POST", "persons", body);
     },
   });
 
@@ -257,7 +230,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { personId } = input as { personId: string };
-      return apiRequest(getKey(ctx), "GET", `/persons/${personId}`);
+      return apiRequest(ctx, "GET", `persons/${seg(personId)}`);
     },
   });
 
@@ -277,7 +250,7 @@ export default function affinity(rl: RunlinePluginAPI) {
         (input as { term?: string; limit?: number }) ?? {};
       const qs: Record<string, unknown> = {};
       if (term) qs.term = term;
-      return paginateAll(getKey(ctx), "/persons", "persons", limit);
+      return paginateAll(ctx, "persons", "persons", limit);
     },
   });
 
@@ -306,7 +279,7 @@ export default function affinity(rl: RunlinePluginAPI) {
       if (firstName) body.first_name = firstName;
       if (lastName) body.last_name = lastName;
       if (organizationIds) body.organization_ids = organizationIds;
-      return apiRequest(getKey(ctx), "PUT", `/persons/${personId}`, body);
+      return apiRequest(ctx, "PUT", `persons/${seg(personId)}`, body);
     },
   });
 
@@ -318,7 +291,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { personId } = input as { personId: string };
-      return apiRequest(getKey(ctx), "DELETE", `/persons/${personId}`);
+      return apiRequest(ctx, "DELETE", `persons/${seg(personId)}`);
     },
   });
 
@@ -348,7 +321,7 @@ export default function affinity(rl: RunlinePluginAPI) {
       const { name, domain, personIds } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { name, domain };
       if (personIds) body.person_ids = personIds;
-      return apiRequest(getKey(ctx), "POST", "/organizations", body);
+      return apiRequest(ctx, "POST", "organizations", body);
     },
   });
 
@@ -364,7 +337,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { organizationId } = input as { organizationId: string };
-      return apiRequest(getKey(ctx), "GET", `/organizations/${organizationId}`);
+      return apiRequest(ctx, "GET", `organizations/${seg(organizationId)}`);
     },
   });
 
@@ -384,7 +357,7 @@ export default function affinity(rl: RunlinePluginAPI) {
         (input as { term?: string; limit?: number }) ?? {};
       const qs: Record<string, unknown> = {};
       if (term) qs.term = term;
-      return paginateAll(getKey(ctx), "/organizations", "organizations", limit);
+      return paginateAll(ctx, "organizations", "organizations", limit);
     },
   });
 
@@ -423,9 +396,9 @@ export default function affinity(rl: RunlinePluginAPI) {
       if (domain) body.domain = domain;
       if (personIds) body.person_ids = personIds;
       return apiRequest(
-        getKey(ctx),
+        ctx,
         "PUT",
-        `/organizations/${organizationId}`,
+        `organizations/${seg(organizationId)}`,
         body,
       );
     },
@@ -443,11 +416,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { organizationId } = input as { organizationId: string };
-      return apiRequest(
-        getKey(ctx),
-        "DELETE",
-        `/organizations/${organizationId}`,
-      );
+      return apiRequest(ctx, "DELETE", `organizations/${seg(organizationId)}`);
     },
   });
 }
