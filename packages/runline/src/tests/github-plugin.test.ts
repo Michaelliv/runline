@@ -74,7 +74,7 @@ describe("github plugin commit and branch actions", () => {
       assert.equal(url.searchParams.get("per_page"), "25");
       assert.equal(url.searchParams.get("page"), "2");
       assert.equal(
-        init?.headers?.["Authorization" as keyof HeadersInit],
+        new Headers(init?.headers).get("authorization"),
         "Bearer gh_test",
       );
     });
@@ -102,10 +102,9 @@ describe("github plugin commit and branch actions", () => {
 
     mockJsonFetch((url, init) => {
       assert.equal(init?.method, "GET");
-      assert.equal(
-        url.pathname,
-        "/repos/octo/hello/commits/feature%2Fread-api",
-      );
+      // A nested ref travels as literal path segments: the credential
+      // transport refuses an encoded slash inside one segment.
+      assert.equal(url.pathname, "/repos/octo/hello/commits/feature/read-api");
     });
 
     const result = await action.execute(
@@ -123,7 +122,7 @@ describe("github plugin commit and branch actions", () => {
       assert.equal(init?.method, "GET");
       assert.equal(
         url.pathname,
-        "/repos/octo/hello/branches/feature%2Fread-api",
+        "/repos/octo/hello/branches/feature/read-api",
       );
     });
 

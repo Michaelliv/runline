@@ -5,7 +5,11 @@ import { GITHUB_API_VERSION, githubCredential } from "./credentials.js";
 /** An owner, repo, or ID as one path segment. */
 const seg = (value: unknown) => encodeURIComponent(String(value));
 
-/** A repository file path: each of its segments encoded, its slashes kept. */
+/**
+ * A file path, ref, or branch name: each of its segments encoded, its
+ * slashes kept. The transport refuses encoded slashes inside one segment;
+ * GitHub routes nested names (feature/x) as literal path segments.
+ */
 const filePath = (value: unknown) =>
   String(value).split("/").map(encodeURIComponent).join("/");
 
@@ -672,7 +676,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/commits/${seg(ref)}`,
+        `repos/${seg(owner)}/${seg(repo)}/commits/${filePath(ref)}`,
       );
     },
   });
@@ -694,7 +698,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/branches/${seg(branch)}`,
+        `repos/${seg(owner)}/${seg(repo)}/branches/${filePath(branch)}`,
       );
     },
   });

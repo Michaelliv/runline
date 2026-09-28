@@ -12,7 +12,6 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { describe, it } from "node:test";
-import github from "../../../runline-plugins/github/src/index.js";
 import gmail from "../../../runline-plugins/gmail/src/index.js";
 import googleAppsScript from "../../../runline-plugins/googleAppsScript/src/index.js";
 import googleCalendar from "../../../runline-plugins/googleCalendar/src/index.js";
@@ -26,6 +25,7 @@ import microsoftCalendar from "../../../runline-plugins/microsoftCalendar/src/in
 import microsoftFiles from "../../../runline-plugins/microsoftFiles/src/index.js";
 import microsoftMail from "../../../runline-plugins/microsoftMail/src/index.js";
 import plaud from "../../../runline-plugins/plaud/src/index.js";
+import trello from "../../../runline-plugins/trello/src/index.js";
 import type { CredentialDeclaration } from "../credentials/types.js";
 import { createPluginAPI, type PluginFunction } from "../plugin/api.js";
 import type { PluginDef } from "../plugin/types.js";
@@ -53,7 +53,8 @@ describe("the plugin API carries a credential declaration", () => {
   });
 
   it("a plugin that signs its own requests declares none", () => {
-    assert.equal(definition(github).credential, undefined);
+    // Trello stays self-signing: its two query secrets have no declarable kind.
+    assert.equal(definition(trello).credential, undefined);
   });
 });
 
