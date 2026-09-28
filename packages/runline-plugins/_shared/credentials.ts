@@ -14,9 +14,8 @@ import { credentialBroker } from "./credentialAdapter.js";
 /**
  * The plugin side of the credential broker, shared by every plugin that
  * signs with a static key: one declaration factory, one way to turn public
- * config into an HTTPS target, one request path. OAuth families keep their
- * own factories (googleCredentials, microsoftCredentials) on the same
- * request path.
+ * config into an HTTPS target, one request path. OAuth families declare
+ * through their own factories (googleCredentials, microsoftCredentials).
  */
 
 /** A flat config field, or a fixed value such as Freshdesk's "X" password. */
