@@ -4,6 +4,7 @@ import * as t from "typebox";
 import { AuthError } from "../auth/errors.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import {
+  BasicSecretSchema,
   CredentialRegistry,
   OAuthGrantSchema,
   SecretSchema,
@@ -151,6 +152,70 @@ describe("constrained credential transport", () => {
       def,
     );
     assert.equal((await h.transport.request(h.binding, request)).status, 200);
+  });
+
+  it("signs HTTP Basic from a stored username and password, either of which may be empty", async () => {
+    for (const [username, password] of [
+      ["dana@example.com", "token"],
+      ["sk_live_1", ""],
+      ["", "token"],
+      ["user", "pass word:with colon"],
+    ]) {
+      const def = definition("bearer");
+      def.methods.selected.schema = t.Object(
+        { key: BasicSecretSchema },
+        { additionalProperties: false },
+      );
+      def.methods.selected.authentication = { kind: "basic", field: "key" };
+      const h = await harness(
+        mock((_url, init) => {
+          assert.equal(
+            new Headers(init.headers).get("authorization"),
+            `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+          );
+          return Response.json({});
+        }),
+        { key: { username, password } },
+        def,
+      );
+      assert.equal((await h.transport.request(h.binding, request)).status, 200);
+    }
+  });
+
+  it("refuses Basic credentials that cannot be encoded unambiguously, before any IO", async () => {
+    for (const key of [
+      { username: "has:colon", password: "p" },
+      { username: "", password: "" },
+      { username: "line\nbreak", password: "p" },
+      { username: "u", password: "tab\there" },
+      { username: "danä", password: "p" },
+      { username: "u" },
+      "u:p",
+    ]) {
+      let calls = 0;
+      const def = definition("bearer");
+      def.methods.selected.schema = t.Object(
+        { key: t.Unknown() },
+        { additionalProperties: false },
+      );
+      def.methods.selected.authentication = { kind: "basic", field: "key" };
+      const h = await harness(
+        mock(() => {
+          calls++;
+          return Response.json({});
+        }),
+        { key },
+        def,
+      );
+      await assert.rejects(
+        h.transport.request(h.binding, request),
+        (error: unknown) =>
+          error instanceof AuthError &&
+          error.code === "invalid_credentials" &&
+          !String(error).includes("colon"),
+      );
+      assert.equal(calls, 0);
+    }
   });
 
   it("refuses a static secret stored flat instead of in its structured field", async () => {

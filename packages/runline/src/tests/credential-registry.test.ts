@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as t from "typebox";
 import {
+  BasicSecretSchema,
   CredentialRegistry,
   OAuthGrantSchema,
   SecretSchema,
@@ -168,6 +169,13 @@ describe("credential registry", () => {
         };
       },
       (d) => {
+        d.methods.apiKey.authentication = { kind: "basic", field: "missing" };
+      },
+      (d) => {
+        d.methods.apiKey.authentication = { kind: "basic", field: "key" };
+        d.methods.apiKey.targets.api.allowedHeaders = ["Authorization"];
+      },
+      (d) => {
         d.methods.apiKey.targets.api.allowedHeaders =
           "Accept" as unknown as string[];
       },
@@ -184,5 +192,19 @@ describe("credential registry", () => {
       edit(def);
       assert.throws(() => new CredentialRegistry().register(def));
     }
+  });
+
+  it("registers HTTP Basic against its structured username/password field", () => {
+    const def = definition();
+    def.methods.apiKey.schema = t.Object(
+      { key: BasicSecretSchema },
+      { additionalProperties: false },
+    );
+    def.methods.apiKey.authentication = { kind: "basic", field: "key" };
+    const registry = new CredentialRegistry();
+    registry.register(def);
+    const method = registry.select("example", "apiKey");
+    validateCredential(method, { key: { username: "u", password: "" } });
+    assert.throws(() => validateCredential(method, { key: { username: "u" } }));
   });
 });
