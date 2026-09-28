@@ -71,7 +71,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["deepl", "phase 3: not yet migrated"],
   ["demio", "two secrets per request: Api-Key and Api-Secret headers"],
-  ["dhl", "phase 3: not yet migrated"],
   ["discord", "phase 3: not yet migrated"],
   ["discourse", "phase 3: not yet migrated"],
   ["drift", "phase 3: not yet migrated"],
