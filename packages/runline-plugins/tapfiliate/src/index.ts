@@ -1,29 +1,21 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { tapfiliateCredential } from "./credentials.js";
 
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
-
-async function apiRequest(
+function apiRequest(
   ctx: ActionContext,
   method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await credentialRequest(ctx, tapfiliateCredential, {
+  return credentialJson(ctx, tapfiliateCredential, "tapfiliate", {
     target: "api",
     path: endpoint,
     method,
     query: qs,
     ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
   });
-  // Failures are reported by status alone: provider text can echo request data.
-  if (!res.ok)
-    throw new Error(`tapfiliate: request failed (HTTP ${res.status})`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
 }
 
 export default function tapfiliate(rl: RunlinePluginAPI) {
@@ -70,7 +62,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `affiliates/${seg((input as Record<string, unknown>).affiliateId)}/`,
+        `affiliates/${pathSegment((input as Record<string, unknown>).affiliateId)}/`,
       );
     },
   });
@@ -105,7 +97,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `affiliates/${seg((input as Record<string, unknown>).affiliateId)}/`,
+        `affiliates/${pathSegment((input as Record<string, unknown>).affiliateId)}/`,
       );
       return { success: true };
     },
@@ -126,7 +118,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `affiliates/${seg(p.affiliateId)}/meta-data/${seg(p.key)}/`,
+        `affiliates/${pathSegment(p.affiliateId)}/meta-data/${pathSegment(p.key)}/`,
         { value: p.value },
       );
     },
@@ -144,7 +136,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `affiliates/${seg(p.affiliateId)}/meta-data/${seg(p.key)}/`,
+        `affiliates/${pathSegment(p.affiliateId)}/meta-data/${pathSegment(p.key)}/`,
       );
       return { success: true };
     },
@@ -164,7 +156,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `programs/${seg(p.programId)}/affiliates/`,
+        `programs/${pathSegment(p.programId)}/affiliates/`,
         { affiliate: { id: p.affiliateId } },
       );
     },
@@ -182,7 +174,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `programs/${seg(p.programId)}/affiliates/${seg(p.affiliateId)}/approved/`,
+        `programs/${pathSegment(p.programId)}/affiliates/${pathSegment(p.affiliateId)}/approved/`,
       );
     },
   });
@@ -199,7 +191,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `programs/${seg(p.programId)}/affiliates/${seg(p.affiliateId)}/approved/`,
+        `programs/${pathSegment(p.programId)}/affiliates/${pathSegment(p.affiliateId)}/approved/`,
       );
       return { success: true };
     },
@@ -217,7 +209,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `programs/${seg(p.programId)}/affiliates/${seg(p.affiliateId)}/`,
+        `programs/${pathSegment(p.programId)}/affiliates/${pathSegment(p.affiliateId)}/`,
       );
     },
   });
@@ -234,7 +226,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `programs/${seg(p.programId)}/affiliates/`,
+        `programs/${pathSegment(p.programId)}/affiliates/`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
