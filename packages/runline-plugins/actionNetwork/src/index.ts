@@ -1,12 +1,12 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  pathSegment as seg,
+} from "../../_shared/credentials.js";
 import { actionNetworkCredential } from "./credentials.js";
 
 /** Public API base, used only for the resource links Action Network expects in bodies. */
 const BASE_URL = "https://actionnetwork.org/api/v2";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
   ctx: ActionContext,
@@ -51,15 +51,6 @@ async function paginate(
   }
 
   return results;
-}
-
-function itemsKeyForEndpoint(endpoint: string): string {
-  const segment = endpoint.split("/").pop()!;
-  return `osdi:${segment}`;
-}
-
-function extractId(item: { _links?: { self?: { href?: string } } }): string {
-  return item._links?.self?.href?.split("/").pop() ?? "";
 }
 
 export default function actionNetwork(rl: RunlinePluginAPI) {
