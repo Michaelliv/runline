@@ -13,6 +13,7 @@ import {
   hostLabel,
   httpsBase,
   multipartBody,
+  pathSegment,
   pathWithin,
   staticCredential,
 } from "../../../runline-plugins/_shared/credentials.js";
@@ -208,6 +209,18 @@ describe("credentialRequest and credentialJson", () => {
       credentialJson(ctx, example, "example", { target: "api", path: "x" }),
       { code: "invalid_response" },
     );
+  });
+});
+
+describe("pathSegment", () => {
+  it("encodes a value as exactly one path segment", () => {
+    assert.equal(pathSegment("a/b?c#d e"), "a%2Fb%3Fc%23d%20e");
+    assert.equal(pathSegment(42), "42");
+  });
+
+  it("refuses an empty value, which would address the parent collection", () => {
+    for (const value of ["", undefined, null])
+      assert.throws(() => pathSegment(value), { code: "request_not_allowed" });
   });
 });
 
