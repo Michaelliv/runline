@@ -315,6 +315,25 @@ describe("credential registry", () => {
           optionalParts: ["secret"],
         } as never;
       },
+      // A target no placement signs: unsigned requests belong to a none
+      // method, not to a static one.
+      (d) => {
+        d.methods.apiKey.targets.other = {
+          baseUrl: "https://other.example/",
+          methods: ["GET"],
+        };
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [
+            {
+              in: "header",
+              part: "secret",
+              name: "X-Key",
+              targets: ["api"],
+            },
+          ],
+        );
+      },
       // One path position: two path placements, or a prefix that is not
       // plain path text.
       (d) => {
