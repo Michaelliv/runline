@@ -147,7 +147,7 @@ describe("the local signer signs static keys from flat config", () => {
 
   it("joins fields and fixed values into one part, as in {email}/token", async () => {
     const cases: Array<
-      [CredentialDeclaration, Record<string, unknown>, string | null]
+      [CredentialDeclaration, Record<string, unknown>, string]
     > = [
       [
         declaration(
@@ -235,7 +235,7 @@ describe("the local signer signs static keys from flat config", () => {
     assert.deepEqual(seen, []);
   });
 
-  it("refuses redirects and returns provider errors as a status, never as text", async () => {
+  it("refuses a redirect, and the error carries no secret", async () => {
     const declare = declaration(
       { kind: "bearer", field: "secret" },
       { secret: { field: "apiKey" } },

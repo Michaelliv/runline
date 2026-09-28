@@ -131,7 +131,7 @@ describe("credential registry", () => {
     assert.equal(registry.select("example", "delegated").probe, undefined);
   });
 
-  it("rejects insecure destinations, header routing controls, missing fields and implicit renewal", () => {
+  it("rejects insecure destinations, unsafe authentication shapes, missing fields, out-of-range target limits and implicit renewal", () => {
     const edits: Array<(def: CredentialType) => void> = [
       (d) => {
         d.methods.apiKey.targets.api.baseUrl = "http://api.example/v1/";

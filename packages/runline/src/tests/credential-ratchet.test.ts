@@ -5,8 +5,8 @@
  * Each plugin directory is in exactly one of three places:
  *   - it declares its credential (`rl.setCredential`) and has a fixture in
  *     credential-fixtures/, exercised by credential-plugins.test.ts;
- *   - UNDECLARED_BACKLOG, with the phase it belongs to or the specific
- *     reason it cannot be declared with today's authentication kinds;
+ *   - UNDECLARED_BACKLOG, with the specific reason it cannot be declared
+ *     with today's authentication kinds;
  *   - NO_CREDENTIAL, with the reason it holds no secret at all.
  *
  * Like plugin-authed-fetch.test.ts, this is a ratchet: the backlog may
@@ -65,7 +65,7 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["ghost", "signature: a JWT is minted per request from the admin key"],
   [
     "gitlab",
-    "path encoding: %2F-encoded project and file paths, which the transport's segment rules refuse",
+    "encoded path segment: project and file paths travel %2F-encoded, which the path policy refuses",
   ],
   [
     "gotify",
@@ -96,7 +96,7 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["paddle", "body key: vendor_auth_code travels in the JSON body"],
   [
     "plivo",
-    "basic username (authId) is also a URL path segment: a secret-free brokered config cannot address the account",
+    "config split: authId is both the Basic username, stored as a secret, and a path segment a brokered config must still hold",
   ],
   ["posthog", "body key: api_key travels in the JSON body"],
   ["pushover", "body key: token travels in the form body"],
@@ -131,7 +131,7 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["trello", "two secrets per request: key and token query parameters"],
   [
     "twilio",
-    "config split: accountSid is both the Basic username, stored away as secret, and the target path segment a brokered config must still hold",
+    "config split: accountSid is both the Basic username, stored as a secret, and a path segment a brokered config must still hold",
   ],
   ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],
   ["uptimerobot", "body key: api_key travels in the form body"],

@@ -53,7 +53,7 @@ describe("the plugin API carries a credential declaration", () => {
   });
 
   it("a plugin that signs its own requests declares none", () => {
-    // Trello stays self-signing: its two query secrets have no declarable kind.
+    // Trello signs its own requests: two query secrets have no declarable kind.
     assert.equal(definition(trello).credential, undefined);
   });
 });

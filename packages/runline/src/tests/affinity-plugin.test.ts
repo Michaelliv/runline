@@ -50,19 +50,13 @@ describe("affinity search terms", () => {
     const urls = wire({ persons: [], next_page_token: null });
     await action("person.list").execute({ term: "ada" }, context());
     assert.equal(urls.length, 1);
-    assert.ok(
-      new URL(urls[0]).searchParams.get("term") === "ada",
-      `term missing from ${urls[0]}`,
-    );
+    assert.equal(new URL(urls[0]).searchParams.get("term"), "ada");
   });
 
   it("organization.list sends the search term", async () => {
     const urls = wire({ organizations: [], next_page_token: null });
     await action("organization.list").execute({ term: "acme" }, context());
     assert.equal(urls.length, 1);
-    assert.ok(
-      new URL(urls[0]).searchParams.get("term") === "acme",
-      `term missing from ${urls[0]}`,
-    );
+    assert.equal(new URL(urls[0]).searchParams.get("term"), "acme");
   });
 });

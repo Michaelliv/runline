@@ -74,7 +74,7 @@ describe("staticCredential", () => {
       field: "credential",
       header: "X-Api-Key",
     });
-    assert.deepEqual(
+    assert.equal(
       method.targets.api.baseUrl,
       "https://tenant.example.com/api/v1/",
     );

@@ -33,7 +33,7 @@ import type { CredentialFixture } from "./credential-fixtures/fixture.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(here, "credential-fixtures");
 
-export async function loadFixtures(): Promise<CredentialFixture[]> {
+async function loadFixtures(): Promise<CredentialFixture[]> {
   const names = readdirSync(FIXTURES)
     .filter((name) => name.endsWith(".ts") && name !== "fixture.ts")
     .sort();
@@ -133,7 +133,7 @@ function wire(handler: (url: string, init: RequestInit) => Response) {
 }
 
 describe("credential fixtures", () => {
-  it("exist, one per declaring plugin (see credential-ratchet.test.ts)", () => {
+  it("load, each named for the plugin it describes", () => {
     assert.ok(fixtures.length > 0);
   });
 });
