@@ -1,9 +1,9 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { registerAccessActions } from "./access.js";
-import { shiftCrmCredential } from "./credentials.js";
 import { registerAccountActions } from "./accounts.js";
 import { registerActivityActions } from "./activities.js";
+import { shiftCrmCredential } from "./credentials.js";
 import { registerImportActions } from "./imports.js";
 import {
   registerOpportunityActions,
