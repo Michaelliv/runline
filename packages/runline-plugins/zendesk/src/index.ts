@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { zendeskCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** One Zendesk call: every endpoint is a .json path beneath /api/v2/. */
 function api(
@@ -87,7 +84,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `tickets/${seg((input as Record<string, unknown>).id)}`,
+        `tickets/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.ticket;
     },
@@ -133,7 +130,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(ctx, "PUT", `tickets/${seg(p.id)}`, {
+      const data = (await api(ctx, "PUT", `tickets/${pathSegment(p.id)}`, {
         ticket: p.data,
       })) as Record<string, unknown>;
       return data.ticket;
@@ -148,7 +145,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `tickets/${seg((input as Record<string, unknown>).id)}`,
+        `tickets/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -180,7 +177,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `users/${seg((input as Record<string, unknown>).id)}`,
+        `users/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.user;
     },
@@ -211,7 +208,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(ctx, "PUT", `users/${seg(p.id)}`, {
+      const data = (await api(ctx, "PUT", `users/${pathSegment(p.id)}`, {
         user: p.data,
       })) as Record<string, unknown>;
       return data.user;
@@ -226,7 +223,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "DELETE",
-        `users/${seg((input as Record<string, unknown>).id)}`,
+        `users/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.user;
     },
@@ -276,7 +273,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `organizations/${seg((input as Record<string, unknown>).id)}`,
+        `organizations/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.organization;
     },
@@ -310,9 +307,14 @@ export default function zendesk(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(ctx, "PUT", `organizations/${seg(p.id)}`, {
-        organization: p.data,
-      })) as Record<string, unknown>;
+      const data = (await api(
+        ctx,
+        "PUT",
+        `organizations/${pathSegment(p.id)}`,
+        {
+          organization: p.data,
+        },
+      )) as Record<string, unknown>;
       return data.organization;
     },
   });
@@ -325,7 +327,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `organizations/${seg((input as Record<string, unknown>).id)}`,
+        `organizations/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -341,7 +343,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `ticket_fields/${seg((input as Record<string, unknown>).id)}`,
+        `ticket_fields/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.ticket_field;
     },
