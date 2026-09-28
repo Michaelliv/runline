@@ -130,7 +130,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "highlevel/src/index.ts",
   "homeAssistant/src/index.ts",
   "hubspot/src/index.ts",
-  "hunter/src/index.ts",
   "intercom/src/index.ts",
   "iterable/src/index.ts",
   "lemlist/src/index.ts",
