@@ -1,7 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { type QueryResult, records } from "./queryResult.js";
 import { pathSegment } from "../../_shared/credentials.js";
+import { type QueryResult, records } from "./queryResult.js";
 import { api, type Ctx } from "./shared.js";
 
 export const SOBJECTS = [
