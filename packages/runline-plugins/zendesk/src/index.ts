@@ -1,47 +1,31 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { zendeskCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    subdomain: c.subdomain as string,
-    email: c.email as string,
-    apiToken: c.apiToken as string,
-  };
-}
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function api(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+/** One Zendesk call: every endpoint is a .json path beneath /api/v2/. */
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(
-    `https://${conn.subdomain}.zendesk.com/api/v2${endpoint}.json`,
-  );
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, zendeskCredential, "zendesk", {
+    target: "api",
+    path: `${endpoint}.json`,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${conn.email}/token:${conn.apiToken}`)}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Zendesk error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function zendesk(rl: RunlinePluginAPI) {
   rl.setName("zendesk");
   rl.setVersion("0.1.0");
+  rl.setCredential(zendeskCredential);
   rl.setConnectionSchema({
     subdomain: {
       type: "string",
@@ -88,7 +72,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       if (p.priority) ticket.priority = p.priority;
       if (p.tags) ticket.tags = p.tags;
       if (p.customFields) ticket.custom_fields = p.customFields;
-      const data = (await api(getConn(ctx), "POST", "/tickets", {
+      const data = (await api(ctx, "POST", "tickets", {
         ticket,
       })) as Record<string, unknown>;
       return data.ticket;
@@ -101,9 +85,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/tickets/${(input as Record<string, unknown>).id}`,
+        `tickets/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.ticket;
     },
@@ -128,13 +112,10 @@ export default function zendesk(rl: RunlinePluginAPI) {
       if (p.status) q += ` status:${p.status}`;
       const qs: Record<string, unknown> = { query: q };
       if (p.limit) qs.per_page = p.limit;
-      const data = (await api(
-        getConn(ctx),
-        "GET",
-        "/search",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "search", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return data.results;
     },
   });
@@ -152,7 +133,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(getConn(ctx), "PUT", `/tickets/${p.id}`, {
+      const data = (await api(ctx, "PUT", `tickets/${seg(p.id)}`, {
         ticket: p.data,
       })) as Record<string, unknown>;
       return data.ticket;
@@ -165,9 +146,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/tickets/${(input as Record<string, unknown>).id}`,
+        `tickets/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -184,7 +165,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
       role: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const data = (await api(getConn(ctx), "POST", "/users", {
+      const data = (await api(ctx, "POST", "users", {
         user: input,
       })) as Record<string, unknown>;
       return data.user;
@@ -197,9 +178,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/users/${(input as Record<string, unknown>).id}`,
+        `users/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.user;
     },
@@ -213,13 +194,10 @@ export default function zendesk(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if ((input as Record<string, unknown>)?.limit)
         qs.per_page = (input as Record<string, unknown>).limit;
-      const data = (await api(
-        getConn(ctx),
-        "GET",
-        "/users",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "users", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return data.users;
     },
   });
@@ -233,7 +211,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(getConn(ctx), "PUT", `/users/${p.id}`, {
+      const data = (await api(ctx, "PUT", `users/${seg(p.id)}`, {
         user: p.data,
       })) as Record<string, unknown>;
       return data.user;
@@ -246,9 +224,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/users/${(input as Record<string, unknown>).id}`,
+        `users/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.user;
     },
@@ -266,9 +244,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { query: p.query };
       if (p.limit) qs.per_page = p.limit;
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        "/users/search",
+        "users/search",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -283,7 +261,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
     description: "Create an organization",
     inputSchema: { name: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(getConn(ctx), "POST", "/organizations", {
+      const data = (await api(ctx, "POST", "organizations", {
         organization: input,
       })) as Record<string, unknown>;
       return data.organization;
@@ -296,9 +274,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/organizations/${(input as Record<string, unknown>).id}`,
+        `organizations/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.organization;
     },
@@ -313,9 +291,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.per_page = (input as Record<string, unknown>).limit;
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        "/organizations",
+        "organizations",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -332,7 +310,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(getConn(ctx), "PUT", `/organizations/${p.id}`, {
+      const data = (await api(ctx, "PUT", `organizations/${seg(p.id)}`, {
         organization: p.data,
       })) as Record<string, unknown>;
       return data.organization;
@@ -345,9 +323,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/organizations/${(input as Record<string, unknown>).id}`,
+        `organizations/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -361,9 +339,9 @@ export default function zendesk(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/ticket_fields/${(input as Record<string, unknown>).id}`,
+        `ticket_fields/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.ticket_field;
     },
@@ -374,7 +352,7 @@ export default function zendesk(rl: RunlinePluginAPI) {
     description: "List ticket fields",
     inputSchema: {},
     async execute(_input, ctx) {
-      const data = (await api(getConn(ctx), "GET", "/ticket_fields")) as Record<
+      const data = (await api(ctx, "GET", "ticket_fields")) as Record<
         string,
         unknown
       >;
