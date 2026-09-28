@@ -102,7 +102,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "generic client: arbitrary endpoint and caller-composed auth header",
   ],
   ["halopsa", "phase 3: not yet migrated"],
-  ["helpscout", "phase 3: not yet migrated"],
   ["highlevel", "phase 3: not yet migrated"],
   [
     "homeAssistant",
