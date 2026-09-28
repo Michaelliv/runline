@@ -539,7 +539,6 @@ export default function clickup(rl: RunlinePluginAPI) {
       const { goalId, dueDate, addOwners, removeOwners, ...rest } =
         input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...rest };
-      delete body.goalId;
       if (dueDate) body.due_date = new Date(dueDate as string).getTime();
       if (addOwners) body.add_owners = addOwners;
       if (removeOwners) body.rem_owners = removeOwners;
@@ -609,7 +608,6 @@ export default function clickup(rl: RunlinePluginAPI) {
       const { goalId, stepsStart, stepsEnd, taskIds, listIds, ...rest } =
         input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...rest };
-      delete body.goalId;
       if (stepsStart !== undefined) body.steps_start = stepsStart;
       if (stepsEnd !== undefined) body.steps_end = stepsEnd;
       if (taskIds) body.task_ids = taskIds;
@@ -652,7 +650,6 @@ export default function clickup(rl: RunlinePluginAPI) {
       const { keyResultId, stepsCurrent, stepsStart, stepsEnd, ...rest } =
         input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...rest };
-      delete body.keyResultId;
       if (stepsCurrent !== undefined) body.steps_current = stepsCurrent;
       if (stepsStart !== undefined) body.steps_start = stepsStart;
       if (stepsEnd !== undefined) body.steps_end = stepsEnd;
@@ -878,7 +875,6 @@ export default function clickup(rl: RunlinePluginAPI) {
         ...rest
       } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...rest };
-      delete body.listId;
       if (dueDate) body.due_date = new Date(dueDate as string).getTime();
       if (startDate) body.start_date = new Date(startDate as string).getTime();
       if (timeEstimate) body.time_estimate = (timeEstimate as number) * 60000;
@@ -1023,7 +1019,6 @@ export default function clickup(rl: RunlinePluginAPI) {
         ...rest
       } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...rest };
-      delete body.taskId;
       if (dueDate) body.due_date = new Date(dueDate as string).getTime();
       if (startDate) body.start_date = new Date(startDate as string).getTime();
       if (timeEstimate) body.time_estimate = (timeEstimate as number) * 60000;
@@ -1371,8 +1366,6 @@ export default function clickup(rl: RunlinePluginAPI) {
         unknown
       >;
       const body: Record<string, unknown> = { name, ...rest };
-      delete body.spaceId;
-      delete body.folderId;
       if (dueDate) body.due_date = new Date(dueDate as string).getTime();
       const endpoint = folderId
         ? `folder/${pathSegment(folderId)}/list`
@@ -1455,7 +1448,6 @@ export default function clickup(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { listId, dueDate, ...rest } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...rest };
-      delete body.listId;
       if (dueDate) body.due_date = new Date(dueDate as string).getTime();
       return apiRequest(ctx, "PUT", `list/${pathSegment(listId)}`, body);
     },
@@ -1549,7 +1541,6 @@ export default function clickup(rl: RunlinePluginAPI) {
         duration: (duration as number) * 60000,
         ...rest,
       };
-      delete body.teamId;
       const data = (await apiRequest(
         ctx,
         "POST",
