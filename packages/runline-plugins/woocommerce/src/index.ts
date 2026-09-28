@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { woocommerceCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -47,7 +44,7 @@ function registerCrud(
       return apiRequest(
         ctx,
         "GET",
-        `${plural}/${seg((input as Record<string, unknown>).id)}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -82,7 +79,7 @@ function registerCrud(
       return apiRequest(
         ctx,
         "PUT",
-        `${plural}/${seg(p.id)}`,
+        `${plural}/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -96,7 +93,7 @@ function registerCrud(
       return apiRequest(
         ctx,
         "DELETE",
-        `${plural}/${seg((input as Record<string, unknown>).id)}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
         undefined,
         { force: "true" },
       );
