@@ -51,3 +51,32 @@ describe("customerIo App API", () => {
     ]);
   });
 });
+
+describe("customerIo region", () => {
+  it("refuses a region it does not know rather than defaulting to the US hosts", async () => {
+    const { api, resolve } = createPluginAPI("customerIo");
+    customerIo(api);
+    const action = resolve().actions.find((a) => a.name === "campaign.list");
+    assert.ok(action);
+    globalThis.fetch = (async () => {
+      throw new Error("no request expected");
+    }) as typeof fetch;
+    const ctx: ActionContext = {
+      connection: {
+        name: "cio",
+        plugin: "customerIo",
+        config: {
+          siteId: "s",
+          trackingApiKey: "t",
+          appApiKey: "a",
+          region: "eu",
+        },
+      },
+      log: { info() {}, warn() {}, error() {} },
+      async updateConnection() {},
+    };
+    await assert.rejects(Promise.resolve(action.execute({}, ctx)), {
+      code: "invalid_credentials",
+    });
+  });
+});
