@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, graphqlFailed } from "../../_shared/credentials.js";
 import { linearCredential } from "./credentials.js";
 
 export type Ctx = ActionContext;
@@ -19,8 +19,7 @@ export async function gql(
     method: "POST",
     json: body,
   })) as Record<string, unknown>;
-  if (data.errors)
-    throw new Error(`Linear GraphQL error: ${JSON.stringify(data.errors)}`);
+  if (data.errors) throw graphqlFailed("linear", data.errors);
   return data.data as Record<string, unknown>;
 }
 

@@ -83,6 +83,21 @@ describe("failures inside a 2xx answer", () => {
     );
   });
 
+  it("mautic reports a failure whose errors are not a list", async () => {
+    globalThis.fetch = (async () =>
+      Response.json({ errors: { message: "odd shape" } })) as typeof fetch;
+    await assert.rejects(
+      run(
+        mautic,
+        "mautic",
+        "company.get",
+        { companyId: "1" },
+        { url: "https://m.example.com", username: "u", password: "p" },
+      ),
+      { message: "mautic: request failed" },
+    );
+  });
+
   it("pipedrive reports its error code and message", async () => {
     globalThis.fetch = (async () =>
       Response.json({

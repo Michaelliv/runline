@@ -11,7 +11,8 @@ async function apiRequest(
     path: "yourls-api.php",
     query: { ...qs, format: "json" },
   })) as Record<string, unknown>;
-  if (data.status === "fail") throw answerFailed("yourls", data.code);
+  if (data.status === "fail")
+    throw answerFailed("yourls", { code: data.code, message: data.message });
   return data;
 }
 

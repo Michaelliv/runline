@@ -40,7 +40,10 @@ async function ocs(
   } = {},
 ): Promise<unknown> {
   const answer = await credentialJson<{
-    ocs?: { meta?: { status?: string; statuscode?: number }; data?: unknown };
+    ocs?: {
+      meta?: { status?: string; statuscode?: number; message?: string };
+      data?: unknown;
+    };
   }>(ctx, nextcloudCredential, "nextcloud", {
     target: "ocs",
     path,
@@ -51,7 +54,10 @@ async function ocs(
   });
   const meta = answer.ocs?.meta;
   if (meta && meta.status !== "ok")
-    throw answerFailed("nextcloud", meta.statuscode);
+    throw answerFailed("nextcloud", {
+      code: meta.statuscode,
+      message: meta.message,
+    });
   return answer.ocs?.data;
 }
 

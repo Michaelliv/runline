@@ -1,5 +1,5 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, graphqlFailed } from "../../_shared/credentials.js";
 import { emeliaCredential } from "./credentials.js";
 
 async function gql(
@@ -15,8 +15,7 @@ async function gql(
     method: "POST",
     json: body,
   })) as Record<string, unknown>;
-  if (data.errors)
-    throw new Error(`Emelia GraphQL error: ${JSON.stringify(data.errors)}`);
+  if (data.errors) throw graphqlFailed("emelia", data.errors);
   return data.data as Record<string, unknown>;
 }
 

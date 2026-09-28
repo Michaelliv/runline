@@ -347,8 +347,8 @@ export function credentialRequest(
 
 /**
  * A provider error identifier worth handing back — an error code, a field
- * path — as a plain name. Anything else is free text, which can echo request
- * data back, and is dropped.
+ * path — as a plain name. Anything else is not a name and is dropped, so
+ * the code and field slots of a failure never carry free text.
  */
 export function errorIdentifier(value: unknown): string | undefined {
   return typeof value === "string" && /^[\w.$:-]{1,100}$/.test(value)
@@ -359,8 +359,8 @@ export function errorIdentifier(value: unknown): string | undefined {
 /**
  * How a failed request reads: its HTTP status when the status is the
  * failure, and the identifiers a provider returns for correcting the call
- * — its error `code` and the offending `param` — never its free-text
- * message.
+ * — its error `code` and the offending `param`. A failed response's body
+ * is never read into it: that is where a provider may echo the credential.
  */
 export function failureMessage(
   plugin: string,
@@ -376,17 +376,48 @@ export function failureMessage(
   return `${plugin}: request failed${inner ? ` (${inner})` : ""}`;
 }
 
+/** A code or field path as a plain identifier, numbers included. */
+function identifierOf(value: unknown): string | undefined {
+  return errorIdentifier(typeof value === "number" ? String(value) : value);
+}
+
 /**
- * A successful response whose answer reports failure (Slack's `ok: false`,
- * an OCS status), by the provider's error code when it is a plain
- * identifier — never its free-text message.
+ * A successful response whose answer reports failure — Slack's `ok: false`,
+ * an OCS status, a GraphQL `errors` entry — by the provider's code, the
+ * field at fault and its message. The answer is 2xx data the plugin
+ * already holds, so the message stays for the caller to act on, reduced
+ * to one line of at most 300 characters.
  */
-export function answerFailed(plugin: string, code: unknown): Error {
-  return new Error(
-    failureMessage(plugin, undefined, {
-      code: errorIdentifier(typeof code === "number" ? String(code) : code),
-    }),
-  );
+export function answerFailed(
+  plugin: string,
+  detail: { code?: unknown; param?: unknown; message?: unknown },
+): Error {
+  const head = failureMessage(plugin, undefined, {
+    code: identifierOf(detail.code),
+    param: identifierOf(detail.param),
+  });
+  const text =
+    typeof detail.message === "string"
+      ? detail.message.replace(/[\u0000-\u001f\u007f\s]+/g, " ").trim()
+      : "";
+  const line = text.length > 300 ? `${text.slice(0, 300)}…` : text;
+  return new Error(line ? `${head}: ${line}` : head);
+}
+
+/** A GraphQL answer's `errors`, read by `answerFailed` from the first entry. */
+export function graphqlFailed(plugin: string, errors: unknown): Error {
+  const first = (Array.isArray(errors) ? errors[0] : undefined) as
+    | {
+        message?: unknown;
+        path?: unknown;
+        extensions?: { code?: unknown };
+      }
+    | undefined;
+  return answerFailed(plugin, {
+    code: first?.extensions?.code,
+    param: Array.isArray(first?.path) ? first.path.join(".") : undefined,
+    message: first?.message,
+  });
 }
 
 /** A failed request, reported by status alone. */

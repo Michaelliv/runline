@@ -1,5 +1,5 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, graphqlFailed } from "../../_shared/credentials.js";
 import { mondayCredential } from "./credentials.js";
 
 async function gql(
@@ -14,10 +14,7 @@ async function gql(
     headers: { "API-Version": "2023-10" },
     json: { query, variables },
   })) as Record<string, unknown>;
-  if (data.errors)
-    throw new Error(
-      `Monday.com GraphQL errors: ${JSON.stringify(data.errors)}`,
-    );
+  if (data.errors) throw graphqlFailed("monday", data.errors);
   return data.data as Record<string, unknown>;
 }
 

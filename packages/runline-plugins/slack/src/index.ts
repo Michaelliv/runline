@@ -16,7 +16,7 @@ async function api(
     query,
     ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
   })) as Record<string, unknown>;
-  if (data.ok === false) throw answerFailed("slack", data.error);
+  if (data.ok === false) throw answerFailed("slack", { code: data.error });
   return data;
 }
 

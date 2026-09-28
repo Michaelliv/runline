@@ -1,5 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  answerFailed,
+  credentialJson,
+  pathSegment,
+} from "../../_shared/credentials.js";
 import { pipedriveCredential } from "./credentials.js";
 
 async function api(
@@ -18,7 +22,10 @@ async function api(
     ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
   })) as Record<string, unknown>;
   if (json.success === false)
-    throw new Error("pipedrive: request failed (API error)");
+    throw answerFailed("pipedrive", {
+      code: json.errorCode,
+      message: json.error,
+    });
   return json.data ?? json;
 }
 

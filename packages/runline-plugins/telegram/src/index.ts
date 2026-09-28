@@ -14,7 +14,11 @@ async function apiRequest(
     "telegram",
     { target: "api", path: name, method: "POST", json: body },
   );
-  if (!data.ok) throw answerFailed("telegram", data.error_code);
+  if (!data.ok)
+    throw answerFailed("telegram", {
+      code: data.error_code,
+      message: data.description,
+    });
   return data.result;
 }
 

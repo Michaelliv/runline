@@ -1,5 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  answerFailed,
+  credentialJson,
+  pathSegment,
+} from "../../_shared/credentials.js";
 import { mauticCredential } from "./credentials.js";
 
 async function req(
@@ -21,7 +25,15 @@ async function req(
       ? { json: body }
       : {}),
   })) as Record<string, unknown>;
-  if (data.errors) throw new Error("mautic: request failed (API errors)");
+  if (data.errors) {
+    const first = (Array.isArray(data.errors) ? data.errors[0] : undefined) as
+      | { code?: unknown; message?: unknown }
+      | undefined;
+    throw answerFailed("mautic", {
+      code: first?.code,
+      message: first?.message,
+    });
+  }
   return data;
 }
 
