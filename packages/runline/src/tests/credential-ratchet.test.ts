@@ -58,10 +58,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "optional credential: username and password are optional, and the empty Basic pair sent today is one the transport refuses",
   ],
   [
-    "elevenlabs",
-    "deadline: audio generation defaults to a 300 s timeout (caller-tunable) and reads up to 100 MiB, past the transport's 120 s and 64 MiB ceilings",
-  ],
-  [
     "facebookGraph",
     "agent-selected host: hostUrl is a per-call action input, not config",
   ],

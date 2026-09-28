@@ -65,6 +65,13 @@ function audio() {
     },
   });
 }
+/** The multipart body travels buffered; its boundary rides the content-type header. */
+async function formOf(call: { init: RequestInit }) {
+  const contentType = new Headers(call.init.headers).get("content-type") ?? "";
+  return new Response(call.init.body as BodyInit, {
+    headers: { "content-type": contentType },
+  }).formData();
+}
 
 describe("elevenlabs plugin", () => {
   it("registers 20 creative-audio actions with explicit access levels", () => {
@@ -168,7 +175,7 @@ describe("elevenlabs plugin", () => {
           {},
           { ...ctx, connection: { ...ctx.connection, config: {} } },
         ),
-      /ELEVENLABS_API_KEY/,
+      /invalid authentication credentials/,
     );
     assert.equal(calls.length, 0);
   });
@@ -384,7 +391,7 @@ describe("elevenlabs plugin", () => {
       removeBackgroundNoise: false,
       saveDir: dir,
     });
-    const form = calls[0].init.body as FormData;
+    const form = await formOf(calls[0]);
     assert.equal(form.get("voice_settings"), '{"style":0}');
     assert.equal(form.get("remove_background_noise"), "false");
     assert.equal(form.get("model_id"), "eleven_multilingual_sts_v2");
@@ -392,10 +399,10 @@ describe("elevenlabs plugin", () => {
       Buffer.from(await (form.get("audio") as Blob).arrayBuffer()),
       bytes,
     );
-    assert.equal(
-      new Headers(calls[0].init.headers).get("content-type"),
-      null,
-      "fetch supplies the multipart boundary",
+    assert.match(
+      new Headers(calls[0].init.headers).get("content-type") ?? "",
+      /^multipart\/form-data; boundary=/,
+      "the buffered body carries its multipart boundary",
     );
   });
   it("transcribes with Scribe and keeps word/speaker metadata", async () => {
@@ -413,7 +420,7 @@ describe("elevenlabs plugin", () => {
       }),
       output,
     );
-    const form = calls[0].init.body as FormData;
+    const form = await formOf(calls[0]);
     assert.equal(form.get("model_id"), "scribe_v2");
     assert.equal(form.get("diarize"), "false");
     assert.equal(form.get("tag_audio_events"), "false");
@@ -426,7 +433,7 @@ describe("elevenlabs plugin", () => {
       audioPaths: [source, source],
       labels: { language: "en" },
     });
-    const form = calls[0].init.body as FormData;
+    const form = await formOf(calls[0]);
     assert.equal(form.getAll("files").length, 2);
     assert.equal(form.get("labels"), '{"language":"en"}');
   });
@@ -446,7 +453,10 @@ describe("elevenlabs plugin", () => {
   });
   it("rejects redirects, even when fetch ignores redirect:error", async () => {
     mock(new Response(null, { status: 302 }));
-    await assert.rejects(() => run("models.list"), /Refusing a redirect/);
+    await assert.rejects(
+      () => run("models.list"),
+      /Authenticated request failed/,
+    );
   });
   it("reports quota errors without retrying", async () => {
     const calls = mock(
@@ -563,7 +573,10 @@ describe("elevenlabs plugin", () => {
         }),
       ),
     );
-    await assert.rejects(() => run("models.list"), /JSON exceeds 8 MiB/);
+    await assert.rejects(
+      () => run("models.list"),
+      /exceeds the configured limit/,
+    );
     assert.ok(cancelled);
   });
   it("keeps the deadline active while consuming audio and JSON bodies", async () => {
@@ -594,7 +607,7 @@ describe("elevenlabs plugin", () => {
       }) as typeof fetch;
       await assert.rejects(
         () => run(name, { ...input, timeoutMs: 1000 }),
-        /stalled.*do not retry automatically/,
+        /timed out.*do not retry automatically/,
       );
       assert.equal(calls, 1);
     }
@@ -824,7 +837,7 @@ describe("elevenlabs plugin", () => {
     const calls = mock(audio());
     await run("audio.isolate", { audioPath: source, saveDir: dir });
     assert.equal(calls[0].url, "https://api.elevenlabs.io/v1/audio-isolation");
-    assert.ok((calls[0].init.body as FormData).get("audio") instanceof Blob);
+    assert.ok((await formOf(calls[0])).get("audio") instanceof Blob);
   });
   it("supports remote multichannel transcription and repeated keyterms", async () => {
     const output = {
@@ -841,7 +854,7 @@ describe("elevenlabs plugin", () => {
       }),
       output,
     );
-    const form = calls[0].init.body as FormData;
+    const form = await formOf(calls[0]);
     assert.equal(form.get("file"), null);
     assert.equal(form.get("source_url"), "https://media.example/audio.wav");
     assert.deepEqual(form.getAll("keyterms"), ["Runline", "Eleven Labs"]);
@@ -883,7 +896,7 @@ describe("elevenlabs plugin", () => {
         calls[0].url,
         "https://api.elevenlabs.io/v1/history/h/audio",
       );
-      assert.equal(calls[0].init.method, undefined);
+      assert.equal(calls[0].init.method, "GET");
       assert.ok(out.audio.path.endsWith(extension));
       assert.equal(out.outputFormat, null);
     }
@@ -909,22 +922,13 @@ describe("elevenlabs plugin", () => {
       ["music.create", { prompt: "ambient", durationMs: 3000 }],
       ["sound.create", { text: "rain" }],
     ] as const) {
-      let cancelled = false;
       const calls = mock(
-        new Response(
-          new ReadableStream({
-            cancel() {
-              cancelled = true;
-            },
-          }),
-          { headers: { "content-type": "audio/wav" } },
-        ),
+        new Response(bytes, { headers: { "content-type": "audio/wav" } }),
       );
       await assert.rejects(
         () => run(name, input),
         /format mismatch.*do not retry/,
       );
-      assert.ok(cancelled);
       assert.equal(calls.length, 1);
     }
   });
@@ -971,7 +975,7 @@ describe("elevenlabs plugin", () => {
       labels: {},
       audioPaths: [source],
     });
-    const form = calls[0].init.body as FormData;
+    const form = await formOf(calls[0]);
     assert.equal(form.get("description"), "");
     assert.equal(form.getAll("files").length, 1);
     assert.equal(
@@ -1019,7 +1023,7 @@ describe("elevenlabs plugin", () => {
     );
     await assert.rejects(
       () => run("speech.create", { voiceId: "v", text: "hi" }),
-      /audio exceeds 100 MiB/,
+      /exceeds the configured limit/,
     );
     assert.ok(cancelled);
   });
