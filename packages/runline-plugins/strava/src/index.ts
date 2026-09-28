@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { stravaCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -101,7 +98,7 @@ export default function strava(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `activities/${seg((input as Record<string, unknown>).activityId)}`,
+        `activities/${pathSegment((input as Record<string, unknown>).activityId)}`,
       );
     },
   });
@@ -139,7 +136,12 @@ export default function strava(rl: RunlinePluginAPI) {
       if (fields.trainer !== undefined) body.trainer = fields.trainer;
       if (fields.commute !== undefined) body.commute = fields.commute;
       if (fields.gearId) body.gear_id = fields.gearId;
-      return apiRequest(ctx, "PUT", `activities/${seg(activityId)}`, body);
+      return apiRequest(
+        ctx,
+        "PUT",
+        `activities/${pathSegment(activityId)}`,
+        body,
+      );
     },
   });
 
@@ -173,7 +175,7 @@ export default function strava(rl: RunlinePluginAPI) {
         const data = (await apiRequest(
           ctx,
           "GET",
-          `activities/${seg(p.activityId)}/${sub.path}`,
+          `activities/${pathSegment(p.activityId)}/${sub.path}`,
         )) as unknown[];
         if (p.limit) return data.slice(0, p.limit as number);
         return data;
@@ -198,7 +200,7 @@ export default function strava(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `activities/${seg(p.activityId)}/streams`,
+        `activities/${pathSegment(p.activityId)}/streams`,
         undefined,
         { keys: p.keys, key_by_type: "true" },
       );
