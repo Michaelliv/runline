@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { bannerbearCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -101,7 +98,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
           result = (await apiRequest(
             ctx,
             "GET",
-            `images/${seg(result.uid)}`,
+            `images/${pathSegment(result.uid)}`,
           )) as Record<string, unknown>;
           if (result.status === "completed") break;
           tries--;
@@ -125,7 +122,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { imageId } = input as { imageId: string };
-      return apiRequest(ctx, "GET", `images/${seg(imageId)}`);
+      return apiRequest(ctx, "GET", `images/${pathSegment(imageId)}`);
     },
   });
 
@@ -143,7 +140,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { templateId } = input as { templateId: string };
-      return apiRequest(ctx, "GET", `templates/${seg(templateId)}`);
+      return apiRequest(ctx, "GET", `templates/${pathSegment(templateId)}`);
     },
   });
 
