@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { homeAssistantCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** One Home Assistant call: every endpoint is a path beneath /api/. */
 function ha(
@@ -105,7 +102,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       return ha(
         ctx,
         "POST",
-        `services/${seg(domain)}/${seg(service)}`,
+        `services/${pathSegment(domain)}/${pathSegment(service)}`,
         (serviceData as Record<string, unknown>) ?? {},
       );
     },
@@ -133,7 +130,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       return ha(
         ctx,
         "GET",
-        `states/${seg((input as { entityId: string }).entityId)}`,
+        `states/${pathSegment((input as { entityId: string }).entityId)}`,
       );
     },
   });
@@ -154,7 +151,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       const { entityId, state, attributes } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { state };
       if (attributes) body.attributes = attributes;
-      return ha(ctx, "POST", `states/${seg(entityId)}`, body);
+      return ha(ctx, "POST", `states/${pathSegment(entityId)}`, body);
     },
   });
 
@@ -178,7 +175,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       return ha(
         ctx,
         "POST",
-        `events/${seg(eventType)}`,
+        `events/${pathSegment(eventType)}`,
         (eventData as Record<string, unknown>) ?? {},
       );
     },
@@ -218,7 +215,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
         unknown
       >;
       let endpoint = "logbook";
-      if (startTime) endpoint += `/${seg(startTime)}`;
+      if (startTime) endpoint += `/${pathSegment(startTime)}`;
       const qs: Record<string, unknown> = {};
       if (entityId) qs.entity = entityId;
       if (endTime) qs.end_time = endTime;
@@ -265,7 +262,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
         unknown
       >;
       let endpoint = "history/period";
-      if (startTime) endpoint += `/${seg(startTime)}`;
+      if (startTime) endpoint += `/${pathSegment(startTime)}`;
       const qs: Record<string, unknown> = {};
       if (entityIds) qs.filter_entity_id = entityIds;
       if (endTime) qs.end_time = endTime;
