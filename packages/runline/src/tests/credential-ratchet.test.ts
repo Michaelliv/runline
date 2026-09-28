@@ -72,10 +72,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["odoo", "login: the password rides in every JSON-RPC argument list"],
   [
-    "reddit",
-    "optional credential: a secret-free config cannot say whether to sign",
-  ],
-  [
     "salesforce",
     "dynamic host: the API origin comes from the token response's instance_url",
   ],

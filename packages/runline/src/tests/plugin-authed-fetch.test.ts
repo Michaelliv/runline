@@ -68,7 +68,6 @@ const UNBROKERED_FETCH = new Set([
   "mailjet/src/index.ts",
   "nextcloud/src/index.ts",
   "odoo/src/index.ts",
-  "reddit/src/index.ts",
   "salesforce/src/shared.ts",
   "steel/src/shared.ts",
   "storyblok/src/index.ts",
