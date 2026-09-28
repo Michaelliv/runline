@@ -1,38 +1,33 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialRequest } from "../../_shared/credentials.js";
+import { getresponseCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.getresponse.com/v3";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
-    method,
-    headers: {
-      "X-Auth-Token": `api-key ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
+  const json =
     body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
+      ? body
+      : undefined;
+  const res = await credentialRequest(ctx, getresponseCredential, {
+    target: "api",
+    path,
+    method,
+    query: qs,
+    ...(json !== undefined ? { json } : {}),
+  });
   if (!res.ok)
-    throw new Error(`GetResponse API error ${res.status}: ${await res.text()}`);
+    throw new Error(`getresponse: request failed (HTTP ${res.status})`);
   if (res.status === 204 || res.status === 202) return { success: true };
   return res.json();
 }
@@ -40,6 +35,7 @@ async function apiRequest(
 export default function getresponse(rl: RunlinePluginAPI) {
   rl.setName("getresponse");
   rl.setVersion("0.1.0");
+  rl.setCredential(getresponseCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -49,9 +45,6 @@ export default function getresponse(rl: RunlinePluginAPI) {
       env: "GETRESPONSE_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("contact.create", {
     access: "write",
@@ -88,7 +81,7 @@ export default function getresponse(rl: RunlinePluginAPI) {
       if (dayOfCycle !== undefined) body.dayOfCycle = dayOfCycle;
       if (tags) body.tags = tags;
       if (customFieldValues) body.customFieldValues = customFieldValues;
-      await apiRequest(key(ctx), "POST", "/contacts", body);
+      await apiRequest(ctx, "POST", "contacts", body);
       return { success: true };
     },
   });
@@ -109,9 +102,9 @@ export default function getresponse(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/contacts/${contactId}`,
+        `contacts/${seg(contactId)}`,
         undefined,
         qs,
       );
@@ -158,7 +151,7 @@ export default function getresponse(rl: RunlinePluginAPI) {
       if (name) qs["query[name]"] = name;
       if (campaignId) qs["query[campaignId]"] = campaignId;
       if (sortBy) qs[`sort[${sortBy}]`] = sortOrder ?? "ASC";
-      return apiRequest(key(ctx), "GET", "/contacts", undefined, qs);
+      return apiRequest(ctx, "GET", "contacts", undefined, qs);
     },
   });
 
@@ -192,7 +185,7 @@ export default function getresponse(rl: RunlinePluginAPI) {
       if (campaignId) body.campaign = { campaignId };
       if (tags) body.tags = tags;
       if (customFieldValues) body.customFieldValues = customFieldValues;
-      return apiRequest(key(ctx), "POST", `/contacts/${contactId}`, body);
+      return apiRequest(ctx, "POST", `contacts/${seg(contactId)}`, body);
     },
   });
 
@@ -221,9 +214,9 @@ export default function getresponse(rl: RunlinePluginAPI) {
       if (messageId) qs.messageId = messageId;
       if (ipAddress) qs.ipAddress = ipAddress;
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/contacts/${contactId}`,
+        `contacts/${seg(contactId)}`,
         undefined,
         qs,
       );
