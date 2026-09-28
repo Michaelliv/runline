@@ -176,7 +176,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["securityScorecard", "phase 3: not yet migrated"],
   ["segment", "phase 3: not yet migrated"],
-  ["sendgrid", "phase 3: not yet migrated"],
   ["sendy", "body key: api_key travels in the form body"],
   ["shiftAtlas", "phase 3: not yet migrated"],
   ["shiftBwm", "phase 3: not yet migrated"],
