@@ -117,10 +117,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "dynamic host: the API origin comes from the token response's instance_url",
   ],
   ["sendy", "body key: api_key travels in the form body"],
-  [
-    "shiftTranscription",
-    "deadline: transcribe waits on /await for up to 120 s plus response time, past the transport's 120 s ceiling",
-  ],
   ["signl4", "path token: the team secret is the URL path"],
   [
     "steel",

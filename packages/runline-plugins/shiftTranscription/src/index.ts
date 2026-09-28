@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { shiftTranscriptionCredential } from "./shared.js";
 import { registerTranscriptionActions } from "./transcription.js";
 
 /**
@@ -12,6 +13,7 @@ import { registerTranscriptionActions } from "./transcription.js";
 export default function shiftTranscription(rl: RunlinePluginAPI) {
   rl.setName("shiftTranscription");
   rl.setVersion("0.2.0");
+  rl.setCredential(shiftTranscriptionCredential);
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({
