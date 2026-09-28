@@ -88,6 +88,13 @@ export interface CredentialSelection {
   method: string;
   application?: OAuthApplication;
   jwtIdentity?: OAuthJwtIdentity;
+  /**
+   * How a process signing with its own flat connection config (the CLI)
+   * assembles a static secret: each key of the kind's structured shape,
+   * from a named config field or a fixed value. Names and fixed values
+   * only, never a secret. Hosts that store the structured field ignore it.
+   */
+  localSecret?: Record<string, { field: string } | { value: string }>;
 }
 
 /**
