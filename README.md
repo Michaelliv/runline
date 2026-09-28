@@ -493,7 +493,7 @@ Each method's `authentication.field` names the one config field a host stores th
 | kind | stored shape | sent as |
 |---|---|---|
 | `none` | nothing | unsigned, still held to the method's targets: the method of a connection without an optional credential |
-| `static` | its named `parts`, each a string (`staticSecretSchema(parts)`) | each part through its `placements` |
+| `static` | its named `parts`, each a string, `optionalParts` allowed to be absent (`staticSecretSchema(parts, optionalParts)`) | each part through its `placements` |
 | `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection |
 
 A static placement is one of:
@@ -506,7 +506,9 @@ A static placement is one of:
 | `{ in: "path", part, prefix? }` | the first path segment beneath the base, `<prefix><part>`; at most one per method. A secret in a URL can reach access logs, so a host may refuse this placement |
 | `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
 
-Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`). With `optional: true` the type also declares a `none` method, which a connection selects unless it holds the flat secret fields or says `authenticated: true` in its public config.
+Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. A placement may name `targets` it alone signs, so a connection holding two credentials for two APIs keeps them as two parts scoped to their own targets; every target of a static method must be signed by at least one placement. A part listed in `optionalParts` may be missing, which refuses only the targets that place it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`). With `optional: true` the type also declares a `none` method, which a connection selects unless it holds the flat secret fields or says `authenticated: true` in its public config.
+
+A public config field that picks a host — a region, an environment, a hosting mode, a sandbox flag — accepts only its documented values; anything else makes the declaration throw `invalid_credentials` rather than fall back to a default host.
 
 Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
 
