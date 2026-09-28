@@ -79,16 +79,19 @@ function controls(value: string): boolean {
   );
 }
 
-function safePath(path: string): void {
+function safePath(path: string, encodedSlashes = false): void {
   // Reject ambiguous encodings and segments before URL normalization. Query values
   // are separate data; encoded URLs in query parameters are not destinations.
   if (/[\\\s]/.test(path) || controls(path)) throw new Error();
   for (const segment of path.split("/")) {
     const decoded = decodeURIComponent(segment);
+    // An opted-in target's segment may hold encoded slashes, but no piece
+    // of it may be empty or a dot segment once decoded.
+    const pieces = encodedSlashes ? decoded.split("/") : [decoded];
     if (
-      decoded === "." ||
-      decoded === ".." ||
-      /[%/\\]/.test(decoded) ||
+      (pieces.length > 1 && pieces.some((piece) => !piece)) ||
+      pieces.some((piece) => piece === "." || piece === "..") ||
+      (encodedSlashes ? /[%\\]/ : /[%/\\]/).test(decoded) ||
       [...decoded].some(
         (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
       )
@@ -195,7 +198,7 @@ export function resourceUrl(target: CredentialTarget, path: string): URL {
       controls(path)
     )
       throw new Error();
-    safePath(path.split("?")[0]);
+    safePath(path.split("?")[0], target.encodedSlashes === true);
     const url = new URL(path, base);
     if (
       url.origin !== base.origin ||

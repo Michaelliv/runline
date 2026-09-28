@@ -218,6 +218,21 @@ export function pathSegments(value: unknown): string {
     .join("/");
 }
 
+/**
+ * A slashed name as exactly one segment, its slashes encoded
+ * (`@scope/pkg` → `%40scope%2Fpkg`), for a target that declares
+ * `encodedSlashes`. An empty or dot piece, or a backslash, is refused.
+ */
+export function slashEncodedSegment(value: unknown): string {
+  const raw = value === undefined || value === null ? "" : String(value);
+  if (
+    raw.includes("\\") ||
+    raw.split("/").some((piece) => !piece || piece === "." || piece === "..")
+  )
+    throw new AuthError("request_not_allowed");
+  return encodeURIComponent(raw);
+}
+
 export interface CredentialCall {
   target: string;
   /** Relative to the target's base URL; may carry its own query. */

@@ -16,6 +16,13 @@ export interface CredentialTarget {
   methods: HttpMethod[];
   /** Additional caller-set headers beyond Accept and Content-Type. Auth is reserved. */
   allowedHeaders?: string[];
+  /**
+   * The provider addresses one resource by a slashed name inside one
+   * segment, encoded (`group%2Fproject`, `@scope%2Fpkg`). Each piece
+   * between the decoded slashes must still be non-empty and not a dot
+   * segment.
+   */
+  encodedSlashes?: boolean;
   /** Google-style PUT upload acknowledgements: allow 308 only without Location. */
   resumableUpload?: boolean;
   /** Declare only when the provider guarantees deduplication for these methods. */

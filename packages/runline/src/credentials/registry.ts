@@ -234,7 +234,9 @@ function validateMethod(method: CredentialMethod): void {
       (target.timeoutMs !== undefined &&
         !bounded(target.timeoutMs, TARGET_TIMEOUT_LIMIT_MS)) ||
       (target.maxResponseBytes !== undefined &&
-        !bounded(target.maxResponseBytes, TARGET_RESPONSE_LIMIT_BYTES))
+        !bounded(target.maxResponseBytes, TARGET_RESPONSE_LIMIT_BYTES)) ||
+      (target.encodedSlashes !== undefined &&
+        typeof target.encodedSlashes !== "boolean")
     )
       throw new AuthError("invalid_definition");
     for (const allowed of target.allowedHeaders ?? []) {
