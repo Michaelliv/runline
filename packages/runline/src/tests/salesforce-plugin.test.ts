@@ -22,6 +22,7 @@ function getAction(plugin: PluginDef, name: string) {
   return action;
 }
 
+/** A connection whose updates land in its config, as the CLI stores them. */
 function ctx(config: Record<string, unknown> = {}): ActionContext {
   return {
     connection: {
@@ -30,7 +31,11 @@ function ctx(config: Record<string, unknown> = {}): ActionContext {
       config,
     },
     log: { info() {}, warn() {}, error() {} },
-    async updateConnection() {},
+    async updateConnection(change) {
+      const patch =
+        typeof change === "function" ? await change(config) : change;
+      if (patch) Object.assign(config, patch);
+    },
   };
 }
 
@@ -61,7 +66,7 @@ describe("salesforce plugin", () => {
     }
   });
 
-  it("exchanges client credentials at the My Domain token endpoint and signs with the token", async () => {
+  it("exchanges client credentials at the My Domain token endpoint once, and signs with the kept token", async () => {
     const plugin = makeSalesforce();
     const seen: Array<{ url: string; method?: string; auth: string | null }> =
       [];
@@ -85,14 +90,17 @@ describe("salesforce plugin", () => {
       return Response.json({ records: [{ Id: "001", Name: "Acme" }] });
     }) as typeof fetch;
 
+    const context = ctx({
+      loginUrl: "https://example.my.salesforce.com",
+      clientId: "client",
+      clientSecret: "secret",
+    });
+    const query = { query: "SELECT Id,Name FROM Account LIMIT 1" };
     const result = await getAction(plugin, "soql.query").execute(
-      { query: "SELECT Id,Name FROM Account LIMIT 1" },
-      ctx({
-        loginUrl: "https://example.my.salesforce.com",
-        clientId: "client",
-        clientSecret: "secret",
-      }),
+      query,
+      context,
     );
+    await getAction(plugin, "soql.query").execute(query, context);
 
     assert.deepEqual(result, [{ Id: "001", Name: "Acme" }]);
     assert.deepEqual(seen, [
@@ -100,6 +108,11 @@ describe("salesforce plugin", () => {
         url: "https://example.my.salesforce.com/services/oauth2/token",
         method: "POST",
         auth: null,
+      },
+      {
+        url: "https://example.my.salesforce.com/services/data/v59.0/query?q=SELECT+Id%2CName+FROM+Account+LIMIT+1",
+        method: "GET",
+        auth: "Bearer tok_test",
       },
       {
         url: "https://example.my.salesforce.com/services/data/v59.0/query?q=SELECT+Id%2CName+FROM+Account+LIMIT+1",

@@ -50,10 +50,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "generic client: arbitrary endpoint and caller-composed auth header",
   ],
   [
-    "salesforce",
-    "dynamic host: the API origin comes from the token response's instance_url",
-  ],
-  [
     "steel",
     "WebSocket: the key rides in a wss:// CDP URL the transport cannot carry",
   ],

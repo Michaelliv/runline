@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { api, type Ctx, getSession, identity } from "./shared.js";
+import { api, type Ctx, identity } from "./shared.js";
 
 export function registerMetadataActions(rl: RunlinePluginAPI) {
   rl.registerAction("connection.test", {
@@ -8,30 +8,15 @@ export function registerMetadataActions(rl: RunlinePluginAPI) {
     description: "Validate Salesforce auth and return safe connection metadata",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
-      const sessionPromise = getSession(ctx as Ctx);
-      const session = await sessionPromise;
-      let limits: Record<string, unknown> | undefined;
-      let limitsError: string | undefined;
-      try {
-        limits = (await api(
-          ctx as Ctx,
-          "GET",
-          "/limits",
-          undefined,
-          undefined,
-          sessionPromise,
-        )) as Record<string, unknown>;
-      } catch (error) {
-        limitsError = error instanceof Error ? error.message : String(error);
-      }
+      const limits = (await api(ctx as Ctx, "GET", "/limits")) as Record<
+        string,
+        unknown
+      >;
       return {
         ok: true,
-        instanceUrl: session.instanceUrl,
-        tokenType: session.tokenType,
-        scope: session.scope,
-        id: session.id,
+        instanceUrl:
+          ctx.connection.config.instanceUrl ?? ctx.connection.config.loginUrl,
         limits,
-        limitsError,
       };
     },
   });

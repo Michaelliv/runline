@@ -61,7 +61,6 @@ const CREDENTIAL_FREE_FETCH = new Map<string, string>([
 const UNBROKERED_FETCH = new Set([
   "facebookGraph/src/index.ts",
   "graphql/src/index.ts",
-  "salesforce/src/shared.ts",
   "steel/src/shared.ts",
 ]);
 
