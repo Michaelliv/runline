@@ -1105,6 +1105,49 @@ describe("constrained credential transport", () => {
     assert.deepEqual(seen, ["https://api.example/v1/items?token=ct"]);
   });
 
+  it("sends a whole header value with its interior spaces, and refuses spaces anywhere else", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["value"],
+      [{ in: "header", part: "value", name: "Authorization" }],
+    );
+    const seen: Array<string | null> = [];
+    const h = await harness(
+      mock((_url, init) => {
+        seen.push(new Headers(init.headers).get("authorization"));
+        return Response.json({});
+      }),
+      { key: { value: "Bearer a b" } },
+      def,
+    );
+    await h.transport.request(h.binding, request);
+    assert.deepEqual(seen, ["Bearer a b"]);
+    for (const [placements, value] of [
+      [[{ in: "header", part: "value", name: "Authorization" }], " Bearer x"],
+      [[{ in: "header", part: "value", name: "Authorization" }], "Bearer x "],
+      [[{ in: "header", part: "value", name: "Authorization" }], "Bearer\tx"],
+      [[{ in: "query", part: "value", name: "key" }], "a b"],
+    ] as const) {
+      const strict = definition("bearer");
+      placed(strict, ["value"], [...placements]);
+      let calls = 0;
+      const refused = await harness(
+        mock(() => {
+          calls++;
+          return Response.json({});
+        }),
+        { key: { value } },
+        strict,
+      );
+      await assert.rejects(
+        refused.transport.request(refused.binding, request),
+        errorCode("invalid_credentials"),
+      );
+      assert.equal(calls, 0);
+    }
+  });
+
   it("refuses an empty part in a header or query placement, before any IO", async () => {
     const def = definition("bearer");
     placed(
