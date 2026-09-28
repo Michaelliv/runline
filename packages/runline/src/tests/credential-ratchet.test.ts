@@ -125,7 +125,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["grist", "phase 2: not yet migrated"],
   ["halopsa", "phase 3: not yet migrated"],
-  ["harvest", "phase 2: not yet migrated"],
   ["helpscout", "phase 3: not yet migrated"],
   ["highlevel", "phase 3: not yet migrated"],
   ["homeAssistant", "phase 2: not yet migrated"],
