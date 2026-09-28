@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { pushbulletCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -138,7 +135,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
     inputSchema: { pushId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { pushId } = input as Record<string, unknown>;
-      await apiRequest(ctx, "DELETE", `/pushes/${seg(pushId)}`);
+      await apiRequest(ctx, "DELETE", `/pushes/${pathSegment(pushId)}`);
       return { success: true };
     },
   });
@@ -156,7 +153,9 @@ export default function pushbullet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { pushId, dismissed } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `/pushes/${seg(pushId)}`, { dismissed });
+      return apiRequest(ctx, "POST", `/pushes/${pathSegment(pushId)}`, {
+        dismissed,
+      });
     },
   });
 }
