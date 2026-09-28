@@ -14,10 +14,8 @@ function apiRequest(
     path,
     method,
     query,
-    ...(body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
+    // DELETE carries a body where Coda names the rows to delete.
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
       ? { json: body }
       : {}),
   });
