@@ -2,13 +2,13 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { ActionContext, HttpMethod } from "runline";
 import * as t from "typebox";
 import { Check } from "typebox/value";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import {
   type SavedMedia,
   SEND_FILE_NOTE,
   writeMediaFile,
 } from "../../_shared/mediaFile.js";
-import { readBoundedBytes, seg } from "../../_shared/provider.js";
+import { readBoundedBytes } from "../../_shared/provider.js";
 import { falCredential } from "./credentials.js";
 
 export type Ctx = ActionContext;
@@ -124,7 +124,7 @@ export async function submit(
     throw new Error(
       "fal: invalid submission receipt or no request id; do not resubmit automatically",
     );
-  seg(receipt.request_id, "request id", "fal");
+  pathSegment(receipt.request_id);
   return receipt;
 }
 
@@ -138,7 +138,7 @@ export async function status(
     ctx,
     queuePath(
       model,
-      `/requests/${seg(requestId, "request id", "fal")}/status${logs ? "?logs=1" : ""}`,
+      `/requests/${pathSegment(requestId)}/status${logs ? "?logs=1" : ""}`,
     ),
   );
   if (!Check(statusSchema, body))
@@ -153,7 +153,7 @@ export async function result(
 ): Promise<Record<string, unknown>> {
   const body = await request(
     ctx,
-    queuePath(model, `/requests/${seg(requestId, "request id", "fal")}`),
+    queuePath(model, `/requests/${pathSegment(requestId)}`),
   );
   if (!object(body)) throw new Error("fal: expected an object result");
   return body;
@@ -162,7 +162,7 @@ export async function result(
 export async function cancel(ctx: Ctx, model: string, requestId: string) {
   const body = await request(
     ctx,
-    queuePath(model, `/requests/${seg(requestId, "request id", "fal")}/cancel`),
+    queuePath(model, `/requests/${pathSegment(requestId)}/cancel`),
     { method: "PUT" },
   );
   if (!object(body) || body.status !== "CANCELLATION_REQUESTED")

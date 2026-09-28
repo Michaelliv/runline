@@ -127,13 +127,16 @@ export function hostLabel(value: unknown): string {
 }
 
 /**
- * An ID or name as exactly one path segment. An empty value is refused: it
- * would turn `items/{id}` into the `items/` collection itself.
+ * An ID or name as exactly one path segment, the one encoder every plugin
+ * uses. A value that is not one segment is refused rather than encoded: an
+ * empty value would address the parent collection (`items/`), a dot segment
+ * a sibling, and a separator more than one segment.
  */
 export function pathSegment(value: unknown): string {
-  if (value === undefined || value === null || value === "")
+  const raw = value === undefined || value === null ? "" : String(value);
+  if (!raw || raw === "." || raw === ".." || /[/\\]/.test(raw))
     throw new AuthError("request_not_allowed");
-  return encodeURIComponent(String(value));
+  return encodeURIComponent(raw);
 }
 
 export interface CredentialCall {

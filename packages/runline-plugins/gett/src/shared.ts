@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ActionContext } from "runline";
 import { authedFetch } from "../../_shared/authedFetch.js";
+import { pathSegment } from "../../_shared/credentials.js";
 import {
   arr,
   num,
@@ -8,7 +9,6 @@ import {
   obj,
   pick,
   readBounded,
-  seg as segment,
 } from "../../_shared/provider.js";
 import { coordinatedAccessToken } from "../../_shared/tokenRefresh.js";
 
@@ -84,8 +84,9 @@ export function normPhone(input: string): string {
   return `972${digits}`;
 }
 
-export const seg = (value: unknown, what: string): string =>
-  segment(value, what, "gett");
+/** A configured or caller-supplied value as one path segment; surrounding whitespace is not part of it. */
+export const seg = (value: unknown): string =>
+  pathSegment(String(value ?? "").trim());
 
 // ---------- HTTP ----------
 
@@ -185,7 +186,7 @@ async function refreshGrant(
   try {
     return await http(
       ctx,
-      `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/token?lc=en`,
+      `/gl/api/v2/phone/${seg(cfg.phone)}/auth/token?lc=en`,
       {
         method: "POST",
         token: cfg.accessToken || cfg.refreshToken,

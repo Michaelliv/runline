@@ -435,7 +435,7 @@ export default function gett(rl: RunlinePluginAPI) {
       const cfg = cfgOf(ctx);
       const r = await authed(
         ctx,
-        `/gl/server/3_3/phone/${seg(cfg.phone, "phone")}/orders/${seg(order_id, "order_id")}`,
+        `/gl/server/3_3/phone/${seg(cfg.phone)}/orders/${seg(order_id)}`,
       );
       return {
         order_id: pick(r.id) ?? order_id,
@@ -480,8 +480,8 @@ export default function gett(rl: RunlinePluginAPI) {
         throw new Error(
           "gett ride.cancel: ordering is disabled for this connection (set allowOrdering:true).",
         );
-      const phone = seg(cfg.phone, "phone");
-      const order = seg(order_id, "order_id");
+      const phone = seg(cfg.phone);
+      const order = seg(order_id);
       // The reason is optional metadata; a rejection there must not block the
       // cancel, but the caller is told whether it landed rather than left to guess.
       let reasonRecorded: boolean | null = null;

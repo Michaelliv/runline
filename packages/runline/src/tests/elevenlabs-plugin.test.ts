@@ -206,10 +206,10 @@ describe("elevenlabs plugin", () => {
       "voices.settings.get",
       "voices.settings.update",
     ]) {
-      for (const voiceId of ["..", "a/b", "x?y", ""])
+      for (const voiceId of ["..", "a/b", ""])
         await assert.rejects(
           () => run(name, { voiceId, text: "hello", audioPath: source }),
-          /invalid voice id/,
+          { code: "request_not_allowed" },
         );
     }
     assert.equal(calls.length, 0);
@@ -898,7 +898,7 @@ describe("elevenlabs plugin", () => {
     );
     await assert.rejects(
       () => run("history.download", { historyItemId: "../x" }),
-      /invalid history item/,
+      { code: "request_not_allowed" },
     );
   });
   it("rejects conflicting audio types across every format-selecting generation path", async () => {

@@ -59,7 +59,7 @@ export async function requestCode(ctx: ActionContext, phone?: string) {
   };
   const r = await http(
     ctx,
-    `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/otp/challenge`,
+    `/gl/api/v2/phone/${seg(cfg.phone)}/auth/otp/challenge`,
     { method: "POST", body },
   );
   // Gett answers 200 even when it refuses to send, so a refusal is reported
@@ -101,7 +101,7 @@ export async function verifyCode(ctx: ActionContext, code: string) {
     throw new Error("gett: no phone — call account.requestCode first");
   const r = await http(
     ctx,
-    `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/otp/verify`,
+    `/gl/api/v2/phone/${seg(cfg.phone)}/auth/otp/verify`,
     { method: "POST", body: { code } },
   );
   const toks = tokensIn(r);
@@ -135,7 +135,7 @@ export async function verifyCard(ctx: ActionContext, digits: string) {
     throw new Error("gett: no pending MFA — call account.verifyCode first");
   const r = await http(
     ctx,
-    `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/mfa/verify`,
+    `/gl/api/v2/phone/${seg(cfg.phone)}/auth/mfa/verify`,
     {
       method: "POST",
       body: { temp_code: cfg.pendingTempCode, card_digits: digits },
@@ -178,7 +178,7 @@ async function finishTokens(
     // valid IL bearer.
     const gl = await http(
       ctx,
-      `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/token?lc=en`,
+      `/gl/api/v2/phone/${seg(cfg.phone)}/auth/token?lc=en`,
       {
         method: "POST",
         token: cfg.accessToken,
@@ -275,7 +275,7 @@ export async function createSession(
   };
   const r = await authed(
     ctx,
-    `/gl/rider-facade/phone/${seg(cfg.phone, "phone")}/create_session`,
+    `/gl/rider-facade/phone/${seg(cfg.phone)}/create_session`,
     { method: "POST", body },
   );
   const profile = obj(r.user_profile);

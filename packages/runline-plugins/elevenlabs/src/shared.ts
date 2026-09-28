@@ -4,16 +4,12 @@ import { basename } from "node:path";
 import * as t from "typebox";
 import { Check } from "typebox/value";
 import { authedFetch } from "../../_shared/authedFetch.js";
+import { pathSegment } from "../../_shared/credentials.js";
 import { SEND_FILE_NOTE, writeMediaFile } from "../../_shared/mediaFile.js";
-import {
-  obj,
-  readBounded,
-  readBoundedBytes,
-  seg,
-} from "../../_shared/provider.js";
+import { obj, readBounded, readBoundedBytes } from "../../_shared/provider.js";
 
 export type Ctx = { connection: { config: Record<string, unknown> } };
-export const voicePath = (id: string) => seg(id, "voice id", "elevenlabs");
+export const voicePath = (id: string) => pathSegment(id);
 const JSON_LIMIT = 8 * 1024 * 1024;
 const AUDIO_LIMIT = 100 * 1024 * 1024;
 

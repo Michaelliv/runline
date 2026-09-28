@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ActionContext } from "runline";
 import { authedFetch } from "../../_shared/authedFetch.js";
+import { pathSegment } from "../../_shared/credentials.js";
 import {
   arr,
   num,
@@ -8,7 +9,6 @@ import {
   obj,
   pick,
   readBounded,
-  seg as segment,
 } from "../../_shared/provider.js";
 import { coordinatedAccessToken } from "../../_shared/tokenRefresh.js";
 
@@ -78,8 +78,9 @@ export type Cfg = {
 export const cfgOf = (ctx: ActionContext): Cfg =>
   (ctx.connection.config || {}) as Cfg;
 
-export const seg = (value: unknown, what: string): string =>
-  segment(value, what, "wolt");
+/** A configured or caller-supplied value as one path segment; surrounding whitespace is not part of it. */
+export const seg = (value: unknown): string =>
+  pathSegment(String(value ?? "").trim());
 
 /**
  * Normalize a phone to E.164 for Wolt, so a number given the local Israeli way

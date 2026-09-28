@@ -450,14 +450,14 @@ describe("fal validation and edge cases", () => {
   it("refuses unsafe request ids on every queue operation before sending", async () => {
     const calls = mockQueue({});
     for (const name of ["queue.status", "queue.result", "queue.cancel"]) {
-      for (const requestId of [".", "..", "", "a/b", "x?y"]) {
+      for (const requestId of [".", "..", "", "a/b"]) {
         await assert.rejects(
           () =>
             action(name).execute(
               { model: "fal-ai/flux/schnell", requestId },
               ctx(),
             ),
-          /invalid request id/,
+          { code: "request_not_allowed" },
         );
       }
     }

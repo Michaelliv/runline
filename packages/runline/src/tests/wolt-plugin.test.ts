@@ -394,14 +394,14 @@ describe("wolt plugin surface", () => {
   it("refuses path-climbing order ids", async () => {
     const { ctx } = await context({ allowOrdering: true });
     const calls = mock([["purchase_tracking", { order_details: {} }]]);
-    for (const id of ["..", "../../v1/user/me", "a/b", "  ", "?x=1"]) {
+    for (const id of ["..", "../../v1/user/me", "a/b", "  "]) {
       await assert.rejects(
         () =>
           action("order.status").execute(
             { order_id: id },
             ctx,
           ) as Promise<unknown>,
-        /invalid order_id/,
+        { code: "request_not_allowed" },
       );
     }
     assert.equal(calls.length, 0);

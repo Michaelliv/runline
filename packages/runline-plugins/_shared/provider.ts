@@ -1,6 +1,6 @@
 /**
- * Provider helpers: total readers for unshaped JSON, path-segment safety,
- * and bounded text or binary body reads.
+ * Provider helpers: total readers for unshaped JSON, and bounded text or
+ * binary body reads. Path segments go through `pathSegment` in credentials.ts.
  *
  * The readers are total by design. These payloads are deep and change without
  * notice, so a missing or wrongly-typed field yields the empty value for its
@@ -38,19 +38,6 @@ export function numOrNull(value: unknown): number | null {
 
 export const num = (value: unknown, fallback: number): number =>
   numOrNull(value) ?? fallback;
-
-/**
- * One path segment, escaped. Caller-supplied ids reach a URL carrying a bearer
- * token, so a segment that could climb out of its position is refused outright
- * rather than encoded and hoped about.
- */
-export function seg(value: unknown, what: string, plugin: string): string {
-  const raw = String(value ?? "").trim();
-  if (!raw || raw === "." || raw === ".." || /[/\\?#]/.test(raw)) {
-    throw new Error(`${plugin}: invalid ${what}`);
-  }
-  return encodeURIComponent(raw);
-}
 
 /**
  * Read a response body with a ceiling, so a hostile or broken endpoint cannot
