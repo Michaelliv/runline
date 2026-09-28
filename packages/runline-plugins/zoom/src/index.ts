@@ -1,38 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { zoomCredential } from "./credentials.js";
 
-const BASE = "https://api.zoom.us/v2";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, zoomCredential, "zoom", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  if (!res.ok) throw new Error(`Zoom error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : { success: true };
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function zoom(rl: RunlinePluginAPI) {
   rl.setName("zoom");
   rl.setVersion("0.1.0");
+  rl.setCredential(zoomCredential);
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -41,8 +33,6 @@ export default function zoom(rl: RunlinePluginAPI) {
       env: "ZOOM_ACCESS_TOKEN",
     },
   });
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   rl.registerAction("meeting.create", {
     access: "write",
@@ -84,7 +74,7 @@ export default function zoom(rl: RunlinePluginAPI) {
       if (p.password) body.password = p.password;
       if (p.agenda) body.agenda = p.agenda;
       if (p.settings) body.settings = p.settings;
-      return apiRequest(key(ctx), "POST", "/users/me/meetings", body);
+      return apiRequest(ctx, "POST", "users/me/meetings", body);
     },
   });
 
@@ -94,9 +84,9 @@ export default function zoom(rl: RunlinePluginAPI) {
     inputSchema: { meetingId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/meetings/${(input as Record<string, unknown>).meetingId}`,
+        `meetings/${seg((input as Record<string, unknown>).meetingId)}`,
       );
     },
   });
@@ -118,9 +108,9 @@ export default function zoom(rl: RunlinePluginAPI) {
       if (p.limit) qs.page_size = p.limit;
       if (p.type) qs.type = p.type;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        "/users/me/meetings",
+        "users/me/meetings",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -151,7 +141,7 @@ export default function zoom(rl: RunlinePluginAPI) {
       if (fields.password) body.password = fields.password;
       if (fields.agenda) body.agenda = fields.agenda;
       if (fields.settings) body.settings = fields.settings;
-      await apiRequest(key(ctx), "PATCH", `/meetings/${meetingId}`, body);
+      await apiRequest(ctx, "PATCH", `meetings/${seg(meetingId)}`, body);
       return { success: true };
     },
   });
@@ -162,9 +152,9 @@ export default function zoom(rl: RunlinePluginAPI) {
     inputSchema: { meetingId: { type: "string", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/meetings/${(input as Record<string, unknown>).meetingId}`,
+        `meetings/${seg((input as Record<string, unknown>).meetingId)}`,
       );
       return { success: true };
     },

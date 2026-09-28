@@ -1,43 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { sentryCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  const base = ((c.url as string | undefined) ?? "https://sentry.io").replace(
-    /\/$/,
-    "",
-  );
-  return { base, token: c.token as string };
-}
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
-  conn: { base: string; token: string },
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.base}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, sentryCredential, "sentry", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${conn.token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Sentry error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
-
-type Ctx = { connection: { config: Record<string, unknown> } };
 
 function registerCrud(
   rl: RunlinePluginAPI,
@@ -58,11 +40,7 @@ function registerCrud(
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(
-        getConn(ctx as Ctx),
-        "GET",
-        `${basePath(p)}${p[idField]}/`,
-      );
+      return apiRequest(ctx, "GET", `${basePath(p)}${seg(p[idField])}/`);
     },
   });
 
@@ -87,7 +65,7 @@ function registerCrud(
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.limit = p.limit;
       const data = (await apiRequest(
-        getConn(ctx as Ctx),
+        ctx,
         "GET",
         basePath(p),
         undefined,
@@ -106,11 +84,7 @@ function registerCrud(
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      await apiRequest(
-        getConn(ctx as Ctx),
-        "DELETE",
-        `${basePath(p)}${p[idField]}/`,
-      );
+      await apiRequest(ctx, "DELETE", `${basePath(p)}${seg(p[idField])}/`);
       return { success: true };
     },
   });
@@ -119,6 +93,7 @@ function registerCrud(
 export default function sentry(rl: RunlinePluginAPI) {
   rl.setName("sentry");
   rl.setVersion("0.1.0");
+  rl.setCredential(sentryCredential);
 
   rl.setConnectionSchema({
     token: {
@@ -148,9 +123,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/projects/${p.org}/${p.project}/events/${p.eventId}/`,
+        `projects/${seg(p.org)}/${seg(p.project)}/events/${seg(p.eventId)}/`,
       );
     },
   });
@@ -170,9 +145,9 @@ export default function sentry(rl: RunlinePluginAPI) {
       if (p.full) qs.full = "true";
       if (p.limit) qs.limit = p.limit;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/projects/${p.org}/${p.project}/events/`,
+        `projects/${seg(p.org)}/${seg(p.project)}/events/`,
         undefined,
         qs,
       );
@@ -187,9 +162,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     inputSchema: { issueId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/issues/${(input as Record<string, unknown>).issueId}/`,
+        `issues/${seg((input as Record<string, unknown>).issueId)}/`,
       );
     },
   });
@@ -209,9 +184,9 @@ export default function sentry(rl: RunlinePluginAPI) {
       if (p.query) qs.query = p.query;
       if (p.limit) qs.limit = p.limit;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/projects/${p.org}/${p.project}/issues/`,
+        `projects/${seg(p.org)}/${seg(p.project)}/issues/`,
         undefined,
         qs,
       );
@@ -230,12 +205,7 @@ export default function sentry(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { issueId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(
-        getConn(ctx),
-        "PUT",
-        `/api/0/issues/${issueId}/`,
-        fields,
-      );
+      return apiRequest(ctx, "PUT", `issues/${seg(issueId)}/`, fields);
     },
   });
 
@@ -245,9 +215,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     inputSchema: { issueId: { type: "string", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/api/0/issues/${(input as Record<string, unknown>).issueId}/`,
+        `issues/${seg((input as Record<string, unknown>).issueId)}/`,
       );
       return { success: true };
     },
@@ -261,9 +231,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     inputSchema: { org: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/organizations/${(input as Record<string, unknown>).org}/`,
+        `organizations/${seg((input as Record<string, unknown>).org)}/`,
       );
     },
   });
@@ -276,13 +246,7 @@ export default function sentry(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
-      return apiRequest(
-        getConn(ctx),
-        "GET",
-        "/api/0/organizations/",
-        undefined,
-        qs,
-      );
+      return apiRequest(ctx, "GET", "organizations/", undefined, qs);
     },
   });
 
@@ -295,7 +259,7 @@ export default function sentry(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "/api/0/organizations/", {
+      return apiRequest(ctx, "POST", "organizations/", {
         name: p.name,
         agreeTerms: true,
         slug: p.slug,
@@ -315,9 +279,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/projects/${p.org}/${p.project}/`,
+        `projects/${seg(p.org)}/${seg(p.project)}/`,
       );
     },
   });
@@ -328,9 +292,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        "/api/0/projects/",
+        "projects/",
         undefined,
         (input as Record<string, unknown>)?.limit
           ? { limit: (input as Record<string, unknown>).limit }
@@ -355,9 +319,9 @@ export default function sentry(rl: RunlinePluginAPI) {
       if (p.slug) body.slug = p.slug;
       if (p.platform) body.platform = p.platform;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "POST",
-        `/api/0/teams/${p.org}/${p.team}/projects/`,
+        `teams/${seg(p.org)}/${seg(p.team)}/projects/`,
         body,
       );
     },
@@ -373,9 +337,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       await apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/api/0/projects/${p.org}/${p.project}/`,
+        `projects/${seg(p.org)}/${seg(p.project)}/`,
       );
       return { success: true };
     },
@@ -393,9 +357,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/organizations/${p.org}/releases/${encodeURIComponent(p.version as string)}/`,
+        `organizations/${seg(p.org)}/releases/${encodeURIComponent(p.version as string)}/`,
       );
     },
   });
@@ -414,9 +378,9 @@ export default function sentry(rl: RunlinePluginAPI) {
       if (p.query) qs.query = p.query;
       if (p.limit) qs.limit = p.limit;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/organizations/${p.org}/releases/`,
+        `organizations/${seg(p.org)}/releases/`,
         undefined,
         qs,
       );
@@ -444,9 +408,9 @@ export default function sentry(rl: RunlinePluginAPI) {
       };
       if (p.url) body.url = p.url;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "POST",
-        `/api/0/organizations/${p.org}/releases/`,
+        `organizations/${seg(p.org)}/releases/`,
         body,
       );
     },
@@ -462,9 +426,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       await apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/api/0/organizations/${p.org}/releases/${encodeURIComponent(p.version as string)}/`,
+        `organizations/${seg(p.org)}/releases/${encodeURIComponent(p.version as string)}/`,
       );
       return { success: true };
     },
@@ -481,11 +445,7 @@ export default function sentry(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(
-        getConn(ctx),
-        "GET",
-        `/api/0/teams/${p.org}/${p.team}/`,
-      );
+      return apiRequest(ctx, "GET", `teams/${seg(p.org)}/${seg(p.team)}/`);
     },
   });
 
@@ -499,9 +459,9 @@ export default function sentry(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/0/organizations/${p.org}/teams/`,
+        `organizations/${seg(p.org)}/teams/`,
         undefined,
         p.limit ? { limit: p.limit } : undefined,
       );
@@ -521,9 +481,9 @@ export default function sentry(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { name: p.name };
       if (p.slug) body.slug = p.slug;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "POST",
-        `/api/0/organizations/${p.org}/teams/`,
+        `organizations/${seg(p.org)}/teams/`,
         body,
       );
     },
@@ -538,11 +498,7 @@ export default function sentry(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      await apiRequest(
-        getConn(ctx),
-        "DELETE",
-        `/api/0/teams/${p.org}/${p.team}/`,
-      );
+      await apiRequest(ctx, "DELETE", `teams/${seg(p.org)}/${seg(p.team)}/`);
       return { success: true };
     },
   });
