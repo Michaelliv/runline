@@ -135,7 +135,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "facebookGraph/src/index.ts",
   "freshdesk/src/index.ts",
   "freshservice/src/index.ts",
-  "freshworksCrm/src/index.ts",
   "getresponse/src/index.ts",
   "ghost/src/index.ts",
   "github/src/index.ts",

@@ -105,7 +105,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["fal", "phase 3: not yet migrated"],
   ["freshdesk", "phase 2: not yet migrated"],
   ["freshservice", "phase 2: not yet migrated"],
-  ["freshworksCrm", "phase 2: not yet migrated"],
   ["getresponse", "phase 3: not yet migrated"],
   ["gett", "login: phone OTP login and a rotating, device-bound refresh grant"],
   ["ghost", "signature: a JWT is minted per request from the admin key"],
