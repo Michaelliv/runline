@@ -4,21 +4,48 @@ import * as t from "typebox";
 import { AuthError } from "../auth/errors.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import {
-  BasicSecretSchema,
   CredentialRegistry,
   OAuthGrantSchema,
-  SecretSchema,
+  staticSecretSchema,
 } from "../credentials/registry.js";
 import {
   type AuthenticatedRequest,
   CredentialTransport,
 } from "../credentials/transport.js";
 import type {
+  CredentialAuthentication,
   CredentialBinding,
   CredentialMethod,
   CredentialType,
   OAuthGrant,
 } from "../credentials/types.js";
+
+type Placements = Extract<
+  CredentialAuthentication,
+  { kind: "static" }
+>["placements"];
+
+/** A static secret of named parts in field `key`, placed as declared. */
+function placed(
+  def: CredentialType,
+  parts: string[],
+  placements: Placements,
+): void {
+  def.methods.selected.schema = t.Object(
+    { key: staticSecretSchema(parts) },
+    { additionalProperties: false },
+  );
+  def.methods.selected.authentication = {
+    kind: "static",
+    field: "key",
+    parts,
+    placements,
+  };
+}
+
+const basic: Placements = [
+  { in: "basic", username: "username", password: "password" },
+];
 
 const initial: OAuthGrant = {
   tokens: { accessToken: "old", refreshToken: "r1" },
@@ -34,7 +61,10 @@ function definition(
             { grant: t.Optional(OAuthGrantSchema) },
             { additionalProperties: false },
           )
-        : t.Object({ key: SecretSchema }, { additionalProperties: false }),
+        : t.Object(
+            { key: staticSecretSchema(["secret"]) },
+            { additionalProperties: false },
+          ),
     authentication:
       kind === "oauth2"
         ? {
@@ -54,9 +84,21 @@ function definition(
               },
             },
           }
-        : kind === "bearer"
-          ? { kind, field: "key" }
-          : { kind, field: "key", header: "X-Api-Key" },
+        : {
+            kind: "static",
+            field: "key",
+            parts: ["secret"],
+            placements: [
+              kind === "bearer"
+                ? {
+                    in: "header",
+                    part: "secret",
+                    name: "Authorization",
+                    prefix: "Bearer ",
+                  }
+                : { in: "header", part: "secret", name: "X-Api-Key" },
+            ],
+          },
     targets: {
       api: {
         baseUrl: "https://api.example/v1/",
@@ -135,12 +177,11 @@ describe("constrained credential transport", () => {
   it("prefixes an API key only with its declared scheme, in its declared header", async () => {
     for (const prefix of ["SSWS ", "Token token=", "api-key ", "Bot "]) {
       const def = definition("apiKey");
-      def.methods.selected.authentication = {
-        kind: "apiKey",
-        field: "key",
-        header: "Authorization",
-        prefix,
-      };
+      placed(
+        def,
+        ["secret"],
+        [{ in: "header", part: "secret", name: "Authorization", prefix }],
+      );
       const h = await harness(
         mock((_url, init) => {
           assert.equal(
@@ -164,11 +205,7 @@ describe("constrained credential transport", () => {
       ["user", "pass word:with colon"],
     ]) {
       const def = definition("bearer");
-      def.methods.selected.schema = t.Object(
-        { key: BasicSecretSchema },
-        { additionalProperties: false },
-      );
-      def.methods.selected.authentication = { kind: "basic", field: "key" };
+      placed(def, ["username", "password"], basic);
       const h = await harness(
         mock((_url, init) => {
           assert.equal(
@@ -196,11 +233,11 @@ describe("constrained credential transport", () => {
     ]) {
       let calls = 0;
       const def = definition("bearer");
+      placed(def, ["username", "password"], basic);
       def.methods.selected.schema = t.Object(
         { key: t.Unknown() },
         { additionalProperties: false },
       );
-      def.methods.selected.authentication = { kind: "basic", field: "key" };
       const h = await harness(
         mock(() => {
           calls++;
@@ -222,11 +259,7 @@ describe("constrained credential transport", () => {
 
   it("adds a declared query key itself, beside the caller's own parameters, with no auth header", async () => {
     const def = definition("bearer");
-    def.methods.selected.authentication = {
-      kind: "queryKey",
-      field: "key",
-      param: "api_key",
-    };
+    placed(def, ["secret"], [{ in: "query", part: "secret", name: "api_key" }]);
     const seen: string[] = [];
     const h = await harness(
       mock((url, init) => {
@@ -247,11 +280,7 @@ describe("constrained credential transport", () => {
 
   it("refuses a caller-supplied copy of the declared query key, in any case, before reading credentials", async () => {
     const def = definition("bearer");
-    def.methods.selected.authentication = {
-      kind: "queryKey",
-      field: "key",
-      param: "hapikey",
-    };
+    placed(def, ["secret"], [{ in: "query", part: "secret", name: "hapikey" }]);
     let reads = 0;
     let calls = 0;
     const h = await harness(
@@ -276,6 +305,71 @@ describe("constrained credential transport", () => {
         errorCode("request_not_allowed"),
       );
     assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
+  it("places each part of a several-part secret, and one part in two places", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["key", "token"],
+      [
+        { in: "query", part: "key", name: "key" },
+        { in: "query", part: "token", name: "token" },
+        { in: "header", part: "token", name: "X-Token" },
+      ],
+    );
+    const seen: Array<{ query: Record<string, string>; token: string | null }> =
+      [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          query: Object.fromEntries(new URL(url).searchParams),
+          token: new Headers(init.headers).get("x-token"),
+        });
+        return Response.json({});
+      }),
+      { key: { key: "k1", token: "t1" } },
+      def,
+    );
+    await h.transport.request(h.binding, { ...request, path: "items?q=a" });
+    assert.deepEqual(seen, [
+      { query: { q: "a", key: "k1", token: "t1" }, token: "t1" },
+    ]);
+    for (const input of [
+      { ...request, path: "items?TOKEN=evil" },
+      { ...request, headers: { "X-Token": "evil" } },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(seen.length, 1);
+  });
+
+  it("refuses an empty part in a header or query placement, before any IO", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["key", "token"],
+      [
+        { in: "query", part: "key", name: "key" },
+        { in: "query", part: "token", name: "token" },
+      ],
+    );
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { key: "k1", token: "" } },
+      def,
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, request),
+      errorCode("invalid_credentials"),
+    );
     assert.equal(calls, 0);
   });
 

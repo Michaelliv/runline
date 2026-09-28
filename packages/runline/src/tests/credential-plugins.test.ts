@@ -93,7 +93,11 @@ function injectedHeaders(fixture: CredentialFixture): string[] {
   const auth = type.methods[method].authentication;
   return [
     "authorization",
-    ...(auth.kind === "apiKey" ? [auth.header.toLowerCase()] : []),
+    ...(auth.kind === "static"
+      ? auth.placements.flatMap((placement) =>
+          placement.in === "header" ? [placement.name.toLowerCase()] : [],
+        )
+      : []),
   ];
 }
 

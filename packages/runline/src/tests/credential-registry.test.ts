@@ -2,13 +2,39 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as t from "typebox";
 import {
-  BasicSecretSchema,
   CredentialRegistry,
   OAuthGrantSchema,
-  SecretSchema,
+  staticSecretSchema,
   validateCredential,
 } from "../credentials/registry.js";
-import type { CredentialType } from "../credentials/types.js";
+import type {
+  CredentialAuthentication,
+  CredentialType,
+} from "../credentials/types.js";
+
+/** A static secret of named parts, each placed as declared. */
+function placed(
+  parts: string[],
+  placements: Extract<
+    CredentialAuthentication,
+    { kind: "static" }
+  >["placements"],
+): CredentialAuthentication {
+  return { kind: "static", field: "key", parts, placements };
+}
+
+const header = (name: string, prefix?: string) =>
+  placed(
+    ["secret"],
+    [
+      {
+        in: "header",
+        part: "secret",
+        name,
+        ...(prefix === undefined ? {} : { prefix }),
+      },
+    ],
+  );
 
 function definition(): CredentialType {
   return {
@@ -16,10 +42,10 @@ function definition(): CredentialType {
     methods: {
       apiKey: {
         schema: t.Object(
-          { key: SecretSchema },
+          { key: staticSecretSchema(["secret"]) },
           { additionalProperties: false },
         ),
-        authentication: { kind: "apiKey", field: "key", header: "X-Api-Key" },
+        authentication: header("X-Api-Key"),
         targets: {
           api: { baseUrl: "https://api.example/v1/", methods: ["GET", "POST"] },
         },
@@ -140,38 +166,88 @@ describe("credential registry", () => {
         d.methods.apiKey.targets.api.baseUrl = "https://api.example/v1/../";
       },
       (d) => {
-        d.methods.apiKey.authentication = {
-          kind: "apiKey",
-          field: "key",
-          header: "Host",
-        };
+        d.methods.apiKey.authentication = header("Host");
       },
       (d) => {
-        d.methods.apiKey.authentication = { kind: "bearer", field: "missing" };
+        d.methods.apiKey.authentication = {
+          ...header("X-Api-Key"),
+          field: "missing",
+        };
       },
       (d) => {
         d.methods.apiKey.schema = t.Object({ key: t.String() });
       },
+      (d) => {
+        // The stored shape must hold exactly the declared parts.
+        d.methods.apiKey.schema = t.Object(
+          { key: staticSecretSchema(["secret", "extra"]) },
+          { additionalProperties: false },
+        );
+      },
       ...["Bearer\n", " leading", "", "x".repeat(33), "café "].map(
         (prefix) => (d: CredentialType) => {
-          d.methods.apiKey.authentication = {
-            kind: "apiKey",
-            field: "key",
-            header: "Authorization",
-            prefix,
-          };
+          d.methods.apiKey.authentication = header("Authorization", prefix);
         },
       ),
       (d) => {
-        d.methods.apiKey.authentication = {
-          kind: "apiKey",
-          field: "key",
-          header: "X-Api-Key",
-          prefix: 7 as unknown as string,
-        };
+        d.methods.apiKey.authentication = header(
+          "X-Api-Key",
+          7 as unknown as string,
+        );
+      },
+      // A placement naming an undeclared part, a declared part never
+      // placed, no parts, no placements, and a duplicate part.
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [{ in: "header", part: "other", name: "X-Api-Key" }],
+        );
       },
       (d) => {
-        d.methods.apiKey.authentication = { kind: "basic", field: "missing" };
+        d.methods.apiKey.authentication = placed(
+          ["secret", "unused"],
+          [{ in: "header", part: "secret", name: "X-Api-Key" }],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          [],
+          [{ in: "header", part: "secret", name: "X-Api-Key" }],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.authentication = placed(["secret"], []);
+      },
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["secret", "secret"],
+          [{ in: "header", part: "secret", name: "X-Api-Key" }],
+        );
+      },
+      // Two placements claiming one header, and Basic beside an
+      // Authorization header.
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [
+            { in: "header", part: "secret", name: "X-Api-Key" },
+            { in: "header", part: "secret", name: "x-api-key" },
+          ],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["username", "password"],
+          [
+            { in: "basic", username: "username", password: "password" },
+            { in: "header", part: "password", name: "Authorization" },
+          ],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.authentication = {
+          ...placed(["secret"], [{ in: "nowhere", part: "secret" }] as never),
+        };
       },
       ...[0, -1, 1.5, 3_600_001, "60000"].map(
         (timeoutMs) => (d: CredentialType) => {
@@ -184,24 +260,29 @@ describe("credential registry", () => {
         },
       ),
       ...["", "api key", "key&x", "key=", 7].map(
-        (param) => (d: CredentialType) => {
-          d.methods.apiKey.authentication = {
-            kind: "queryKey",
-            field: "key",
-            param: param as string,
-          };
+        (name) => (d: CredentialType) => {
+          d.methods.apiKey.authentication = placed(
+            ["secret"],
+            [{ in: "query", part: "secret", name: name as string }],
+          );
         },
       ),
       (d) => {
-        d.methods.apiKey.authentication = {
-          kind: "queryKey",
-          field: "key",
-          param: "key",
-        };
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [{ in: "query", part: "secret", name: "key" }],
+        );
         if (d.methods.apiKey.probe) d.methods.apiKey.probe.path = "me?KEY=x";
       },
       (d) => {
-        d.methods.apiKey.authentication = { kind: "basic", field: "key" };
+        d.methods.apiKey.schema = t.Object(
+          { key: staticSecretSchema(["username", "password"]) },
+          { additionalProperties: false },
+        );
+        d.methods.apiKey.authentication = placed(
+          ["username", "password"],
+          [{ in: "basic", username: "username", password: "password" }],
+        );
         d.methods.apiKey.targets.api.allowedHeaders = ["Authorization"];
       },
       (d) => {
@@ -226,14 +307,48 @@ describe("credential registry", () => {
   it("registers HTTP Basic against its structured username/password field", () => {
     const def = definition();
     def.methods.apiKey.schema = t.Object(
-      { key: BasicSecretSchema },
+      { key: staticSecretSchema(["username", "password"]) },
       { additionalProperties: false },
     );
-    def.methods.apiKey.authentication = { kind: "basic", field: "key" };
+    def.methods.apiKey.authentication = placed(
+      ["username", "password"],
+      [{ in: "basic", username: "username", password: "password" }],
+    );
     const registry = new CredentialRegistry();
     registry.register(def);
     const method = registry.select("example", "apiKey");
     validateCredential(method, { key: { username: "u", password: "" } });
     assert.throws(() => validateCredential(method, { key: { username: "u" } }));
+  });
+
+  it("registers a secret of several parts, and one part in more than one place", () => {
+    const def = definition();
+    def.methods.apiKey.schema = t.Object(
+      { key: staticSecretSchema(["key", "token"]) },
+      { additionalProperties: false },
+    );
+    def.methods.apiKey.authentication = placed(
+      ["key", "token"],
+      [
+        { in: "query", part: "key", name: "key" },
+        { in: "query", part: "token", name: "token" },
+        {
+          in: "header",
+          part: "token",
+          name: "Authorization",
+          prefix: "Bearer ",
+        },
+      ],
+    );
+    const registry = new CredentialRegistry();
+    registry.register(def);
+    validateCredential(registry.select("example", "apiKey"), {
+      key: { key: "k", token: "t" },
+    });
+    assert.throws(() =>
+      validateCredential(registry.select("example", "apiKey"), {
+        key: { key: "k" },
+      }),
+    );
   });
 });

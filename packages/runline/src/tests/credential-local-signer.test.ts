@@ -11,11 +11,11 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import * as t from "typebox";
 import { credentialBroker } from "../../../runline-plugins/_shared/credentialAdapter.js";
-import { BasicSecretSchema, SecretSchema } from "../credentials/registry.js";
+import { staticSecretSchema } from "../credentials/registry.js";
 import type {
-  CredentialAuthentication,
   CredentialDeclaration,
   CredentialSelection,
+  SecretPlacement,
 } from "../credentials/types.js";
 import type { ActionContext } from "../plugin/types.js";
 
@@ -24,25 +24,45 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+const bearer: SecretPlacement = {
+  in: "header",
+  part: "secret",
+  name: "Authorization",
+  prefix: "Bearer ",
+};
+const basic: SecretPlacement = {
+  in: "basic",
+  username: "username",
+  password: "password",
+};
+const header = (prefix: string): SecretPlacement => ({
+  in: "header",
+  part: "secret",
+  name: "Authorization",
+  prefix,
+});
+
 function declaration(
-  authentication: CredentialAuthentication,
+  placement: SecretPlacement,
   localSecret: CredentialSelection["localSecret"],
 ): CredentialDeclaration {
+  const parts =
+    placement.in === "basic" ? ["username", "password"] : ["secret"];
   return () => ({
     type: {
       id: "example",
       methods: {
         key: {
           schema: t.Object(
-            {
-              secret:
-                authentication.kind === "basic"
-                  ? BasicSecretSchema
-                  : SecretSchema,
-            },
+            { secret: staticSecretSchema(parts) },
             { additionalProperties: false },
           ),
-          authentication,
+          authentication: {
+            kind: "static",
+            field: "secret",
+            parts,
+            placements: [placement],
+          },
           targets: {
             api: {
               baseUrl: "https://api.example/v1/",
@@ -85,49 +105,38 @@ describe("the local signer signs static keys from flat config", () => {
       [CredentialDeclaration, Record<string, unknown>, string, string | null]
     > = [
       [
-        declaration(
-          { kind: "bearer", field: "secret" },
-          { secret: { field: "apiKey" } },
-        ),
+        declaration(bearer, { secret: { field: "apiKey" } }),
         { apiKey: "sk-1" },
         "https://api.example/v1/items",
         "Bearer sk-1",
       ],
       [
-        declaration(
-          {
-            kind: "apiKey",
-            field: "secret",
-            header: "Authorization",
-            prefix: "SSWS ",
-          },
-          { secret: { field: "apiToken" } },
-        ),
+        declaration(header("SSWS "), { secret: { field: "apiToken" } }),
         { apiToken: "okta" },
         "https://api.example/v1/items",
         "SSWS okta",
       ],
       [
-        declaration(
-          { kind: "basic", field: "secret" },
-          { username: { field: "email" }, password: { field: "apiToken" } },
-        ),
+        declaration(basic, {
+          username: { field: "email" },
+          password: { field: "apiToken" },
+        }),
         { email: "dana@example.com", apiToken: "t" },
         "https://api.example/v1/items",
         `Basic ${Buffer.from("dana@example.com:t").toString("base64")}`,
       ],
       [
-        declaration(
-          { kind: "basic", field: "secret" },
-          { username: { value: "api" }, password: { field: "apiKey" } },
-        ),
+        declaration(basic, {
+          username: { value: "api" },
+          password: { field: "apiKey" },
+        }),
         { apiKey: "key-1" },
         "https://api.example/v1/items",
         `Basic ${Buffer.from("api:key-1").toString("base64")}`,
       ],
       [
         declaration(
-          { kind: "queryKey", field: "secret", param: "key" },
+          { in: "query", part: "secret", name: "key" },
           { secret: { field: "apiKey" } },
         ),
         { apiKey: "k1" },
@@ -150,34 +159,23 @@ describe("the local signer signs static keys from flat config", () => {
       [CredentialDeclaration, Record<string, unknown>, string]
     > = [
       [
-        declaration(
-          { kind: "basic", field: "secret" },
-          {
-            username: { concat: [{ field: "email" }, { value: "/token" }] },
-            password: { field: "apiToken" },
-          },
-        ),
+        declaration(basic, {
+          username: { concat: [{ field: "email" }, { value: "/token" }] },
+          password: { field: "apiToken" },
+        }),
         { email: "dana@example.com", apiToken: "t" },
         `Basic ${Buffer.from("dana@example.com/token:t").toString("base64")}`,
       ],
       [
-        declaration(
-          {
-            kind: "apiKey",
-            field: "secret",
-            header: "Authorization",
-            prefix: "token ",
+        declaration(header("token "), {
+          secret: {
+            concat: [
+              { field: "apiKey" },
+              { value: ":" },
+              { field: "apiSecret" },
+            ],
           },
-          {
-            secret: {
-              concat: [
-                { field: "apiKey" },
-                { value: ":" },
-                { field: "apiSecret" },
-              ],
-            },
-          },
-        ),
+        }),
         { apiKey: "k", apiSecret: "s" },
         "token k:s",
       ],
@@ -202,10 +200,10 @@ describe("the local signer signs static keys from flat config", () => {
   });
 
   it("a missing or non-string flat field is invalid_credentials before any IO", async () => {
-    const declare = declaration(
-      { kind: "basic", field: "secret" },
-      { username: { field: "email" }, password: { field: "apiToken" } },
-    );
+    const declare = declaration(basic, {
+      username: { field: "email" },
+      password: { field: "apiToken" },
+    });
     for (const config of [
       {},
       { email: "dana@example.com" },
@@ -228,7 +226,7 @@ describe("the local signer signs static keys from flat config", () => {
     await assert.rejects(
       credentialBroker(
         context({ apiKey: "sk-1" }),
-        declaration({ kind: "bearer", field: "secret" }, undefined),
+        declaration(bearer, undefined),
       ).request({ target: "api", path: "items" }),
       { code: "invalid_credentials" },
     );
@@ -236,10 +234,7 @@ describe("the local signer signs static keys from flat config", () => {
   });
 
   it("refuses a redirect, and the error carries no secret", async () => {
-    const declare = declaration(
-      { kind: "bearer", field: "secret" },
-      { secret: { field: "apiKey" } },
-    );
+    const declare = declaration(bearer, { secret: { field: "apiKey" } });
     globalThis.fetch = (async () =>
       new Response(null, {
         status: 302,

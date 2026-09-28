@@ -65,15 +65,16 @@ function brokered(body: BodyInit | null, status = 200) {
 }
 
 describe("staticCredential", () => {
-  it("declares one structured credential field, a method named for its kind, and the flat fields it signs from locally", () => {
+  it("declares one structured credential field, a method named for its shorthand, and the flat fields it signs from locally", () => {
     const selection = example({ url: "https://tenant.example.com" });
     assert.equal(selection.method, "apiKey");
     assert.deepEqual(selection.localSecret, { secret: { field: "apiKey" } });
     const method = selection.type.methods.apiKey;
     assert.deepEqual(method.authentication, {
-      kind: "apiKey",
+      kind: "static",
       field: "credential",
-      header: "X-Api-Key",
+      parts: ["secret"],
+      placements: [{ in: "header", part: "secret", name: "X-Api-Key" }],
     });
     assert.equal(
       method.targets.api.baseUrl,
@@ -93,7 +94,47 @@ describe("staticCredential", () => {
       username: { field: "email" },
       password: { value: "X" },
     });
+    assert.deepEqual(basic.type.methods.basic.authentication, {
+      kind: "static",
+      field: "credential",
+      parts: ["username", "password"],
+      placements: [{ in: "basic", username: "username", password: "password" }],
+    });
     new CredentialRegistry().register(basic.type);
+  });
+
+  it("bearer and query-key shorthands place one secret part", () => {
+    const targets = {
+      api: { baseUrl: "https://api.example/", methods: ["GET" as const] },
+    };
+    const bearer = staticCredential({
+      id: "b",
+      auth: { kind: "bearer" },
+      local: { secret: "token" },
+      targets,
+    })({});
+    assert.deepEqual(bearer.type.methods.bearer.authentication, {
+      kind: "static",
+      field: "credential",
+      parts: ["secret"],
+      placements: [
+        {
+          in: "header",
+          part: "secret",
+          name: "Authorization",
+          prefix: "Bearer ",
+        },
+      ],
+    });
+    const query = staticCredential({
+      id: "q",
+      auth: { kind: "queryKey", param: "key" },
+      local: { secret: "token" },
+      targets,
+    })({});
+    assert.deepEqual(query.type.methods.queryKey.authentication.kind, "static");
+    new CredentialRegistry().register(bearer.type);
+    new CredentialRegistry().register(query.type);
   });
 });
 
