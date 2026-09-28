@@ -219,7 +219,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["trello", "two secrets per request: key and token query parameters"],
   ["twake", "phase 3: not yet migrated"],
-  ["twilio", "phase 3: not yet migrated"],
+  [
+    "twilio",
+    "config split: accountSid is both the Basic username, stored away as secret, and the target path segment a brokered config must still hold",
+  ],
   ["typesafe", "phase 3: not yet migrated"],
   ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],
   ["uplead", "phase 3: not yet migrated"],
