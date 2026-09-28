@@ -474,7 +474,7 @@ console.log(result.result);  // [{ hex: "#635BFF", type: "accent", brightness: 1
 
 ### Host-signed requests
 
-A host that keeps credentials outside the process running actions — a server signing for a sandboxed worker — passes `credentialBroker`. The engine calls it once per action call with `{ plugin, action, context }` (`context` is whatever that `execute()` passed) and hands the result to the action as `ctx.credentials`. The registry-backed built-ins (Google, Microsoft, Plaud) then send every request and probe through it and sign nothing themselves, so their connection config carries public settings only.
+A host that keeps credentials outside the process running actions — a server signing for a sandboxed worker — passes `credentialBroker`. The engine calls it once per action call of a plugin that declares its credential (`setCredential`), with `{ plugin, action, context }` (`context` is whatever that `execute()` passed) and hands the result to the action as `ctx.credentials`. The registry-backed built-ins (Google, Microsoft, Plaud) then send every request and probe through it and sign nothing themselves, so their connection config carries public settings only.
 
 ```typescript
 const rl = Runline.create({

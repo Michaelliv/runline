@@ -29,9 +29,10 @@ export interface RunlineOptions {
   /** Host-owned credentials; mutually exclusive with initial connections. */
   connectionProvider?: ConnectionProvider;
   /**
-   * Host-signed requests, built per action call and handed to the action
-   * as `ctx.credentials`. For hosts that keep credentials outside the
-   * process running actions; absent, plugins sign with their connection.
+   * Host-signed requests, built per action call of a plugin that declares
+   * its credential and handed to the action as `ctx.credentials`. For
+   * hosts that keep credentials outside the process running actions;
+   * absent, plugins sign with their connection.
    */
   credentialBroker?: EngineHooks["credentialBroker"];
   timeoutMs?: number;

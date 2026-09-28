@@ -4,48 +4,11 @@ import {
   downloadResource,
   type HttpMethod,
 } from "runline";
-import { credentialBroker, credentialRuntime } from "./credentialAdapter.js";
-import {
-  type GoogleAuthConfig,
-  googleCredential,
-  googleIdentity,
-  googleMethod,
-  googleResources,
-} from "./googleCredentials.js";
+import { credentialBroker } from "./credentialAdapter.js";
+import { googleCredential, googleResources } from "./googleCredentials.js";
 
 export type { GoogleAuthConfig } from "./googleCredentials.js";
 export { googleCredential } from "./googleCredentials.js";
-
-/** Explicit storage adapter: the registry owns token protocols and renewal. */
-export function googleRuntime(
-  ctx: ActionContext,
-  pluginName: string,
-  scopes: string[],
-) {
-  const selection = googleCredential(pluginName, scopes)(ctx.connection.config);
-  return credentialRuntime(ctx, selection, (current) => {
-    const cfg = current as GoogleAuthConfig;
-    return [
-      pluginName,
-      scopes,
-      googleMethod(cfg),
-      ...(selection.method === "serviceAccount"
-        ? [googleIdentity(cfg)]
-        : [cfg.clientId, cfg.clientSecret]),
-    ];
-  });
-}
-
-/** The local signer's token, for trusted in-process callers only: a brokered
- *  host holds none to hand out. Resource consumers use googleResponse. */
-export async function googleAccessToken(
-  ctx: ActionContext,
-  pluginName: string,
-  scopes: string[],
-): Promise<string> {
-  const { binding, transport } = googleRuntime(ctx, pluginName, scopes);
-  return transport.accessToken(binding);
-}
 
 /** Translate builtin absolute URLs at one boundary; validate the raw path before URL normalization. */
 export async function googleResponse(
@@ -80,15 +43,13 @@ export async function googleResponse(
     }
     path = `${separator < 0 ? path : path.slice(0, separator)}?${params}`;
   }
-  return credentialBroker(ctx, () => googleRuntime(ctx, plugin, scopes)).request(
-    {
-      target,
-      path,
-      method: (init.method ?? "GET") as HttpMethod,
-      headers: init.headers,
-      body: init.body,
-    },
-  );
+  return credentialBroker(ctx, googleCredential(plugin, scopes)).request({
+    target,
+    path,
+    method: (init.method ?? "GET") as HttpMethod,
+    headers: init.headers,
+    body: init.body,
+  });
 }
 
 export async function googleJsonRequest(
@@ -131,9 +92,7 @@ export async function googleProbe(
   plugin: string,
   scopes: string[],
 ) {
-  return credentialBroker(ctx, () =>
-    googleRuntime(ctx, plugin, scopes),
-  ).probe();
+  return credentialBroker(ctx, googleCredential(plugin, scopes)).probe();
 }
 
 /** Only Google-issued thumbnail hosts; never attach credentials to signed URLs. */

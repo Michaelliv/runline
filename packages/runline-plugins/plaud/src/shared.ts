@@ -8,10 +8,7 @@ import {
   OAuthGrantSchema,
 } from "runline";
 import * as t from "typebox";
-import {
-  credentialBroker,
-  credentialRuntime,
-} from "../../_shared/credentialAdapter.js";
+import { credentialBroker } from "../../_shared/credentialAdapter.js";
 
 const BASE = "https://platform.plaud.ai/developer/api";
 
@@ -73,14 +70,6 @@ export const plaudCredential: CredentialDeclaration = (config) => ({
   application: { clientId: config.clientId as string },
 });
 
-export function plaudRuntime(ctx: ActionContext) {
-  return credentialRuntime(
-    ctx,
-    plaudCredential(ctx.connection.config),
-    (config) => [config.clientId],
-  );
-}
-
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new AuthError("invalid_response");
@@ -91,9 +80,10 @@ export async function request(
   ctx: ActionContext,
   path: string,
 ): Promise<Record<string, unknown>> {
-  const response = await credentialBroker(ctx, () => plaudRuntime(ctx)).request(
-    { target: "api", path },
-  );
+  const response = await credentialBroker(ctx, plaudCredential).request({
+    target: "api",
+    path,
+  });
   if (!response.ok)
     throw new Error(`plaud: request failed (HTTP ${response.status})`);
   try {

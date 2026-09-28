@@ -6,46 +6,46 @@ import {
   type ActionContext,
   type CredentialBinding,
   type CredentialBroker,
+  type CredentialDeclaration,
   type CredentialSelection,
   type OAuthGrant,
 } from "runline";
 
 /**
  * Where one action call's authenticated requests go: the host's broker
- * when it supplies one — the credentials then live with the host, and
- * `local` is never built — else this process signs with its own
- * connection.
+ * when it supplies one — the credentials then live with the host, and no
+ * local signer is built — else this process signs with its own
+ * connection, from the plugin's declaration.
  */
 export function credentialBroker(
   ctx: ActionContext,
-  local: () => ReturnType<typeof credentialRuntime>,
+  declaration: CredentialDeclaration,
 ): CredentialBroker {
   if (ctx.credentials) return ctx.credentials;
-  const { binding, transport } = local();
+  const { binding, transport } = localSigner(ctx, declaration);
   return {
     request: (input) => transport.request(binding, input),
     probe: () => transport.probe(binding),
   };
 }
 
+/** Everything a stored token was issued under. A config whose selection
+ *  hashes differently can no longer use tokens issued for this one. */
+function authorityOf(selection: CredentialSelection): string {
+  return createHash("sha256").update(JSON.stringify(selection)).digest("hex");
+}
+
 /**
- * The local signer for a plugin's declared selection. Flat CLI/env
- * storage is a projection, not a second token cache or refresh engine.
+ * This process signing with its own connection. Flat CLI/env storage is a
+ * projection, not a second token cache or refresh engine.
  */
-export function credentialRuntime(
-  ctx: ActionContext,
-  selection: CredentialSelection,
-  authority: (config: Readonly<Record<string, unknown>>) => unknown,
-) {
+function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
+  const selection = declaration(ctx.connection.config);
   const { type: definition, method } = selection;
   const identity = { name: ctx.connection.name, plugin: ctx.connection.plugin };
-  const fingerprint = (config: Readonly<Record<string, unknown>>) =>
-    createHash("sha256")
-      .update(JSON.stringify([definition.id, method, authority(config)]))
-      .digest("hex");
-  const expected = fingerprint(ctx.connection.config);
+  const expected = authorityOf(selection);
   const project = (current: Readonly<Record<string, unknown>>) => {
-    if (fingerprint(current) !== expected)
+    if (authorityOf(declaration(current)) !== expected)
       throw new AuthError("binding_changed");
     const compatible =
       current.authTokenBinding === undefined ||
@@ -113,8 +113,6 @@ export function credentialRuntime(
   };
   const registry = new CredentialRegistry();
   registry.register(definition);
-  // The local signer: this process holds the credentials and egresses itself.
-  // A host that keeps them elsewhere supplies a broker, and this is never built.
   const transport = new CredentialTransport(registry, {
     fetch: globalThis.fetch,
     maxRequestBytes: 64 * 1024 * 1024,

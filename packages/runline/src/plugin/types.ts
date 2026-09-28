@@ -73,9 +73,9 @@ export interface ActionContext {
   context?: unknown;
   /**
    * Authenticated requests signed by the host, present when the embedder
-   * holds this connection's credentials elsewhere. A plugin given one
-   * sends through it and signs nothing itself: its connection config
-   * then carries public settings only.
+   * holds this connection's credentials elsewhere and the plugin declares
+   * its credential. A plugin given one sends through it and signs nothing
+   * itself: its connection config then carries public settings only.
    */
   credentials?: CredentialBroker;
   log: {

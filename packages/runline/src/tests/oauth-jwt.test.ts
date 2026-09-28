@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import { afterEach, it } from "node:test";
-import { googleAccessToken } from "../../../runline-plugins/_shared/googleAuth.js";
+import { googleResponse } from "../../../runline-plugins/_shared/googleAuth.js";
 import { acquireOAuth2JwtToken } from "../auth/oauth2.js";
 import type { OAuth2Definition } from "../auth/types.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
@@ -129,6 +129,43 @@ async function context(
   };
 }
 
+const TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+/** Serve token issuance through `issue`; every Drive read answers 200.
+ *  Any other destination — a credential's own token_uri included — fails. */
+function serve(issue: (init: RequestInit) => Response) {
+  globalThis.fetch = (async (url, init) => {
+    if (String(url) === TOKEN_URL) return issue(init ?? {});
+    assert.ok(String(url).startsWith("https://www.googleapis.com/drive/v3/"));
+    return Response.json({});
+  }) as typeof fetch;
+}
+
+/** The bearer a Drive read through the local signer carries. */
+async function bearerFor(
+  store: MemoryConnectionProvider,
+  scopes: string[],
+): Promise<string | null> {
+  let bearer: string | null = null;
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (url, init) => {
+    if (String(url) !== TOKEN_URL)
+      bearer = new Headers(init?.headers).get("authorization");
+    return served(url, init);
+  }) as typeof fetch;
+  try {
+    await googleResponse(
+      await context(store),
+      "googleDrive",
+      scopes,
+      "https://www.googleapis.com/drive/v3/files",
+    );
+  } finally {
+    globalThis.fetch = served;
+  }
+  return bearer;
+}
+
 it("Google compatibility selection respects explicit delegated mode and invalidates scope/subject changes", async () => {
   const store = new MemoryConnectionProvider([
     {
@@ -145,43 +182,24 @@ it("Google compatibility selection respects explicit delegated mode and invalida
     },
   ]);
   const grants: string[] = [];
-  globalThis.fetch = (async (_url, init) => {
-    const grant = new URLSearchParams(String(init?.body)).get("grant_type");
+  serve((init) => {
+    const grant = new URLSearchParams(String(init.body)).get("grant_type");
     assert.ok(grant);
     grants.push(grant);
     return Response.json({
       access_token: `token-${grants.length}`,
       expires_in: 3600,
     });
-  }) as typeof fetch;
-  assert.equal(
-    await googleAccessToken(await context(store), "googleDrive", ["scope"]),
-    "token-1",
-  );
+  });
+  assert.equal(await bearerFor(store, ["scope"]), "Bearer token-1");
   assert.equal(grants[0], "refresh_token");
   const handle = await store.resolve({ plugin: "googleDrive" });
   await handle.update({ authMethod: "serviceAccount" });
-  assert.equal(
-    await googleAccessToken(await context(store), "googleDrive", ["scope"]),
-    "token-2",
-  );
-  assert.equal(
-    await googleAccessToken(await context(store), "googleDrive", ["scope"]),
-    "token-2",
-  );
-  assert.equal(
-    await googleAccessToken(await context(store), "googleDrive", [
-      "other.scope",
-    ]),
-    "token-3",
-  );
+  assert.equal(await bearerFor(store, ["scope"]), "Bearer token-2");
+  assert.equal(await bearerFor(store, ["scope"]), "Bearer token-2");
+  assert.equal(await bearerFor(store, ["other.scope"]), "Bearer token-3");
   await handle.update({ serviceAccountSubject: "new-user@example.com" });
-  assert.equal(
-    await googleAccessToken(await context(store), "googleDrive", [
-      "other.scope",
-    ]),
-    "token-4",
-  );
+  assert.equal(await bearerFor(store, ["other.scope"]), "Bearer token-4");
   assert.deepEqual(
     grants.slice(1),
     Array(3).fill("urn:ietf:params:oauth:grant-type:jwt-bearer"),
@@ -203,21 +221,19 @@ it("Google JSON credentials cannot override the token endpoint or silently fall 
     },
   ]);
   let calls = 0;
-  globalThis.fetch = (async (url) => {
+  serve(() => {
     calls++;
-    assert.equal(String(url), "https://oauth2.googleapis.com/token");
     return Response.json({ access_token: "issued" });
-  }) as typeof fetch;
-  await googleAccessToken(await context(store), "googleDrive", ["scope"]);
+  });
+  assert.equal(await bearerFor(store, ["scope"]), "Bearer issued");
   const handle = await store.resolve({ plugin: "googleDrive" });
   await handle.update({
     serviceAccountJson: "malformed-secret",
     serviceAccountEmail: identity.issuer,
     serviceAccountPrivateKey: privateKey,
   });
-  await assert.rejects(
-    googleAccessToken(await context(store), "googleDrive", ["scope"]),
-    { code: "invalid_credentials" },
-  );
+  await assert.rejects(bearerFor(store, ["scope"]), {
+    code: "invalid_credentials",
+  });
   assert.equal(calls, 1);
 });

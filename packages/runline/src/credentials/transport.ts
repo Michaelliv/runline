@@ -384,17 +384,6 @@ export class CredentialTransport {
     }
   }
 
-  /** Trusted-host compatibility primitive. Never expose raw tokens through a broker. */
-  async accessToken(selection: CredentialBinding): Promise<string> {
-    const binding = pinBinding(selection);
-    return (
-      await this.authorize(
-        binding,
-        this.registry.select(binding.type, binding.method),
-      )
-    ).token;
-  }
-
   private async authorize(
     binding: CredentialBinding,
     method: CredentialMethod,

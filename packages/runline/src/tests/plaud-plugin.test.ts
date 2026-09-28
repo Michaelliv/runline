@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { TSchema } from "typebox";
 import { Check } from "typebox/value";
+import { credentialBroker } from "../../../runline-plugins/_shared/credentialAdapter.js";
 import plaud from "../../../runline-plugins/plaud/src/index.js";
 import {
   PLAUD_CREDENTIAL,
   PLAUD_OAUTH,
   PLAUD_PUBLIC_CLIENT_ID,
   PLAUD_REDIRECT_URI,
-  plaudRuntime,
+  plaudCredential,
 } from "../../../runline-plugins/plaud/src/shared.js";
 import {
   buildOAuth2AuthorizationUrl,
@@ -520,11 +521,13 @@ describe("native Plaud plugin", () => {
         code: "request_not_allowed",
       });
     assert.equal(calls, 0);
-    const { binding, transport } = plaudRuntime((await context()).ctx);
-    assert.deepEqual(await transport.probe(binding), {
-      outcome: "accepted",
-      status: 200,
-    });
+    assert.deepEqual(
+      await credentialBroker((await context()).ctx, plaudCredential).probe(),
+      {
+        outcome: "accepted",
+        status: 200,
+      },
+    );
     assert.equal(calls, 1);
     for (const id of ["a?b=c", "a#b", "with space"]) {
       mock((url) => {

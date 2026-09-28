@@ -61,8 +61,9 @@ export interface EngineHooks {
   /** Host-owned resolution and persistence. Defaults to process-local memory. */
   connectionProvider?: ConnectionProvider;
   /**
-   * Host-signed requests: built per action call and handed to the action
-   * as `ctx.credentials`. Absent, plugins sign with their own connection.
+   * Host-signed requests: built per action call of a plugin that declares
+   * its credential, and handed to the action as `ctx.credentials`. Absent,
+   * plugins sign with their own connection.
    */
   credentialBroker?: (call: CredentialBrokerCall) => CredentialBroker;
   /**
@@ -540,7 +541,7 @@ export class ExecutionEngine {
     const ctx: ActionContext = {
       connection,
       context,
-      ...(this.hooks.credentialBroker
+      ...(this.hooks.credentialBroker && plugin.credential
         ? {
             credentials: this.hooks.credentialBroker({
               plugin: plugin.name,

@@ -4,10 +4,9 @@ import {
   type ActionContext,
   type HttpMethod,
 } from "runline";
-import { credentialBroker, credentialRuntime } from "./credentialAdapter.js";
+import { credentialBroker } from "./credentialAdapter.js";
 import {
   microsoftCredential,
-  microsoftMethod,
   microsoftUserBase,
   type MicrosoftAuthConfig,
 } from "./microsoftCredentials.js";
@@ -18,40 +17,8 @@ export {
   microsoftDriveBase,
 } from "./microsoftCredentials.js";
 
-export function isAppOnly(cfg: MicrosoftAuthConfig): boolean {
-  return microsoftMethod(cfg) === "appOnly";
-}
-
 export function userBase(ctx: ActionContext): string {
   return microsoftUserBase(ctx.connection.config as MicrosoftAuthConfig);
-}
-
-function runtime(ctx: ActionContext, plugin: string, scopes: string[]) {
-  return credentialRuntime(
-    ctx,
-    microsoftCredential(plugin, scopes)(ctx.connection.config),
-    (current) => {
-      const c = current as MicrosoftAuthConfig;
-      return [
-        microsoftMethod(c),
-        c.tenantId,
-        c.clientId,
-        c.clientSecret,
-        scopes,
-      ];
-    },
-  );
-}
-
-/** The local signer's token, for trusted in-process callers only: a brokered
- *  host holds none to hand out. Resource consumers use graphResponse. */
-export async function microsoftAccessToken(
-  ctx: ActionContext,
-  plugin: string,
-  scopes: string[],
-): Promise<string> {
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.accessToken(binding);
 }
 
 export async function microsoftProbe(
@@ -59,7 +26,7 @@ export async function microsoftProbe(
   plugin: string,
   scopes: string[],
 ) {
-  return credentialBroker(ctx, () => runtime(ctx, plugin, scopes)).probe();
+  return credentialBroker(ctx, microsoftCredential(plugin, scopes)).probe();
 }
 
 export async function graphResponse(
@@ -73,7 +40,7 @@ export async function graphResponse(
 ): Promise<Response> {
   if (!path.startsWith("/") || path.startsWith("//"))
     throw new AuthError("request_not_allowed");
-  return credentialBroker(ctx, () => runtime(ctx, plugin, scopes)).request({
+  return credentialBroker(ctx, microsoftCredential(plugin, scopes)).request({
     target: "graph",
     path: path.slice(1),
     method: method as HttpMethod,

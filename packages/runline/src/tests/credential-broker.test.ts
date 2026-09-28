@@ -6,9 +6,10 @@
  * `ctx.credentials` instead of signing them itself.
  *
  * Pinned here:
- *   - the engine hands each action the broker the embedder built for
- *     exactly that call — plugin, action, and per-run context — and
- *     hands nothing when the embedder supplied none;
+ *   - the engine hands each action of a plugin that declares its
+ *     credential the broker the embedder built for exactly that call —
+ *     plugin, action, and per-run context — and hands nothing when the
+ *     embedder supplied none or the plugin declares no credential;
  *   - with a broker, a plugin needs no secret in its connection config
  *     and never touches the network itself: requests and probes alike
  *     go through the broker.
@@ -36,6 +37,7 @@ import type {
   CredentialBroker,
   CredentialBrokerCall,
 } from "../credentials/transport.js";
+import type { CredentialDeclaration } from "../credentials/types.js";
 import { createPluginAPI, type PluginFunction } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
 import { Runline } from "../sdk.js";
@@ -92,19 +94,26 @@ function refuseNetwork() {
 }
 
 describe("the engine hands actions the embedder's broker", () => {
-  const probe: PluginFunction = (rl) => {
-    rl.setName("probe");
-    rl.registerAction("ask", {
-      async execute(_input, ctx) {
-        if (!ctx.credentials) return { brokered: false };
-        const res = await ctx.credentials.request({
-          target: "api",
-          path: "items",
-        });
-        return { brokered: true, body: await res.json() };
-      },
-    });
+  const declared: CredentialDeclaration = () => {
+    throw new Error("only a signer reads the declaration");
   };
+  const plugin =
+    (name: string, declaration?: CredentialDeclaration): PluginFunction =>
+    (rl) => {
+      rl.setName(name);
+      if (declaration) rl.setCredential(declaration);
+      rl.registerAction("ask", {
+        async execute(_input, ctx) {
+          if (!ctx.credentials) return { brokered: false };
+          const res = await ctx.credentials.request({
+            target: "api",
+            path: "items",
+          });
+          return { brokered: true, body: await res.json() };
+        },
+      });
+    };
+  const probe = plugin("probe", declared);
 
   it("built for exactly this call: plugin, action, and per-run context", async () => {
     const calls: CredentialBrokerCall[] = [];
@@ -136,6 +145,24 @@ describe("the engine hands actions the embedder's broker", () => {
     try {
       const out = await runline.execute("return await probe.ask({})");
       assert.deepEqual(out.result, { brokered: false });
+    } finally {
+      runline.dispose();
+    }
+  });
+
+  it("absent for a plugin that declares no credential, whatever the embedder supplies", async () => {
+    const calls: CredentialBrokerCall[] = [];
+    const runline = Runline.create({
+      plugins: [plugin("custom")],
+      credentialBroker: (call) => {
+        calls.push(call);
+        return recordingBroker().broker;
+      },
+    });
+    try {
+      const out = await runline.execute("return await custom.ask({})");
+      assert.deepEqual(out.result, { brokered: false });
+      assert.deepEqual(calls, []);
     } finally {
       runline.dispose();
     }
