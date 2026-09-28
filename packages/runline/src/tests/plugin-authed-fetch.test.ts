@@ -76,7 +76,6 @@ const UNBROKERED_FETCH = new Set([
   "steel/src/shared.ts",
   "storyblok/src/index.ts",
   "strapi/src/index.ts",
-  "telegram/src/index.ts",
   "travisci/src/index.ts",
   "unleashedSoftware/src/index.ts",
 ]);

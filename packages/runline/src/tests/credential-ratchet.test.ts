@@ -103,7 +103,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "strapi",
     "login: password mode mints a JWT; one plugin cannot sign two ways",
   ],
-  ["telegram", "path token: the bot token is a URL path segment"],
   [
     "travisci",
     "encoded path segment: repo slugs travel %2F-encoded, which the path policy refuses",
