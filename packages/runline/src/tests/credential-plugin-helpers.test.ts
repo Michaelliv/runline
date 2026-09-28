@@ -264,6 +264,21 @@ describe("credentialRequest and credentialJson", () => {
     ]);
   });
 
+  it("serializes a form body, skipping null and undefined, with a form Content-Type", async () => {
+    const { ctx, requests } = brokered("{}");
+    await credentialRequest(ctx, example, {
+      target: "api",
+      path: "items",
+      method: "POST",
+      form: { a: "x y&z", n: 2, skip: undefined, none: null },
+    });
+    assert.deepEqual(requests[0].headers, {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    });
+    assert.equal(requests[0].body, "a=x+y%26z&n=2");
+  });
+
   it("appends to a query already in the path", async () => {
     const { ctx, requests } = brokered("{}");
     await credentialRequest(ctx, example, {
