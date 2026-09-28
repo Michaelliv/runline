@@ -64,9 +64,12 @@ export type SecretPlacement =
  * How a request is signed. `field` names the one top-level config field
  * holding the secret: for `static`, a record of the named `parts`
  * (`staticSecretSchema(parts)`), each sent through its placements; for
- * `oauth2`, a revisioned OAuthGrant.
+ * `oauth2`, a revisioned OAuthGrant. `none` signs nothing: the method of a
+ * connection that holds no optional credential, still pinned to its
+ * targets.
  */
 export type CredentialAuthentication =
+  | { kind: "none" }
   | {
       kind: "static";
       field: string;

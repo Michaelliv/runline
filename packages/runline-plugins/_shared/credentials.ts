@@ -85,6 +85,13 @@ export interface StaticCredentialSpec {
         config: Readonly<Record<string, unknown>>,
       ) => Record<string, CredentialTarget>);
   probe?: CredentialProbe;
+  /**
+   * The credential is optional: a connection signs when it holds the flat
+   * secret fields (the CLI) or says `authenticated: true` in its public
+   * config (a host that stores the credential), and otherwise sends its
+   * requests unsigned through a `none` method held to the same targets.
+   */
+  optional?: true;
 }
 
 /**
@@ -107,27 +114,47 @@ export function staticCredential(
       typeof source === "string" ? { field: source } : source,
     ]),
   );
-  return (config) => ({
-    type: {
-      id: spec.id,
-      methods: {
-        [spec.auth.kind]: {
-          schema: t.Object(
-            { [field]: staticSecretSchema(parts) },
-            { additionalProperties: false },
-          ),
-          authentication: { kind: "static", field, parts, placements },
-          targets:
-            typeof spec.targets === "function"
-              ? spec.targets(config)
-              : spec.targets,
-          ...(spec.probe ? { probe: spec.probe } : {}),
+  const fields = Object.values(localSecret).flatMap((source) =>
+    ("concat" in source ? source.concat : [source]).flatMap((part) =>
+      "field" in part ? [part.field] : [],
+    ),
+  );
+  return (config) => {
+    const targets =
+      typeof spec.targets === "function" ? spec.targets(config) : spec.targets;
+    const signed =
+      !spec.optional ||
+      config.authenticated === true ||
+      fields.every((name) => typeof config[name] === "string" && config[name]);
+    return {
+      type: {
+        id: spec.id,
+        methods: {
+          [spec.auth.kind]: {
+            schema: t.Object(
+              { [field]: staticSecretSchema(parts) },
+              { additionalProperties: false },
+            ),
+            authentication: { kind: "static", field, parts, placements },
+            targets,
+            ...(spec.probe ? { probe: spec.probe } : {}),
+          },
+          ...(spec.optional
+            ? {
+                none: {
+                  schema: t.Object({}, { additionalProperties: false }),
+                  authentication: { kind: "none" },
+                  targets,
+                },
+              }
+            : {}),
         },
       },
-    },
-    method: spec.auth.kind,
-    localSecret,
-  });
+      ...(signed
+        ? { method: spec.auth.kind, localSecret }
+        : { method: "none" }),
+    };
+  };
 }
 
 /**

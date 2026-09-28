@@ -74,7 +74,8 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
   const project = (current: Readonly<Record<string, unknown>>) => {
     if (authorityOf(declaration(current)) !== expected)
       throw new AuthError("binding_changed");
-    if (auth.kind !== "oauth2") {
+    if (auth.kind === "none") return {};
+    if (auth.kind === "static") {
       const secret = staticSecret(current, selection.localSecret);
       return secret ? { [auth.field]: secret } : {};
     }
@@ -120,6 +121,8 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
         return snapshot();
       },
       async update(change) {
+        // Only an OAuth grant is ever renewed and written back.
+        if (auth.kind !== "oauth2") throw new AuthError("invalid_definition");
         await ctx.updateConnection(async (current) => {
           const projected = project(current);
           const patch =

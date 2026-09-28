@@ -150,9 +150,15 @@ function validateMethod(method: CredentialMethod): void {
   )
     throw new AuthError("invalid_definition");
   const auth = method.authentication;
-  identifier(auth.field);
-  if (!Object.hasOwn(schema.properties, auth.field))
-    throw new AuthError("invalid_definition");
+  if (auth.kind === "none") {
+    // Nothing is stored for a method that signs nothing.
+    if (Object.keys(schema.properties).length)
+      throw new AuthError("invalid_definition");
+  } else {
+    identifier(auth.field);
+    if (!Object.hasOwn(schema.properties, auth.field))
+      throw new AuthError("invalid_definition");
+  }
   if (auth.kind === "static")
     validateStatic(auth, schema.properties[auth.field]);
   else if (auth.kind === "oauth2") {
@@ -209,7 +215,7 @@ function validateMethod(method: CredentialMethod): void {
       )
         throw new AuthError("invalid_definition");
     }
-  } else throw new AuthError("invalid_definition");
+  } else if (auth.kind !== "none") throw new AuthError("invalid_definition");
   const injected = injectedHeaders(auth);
   if (!Object.keys(method.targets).length)
     throw new AuthError("invalid_definition");

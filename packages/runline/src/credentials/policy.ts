@@ -99,6 +99,7 @@ function safePath(path: string): void {
 
 /** Headers a method's authentication sets, lowercased; callers never set them. */
 export function injectedHeaders(auth: CredentialAuthentication): string[] {
+  if (auth.kind === "none") return [];
   if (auth.kind === "oauth2") return ["authorization"];
   return auth.placements.flatMap((placement) =>
     placement.in === "header"
@@ -114,7 +115,7 @@ export function injectedHeaders(auth: CredentialAuthentication): string[] {
  * (it reaches the query when a request has no body); callers never set them.
  */
 export function injectedParams(auth: CredentialAuthentication): string[] {
-  if (auth.kind === "oauth2") return [];
+  if (auth.kind !== "static") return [];
   return auth.placements.flatMap((placement) =>
     placement.in === "query" || placement.in === "body" ? [placement.name] : [],
   );
@@ -122,7 +123,7 @@ export function injectedParams(auth: CredentialAuthentication): string[] {
 
 /** Body fields a method's authentication sets; callers never set them. */
 export function injectedFields(auth: CredentialAuthentication): string[] {
-  if (auth.kind === "oauth2") return [];
+  if (auth.kind !== "static") return [];
   return auth.placements.flatMap((placement) =>
     placement.in === "body" ? [placement.name] : [],
   );

@@ -488,10 +488,11 @@ const rl = Runline.create({
 
 The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application and JWT identity — never with anything the plugin's process sends.
 
-Each method's `authentication.field` names the one config field a host stores the secret in. There are two kinds:
+Each method's `authentication.field` names the one config field a host stores the secret in. There are three kinds:
 
 | kind | stored shape | sent as |
 |---|---|---|
+| `none` | nothing | unsigned, still held to the method's targets: the method of a connection without an optional credential |
 | `static` | its named `parts`, each a string (`staticSecretSchema(parts)`) | each part through its `placements` |
 | `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection |
 
@@ -505,7 +506,7 @@ A static placement is one of:
 | `{ in: "path", part, prefix? }` | the first path segment beneath the base, `<prefix><part>`; at most one per method. A secret in a URL can reach access logs, so a host may refuse this placement |
 | `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
 
-Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`).
+Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`). With `optional: true` the type also declares a `none` method, which a connection selects unless it holds the flat secret fields or says `authenticated: true` in its public config.
 
 Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
 

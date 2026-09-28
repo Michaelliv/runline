@@ -521,6 +521,7 @@ export class CredentialTransport {
   ): Promise<{ sign: Signer; grant?: OAuthGrant }> {
     const config = await this.read(binding, method);
     const auth = method.authentication;
+    if (auth.kind === "none") return { sign: () => {} };
     if (auth.kind === "static")
       return {
         sign: placeStatic(auth, config[auth.field] as Record<string, string>),
