@@ -1,49 +1,31 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { salesmateCredential } from "./credentials.js";
 
-const BASE = "https://apis.salesmate.io";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    sessionToken: ctx.connection.config.sessionToken as string,
-    linkname: ctx.connection.config.linkname as string,
-  };
-}
-
-async function api(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, salesmateCredential, "salesmate", {
+    target: "api",
+    path: endpoint.replace(/^\//, ""),
     method,
-    headers: {
-      sessionToken: conn.sessionToken,
-      "x-linkname": conn.linkname,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Salesmate error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    headers: { "x-linkname": String(ctx.connection.config.linkname) },
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 function registerCrud(
   rl: RunlinePluginAPI,
   resource: string,
   plural: string,
-  conn: (ctx: {
-    connection: { config: Record<string, unknown> };
-  }) => ReturnType<typeof getConn>,
   createSchema: Record<
     string,
     { type: string; required: boolean; description?: string }
@@ -55,7 +37,7 @@ function registerCrud(
     inputSchema: createSchema,
     async execute(input, ctx) {
       const data = (await api(
-        conn(ctx),
+        ctx,
         "POST",
         `/v1/${plural}`,
         input as Record<string, unknown>,
@@ -70,9 +52,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        conn(ctx),
+        ctx,
         "GET",
-        `/v1/${plural}/${(input as Record<string, unknown>).id}`,
+        `/v1/${plural}/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.Data;
     },
@@ -103,7 +85,7 @@ function registerCrud(
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.rows = p.limit;
       const data = (await api(
-        conn(ctx),
+        ctx,
         "POST",
         `/v2/${plural}/search`,
         body,
@@ -123,9 +105,9 @@ function registerCrud(
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await api(
-        conn(ctx),
+        ctx,
         "PUT",
-        `/v1/${plural}/${p.id}`,
+        `/v1/${plural}/${seg(p.id)}`,
         p.data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.Data;
@@ -138,9 +120,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        conn(ctx),
+        ctx,
         "DELETE",
-        `/v1/${plural}/${(input as Record<string, unknown>).id}`,
+        `/v1/${plural}/${seg((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -149,6 +131,7 @@ function registerCrud(
 export default function salesmate(rl: RunlinePluginAPI) {
   rl.setName("salesmate");
   rl.setVersion("0.1.0");
+  rl.setCredential(salesmateCredential);
   rl.setConnectionSchema({
     sessionToken: {
       type: "string",
@@ -164,7 +147,7 @@ export default function salesmate(rl: RunlinePluginAPI) {
     },
   });
 
-  registerCrud(rl, "company", "companies", getConn, {
+  registerCrud(rl, "company", "companies", {
     name: { type: "string", required: true },
     owner: { type: "number", required: true },
     website: { type: "string", required: false },
@@ -172,7 +155,7 @@ export default function salesmate(rl: RunlinePluginAPI) {
     description: { type: "string", required: false },
   });
 
-  registerCrud(rl, "activity", "activities", getConn, {
+  registerCrud(rl, "activity", "activities", {
     title: { type: "string", required: true },
     owner: { type: "number", required: true },
     type: {
@@ -184,7 +167,7 @@ export default function salesmate(rl: RunlinePluginAPI) {
     dueDate: { type: "string", required: false },
   });
 
-  registerCrud(rl, "deal", "deals", getConn, {
+  registerCrud(rl, "deal", "deals", {
     title: { type: "string", required: true },
     owner: { type: "number", required: true },
     primaryContact: { type: "number", required: true },

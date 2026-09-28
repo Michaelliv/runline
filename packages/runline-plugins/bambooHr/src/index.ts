@@ -1,39 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialRequest } from "../../_shared/credentials.js";
+import { bambooHrCredential } from "./credentials.js";
 
-function buildBaseUrl(subdomain: string): string {
-  return `https://api.bamboohr.com/api/gateway.php/${subdomain}/v1`;
-}
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
-  subdomain: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = `${buildBaseUrl(subdomain)}/${endpoint}`;
-  const opts: RequestInit = {
+  const res = await credentialRequest(ctx, bambooHrCredential, {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Basic ${btoa(`${apiKey}:x`)}`,
-    },
-  };
-  if (
-    body &&
+    query,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url, opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`BambooHR API error ${res.status}: ${text}`);
-  }
+      ? { json: body }
+      : {}),
+  });
+  if (!res.ok) throw new Error(`bambooHr: request failed (HTTP ${res.status})`);
   if (res.status === 204 || res.headers.get("content-length") === "0")
     return { success: true };
   const contentType = res.headers.get("content-type") ?? "";
@@ -41,16 +32,10 @@ async function apiRequest(
   return { success: true };
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    subdomain: ctx.connection.config.subdomain as string,
-    apiKey: ctx.connection.config.apiKey as string,
-  };
-}
-
 export default function bambooHr(rl: RunlinePluginAPI) {
   rl.setName("bambooHr");
   rl.setVersion("0.1.0");
+  rl.setCredential(bambooHrCredential);
 
   rl.setConnectionSchema({
     subdomain: {
@@ -110,19 +95,15 @@ export default function bambooHr(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { subdomain, apiKey } = getConn(ctx);
       const body = input as Record<string, unknown>;
-      const res = await fetch(`${buildBaseUrl(subdomain)}/employees`, {
+      const res = await credentialRequest(ctx, bambooHrCredential, {
+        target: "api",
+        path: "employees",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Basic ${btoa(`${apiKey}:x`)}`,
-        },
-        body: JSON.stringify(body),
+        json: body,
       });
       if (!res.ok)
-        throw new Error(`BambooHR error ${res.status}: ${await res.text()}`);
+        throw new Error(`bambooHr: request failed (HTTP ${res.status})`);
       const location = res.headers.get("location") ?? "";
       const employeeId = location.split("/").pop();
       return { id: employeeId };
@@ -149,24 +130,19 @@ export default function bambooHr(rl: RunlinePluginAPI) {
         employeeId: string;
         fields?: string;
       };
-      const { subdomain, apiKey } = getConn(ctx);
       let fieldList = fields ?? "all";
       if (fieldList === "all") {
         const dir = (await apiRequest(
-          subdomain,
-          apiKey,
+          ctx,
           "GET",
           "employees/directory",
         )) as Record<string, unknown>;
         const dirFields = (dir.fields as Array<{ id: string }>) ?? [];
         fieldList = dirFields.map((f) => f.id).join(",");
       }
-      return apiRequest(
-        subdomain,
-        apiKey,
-        "GET",
-        `employees/${employeeId}?fields=${fieldList}`,
-      );
+      return apiRequest(ctx, "GET", `employees/${seg(employeeId)}`, undefined, {
+        fields: fieldList,
+      });
     },
   });
 
@@ -182,10 +158,8 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const { subdomain, apiKey } = getConn(ctx);
       const data = (await apiRequest(
-        subdomain,
-        apiKey,
+        ctx,
         "GET",
         "employees/directory",
       )) as Record<string, unknown>;
@@ -227,14 +201,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { employeeId, ...fields } = input as Record<string, unknown>;
-      const { subdomain, apiKey } = getConn(ctx);
-      await apiRequest(
-        subdomain,
-        apiKey,
-        "POST",
-        `employees/${employeeId}`,
-        fields,
-      );
+      await apiRequest(ctx, "POST", `employees/${seg(employeeId)}`, fields);
       return { success: true };
     },
   });
@@ -261,12 +228,10 @@ export default function bambooHr(rl: RunlinePluginAPI) {
         employeeId: string;
         limit?: number;
       };
-      const { subdomain, apiKey } = getConn(ctx);
       const data = (await apiRequest(
-        subdomain,
-        apiKey,
+        ctx,
         "GET",
-        `employees/${employeeId}/files/view/`,
+        `employees/${seg(employeeId)}/files/view/`,
       )) as Record<string, unknown>;
       const categories =
         (data.categories as Array<Record<string, unknown>>) ?? [];
@@ -297,12 +262,10 @@ export default function bambooHr(rl: RunlinePluginAPI) {
         employeeId: string;
         fileId: string;
       };
-      const { subdomain, apiKey } = getConn(ctx);
       await apiRequest(
-        subdomain,
-        apiKey,
+        ctx,
         "DELETE",
-        `employees/${employeeId}/files/${fileId}`,
+        `employees/${seg(employeeId)}/files/${seg(fileId)}`,
       );
       return { success: true };
     },
@@ -329,14 +292,12 @@ export default function bambooHr(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { subdomain, apiKey } = getConn(ctx);
       const body: Record<string, unknown> = {};
       body.shareWithEmployee = shareWithEmployee ? "yes" : "no";
       await apiRequest(
-        subdomain,
-        apiKey,
+        ctx,
         "POST",
-        `employees/${employeeId}/files/${fileId}`,
+        `employees/${seg(employeeId)}/files/${seg(fileId)}`,
         body,
       );
       return { success: true };
@@ -357,13 +318,10 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const { subdomain, apiKey } = getConn(ctx);
-      const data = (await apiRequest(
-        subdomain,
-        apiKey,
-        "GET",
-        "files/view",
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "files/view")) as Record<
+        string,
+        unknown
+      >;
       const categories =
         (data.categories as Array<Record<string, unknown>>) ?? [];
 
@@ -384,8 +342,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileId } = input as { fileId: string };
-      const { subdomain, apiKey } = getConn(ctx);
-      await apiRequest(subdomain, apiKey, "DELETE", `files/${fileId}`);
+      await apiRequest(ctx, "DELETE", `files/${seg(fileId)}`);
       return { success: true };
     },
   });
@@ -403,8 +360,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileId, shareWithEmployee } = input as Record<string, unknown>;
-      const { subdomain, apiKey } = getConn(ctx);
-      await apiRequest(subdomain, apiKey, "POST", `files/${fileId}`, {
+      await apiRequest(ctx, "POST", `files/${seg(fileId)}`, {
         shareWithEmployee: shareWithEmployee ? "yes" : "no",
       });
       return { success: true };
@@ -429,13 +385,11 @@ export default function bambooHr(rl: RunlinePluginAPI) {
         reportId: string;
         format?: string;
       };
-      const { subdomain, apiKey } = getConn(ctx);
-      return apiRequest(
-        subdomain,
-        apiKey,
-        "GET",
-        `reports/${reportId}/?format=${format}&fd=true&onlyCurrent=true`,
-      );
+      return apiRequest(ctx, "GET", `reports/${seg(reportId)}/`, undefined, {
+        format,
+        fd: "true",
+        onlyCurrent: "true",
+      });
     },
   });
 }

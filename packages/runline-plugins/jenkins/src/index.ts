@@ -1,68 +1,37 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialRequest } from "../../_shared/credentials.js";
+import { jenkinsCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  username: string,
-  apiToken: string,
-  method: string,
+async function jk(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: string | Record<string, unknown>,
   contentType?: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const headers: Record<string, string> = {
-    Authorization: `Basic ${btoa(`${username}:${apiToken}`)}`,
-  };
-  if (contentType) headers["Content-Type"] = contentType;
-  const opts: RequestInit = { method, headers };
-  if (body && method !== "GET")
-    opts.body = typeof body === "string" ? body : JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Jenkins error ${res.status}: ${await res.text()}`);
+  const res = await credentialRequest(ctx, jenkinsCredential, {
+    target: "api",
+    path: endpoint.replace(/^\//, ""),
+    method,
+    query: qs,
+    ...(contentType ? { headers: { "Content-Type": contentType } } : {}),
+    ...(body && method !== "GET"
+      ? typeof body === "string"
+        ? { body }
+        : { json: body }
+      : {}),
+  });
+  if (!res.ok) throw new Error(`jenkins: request failed (HTTP ${res.status})`);
   const ct = res.headers.get("content-type") ?? "";
   if (ct.includes("json")) return res.json();
   return { success: true };
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    baseUrl: (ctx.connection.config.baseUrl as string).replace(/\/$/, ""),
-    username: ctx.connection.config.username as string,
-    apiToken: ctx.connection.config.apiToken as string,
-  };
-}
-
-function jk(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: string | Record<string, unknown>,
-  ct?: string,
-  qs?: Record<string, unknown>,
-) {
-  const { baseUrl, username, apiToken } = getConn(ctx);
-  return apiRequest(
-    baseUrl,
-    username,
-    apiToken,
-    method,
-    endpoint,
-    body,
-    ct,
-    qs,
-  );
-}
-
 export default function jenkins(rl: RunlinePluginAPI) {
   rl.setName("jenkins");
   rl.setVersion("0.1.0");
+  rl.setCredential(jenkinsCredential);
 
   rl.setConnectionSchema({
     baseUrl: {

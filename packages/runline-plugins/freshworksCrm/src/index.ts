@@ -1,61 +1,26 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { freshworksCrmCredential } from "./credentials.js";
 
-async function apiRequest(
-  domain: string,
-  apiKey: string,
-  method: string,
+function req(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(
-    `https://${domain}.myfreshworks.com/crm/sales/api${endpoint}`,
-  );
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, freshworksCrmCredential, "freshworksCrm", {
+    target: "api",
+    path: endpoint.replace(/^\//, ""),
     method,
-    headers: {
-      Authorization: `Token token=${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(
-      `Freshworks CRM API error ${res.status}: ${await res.text()}`,
-    );
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    domain: ctx.connection.config.domain as string,
-    apiKey: ctx.connection.config.apiKey as string,
-  };
-}
-
-function req(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { domain, apiKey } = getConn(ctx);
-  return apiRequest(domain, apiKey, method, endpoint, body, qs);
+      ? { json: body }
+      : {}),
+  });
 }
 
 function unwrap(data: unknown): unknown {
@@ -98,7 +63,11 @@ function registerCrud(
       },
       async execute(input, ctx) {
         return unwrap(
-          await req(ctx, "GET", `${apiPath}/${(input as { id: number }).id}`),
+          await req(
+            ctx,
+            "GET",
+            `${apiPath}/${encodeURIComponent((input as { id: number }).id)}`,
+          ),
         );
       },
     });
@@ -139,7 +108,9 @@ function registerCrud(
         properties: Record<string, unknown>;
       };
       return unwrap(
-        await req(ctx, "PUT", `${apiPath}/${id}`, { [wrapKey]: properties }),
+        await req(ctx, "PUT", `${apiPath}/${encodeURIComponent(id)}`, {
+          [wrapKey]: properties,
+        }),
       );
     },
   });
@@ -152,7 +123,11 @@ function registerCrud(
         id: { type: "number", required: true, description: `${resource} ID` },
       },
       async execute(input, ctx) {
-        await req(ctx, "DELETE", `${apiPath}/${(input as { id: number }).id}`);
+        await req(
+          ctx,
+          "DELETE",
+          `${apiPath}/${encodeURIComponent((input as { id: number }).id)}`,
+        );
         return { success: true };
       },
     });
@@ -162,6 +137,7 @@ function registerCrud(
 export default function freshworksCrm(rl: RunlinePluginAPI) {
   rl.setName("freshworksCrm");
   rl.setVersion("0.1.0");
+  rl.setCredential(freshworksCrmCredential);
 
   rl.setConnectionSchema({
     domain: {
