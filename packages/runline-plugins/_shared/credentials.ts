@@ -288,6 +288,8 @@ export interface CredentialCall {
   form?: Record<string, unknown>;
   body?: string | Uint8Array;
   headers?: Record<string, string>;
+  /** COPY and MOVE: the destination path beneath the same target. */
+  destination?: string;
 }
 
 /** Parameters as `a=1&b=2`: arrays repeat the key; null and undefined are skipped. */
@@ -337,6 +339,9 @@ export function credentialRequest(
       ...call.headers,
     },
     ...(payload !== undefined ? { body: payload } : {}),
+    ...(call.destination !== undefined
+      ? { destination: call.destination }
+      : {}),
   });
 }
 
