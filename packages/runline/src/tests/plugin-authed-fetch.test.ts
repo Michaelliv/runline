@@ -152,7 +152,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "node/src/index.ts",
   "npm/src/index.ts",
   "odoo/src/index.ts",
-  "onfleet/src/index.ts",
   "openThesaurus/src/index.ts",
   "openai/src/index.ts",
   "openweathermap/src/index.ts",
