@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import {
+  answerFailed,
   credentialJson,
   credentialOk,
   credentialRequest,
@@ -400,6 +401,24 @@ describe("credentialRequest and credentialJson", () => {
       credentialJson(ctx, example, "example", { target: "api", path: "x" }),
       { code: "invalid_response" },
     );
+  });
+});
+
+describe("answerFailed", () => {
+  it("names a provider's error code, never its free text", () => {
+    assert.equal(
+      answerFailed("slack", "channel_not_found").message,
+      "slack: request failed (channel_not_found)",
+    );
+    assert.equal(
+      answerFailed("nextcloud", 102).message,
+      "nextcloud: request failed (102)",
+    );
+    assert.equal(
+      answerFailed("x", "Bad Request: <private> text").message,
+      "x: request failed",
+    );
+    assert.equal(answerFailed("x", undefined).message, "x: request failed");
   });
 });
 
