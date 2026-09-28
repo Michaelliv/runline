@@ -161,7 +161,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["mautic", "phase 2: not yet migrated"],
   ["medium", "phase 2: not yet migrated"],
   ["messagebird", "phase 3: not yet migrated"],
-  ["metabase", "phase 2: not yet migrated"],
   ["misp", "phase 2: not yet migrated"],
   [
     "mocean",
