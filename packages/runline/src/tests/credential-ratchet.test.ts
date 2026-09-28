@@ -49,7 +49,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["apiTemplateIo", "phase 3: not yet migrated"],
   ["asana", "phase 2: not yet migrated"],
   ["autopilot", "phase 3: not yet migrated"],
-  ["bambooHr", "phase 2: not yet migrated"],
   ["bannerbear", "phase 3: not yet migrated"],
   ["baserow", "phase 3: not yet migrated"],
   ["beeminder", "phase 2: not yet migrated"],

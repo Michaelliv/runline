@@ -93,7 +93,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "apiTemplateIo/src/index.ts",
   "asana/src/index.ts",
   "autopilot/src/index.ts",
-  "bambooHr/src/index.ts",
   "bannerbear/src/index.ts",
   "baserow/src/index.ts",
   "beeminder/src/index.ts",
