@@ -62,7 +62,6 @@ const UNBROKERED_FETCH = new Set([
   "facebookGraph/src/index.ts",
   "ghost/src/index.ts",
   "graphql/src/index.ts",
-  "nextcloud/src/index.ts",
   "odoo/src/index.ts",
   "salesforce/src/shared.ts",
   "steel/src/shared.ts",

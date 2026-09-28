@@ -1,91 +1,64 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  answerFailed,
+  credentialJson,
+  credentialOk,
+  pathSegment,
+  pathSegments,
+} from "../../_shared/credentials.js";
+import { nextcloudCredential } from "./credentials.js";
 
-interface Conn {
-  config: Record<string, unknown>;
+/** A file or folder path beneath the WebDAV base, each segment encoded. */
+function davPath(path: unknown): string {
+  return pathSegments(String(path ?? "").replace(/^\/+|\/+$/g, ""));
 }
 
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
-  return {
-    webDavUrl: (c.webDavUrl as string).replace(/\/$/, ""),
-    username: c.username as string,
-    password: c.password as string,
-  };
-}
-
-function authHeader(conn: { username: string; password: string }): string {
-  // Nextcloud uses Basic auth for access token API
-  return "Basic " + btoa(`${conn.username}:${conn.password}`);
-}
-
-/** Base URL without /remote.php/webdav — for OCS and share APIs */
-function baseUrl(conn: { webDavUrl: string }): string {
-  return conn.webDavUrl.replace("/remote.php/webdav", "");
-}
-
-/** Make a WebDAV request */
-async function webdavRequest(
-  conn: { webDavUrl: string; username: string; password: string },
-  method: string,
-  path: string,
-  headers?: Record<string, string>,
-): Promise<string> {
-  const url = `${conn.webDavUrl}/${encodeURI(path.replace(/^\//, ""))}`;
-  const res = await fetch(url, {
+/** A WebDAV call on `path`; COPY and MOVE name where it goes. */
+async function dav(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: unknown,
+  toPath?: unknown,
+): Promise<{ success: true }> {
+  await credentialOk(ctx, nextcloudCredential, "nextcloud", {
+    target: "dav",
+    path: davPath(path),
     method,
-    headers: { Authorization: authHeader(conn), ...headers },
+    ...(toPath !== undefined ? { destination: davPath(toPath) } : {}),
   });
-  if (!res.ok)
-    throw new Error(
-      `Nextcloud WebDAV error ${res.status}: ${await res.text()}`,
-    );
-  return res.text();
+  return { success: true };
 }
 
-/** Make an OCS API request (returns XML text) */
-async function ocsRequest(
-  conn: { webDavUrl: string; username: string; password: string },
-  method: string,
-  endpoint: string,
-  body?: string,
-  qs?: Record<string, unknown>,
-): Promise<string> {
-  const url = new URL(`${baseUrl(conn)}/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  // Request JSON format via OCS
-  url.searchParams.set("format", "json");
-  const headers: Record<string, string> = {
-    Authorization: authHeader(conn),
-    "OCS-APIRequest": "true",
-  };
-  const init: RequestInit = { method, headers };
-  if (body) {
-    headers["Content-Type"] = "application/x-www-form-urlencoded";
-    init.body = body;
-  }
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Nextcloud OCS error ${res.status}: ${await res.text()}`);
-  return res.text();
-}
-
-/** Parse OCS JSON response */
-function parseOcs(text: string): unknown {
-  const json = JSON.parse(text);
-  const meta = json?.ocs?.meta;
-  if (meta && meta.status !== "ok" && meta.statuscode >= 300) {
-    throw new Error(`Nextcloud OCS error: ${meta.message || meta.status}`);
-  }
-  return json?.ocs?.data;
+/** An OCS call, answered as JSON; a status other than ok is a failure. */
+async function ocs(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
+  options: {
+    form?: Record<string, unknown>;
+    query?: Record<string, unknown>;
+  } = {},
+): Promise<unknown> {
+  const answer = await credentialJson<{
+    ocs?: { meta?: { status?: string; statuscode?: number }; data?: unknown };
+  }>(ctx, nextcloudCredential, "nextcloud", {
+    target: "ocs",
+    path,
+    method,
+    query: { ...options.query, format: "json" },
+    form: options.form,
+    headers: { "OCS-APIRequest": "true" },
+  });
+  const meta = answer.ocs?.meta;
+  if (meta && meta.status !== "ok")
+    throw answerFailed("nextcloud", meta.statuscode);
+  return answer.ocs?.data;
 }
 
 export default function nextcloud(rl: RunlinePluginAPI) {
   rl.setName("nextcloud");
   rl.setVersion("0.1.0");
+  rl.setCredential(nextcloudCredential);
 
   rl.setConnectionSchema({
     webDavUrl: {
@@ -128,11 +101,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { path, toPath } = input as Record<string, unknown>;
-      const conn = getConn(ctx);
-      await webdavRequest(conn, "COPY", path as string, {
-        Destination: `${conn.webDavUrl}/${encodeURI((toPath as string).replace(/^\//, ""))}`,
-      });
-      return { success: true };
+      return dav(ctx, "COPY", path, toPath);
     },
   });
 
@@ -148,8 +117,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { path } = input as Record<string, unknown>;
-      await webdavRequest(getConn(ctx), "DELETE", path as string);
-      return { success: true };
+      return dav(ctx, "DELETE", path);
     },
   });
 
@@ -166,11 +134,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { path, toPath } = input as Record<string, unknown>;
-      const conn = getConn(ctx);
-      await webdavRequest(conn, "MOVE", path as string, {
-        Destination: `${conn.webDavUrl}/${encodeURI((toPath as string).replace(/^\//, ""))}`,
-      });
-      return { success: true };
+      return dav(ctx, "MOVE", path, toPath);
     },
   });
 
@@ -207,19 +171,15 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const params = new URLSearchParams();
-      params.set("path", p.path as string);
-      params.set("shareType", String(p.shareType));
-      if (p.shareWith) params.set("shareWith", p.shareWith as string);
-      if (p.permissions) params.set("permissions", String(p.permissions));
-      if (p.password) params.set("password", p.password as string);
-      const text = await ocsRequest(
-        getConn(ctx),
-        "POST",
-        "ocs/v2.php/apps/files_sharing/api/v1/shares",
-        params.toString(),
-      );
-      return parseOcs(text);
+      return ocs(ctx, "POST", "v2.php/apps/files_sharing/api/v1/shares", {
+        form: {
+          path: p.path,
+          shareType: p.shareType,
+          shareWith: p.shareWith || undefined,
+          permissions: p.permissions || undefined,
+          password: p.password || undefined,
+        },
+      });
     },
   });
 
@@ -235,8 +195,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { path } = input as Record<string, unknown>;
-      await webdavRequest(getConn(ctx), "MKCOL", path as string);
-      return { success: true };
+      return dav(ctx, "MKCOL", path);
     },
   });
 
@@ -252,8 +211,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { path } = input as Record<string, unknown>;
-      await webdavRequest(getConn(ctx), "DELETE", path as string);
-      return { success: true };
+      return dav(ctx, "DELETE", path);
     },
   });
 
@@ -274,11 +232,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { path, toPath } = input as Record<string, unknown>;
-      const conn = getConn(ctx);
-      await webdavRequest(conn, "COPY", path as string, {
-        Destination: `${conn.webDavUrl}/${encodeURI((toPath as string).replace(/^\//, ""))}`,
-      });
-      return { success: true };
+      return dav(ctx, "COPY", path, toPath);
     },
   });
 
@@ -299,11 +253,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { path, toPath } = input as Record<string, unknown>;
-      const conn = getConn(ctx);
-      await webdavRequest(conn, "MOVE", path as string, {
-        Destination: `${conn.webDavUrl}/${encodeURI((toPath as string).replace(/^\//, ""))}`,
-      });
-      return { success: true };
+      return dav(ctx, "MOVE", path, toPath);
     },
   });
 
@@ -323,17 +273,9 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId, email, displayName } = input as Record<string, unknown>;
-      const params = new URLSearchParams();
-      params.set("userid", userId as string);
-      params.set("email", email as string);
-      if (displayName) params.set("displayName", displayName as string);
-      const text = await ocsRequest(
-        getConn(ctx),
-        "POST",
-        "ocs/v1.php/cloud/users",
-        params.toString(),
-      );
-      return parseOcs(text);
+      return ocs(ctx, "POST", "v1.php/cloud/users", {
+        form: { userid: userId, email, displayName: displayName || undefined },
+      });
     },
   });
 
@@ -345,12 +287,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId } = input as Record<string, unknown>;
-      const text = await ocsRequest(
-        getConn(ctx),
-        "DELETE",
-        `ocs/v1.php/cloud/users/${userId}`,
-      );
-      return parseOcs(text);
+      return ocs(ctx, "DELETE", `v1.php/cloud/users/${pathSegment(userId)}`);
     },
   });
 
@@ -362,12 +299,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId } = input as Record<string, unknown>;
-      const text = await ocsRequest(
-        getConn(ctx),
-        "GET",
-        `ocs/v1.php/cloud/users/${userId}`,
-      );
-      return parseOcs(text);
+      return ocs(ctx, "GET", `v1.php/cloud/users/${pathSegment(userId)}`);
     },
   });
 
@@ -385,14 +317,7 @@ export default function nextcloud(rl: RunlinePluginAPI) {
       if (p.limit) qs.limit = p.limit;
       if (p.offset) qs.offset = p.offset;
       if (p.search) qs.search = p.search;
-      const text = await ocsRequest(
-        getConn(ctx),
-        "GET",
-        "ocs/v1.php/cloud/users",
-        undefined,
-        qs,
-      );
-      return parseOcs(text);
+      return ocs(ctx, "GET", "v1.php/cloud/users", { query: qs });
     },
   });
 
@@ -412,14 +337,9 @@ export default function nextcloud(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId, key, value } = input as Record<string, unknown>;
-      const body = `key=${encodeURIComponent(key as string)}&value=${encodeURIComponent(value as string)}`;
-      const text = await ocsRequest(
-        getConn(ctx),
-        "PUT",
-        `ocs/v1.php/cloud/users/${userId}`,
-        body,
-      );
-      return parseOcs(text);
+      return ocs(ctx, "PUT", `v1.php/cloud/users/${pathSegment(userId)}`, {
+        form: { key, value },
+      });
     },
   });
 }

@@ -50,10 +50,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "graphql",
     "generic client: arbitrary endpoint and caller-composed auth header",
   ],
-  [
-    "nextcloud",
-    "WebDAV methods (PROPFIND, MKCOL, COPY, MOVE) the transport does not carry",
-  ],
   ["odoo", "login: the password rides in every JSON-RPC argument list"],
   [
     "salesforce",

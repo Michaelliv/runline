@@ -512,6 +512,8 @@ A public config field that picks a host — a region, an environment, a hosting 
 
 Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
 
+A target may allow the WebDAV methods `MKCOL`, `COPY` and `MOVE`. A `COPY` or `MOVE` names its `destination`, a path beneath the same target checked as `path` is, and the transport alone sends it as the absolute `Destination` header; a caller never sets that header.
+
 A target that the provider holds open longer, or answers larger, than the transport defaults declares its own `timeoutMs` or `maxResponseBytes`; the host caps both with `maxTargetTimeoutMs` and `maxTargetResponseBytes` on `CredentialTransport`.
 
 ## CLI Reference
