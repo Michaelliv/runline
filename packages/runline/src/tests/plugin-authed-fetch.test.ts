@@ -213,7 +213,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "recraft/src/index.ts",
   "reddit/src/index.ts",
   "replicate/src/index.ts",
-  "rocketchat/src/index.ts",
   "rundeck/src/index.ts",
   "salesforce/src/shared.ts",
   "salesmate/src/index.ts",
