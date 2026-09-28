@@ -1,8 +1,12 @@
 import type { RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { vonageCredential } from "./credentials.js";
 
 export default function vonage(rl: RunlinePluginAPI) {
   rl.setName("vonage");
   rl.setVersion("0.1.0");
+  rl.setCredential(vonageCredential);
+
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -45,25 +49,25 @@ export default function vonage(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const c = ctx.connection.config;
       const p = input as Record<string, unknown>;
-      const form = new URLSearchParams();
-      form.set("api_key", c.apiKey as string);
-      form.set("api_secret", c.apiSecret as string);
-      form.set("from", p.from as string);
-      form.set("to", p.to as string);
-      form.set("text", p.text as string);
-      form.set("type", "text");
-      if (p.ttl) form.set("ttl", String((p.ttl as number) * 60000));
-      if (p.callback) form.set("callback", p.callback as string);
-      const res = await fetch("https://rest.nexmo.com/sms/json", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: form,
-      });
-      if (!res.ok)
-        throw new Error(`Vonage error ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as Record<string, unknown>;
+      const data = await credentialJson<{ messages?: unknown }>(
+        ctx,
+        vonageCredential,
+        "vonage",
+        {
+          target: "sms",
+          path: "json",
+          method: "POST",
+          form: {
+            from: p.from,
+            to: p.to,
+            text: p.text,
+            type: "text",
+            ttl: p.ttl ? (p.ttl as number) * 60000 : undefined,
+            callback: p.callback,
+          },
+        },
+      );
       return data.messages;
     },
   });

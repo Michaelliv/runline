@@ -75,10 +75,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "two credentials in one connection: basic pair for email, bearer for SMS",
   ],
   [
-    "mocean",
-    "body key: mocean-api-key and mocean-api-secret travel in the form body",
-  ],
-  [
     "nextcloud",
     "WebDAV methods (PROPFIND, MKCOL, COPY, MOVE) the transport does not carry",
   ],
@@ -125,7 +121,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],
   ["uptimerobot", "body key: api_key travels in the form body"],
   ["vero", "body key: auth_token travels in the form body"],
-  ["vonage", "body key: api_key and api_secret travel in the form body"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 

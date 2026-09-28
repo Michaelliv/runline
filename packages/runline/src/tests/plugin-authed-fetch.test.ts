@@ -68,7 +68,6 @@ const UNBROKERED_FETCH = new Set([
   "gotify/src/index.ts",
   "graphql/src/index.ts",
   "mailjet/src/index.ts",
-  "mocean/src/index.ts",
   "nextcloud/src/index.ts",
   "npm/src/index.ts",
   "odoo/src/index.ts",
@@ -86,7 +85,6 @@ const UNBROKERED_FETCH = new Set([
   "unleashedSoftware/src/index.ts",
   "uptimerobot/src/index.ts",
   "vero/src/index.ts",
-  "vonage/src/index.ts",
 ]);
 
 function pluginSources(): string[] {
