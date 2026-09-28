@@ -1,43 +1,32 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialRequest } from "../../_shared/credentials.js";
+import { brevoCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.brevo.com";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "api-key": apiKey,
-    },
-  };
-  if (
+  const json =
     body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Brevo API error ${res.status}: ${text}`);
-  }
+      ? body
+      : undefined;
+  const res = await credentialRequest(ctx, brevoCredential, {
+    target: "api",
+    path,
+    method,
+    query: qs,
+    ...(json !== undefined ? { json } : {}),
+  });
+  if (!res.ok) throw new Error(`brevo: request failed (HTTP ${res.status})`);
   if (res.status === 204 || res.headers.get("content-length") === "0")
     return { success: true };
   const ct = res.headers.get("content-type") ?? "";
@@ -45,15 +34,10 @@ async function apiRequest(
   return { success: true };
 }
 
-function getKey(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
-}
-
 export default function brevo(rl: RunlinePluginAPI) {
   rl.setName("brevo");
   rl.setVersion("0.1.0");
+  rl.setCredential(brevoCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -90,7 +74,7 @@ export default function brevo(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { email };
       if (attributes) body.attributes = attributes;
       if (listIds) body.listIds = listIds;
-      return apiRequest(getKey(ctx), "POST", "/v3/contacts", body);
+      return apiRequest(ctx, "POST", "contacts", body);
     },
   });
 
@@ -114,7 +98,7 @@ export default function brevo(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { email, updateEnabled: true };
       if (attributes) body.attributes = attributes;
       if (listIds) body.listIds = listIds;
-      return apiRequest(getKey(ctx), "POST", "/v3/contacts", body);
+      return apiRequest(ctx, "POST", "contacts", body);
     },
   });
 
@@ -130,11 +114,7 @@ export default function brevo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { identifier } = input as { identifier: string };
-      return apiRequest(
-        getKey(ctx),
-        "GET",
-        `/v3/contacts/${encodeURIComponent(identifier)}`,
-      );
+      return apiRequest(ctx, "GET", `contacts/${seg(identifier)}`);
     },
   });
 
@@ -174,9 +154,9 @@ export default function brevo(rl: RunlinePluginAPI) {
       if (sort) qs.sort = sort;
       if (modifiedSince) qs.modifiedSince = modifiedSince;
       const data = (await apiRequest(
-        getKey(ctx),
+        ctx,
         "GET",
-        "/v3/contacts",
+        "contacts",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -216,12 +196,7 @@ export default function brevo(rl: RunlinePluginAPI) {
       if (attributes) body.attributes = attributes;
       if (listIds) body.listIds = listIds;
       if (unlinkListIds) body.unlinkListIds = unlinkListIds;
-      await apiRequest(
-        getKey(ctx),
-        "PUT",
-        `/v3/contacts/${encodeURIComponent(identifier as string)}`,
-        body,
-      );
+      await apiRequest(ctx, "PUT", `contacts/${seg(identifier)}`, body);
       return { success: true };
     },
   });
@@ -238,11 +213,7 @@ export default function brevo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { identifier } = input as { identifier: string };
-      await apiRequest(
-        getKey(ctx),
-        "DELETE",
-        `/v3/contacts/${encodeURIComponent(identifier)}`,
-      );
+      await apiRequest(ctx, "DELETE", `contacts/${seg(identifier)}`);
       return { success: true };
     },
   });
@@ -286,9 +257,9 @@ export default function brevo(rl: RunlinePluginAPI) {
       if (value) body.value = value;
       if (enumeration) body.enumeration = enumeration;
       await apiRequest(
-        getKey(ctx),
+        ctx,
         "POST",
-        `/v3/contacts/attributes/${category}/${encodeURIComponent(name as string)}`,
+        `contacts/attributes/${seg(category)}/${seg(name)}`,
         body,
       );
       return { success: true };
@@ -321,9 +292,9 @@ export default function brevo(rl: RunlinePluginAPI) {
       if (value) body.value = value;
       if (enumeration) body.enumeration = enumeration;
       return apiRequest(
-        getKey(ctx),
+        ctx,
         "PUT",
-        `/v3/contacts/attributes/${category}/${encodeURIComponent(name as string)}`,
+        `contacts/attributes/${seg(category)}/${seg(name)}`,
         body,
       );
     },
@@ -339,9 +310,9 @@ export default function brevo(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { category, name } = input as { category: string; name: string };
       await apiRequest(
-        getKey(ctx),
+        ctx,
         "DELETE",
-        `/v3/contacts/attributes/${category}/${encodeURIComponent(name)}`,
+        `contacts/attributes/${seg(category)}/${seg(name)}`,
       );
       return { success: true };
     },
@@ -356,9 +327,9 @@ export default function brevo(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
       const data = (await apiRequest(
-        getKey(ctx),
+        ctx,
         "GET",
-        "/v3/contacts/attributes",
+        "contacts/attributes",
       )) as Record<string, unknown>;
       const attrs = (data.attributes as unknown[]) ?? [];
       if (limit) return attrs.slice(0, limit);
@@ -423,7 +394,7 @@ export default function brevo(rl: RunlinePluginAPI) {
         );
       if (tags) body.tags = tags;
 
-      return apiRequest(getKey(ctx), "POST", "/v3/smtp/email", body);
+      return apiRequest(ctx, "POST", "smtp/email", body);
     },
   });
 
@@ -456,7 +427,7 @@ export default function brevo(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { templateId, to: toList };
       if (params) body.params = params;
       if (tags) body.tags = tags;
-      return apiRequest(getKey(ctx), "POST", "/v3/smtp/email", body);
+      return apiRequest(ctx, "POST", "smtp/email", body);
     },
   });
 
@@ -471,7 +442,7 @@ export default function brevo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name, email } = input as { name: string; email: string };
-      return apiRequest(getKey(ctx), "POST", "/v3/senders", { name, email });
+      return apiRequest(ctx, "POST", "senders", { name, email });
     },
   });
 
@@ -483,7 +454,7 @@ export default function brevo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      await apiRequest(getKey(ctx), "DELETE", `/v3/senders/${id}`);
+      await apiRequest(ctx, "DELETE", `senders/${seg(id)}`);
       return { success: true };
     },
   });
@@ -496,11 +467,10 @@ export default function brevo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const data = (await apiRequest(
-        getKey(ctx),
-        "GET",
-        "/v3/senders",
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "senders")) as Record<
+        string,
+        unknown
+      >;
       const senders = (data.senders as unknown[]) ?? [];
       if (limit) return senders.slice(0, limit);
       return senders;
