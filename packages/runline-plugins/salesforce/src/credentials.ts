@@ -2,6 +2,7 @@ import {
   AuthError,
   type CredentialDeclaration,
   type CredentialTarget,
+  type CredentialType,
 } from "runline";
 import {
   configChoice,
@@ -52,16 +53,16 @@ export const salesforceCredential: CredentialDeclaration = (config) => {
     ["accessToken", "clientCredentials"],
     "accessToken",
   );
-  const type = {
+  const type: CredentialType = {
     id: "salesforce",
     methods: {
       ...token.type.methods,
       clientCredentials: {
         schema: grantSchema,
         authentication: {
-          kind: "oauth2" as const,
+          kind: "oauth2",
           field: "grant",
-          renewal: "clientCredentials" as const,
+          renewal: "clientCredentials",
           definition: {
             id: "salesforce.oauth2",
             provider: "salesforce",
@@ -70,7 +71,7 @@ export const salesforceCredential: CredentialDeclaration = (config) => {
                 config.loginUrl ?? config.instanceUrl,
                 "services/oauth2/token",
               ),
-              clientAuthentication: "client_secret_post" as const,
+              clientAuthentication: "client_secret_post",
             },
           },
         },

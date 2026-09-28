@@ -3,7 +3,11 @@ import {
   type CredentialDeclaration,
   type CredentialType,
 } from "runline";
-import { configChoice, grantSchema, httpsBase } from "../../_shared/credentials.js";
+import {
+  configChoice,
+  grantSchema,
+  httpsBase,
+} from "../../_shared/credentials.js";
 
 /**
  * A client-credentials OAuth grant: the token comes from the configured

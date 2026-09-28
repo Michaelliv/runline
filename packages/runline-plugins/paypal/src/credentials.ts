@@ -1,4 +1,4 @@
-import { type CredentialDeclaration, } from "runline";
+import { type CredentialDeclaration } from "runline";
 import { configChoice, grantSchema } from "../../_shared/credentials.js";
 
 /**

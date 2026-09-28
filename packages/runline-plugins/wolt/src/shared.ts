@@ -1,10 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type ActionContext, AuthError, type HttpMethod } from "runline";
-import {
-  credentialRequest,
-  pathSegment,
-  refuseUnderHost,
-} from "../../_shared/credentials.js";
+import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
 import { arr, num, numOrNull, obj, pick } from "../../_shared/provider.js";
 import {
   CONSUMER,
@@ -21,7 +17,7 @@ export {
   RESTAURANT,
 } from "./credentials.js";
 export { http, WoltError } from "./public.js";
-export { arr, num, numOrNull, obj, pick, refuseUnderHost };
+export { arr, num, numOrNull, obj, pick };
 
 /**
  * The Wolt consumer surface. Catalogue reads are anonymous and go out as

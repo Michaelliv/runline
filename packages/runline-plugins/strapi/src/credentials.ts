@@ -1,8 +1,14 @@
 import {
   type CredentialDeclaration,
   type CredentialTarget,
+  type CredentialType,
 } from "runline";
-import { configChoice, grantSchema, httpsBase, staticCredential } from "../../_shared/credentials.js";
+import {
+  configChoice,
+  grantSchema,
+  httpsBase,
+  staticCredential,
+} from "../../_shared/credentials.js";
 
 /** The Strapi major version the connection names, v4 when absent. */
 export function strapiVersion(
@@ -49,23 +55,23 @@ export const strapiCredential: CredentialDeclaration = (config) => {
     "apiToken",
   );
   const { prefix, target } = apiBase(config);
-  const type = {
+  const type: CredentialType = {
     id: "strapi",
     methods: {
       ...token.type.methods,
       password: {
         schema: grantSchema,
         authentication: {
-          kind: "oauth2" as const,
+          kind: "oauth2",
           field: "grant",
-          renewal: "password" as const,
+          renewal: "password",
           definition: {
             id: "strapi.login",
             provider: "strapi",
             password: {
               url: httpsBase(config.url, `${prefix}auth/local`),
-              clientAuthentication: "none" as const,
-              encoding: "json" as const,
+              clientAuthentication: "none",
+              encoding: "json",
               grantType: null,
               fields: { username: "identifier" },
               response: { accessToken: "jwt" },

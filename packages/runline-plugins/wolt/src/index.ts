@@ -1,5 +1,6 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { refuseUnderHost } from "../../_shared/credentials.js";
 import {
   discoverPaymentMethod,
   listAddresses,
@@ -32,7 +33,6 @@ import {
   DEF_LON,
   num,
   RESTAURANT,
-  refuseUnderHost,
 } from "./shared.js";
 
 /**

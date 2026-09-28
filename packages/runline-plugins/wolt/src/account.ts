@@ -1,4 +1,5 @@
 import type { ActionContext } from "runline";
+import { refuseUnderHost } from "../../_shared/credentials.js";
 import {
   AUDIENCE,
   AUTH,
@@ -17,7 +18,6 @@ import {
   obj,
   pick,
   RESTAURANT,
-  refuseUnderHost,
   WoltError,
 } from "./shared.js";
 

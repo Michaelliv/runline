@@ -4,8 +4,6 @@ import { readBounded } from "../../_shared/provider.js";
 import { appHeaders, HOST } from "./credentials.js";
 import { bodyOf, endpointOf } from "./shared.js";
 
-export { refuseUnderHost };
-
 /**
  * One unsigned login call. It carries no stored credential — the phone, the
  * texted code and the card digits come from the person logging in — and its

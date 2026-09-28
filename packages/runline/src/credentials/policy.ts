@@ -1,6 +1,7 @@
 import { AuthError } from "../auth/errors.js";
 import type {
   CredentialAuthentication,
+  CredentialMethod,
   CredentialTarget,
   HttpMethod,
   SecretPlacement,
@@ -64,6 +65,14 @@ export function headerName(name: string): string {
   )
     throw new AuthError("invalid_definition");
   return lower;
+}
+
+/** A method's target by name, own properties only. */
+export function targetOf(
+  method: CredentialMethod,
+  name: string,
+): CredentialTarget | undefined {
+  return Object.hasOwn(method.targets, name) ? method.targets[name] : undefined;
 }
 
 export function targetBase(target: CredentialTarget): URL {

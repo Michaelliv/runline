@@ -27,6 +27,7 @@ import {
   TARGET_TIMEOUT_LIMIT_MS,
   TRANSPORT_HEADERS,
   targetBase,
+  targetOf,
 } from "./policy.js";
 import {
   type CredentialRegistry,
@@ -491,9 +492,7 @@ export class CredentialTransport {
     // Pin authority, routing, headers, registration, and replayable bytes before IO.
     const binding = pinBinding(selection);
     const method = this.registry.select(binding.type, binding.method);
-    const target = Object.hasOwn(method.targets, input.target)
-      ? method.targets[input.target]
-      : undefined;
+    const target = targetOf(method, input.target);
     if (!target || target.socket) throw new AuthError("request_not_allowed");
     const url = resourceUrl(target, input.path);
     const verb = input.method ?? "GET";
@@ -636,9 +635,7 @@ export class CredentialTransport {
   ): Promise<string> {
     const binding = pinBinding(selection);
     const method = this.registry.select(binding.type, binding.method);
-    const target = Object.hasOwn(method.targets, input.target)
-      ? method.targets[input.target]
-      : undefined;
+    const target = targetOf(method, input.target);
     if (!target?.socket) throw new AuthError("request_not_allowed");
     const url = resourceUrl(target, input.path);
     refuseCredentialParams(

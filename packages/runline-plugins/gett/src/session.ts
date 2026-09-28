@@ -1,5 +1,6 @@
 import type { ActionContext } from "runline";
-import { loginRequest, refuseUnderHost } from "./login.js";
+import { refuseUnderHost } from "../../_shared/credentials.js";
+import { loginRequest } from "./login.js";
 import {
   APP_VERSION,
   accepted,

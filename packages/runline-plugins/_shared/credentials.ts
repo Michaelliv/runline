@@ -14,10 +14,10 @@ import * as t from "typebox";
 import { credentialBroker } from "./credentialAdapter.js";
 
 /**
- * The plugin side of the credential broker, shared by every plugin that
- * signs with a static key: one declaration factory, one way to turn public
- * config into an HTTPS target, one request path. OAuth families declare
- * through their own factories (googleCredentials, microsoftCredentials).
+ * The plugin side of the credential broker, shared by every plugin: one
+ * declaration factory for static keys, one stored grant shape for OAuth
+ * methods, one way to turn public config into an HTTPS target, one
+ * request path.
  */
 
 /**
