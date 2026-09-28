@@ -1,5 +1,10 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  credentialRequest,
+  pathSegment,
+  requestFailed,
+} from "../../_shared/credentials.js";
 import { autopilotCredential } from "./credentials.js";
 
 function apiRequest(
@@ -234,16 +239,15 @@ export default function autopilot(rl: RunlinePluginAPI) {
         listId: string;
         contactId: string;
       };
-      try {
-        await apiRequest(
-          ctx,
-          "GET",
-          `list/${pathSegment(listId)}/contact/${pathSegment(contactId)}`,
-        );
-        return { exists: true };
-      } catch {
-        return { exists: false };
-      }
+      // Membership is the lookup's status: 404 means not in the list; any
+      // other failure is reported, not mistaken for an answer.
+      const response = await credentialRequest(ctx, autopilotCredential, {
+        target: "api",
+        path: `list/${pathSegment(listId)}/contact/${pathSegment(contactId)}`,
+      });
+      if (response.status === 404) return { exists: false };
+      if (!response.ok) throw requestFailed("autopilot", response.status);
+      return { exists: true };
     },
   });
 
