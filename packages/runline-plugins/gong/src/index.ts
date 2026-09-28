@@ -1,34 +1,23 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { gongCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  accessKey: string,
-  accessKeySecret: string,
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
+function api(
+  ctx: ActionContext,
+  path: string,
+  body: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Basic ${btoa(`${accessKey}:${accessKeySecret}`)}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(`${baseUrl}${endpoint}`, opts);
-  if (!res.ok)
-    throw new Error(`Gong API error ${res.status}: ${await res.text()}`);
-  return res.json();
+  return credentialJson(ctx, gongCredential, "gong", {
+    target: "api",
+    path,
+    method: "POST",
+    json: body,
+  });
 }
 
 async function paginate(
-  baseUrl: string,
-  accessKey: string,
-  accessKeySecret: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   body: Record<string, unknown>,
   resultKey: string,
   limit?: number,
@@ -38,14 +27,7 @@ async function paginate(
   do {
     const reqBody = { ...body };
     if (cursor) reqBody.cursor = cursor;
-    const data = (await apiRequest(
-      baseUrl,
-      accessKey,
-      accessKeySecret,
-      "POST",
-      endpoint,
-      reqBody,
-    )) as Record<string, unknown>;
+    const data = (await api(ctx, path, reqBody)) as Record<string, unknown>;
     const items = (data[resultKey] as unknown[]) ?? [];
     results.push(...items);
     cursor = (data.records as Record<string, unknown>)?.cursor as
@@ -56,19 +38,10 @@ async function paginate(
   return limit ? results.slice(0, limit) : results;
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    baseUrl: (
-      (ctx.connection.config.baseUrl as string) ?? "https://api.gong.io"
-    ).replace(/\/$/, ""),
-    accessKey: ctx.connection.config.accessKey as string,
-    accessKeySecret: ctx.connection.config.accessKeySecret as string,
-  };
-}
-
 export default function gong(rl: RunlinePluginAPI) {
   rl.setName("gong");
   rl.setVersion("0.1.0");
+  rl.setCredential(gongCredential);
 
   rl.setConnectionSchema({
     baseUrl: {
@@ -106,17 +79,12 @@ export default function gong(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { callId, contentSelector } = input as Record<string, unknown>;
-      const { baseUrl, accessKey, accessKeySecret } = getConn(ctx);
       const body: Record<string, unknown> = { filter: { callIds: [callId] } };
       if (contentSelector) body.contentSelector = contentSelector;
-      const data = (await apiRequest(
-        baseUrl,
-        accessKey,
-        accessKeySecret,
-        "POST",
-        "/v2/calls/extensive",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "calls/extensive", body)) as Record<
+        string,
+        unknown
+      >;
       const calls = data.calls as Array<Record<string, unknown>>;
       return calls?.[0];
     },
@@ -162,7 +130,6 @@ export default function gong(rl: RunlinePluginAPI) {
         callIds,
         primaryUserIds,
       } = (input ?? {}) as Record<string, unknown>;
-      const { baseUrl, accessKey, accessKeySecret } = getConn(ctx);
       const filter: Record<string, unknown> = {};
       if (fromDateTime) filter.fromDateTime = fromDateTime;
       if (toDateTime) filter.toDateTime = toDateTime;
@@ -170,10 +137,8 @@ export default function gong(rl: RunlinePluginAPI) {
       if (callIds) filter.callIds = callIds;
       if (primaryUserIds) filter.primaryUserIds = primaryUserIds;
       return paginate(
-        baseUrl,
-        accessKey,
-        accessKeySecret,
-        "/v2/calls/extensive",
+        ctx,
+        "calls/extensive",
         { filter },
         "calls",
         limit as number | undefined,
@@ -189,17 +154,9 @@ export default function gong(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId } = input as { userId: string };
-      const { baseUrl, accessKey, accessKeySecret } = getConn(ctx);
-      const data = (await apiRequest(
-        baseUrl,
-        accessKey,
-        accessKeySecret,
-        "POST",
-        "/v2/users/extensive",
-        {
-          filter: { userIds: [userId] },
-        },
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "users/extensive", {
+        filter: { userIds: [userId] },
+      })) as Record<string, unknown>;
       const users = data.users as Array<Record<string, unknown>>;
       return users?.[0];
     },
@@ -229,16 +186,13 @@ export default function gong(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { limit, createdFromDateTime, createdToDateTime, userIds } =
         (input ?? {}) as Record<string, unknown>;
-      const { baseUrl, accessKey, accessKeySecret } = getConn(ctx);
       const filter: Record<string, unknown> = {};
       if (createdFromDateTime) filter.createdFromDateTime = createdFromDateTime;
       if (createdToDateTime) filter.createdToDateTime = createdToDateTime;
       if (userIds) filter.userIds = userIds;
       return paginate(
-        baseUrl,
-        accessKey,
-        accessKeySecret,
-        "/v2/users/extensive",
+        ctx,
+        "users/extensive",
         { filter },
         "users",
         limit as number | undefined,

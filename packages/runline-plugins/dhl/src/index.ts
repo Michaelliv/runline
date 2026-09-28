@@ -1,31 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
-
-const BASE_URL = "https://api-eu.dhl.com";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
-  qs?: Record<string, unknown>,
-): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const res = await fetch(url.toString(), {
-    method,
-    headers: { "DHL-API-Key": apiKey, Accept: "application/json" },
-  });
-  if (!res.ok)
-    throw new Error(`DHL API error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
+import { credentialJson } from "../../_shared/credentials.js";
+import { dhlCredential } from "./credentials.js";
 
 export default function dhl(rl: RunlinePluginAPI) {
   rl.setName("dhl");
   rl.setVersion("0.1.0");
+  rl.setCredential(dhlCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -56,15 +36,13 @@ export default function dhl(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const apiKey = ctx.connection.config.apiKey as string;
       const qs: Record<string, unknown> = { trackingNumber };
       if (recipientPostalCode) qs.recipientPostalCode = recipientPostalCode;
-      const data = (await apiRequest(
-        apiKey,
-        "GET",
-        "/track/shipments",
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await credentialJson(ctx, dhlCredential, "dhl", {
+        target: "api",
+        path: "track/shipments",
+        query: qs,
+      })) as Record<string, unknown>;
       return data.shipments;
     },
   });

@@ -1,68 +1,29 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { bubbleCredential } from "./credentials.js";
 
-function buildBaseUrl(cfg: Record<string, unknown>): string {
-  const hosting = cfg.hosting as string | undefined;
-  const appName = cfg.appName as string;
-  const domain = (cfg.domain as string | undefined)?.replace(/\/$/, "");
-  const environment = cfg.environment as string | undefined;
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-  const rootUrl =
-    hosting === "selfHosted" && domain
-      ? domain
-      : `https://${appName}.bubbleapps.io`;
-  const urlSegment =
-    environment === "development" ? "/version-test/api/1.1" : "/api/1.1";
-  return `${rootUrl}${urlSegment}`;
-}
-
-async function apiRequest(
-  baseUrl: string,
-  token: string,
-  method: string,
-  endpoint: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, bubbleCredential, "bubble", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Bubble API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204) return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  return {
-    baseUrl: buildBaseUrl(cfg),
-    token: cfg.apiToken as string,
-  };
+      ? { json: body }
+      : {}),
+  });
 }
 
 function normalizeTypeName(name: string): string {
@@ -72,6 +33,7 @@ function normalizeTypeName(name: string): string {
 export default function bubble(rl: RunlinePluginAPI) {
   rl.setName("bubble");
   rl.setVersion("0.1.0");
+  rl.setCredential(bubbleCredential);
 
   rl.setConnectionSchema({
     apiToken: {
@@ -128,14 +90,7 @@ export default function bubble(rl: RunlinePluginAPI) {
         typeName: string;
         properties: Record<string, unknown>;
       };
-      const { baseUrl, token } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        token,
-        "POST",
-        `/obj/${normalizeTypeName(typeName)}`,
-        properties,
-      );
+      return api(ctx, "POST", `obj/${normalizeTypeName(typeName)}`, properties);
     },
   });
 
@@ -159,12 +114,10 @@ export default function bubble(rl: RunlinePluginAPI) {
         typeName: string;
         objectId: string;
       };
-      const { baseUrl, token } = getConn(ctx);
-      const data = (await apiRequest(
-        baseUrl,
-        token,
+      const data = (await api(
+        ctx,
         "GET",
-        `/obj/${normalizeTypeName(typeName)}/${objectId}`,
+        `obj/${normalizeTypeName(typeName)}/${seg(objectId)}`,
       )) as Record<string, unknown>;
       return data.response;
     },
@@ -200,7 +153,6 @@ export default function bubble(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { typeName, constraints, sortField, descending, limit } = (input ??
         {}) as Record<string, unknown>;
-      const { baseUrl, token } = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (constraints) qs.constraints = JSON.stringify(constraints);
       if (sortField) {
@@ -208,18 +160,14 @@ export default function bubble(rl: RunlinePluginAPI) {
         if (descending) qs.descending = "true";
       }
 
-      const endpoint = `/obj/${normalizeTypeName(typeName as string)}`;
+      const endpoint = `obj/${normalizeTypeName(typeName as string)}`;
 
       if (limit) {
         qs.limit = limit;
-        const data = (await apiRequest(
-          baseUrl,
-          token,
-          "GET",
-          endpoint,
-          undefined,
-          qs,
-        )) as Record<string, unknown>;
+        const data = (await api(ctx, "GET", endpoint, undefined, qs)) as Record<
+          string,
+          unknown
+        >;
         return (
           ((data.response as Record<string, unknown>)?.results as unknown[]) ??
           []
@@ -231,14 +179,10 @@ export default function bubble(rl: RunlinePluginAPI) {
       qs.limit = 100;
       qs.cursor = 0;
       while (true) {
-        const data = (await apiRequest(
-          baseUrl,
-          token,
-          "GET",
-          endpoint,
-          undefined,
-          qs,
-        )) as Record<string, unknown>;
+        const data = (await api(ctx, "GET", endpoint, undefined, qs)) as Record<
+          string,
+          unknown
+        >;
         const resp = data.response as Record<string, unknown>;
         const items = (resp.results as unknown[]) ?? [];
         results.push(...items);
@@ -275,12 +219,10 @@ export default function bubble(rl: RunlinePluginAPI) {
         objectId: string;
         properties: Record<string, unknown>;
       };
-      const { baseUrl, token } = getConn(ctx);
-      await apiRequest(
-        baseUrl,
-        token,
+      await api(
+        ctx,
         "PATCH",
-        `/obj/${normalizeTypeName(typeName)}/${objectId}`,
+        `obj/${normalizeTypeName(typeName)}/${seg(objectId)}`,
         properties,
       );
       return { success: true };
@@ -307,12 +249,10 @@ export default function bubble(rl: RunlinePluginAPI) {
         typeName: string;
         objectId: string;
       };
-      const { baseUrl, token } = getConn(ctx);
-      await apiRequest(
-        baseUrl,
-        token,
+      await api(
+        ctx,
         "DELETE",
-        `/obj/${normalizeTypeName(typeName)}/${objectId}`,
+        `obj/${normalizeTypeName(typeName)}/${seg(objectId)}`,
       );
       return { success: true };
     },

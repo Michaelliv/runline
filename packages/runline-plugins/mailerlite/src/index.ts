@@ -1,43 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { mailerliteCredential } from "./credentials.js";
 
-const BASE_URL = "https://connect.mailerlite.com/api";
-
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, mailerliteCredential, "mailerlite", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`MailerLite API error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginateAll(
-  token: string,
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown[]> {
@@ -46,13 +31,10 @@ async function paginateAll(
   let cursor: string | null = null;
   do {
     if (cursor) qs.cursor = cursor;
-    const resp = (await apiRequest(
-      token,
-      method,
-      endpoint,
-      undefined,
-      qs,
-    )) as Record<string, unknown>;
+    const resp = (await api(ctx, method, endpoint, undefined, qs)) as Record<
+      string,
+      unknown
+    >;
     const data = resp.data as unknown[];
     if (data) all.push(...data);
     const meta = resp.meta as Record<string, unknown> | undefined;
@@ -66,6 +48,7 @@ async function paginateAll(
 export default function mailerlite(rl: RunlinePluginAPI) {
   rl.setName("mailerlite");
   rl.setVersion("0.1.0");
+  rl.setCredential(mailerliteCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -75,9 +58,6 @@ export default function mailerlite(rl: RunlinePluginAPI) {
       env: "MAILERLITE_API_KEY",
     },
   });
-
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("subscriber.create", {
     access: "write",
@@ -115,12 +95,10 @@ export default function mailerlite(rl: RunlinePluginAPI) {
       for (const [k, v] of Object.entries(rest)) {
         if (v !== undefined && v !== null) body[k] = v;
       }
-      const resp = (await apiRequest(
-        tok(ctx),
-        "POST",
-        "/subscribers",
-        body,
-      )) as Record<string, unknown>;
+      const resp = (await api(ctx, "POST", "subscribers", body)) as Record<
+        string,
+        unknown
+      >;
       return resp.data;
     },
   });
@@ -136,10 +114,10 @@ export default function mailerlite(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const resp = (await apiRequest(
-        tok(ctx),
+      const resp = (await api(
+        ctx,
         "GET",
-        `/subscribers/${encodeURIComponent((input as { subscriberId: string }).subscriberId)}`,
+        `subscribers/${encodeURIComponent((input as { subscriberId: string }).subscriberId)}`,
       )) as Record<string, unknown>;
       return resp.data;
     },
@@ -163,16 +141,16 @@ export default function mailerlite(rl: RunlinePluginAPI) {
       if (status) qs["filter[status]"] = status;
       if (limit) {
         qs.limit = limit;
-        const resp = (await apiRequest(
-          tok(ctx),
+        const resp = (await api(
+          ctx,
           "GET",
-          "/subscribers",
+          "subscribers",
           undefined,
           qs,
         )) as Record<string, unknown>;
         return resp.data;
       }
-      return paginateAll(tok(ctx), "GET", "/subscribers", qs);
+      return paginateAll(ctx, "GET", "subscribers", qs);
     },
   });
 
@@ -211,10 +189,10 @@ export default function mailerlite(rl: RunlinePluginAPI) {
       for (const [k, v] of Object.entries(rest)) {
         if (v !== undefined && v !== null && k !== "subscriberId") body[k] = v;
       }
-      return apiRequest(
-        tok(ctx),
+      return api(
+        ctx,
         "PUT",
-        `/subscribers/${encodeURIComponent(subscriberId as string)}`,
+        `subscribers/${encodeURIComponent(subscriberId as string)}`,
         body,
       );
     },
