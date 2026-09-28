@@ -9,7 +9,7 @@ import {
 import type { OAuthRuntimeOptions } from "../auth/types.js";
 import type { ConnectionConfig } from "../plugin/types.js";
 import { sendResource } from "./http.js";
-import { headerName, resourceUrl } from "./policy.js";
+import { headerName, refuseCredentialParams, resourceUrl } from "./policy.js";
 import {
   BasicSecretSchema,
   type CredentialRegistry,
@@ -295,19 +295,11 @@ export class CredentialTransport {
       (input.retry !== undefined && input.retry !== "never")
     )
       throw new AuthError("request_not_allowed");
-    for (const name of url.searchParams.keys()) {
-      if (
-        [
-          "access_token",
-          "refresh_token",
-          "client_secret",
-          "api_key",
-          "authorization",
-        ].includes(name.toLowerCase())
-      )
-        throw new AuthError("request_not_allowed");
-    }
     const auth = method.authentication;
+    refuseCredentialParams(
+      url,
+      auth.kind === "queryKey" ? auth.param : undefined,
+    );
     const authHeader =
       auth.kind === "apiKey" ? headerName(auth.header) : "authorization";
     let headers: Headers;
@@ -359,15 +351,19 @@ export class CredentialTransport {
     let { token, grant } = await this.authorize(binding, method);
     const send = async (value: string) => {
       const signed = new Headers(headers);
-      signed.set(
-        authHeader,
-        auth.kind === "apiKey"
-          ? `${auth.prefix ?? ""}${value}`
-          : auth.kind === "basic"
-            ? `Basic ${value}`
-            : `Bearer ${value}`,
-      );
-      return sendResource(url.toString(), verb, signed, body, {
+      const destination = new URL(url);
+      if (auth.kind === "queryKey")
+        destination.searchParams.append(auth.param, value);
+      else
+        signed.set(
+          authHeader,
+          auth.kind === "apiKey"
+            ? `${auth.prefix ?? ""}${value}`
+            : auth.kind === "basic"
+              ? `Basic ${value}`
+              : `Bearer ${value}`,
+        );
+      return sendResource(destination.toString(), verb, signed, body, {
         ...this.options,
         resumableUpload: target.resumableUpload,
       });

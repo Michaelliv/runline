@@ -232,14 +232,14 @@ describe("constrained credential transport", () => {
         assert.equal(new Headers(init.headers).has("authorization"), false);
         return Response.json({});
       }),
-      { key: { secret: "pri vate&x=1" } },
+      { key: { secret: "pri&vate=1" } },
       def,
     );
     await h.transport.request(h.binding, { ...request, path: "items?q=a" });
     await h.transport.probe(h.binding);
     assert.deepEqual(
       seen.map((url) => Object.fromEntries(new URL(url).searchParams)),
-      [{ q: "a", api_key: "pri vate&x=1" }, { api_key: "pri vate&x=1" }],
+      [{ q: "a", api_key: "pri&vate=1" }, { api_key: "pri&vate=1" }],
     );
   });
 

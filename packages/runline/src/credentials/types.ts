@@ -25,7 +25,7 @@ export interface CredentialTarget {
 /**
  * How a request is signed. `field` names the one top-level config field
  * holding the secret, in the kind's structured shape: `{ secret }` for
- * bearer and apiKey (SecretSchema), `{ username, password }` for basic
+ * bearer, apiKey and queryKey (SecretSchema), `{ username, password }` for basic
  * (BasicSecretSchema), a revisioned OAuthGrant for oauth2.
  */
 export type CredentialAuthentication =
@@ -38,6 +38,12 @@ export type CredentialAuthentication =
     }
   | { kind: "bearer"; field: string }
   | { kind: "basic"; field: string }
+  | {
+      kind: "queryKey";
+      field: string;
+      /** Query parameter the transport adds; callers may never supply it. */
+      param: string;
+    }
   | {
       kind: "oauth2";
       field: string;

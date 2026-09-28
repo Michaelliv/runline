@@ -80,6 +80,25 @@ function safePath(path: string): void {
   }
 }
 
+/**
+ * Query parameters only the transport may set: common credential names,
+ * and the method's own declared query key. Compared case-insensitively,
+ * since providers differ in how they match parameter names.
+ */
+export function refuseCredentialParams(url: URL, declared?: string): void {
+  const reserved = [
+    "access_token",
+    "refresh_token",
+    "client_secret",
+    "api_key",
+    "authorization",
+    ...(declared === undefined ? [] : [declared.toLowerCase()]),
+  ];
+  for (const name of url.searchParams.keys())
+    if (reserved.includes(name.toLowerCase()))
+      throw new AuthError("request_not_allowed");
+}
+
 export function resourceUrl(target: CredentialTarget, path: string): URL {
   const base = targetBase(target);
   try {

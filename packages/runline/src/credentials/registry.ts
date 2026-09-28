@@ -3,7 +3,13 @@ import { Check } from "typebox/value";
 import { AuthError } from "../auth/errors.js";
 import { validateOAuth2ExchangePolicy } from "../auth/oauth2.js";
 import { oauthEndpoint, providerParameters } from "../auth/token.js";
-import { HTTP_METHODS, headerName, resourceUrl, targetBase } from "./policy.js";
+import {
+  HTTP_METHODS,
+  headerName,
+  refuseCredentialParams,
+  resourceUrl,
+  targetBase,
+} from "./policy.js";
 import type { CredentialMethod, CredentialType } from "./types.js";
 
 /** Normalized grant storage; application registration remains host-owned. */
@@ -129,7 +135,8 @@ function validateMethod(method: CredentialMethod): void {
       )
         throw new AuthError("invalid_definition");
     }
-  } else if (auth.kind !== "bearer" && auth.kind !== "basic")
+  } else if (auth.kind === "queryKey") identifier(auth.param);
+  else if (auth.kind !== "bearer" && auth.kind !== "basic")
     throw new AuthError("invalid_definition");
   if (!Object.keys(method.targets).length)
     throw new AuthError("invalid_definition");
@@ -189,7 +196,10 @@ function validateMethod(method: CredentialMethod): void {
       )
     )
       throw new AuthError("invalid_definition");
-    resourceUrl(target, probe.path);
+    refuseCredentialParams(
+      resourceUrl(target, probe.path),
+      auth.kind === "queryKey" ? auth.param : undefined,
+    );
   }
 }
 
