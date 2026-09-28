@@ -489,7 +489,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       ref: {
         type: "string",
         required: false,
-        description: "Branch/tag/SHA (default: default branch)",
+        description: "Branch/tag/SHA (default: main)",
       },
     },
     async execute(input, ctx) {

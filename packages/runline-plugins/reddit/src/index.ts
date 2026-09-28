@@ -2,18 +2,23 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { redditCredential } from "./credentials.js";
 
-/** A Reddit call; every answer is asked for as JSON (`api_type=json`). */
+/**
+ * A Reddit call; every answer is asked for as JSON (`api_type=json`). A
+ * read's parameters travel as its query, a write's as a form body, so
+ * posted text never reaches a URL.
+ */
 function apiRequest(
   ctx: ActionContext,
   method: HttpMethod,
   endpoint: string,
-  query?: Record<string, unknown>,
+  params?: Record<string, unknown>,
 ): Promise<unknown> {
+  const all = { ...params, api_type: "json" };
   return credentialJson(ctx, redditCredential, "reddit", {
     target: "api",
     path: endpoint,
     method,
-    query: { ...query, api_type: "json" },
+    ...(method === "GET" ? { query: all } : { form: all }),
     headers: { "User-Agent": "runline" },
   });
 }
@@ -255,7 +260,7 @@ export default function reddit(rl: RunlinePluginAPI) {
         "GET",
         `r/${pathSegment(p.subreddit)}/about/${pathSegment(`${content}.json`)}`,
       )) as Record<string, unknown>;
-      if (content === "rules") return (data as Record<string, unknown>).rules;
+      if (content === "rules") return data.rules;
       return data.data;
     },
   });
