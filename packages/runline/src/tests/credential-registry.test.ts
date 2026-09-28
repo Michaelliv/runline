@@ -260,6 +260,23 @@ describe("credential registry", () => {
           { in: "nowhere", part: "secret" },
         ] as never);
       },
+      // A body part also reaches the query, so it cannot share a query
+      // parameter's name, and its name is a plain identifier.
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [
+            { in: "body", part: "secret", name: "key" },
+            { in: "query", part: "secret", name: "KEY" },
+          ],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [{ in: "body", part: "secret", name: "api key" }],
+        );
+      },
       ...[0, -1, 1.5, 3_600_001, "60000"].map(
         (timeoutMs) => (d: CredentialType) => {
           d.methods.apiKey.targets.api.timeoutMs = timeoutMs as number;
