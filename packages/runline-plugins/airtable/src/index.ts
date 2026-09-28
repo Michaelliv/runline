@@ -309,7 +309,11 @@ export default function airtable(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (filterByFormula) qs.filterByFormula = filterByFormula;
       if (fields) qs.fields = fields;
-      if (sort) qs.sort = sort;
+      // Airtable's indexed form: sort[0][field]=Due&sort[0][direction]=asc.
+      for (const [i, s] of (sort ?? []).entries()) {
+        qs[`sort[${i}][field]`] = s.field;
+        qs[`sort[${i}][direction]`] = s.direction;
+      }
       if (view) qs.view = view;
       if (limit && !filterByFormula) qs.maxRecords = limit;
 
