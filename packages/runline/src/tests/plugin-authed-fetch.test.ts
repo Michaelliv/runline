@@ -265,7 +265,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "woocommerce/src/index.ts",
   "wordpress/src/index.ts",
   "xai/src/index.ts",
-  "xero/src/index.ts",
   "yourls/src/index.ts",
   "zammad/src/index.ts",
   "zendesk/src/index.ts",
