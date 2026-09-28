@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { magentoCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** Magento uses nested query params like search_criteria[page_size]=10. */
 function flattenQuery(qs: Record<string, unknown>): Record<string, string> {
@@ -152,7 +149,7 @@ export default function magento(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `default/V1/customers/${seg((input as { customerId: number }).customerId)}`,
+        `default/V1/customers/${pathSegment((input as { customerId: number }).customerId)}`,
       );
     },
   });
@@ -246,7 +243,9 @@ export default function magento(rl: RunlinePluginAPI) {
       }
       if (customAttributes) customer.custom_attributes = customAttributes;
       if (updateFields) Object.assign(customer, updateFields);
-      return api(ctx, "PUT", `V1/customers/${seg(customerId)}`, { customer });
+      return api(ctx, "PUT", `V1/customers/${pathSegment(customerId)}`, {
+        customer,
+      });
     },
   });
 
@@ -258,7 +257,7 @@ export default function magento(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `default/V1/customers/${seg((input as { customerId: number }).customerId)}`,
+        `default/V1/customers/${pathSegment((input as { customerId: number }).customerId)}`,
       );
       return { success: true };
     },
@@ -274,7 +273,7 @@ export default function magento(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `default/V1/order/${seg((input as { orderId: number }).orderId)}/invoice`,
+        `default/V1/order/${pathSegment((input as { orderId: number }).orderId)}/invoice`,
       );
       return { success: true };
     },
@@ -290,7 +289,7 @@ export default function magento(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `default/V1/orders/${seg((input as { orderId: number }).orderId)}`,
+        `default/V1/orders/${pathSegment((input as { orderId: number }).orderId)}`,
       );
     },
   });
@@ -335,7 +334,7 @@ export default function magento(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `default/V1/orders/${seg((input as { orderId: number }).orderId)}/cancel`,
+        `default/V1/orders/${pathSegment((input as { orderId: number }).orderId)}/cancel`,
       );
       return { success: true };
     },
@@ -349,7 +348,7 @@ export default function magento(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `default/V1/order/${seg((input as { orderId: number }).orderId)}/ship`,
+        `default/V1/order/${pathSegment((input as { orderId: number }).orderId)}/ship`,
       );
       return { success: true };
     },
@@ -406,7 +405,7 @@ export default function magento(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `default/V1/products/${encodeURIComponent((input as { sku: string }).sku)}`,
+        `default/V1/products/${pathSegment((input as { sku: string }).sku)}`,
       );
     },
   });
@@ -460,12 +459,9 @@ export default function magento(rl: RunlinePluginAPI) {
       const product: Record<string, unknown> = { sku };
       if (customAttributes) product.custom_attributes = customAttributes;
       Object.assign(product, updateFields);
-      return api(
-        ctx,
-        "PUT",
-        `default/V1/products/${encodeURIComponent(sku as string)}`,
-        { product },
-      );
+      return api(ctx, "PUT", `default/V1/products/${pathSegment(sku)}`, {
+        product,
+      });
     },
   });
 
@@ -477,7 +473,7 @@ export default function magento(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `default/V1/products/${encodeURIComponent((input as { sku: string }).sku)}`,
+        `default/V1/products/${pathSegment((input as { sku: string }).sku)}`,
       );
       return { success: true };
     },
