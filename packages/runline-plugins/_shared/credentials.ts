@@ -89,9 +89,11 @@ export interface StaticCredentialSpec {
    * The credential is optional: a connection signs when it holds the flat
    * secret fields (the CLI) or says `authenticated: true` in its public
    * config (a host that stores the credential), and otherwise sends its
-   * requests unsigned through a `none` method held to the same targets.
+   * requests unsigned through a `none` method — held to the same targets,
+   * or to targets of its own where the provider serves unsigned requests
+   * elsewhere.
    */
-  optional?: true;
+  optional?: true | { targets: Record<string, CredentialTarget> };
 }
 
 /**
@@ -144,7 +146,8 @@ export function staticCredential(
                 none: {
                   schema: t.Object({}, { additionalProperties: false }),
                   authentication: { kind: "none" },
-                  targets,
+                  targets:
+                    spec.optional === true ? targets : spec.optional.targets,
                 },
               }
             : {}),
