@@ -77,8 +77,7 @@ function validateMethod(method: CredentialMethod): void {
     if (
       auth.prefix !== undefined &&
       (typeof auth.prefix !== "string" ||
-        !/^[\x21-\x7e]+ ?$/.test(auth.prefix) ||
-        auth.prefix.length > 32)
+        !/^[\x21-\x7e][\x20-\x7e]{0,31}$/.test(auth.prefix))
     )
       throw new AuthError("invalid_definition");
   } else if (auth.kind === "oauth2") {
