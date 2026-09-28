@@ -1,10 +1,35 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { mailjetCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.mailjet.com";
+/** One message through the v3.1 Send API, in sandbox mode when the connection asks. */
+async function sendMessage(
+  ctx: ActionContext,
+  message: Record<string, unknown>,
+): Promise<unknown> {
+  const data = await credentialJson<{ Messages?: unknown }>(
+    ctx,
+    mailjetCredential,
+    "mailjet",
+    {
+      target: "email",
+      path: "send",
+      method: "POST",
+      json: {
+        Messages: [message],
+        SandboxMode:
+          ctx.connection.config.sandboxMode === true ||
+          ctx.connection.config.sandboxMode === "true",
+      },
+    },
+  );
+  return data.Messages;
+}
 
 export default function mailjet(rl: RunlinePluginAPI) {
   rl.setName("mailjet");
   rl.setVersion("0.1.0");
+  rl.setCredential(mailjetCredential);
 
   rl.setConnectionSchema({
     apiKeyPublic: {
@@ -32,13 +57,6 @@ export default function mailjet(rl: RunlinePluginAPI) {
       env: "MAILJET_SMS_TOKEN",
     },
   });
-
-  const emailAuth = (ctx: {
-    connection: { config: Record<string, unknown> };
-  }) =>
-    `Basic ${btoa(`${ctx.connection.config.apiKeyPublic}:${ctx.connection.config.apiKeyPrivate}`)}`;
-  const sandbox = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    (ctx.connection.config.sandboxMode as boolean) ?? false;
 
   rl.registerAction("email.send", {
     access: "write",
@@ -132,22 +150,7 @@ export default function mailjet(rl: RunlinePluginAPI) {
       if (p.deduplicateCampaign !== undefined)
         message.DeduplicateCampaign = p.deduplicateCampaign;
 
-      const res = await fetch(`${BASE_URL}/v3.1/send`, {
-        method: "POST",
-        headers: {
-          Authorization: emailAuth(ctx),
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          Messages: [message],
-          SandboxMode: sandbox(ctx),
-        }),
-      });
-      if (!res.ok)
-        throw new Error(`Mailjet API error ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as Record<string, unknown>;
-      return data.Messages;
+      return sendMessage(ctx, message);
     },
   });
 
@@ -213,22 +216,7 @@ export default function mailjet(rl: RunlinePluginAPI) {
       if (p.deduplicateCampaign !== undefined)
         message.DeduplicateCampaign = p.deduplicateCampaign;
 
-      const res = await fetch(`${BASE_URL}/v3.1/send`, {
-        method: "POST",
-        headers: {
-          Authorization: emailAuth(ctx),
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          Messages: [message],
-          SandboxMode: sandbox(ctx),
-        }),
-      });
-      if (!res.ok)
-        throw new Error(`Mailjet API error ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as Record<string, unknown>;
-      return data.Messages;
+      return sendMessage(ctx, message);
     },
   });
 
@@ -250,22 +238,12 @@ export default function mailjet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { from, to, text } = input as Record<string, unknown>;
-      const smsToken = ctx.connection.config.smsToken as string;
-      if (!smsToken)
-        throw new Error(
-          "SMS token not configured — set smsToken in connection config",
-        );
-      const res = await fetch(`${BASE_URL}/v4/sms-send`, {
+      return credentialJson(ctx, mailjetCredential, "mailjet", {
+        target: "sms",
+        path: "sms-send",
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${smsToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ From: from, To: to, Text: text }),
+        json: { From: from, To: to, Text: text },
       });
-      if (!res.ok)
-        throw new Error(`Mailjet SMS error ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 }

@@ -55,10 +55,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "generic client: arbitrary endpoint and caller-composed auth header",
   ],
   [
-    "mailjet",
-    "two credentials in one connection: basic pair for email, bearer for SMS",
-  ],
-  [
     "nextcloud",
     "WebDAV methods (PROPFIND, MKCOL, COPY, MOVE) the transport does not carry",
   ],
