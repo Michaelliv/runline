@@ -279,7 +279,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["wekan", "phase 2: not yet migrated"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
   ["woocommerce", "phase 3: not yet migrated"],
-  ["wordpress", "phase 2: not yet migrated"],
   ["xai", "phase 3: not yet migrated"],
   ["xero", "phase 2: not yet migrated"],
   ["yourls", "phase 3: not yet migrated"],
