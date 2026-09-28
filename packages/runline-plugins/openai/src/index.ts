@@ -17,11 +17,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  credentialRequest,
-  multipartBody,
-} from "../../_shared/credentials.js";
+import { credentialJson, multipartBody } from "../../_shared/credentials.js";
 import {
   readImageInput,
   SEND_FILE_NOTE,
@@ -288,18 +284,13 @@ export default function openai(rl: RunlinePluginAPI) {
       }
 
       const { body: formBytes, contentType } = await multipartBody(form);
-      const res = await credentialRequest(ctx, openaiCredential, {
+      const data = (await credentialJson(ctx, openaiCredential, "openai", {
         target: "api",
         path: "edits",
         method: "POST",
         body: formBytes,
         headers: { "Content-Type": contentType },
-      });
-      if (!res.ok) {
-        throw new Error(`openai: request failed (HTTP ${res.status})`);
-      }
-
-      const data = (await res.json()) as { data?: OpenAIImage[] };
+      })) as { data?: OpenAIImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) => ({
         ...writeImageFile({
