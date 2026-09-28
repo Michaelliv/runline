@@ -56,15 +56,18 @@ interface LabelEntry {
 type LabelDirectory = Map<string, LabelEntry[]>;
 
 /**
- * The workspace's labels, per API key. Linear rejects a non-UUID in
+ * The workspace's labels. Linear rejects a non-UUID in
  * `labels: { id: { in: [...] } }` with "each value in in must be a UUID",
  * so a human-written scope value like `requester:yosi` breaks every issue
  * query (SHFT-1644) unless it is resolved to an id first. The directory is
- * fetched once per connection and re-read on a miss, so a label created
- * later still resolves.
+ * fetched once per locally signed connection and re-read on a miss, so a
+ * label created later still resolves.
  *
- * Keyed by a digest of the connection config, so a long-lived Map never
- * holds the API key itself.
+ * Keyed by a digest of the connection config, API key included, so a
+ * long-lived Map never holds the key itself. A brokered connection's config
+ * holds no key: two people's connections can be identical, and only the
+ * broker knows whose workspace answers. Brokered calls read their own
+ * directory every time and cache nothing.
  */
 const labelDirectories = new Map<string, Promise<LabelDirectory>>();
 
@@ -110,6 +113,7 @@ function labelDirectory(
   ctx: Ctx,
   { refresh = false }: { refresh?: boolean } = {},
 ): Promise<LabelDirectory> {
+  if (ctx.credentials) return fetchLabelDirectory(ctx);
   const cacheKey = directoryKey(ctx);
   const cached = refresh ? undefined : labelDirectories.get(cacheKey);
   if (cached) return cached;
