@@ -62,7 +62,7 @@ function mockVercel(
     const url = new URL(String(input));
     assert.equal(url.origin, "https://api.vercel.com");
     assert.equal(
-      init?.headers?.["Authorization" as keyof HeadersInit],
+      new Headers(init?.headers).get("authorization"),
       "Bearer vcp_test",
     );
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -261,7 +261,7 @@ describe("vercel plugin REST actions", () => {
 
     await assert.rejects(
       action.execute({ id: "missing" }, ctx()),
-      /Vercel API error 403/,
+      /vercel: request failed \(HTTP 403\)/,
     );
   });
 });
