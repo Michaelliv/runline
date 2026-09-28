@@ -1,44 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { baserowCredential } from "./credentials.js";
 
-async function apiRequest(
-  host: string,
-  token: string,
-  method: string,
-  endpoint: string,
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+/** A path beneath the host's /api/ base, signed through the credential. */
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: unknown,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${host}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, baserowCredential, "baserow", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Token ${token}`,
-    },
-  };
-  if (body && method !== "GET" && method !== "DELETE") {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Baserow API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query,
+    ...(body && method !== "GET" && method !== "DELETE" ? { json: body } : {}),
+  });
 }
 
 async function paginateAll(
-  host: string,
-  token: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   qs?: Record<string, unknown>,
   limit?: number,
 ): Promise<unknown[]> {
@@ -47,7 +33,7 @@ async function paginateAll(
   const size = 100;
 
   while (true) {
-    const data = (await apiRequest(host, token, "GET", endpoint, undefined, {
+    const data = (await apiRequest(ctx, "GET", path, undefined, {
       ...qs,
       page,
       size,
@@ -62,16 +48,10 @@ async function paginateAll(
   return results;
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    host: (ctx.connection.config.host as string).replace(/\/$/, ""),
-    token: ctx.connection.config.token as string,
-  };
-}
-
 export default function baserow(rl: RunlinePluginAPI) {
   rl.setName("baserow");
   rl.setVersion("0.1.0");
+  rl.setCredential(baserowCredential);
 
   rl.setConnectionSchema({
     host: {
@@ -108,12 +88,10 @@ export default function baserow(rl: RunlinePluginAPI) {
         tableId: string;
         fields: Record<string, unknown>;
       };
-      const { host, token } = getConn(ctx);
       return apiRequest(
-        host,
-        token,
+        ctx,
         "POST",
-        `/api/database/rows/table/${tableId}/`,
+        `database/rows/table/${seg(tableId)}/`,
         fields,
       );
     },
@@ -128,12 +106,10 @@ export default function baserow(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, rowId } = input as { tableId: string; rowId: string };
-      const { host, token } = getConn(ctx);
       return apiRequest(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/database/rows/table/${tableId}/${rowId}/`,
+        `database/rows/table/${seg(tableId)}/${seg(rowId)}/`,
       );
     },
   });
@@ -161,14 +137,12 @@ export default function baserow(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { host, token } = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (search) qs.search = search;
       if (orderBy) qs.order_by = orderBy;
       return paginateAll(
-        host,
-        token,
-        `/api/database/rows/table/${tableId}/`,
+        ctx,
+        `database/rows/table/${seg(tableId)}/`,
         qs,
         limit as number | undefined,
       );
@@ -193,12 +167,10 @@ export default function baserow(rl: RunlinePluginAPI) {
         rowId: string;
         fields: Record<string, unknown>;
       };
-      const { host, token } = getConn(ctx);
       return apiRequest(
-        host,
-        token,
+        ctx,
         "PATCH",
-        `/api/database/rows/table/${tableId}/${rowId}/`,
+        `database/rows/table/${seg(tableId)}/${seg(rowId)}/`,
         fields,
       );
     },
@@ -213,12 +185,10 @@ export default function baserow(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, rowId } = input as { tableId: string; rowId: string };
-      const { host, token } = getConn(ctx);
       await apiRequest(
-        host,
-        token,
+        ctx,
         "DELETE",
-        `/api/database/rows/table/${tableId}/${rowId}/`,
+        `database/rows/table/${seg(tableId)}/${seg(rowId)}/`,
       );
       return { success: true };
     },
@@ -237,13 +207,13 @@ export default function baserow(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, items } = input as { tableId: string; items: unknown[] };
-      const { host, token } = getConn(ctx);
       return apiRequest(
-        host,
-        token,
+        ctx,
         "POST",
-        `/api/database/rows/table/${tableId}/batch/`,
-        { items },
+        `database/rows/table/${seg(tableId)}/batch/`,
+        {
+          items,
+        },
       );
     },
   });
@@ -261,12 +231,10 @@ export default function baserow(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, items } = input as { tableId: string; items: unknown[] };
-      const { host, token } = getConn(ctx);
       return apiRequest(
-        host,
-        token,
+        ctx,
         "PATCH",
-        `/api/database/rows/table/${tableId}/batch/`,
+        `database/rows/table/${seg(tableId)}/batch/`,
         { items },
       );
     },
@@ -288,12 +256,10 @@ export default function baserow(rl: RunlinePluginAPI) {
         tableId: string;
         rowIds: string[];
       };
-      const { host, token } = getConn(ctx);
       await apiRequest(
-        host,
-        token,
+        ctx,
         "POST",
-        `/api/database/rows/table/${tableId}/batch-delete/`,
+        `database/rows/table/${seg(tableId)}/batch-delete/`,
         {
           items: rowIds,
         },
