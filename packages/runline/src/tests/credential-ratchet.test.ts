@@ -120,7 +120,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["iterable", "phase 3: not yet migrated"],
   ["lemlist", "phase 3: not yet migrated"],
   ["lingvanex", "phase 3: not yet migrated"],
-  ["lonescale", "phase 3: not yet migrated"],
   ["magento", "phase 3: not yet migrated"],
   ["mailcheck", "phase 3: not yet migrated"],
   [

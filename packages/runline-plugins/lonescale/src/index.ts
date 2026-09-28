@@ -1,40 +1,32 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { lonescaleCredential } from "./credentials.js";
 
-const BASE_URL = "https://public-api.lonescale.com";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, lonescaleCredential, "lonescale", {
+    target: "api",
+    path,
     method,
-    headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`LoneScale API error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function lonescale(rl: RunlinePluginAPI) {
   rl.setName("lonescale");
   rl.setVersion("0.1.0");
+  rl.setCredential(lonescaleCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -44,9 +36,6 @@ export default function lonescale(rl: RunlinePluginAPI) {
       env: "LONESCALE_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("list.create", {
     access: "write",
@@ -61,7 +50,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name, entity } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "POST", "/lists", { name, entity });
+      return apiRequest(ctx, "POST", "lists", { name, entity });
     },
   });
 
@@ -79,7 +68,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
       const { entity } = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (entity) qs.entity = entity;
-      return apiRequest(key(ctx), "GET", "/lists", undefined, qs);
+      return apiRequest(ctx, "GET", "lists", undefined, qs);
     },
   });
 
@@ -132,7 +121,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
       if (linkedinUrl) body.linkedin_url = linkedinUrl;
       if (location) body.location = location;
       if (contactId) body.contact_id = contactId;
-      return apiRequest(key(ctx), "POST", `/lists/${listId}/item`, body);
+      return apiRequest(ctx, "POST", `lists/${seg(listId)}/item`, body);
     },
   });
 
@@ -164,7 +153,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
       if (domain) body.domain = domain;
       if (location) body.location = location;
       if (contactId) body.contact_id = contactId;
-      return apiRequest(key(ctx), "POST", `/lists/${listId}/item`, body);
+      return apiRequest(ctx, "POST", `lists/${seg(listId)}/item`, body);
     },
   });
 }
