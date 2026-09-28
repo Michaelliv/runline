@@ -193,18 +193,30 @@ export function credentialRequest(
 }
 
 /**
- * A JSON request. Failure is reported by status alone: provider error text
- * can echo request data back and is not returned to the caller.
+ * A request that must succeed, for callers that read the Response itself
+ * (headers, text, bytes). Failure is reported by status alone: provider
+ * error text can echo request data back and is not returned to the caller.
  */
+export async function credentialOk(
+  ctx: ActionContext,
+  declaration: CredentialDeclaration,
+  plugin: string,
+  call: CredentialCall,
+): Promise<Response> {
+  const response = await credentialRequest(ctx, declaration, call);
+  if (!response.ok)
+    throw new Error(`${plugin}: request failed (HTTP ${response.status})`);
+  return response;
+}
+
+/** A JSON request that must succeed; an empty answer is `{ success: true }`. */
 export async function credentialJson(
   ctx: ActionContext,
   declaration: CredentialDeclaration,
   plugin: string,
   call: CredentialCall,
 ): Promise<any> {
-  const response = await credentialRequest(ctx, declaration, call);
-  if (!response.ok)
-    throw new Error(`${plugin}: request failed (HTTP ${response.status})`);
+  const response = await credentialOk(ctx, declaration, plugin, call);
   if (response.status === 204) return { success: true };
   const text = await response.text();
   if (!text) return { success: true };
