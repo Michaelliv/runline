@@ -90,7 +90,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "airtop/src/index.ts",
   "apiTemplateIo/src/index.ts",
   "autopilot/src/index.ts",
-  "bannerbear/src/index.ts",
   "baserow/src/index.ts",
   "bitwarden/src/index.ts",
   "brandfetch/src/index.ts",
