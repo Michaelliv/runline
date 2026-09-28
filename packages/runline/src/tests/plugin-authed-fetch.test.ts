@@ -222,7 +222,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "segment/src/index.ts",
   "sendgrid/src/index.ts",
   "sendy/src/index.ts",
-  "sentry/src/index.ts",
   "servicenow/src/index.ts",
   "shiftObjects/src/objects.ts",
   "shiftTranscription/src/transcription.ts",
