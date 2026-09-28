@@ -1,6 +1,6 @@
 import { AuthError } from "runline";
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
+import { credentialOk, pathSegment } from "../../_shared/credentials.js";
 import { oktaCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -10,14 +10,13 @@ async function apiRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<{ data: unknown; linkHeader?: string }> {
-  const res = await credentialRequest(ctx, oktaCredential, {
+  const res = await credentialOk(ctx, oktaCredential, "okta", {
     target: "api",
     path,
     method,
     query: qs,
     ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
   });
-  if (!res.ok) throw new Error(`okta: request failed (HTTP ${res.status})`);
   const text = await res.text();
   let data: unknown = {};
   if (text) {
