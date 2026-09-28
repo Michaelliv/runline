@@ -1,39 +1,31 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { twitterCredential } from "./credentials.js";
 
-const BASE = "https://api.twitter.com/2";
+/** An ID or username as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function api(
-  token: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
   fullOutput = false,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  const json = (await credentialJson(ctx, twitterCredential, "twitter", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Twitter error ${res.status}: ${await res.text()}`);
-  const json = (await res.json()) as Record<string, unknown>;
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  })) as Record<string, unknown>;
   return fullOutput ? json : json.data;
 }
 
 async function paginate(
-  token: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   qs: Record<string, unknown> = {},
   limit?: number,
 ): Promise<unknown[]> {
@@ -43,9 +35,9 @@ async function paginate(
   do {
     if (nextToken) qs.next_token = nextToken;
     const res = (await api(
-      token,
+      ctx,
       "GET",
-      endpoint,
+      path,
       undefined,
       { ...qs },
       true,
@@ -65,6 +57,7 @@ async function paginate(
 export default function twitter(rl: RunlinePluginAPI) {
   rl.setName("twitter");
   rl.setVersion("0.1.0");
+  rl.setCredential(twitterCredential);
   rl.setConnectionSchema({
     bearerToken: {
       type: "string",
@@ -73,9 +66,6 @@ export default function twitter(rl: RunlinePluginAPI) {
       env: "TWITTER_BEARER_TOKEN",
     },
   });
-  const t = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.bearerToken as string;
-
   // ── Tweet ───────────────────────────────────────────
 
   rl.registerAction("tweet.create", {
@@ -104,7 +94,7 @@ export default function twitter(rl: RunlinePluginAPI) {
         body.reply = { in_reply_to_tweet_id: p.replyToTweetId };
       if (p.mediaId) body.media = { media_ids: [p.mediaId] };
       if (p.placeId) body.geo = { place_id: p.placeId };
-      return api(t(ctx), "POST", "/tweets", body);
+      return api(ctx, "POST", "tweets", body);
     },
   });
 
@@ -114,9 +104,9 @@ export default function twitter(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "DELETE",
-        `/tweets/${(input as Record<string, unknown>).id}`,
+        `tweets/${seg((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -126,11 +116,11 @@ export default function twitter(rl: RunlinePluginAPI) {
     description: "Like a tweet (requires user context)",
     inputSchema: { tweetId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const user = (await api(t(ctx), "GET", "/users/me")) as Record<
+      const user = (await api(ctx, "GET", "users/me")) as Record<
         string,
         unknown
       >;
-      return api(t(ctx), "POST", `/users/${user.id}/likes`, {
+      return api(ctx, "POST", `users/${seg(user.id)}/likes`, {
         tweet_id: (input as Record<string, unknown>).tweetId,
       });
     },
@@ -141,11 +131,11 @@ export default function twitter(rl: RunlinePluginAPI) {
     description: "Retweet a tweet (requires user context)",
     inputSchema: { tweetId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const user = (await api(t(ctx), "GET", "/users/me")) as Record<
+      const user = (await api(ctx, "GET", "users/me")) as Record<
         string,
         unknown
       >;
-      return api(t(ctx), "POST", `/users/${user.id}/retweets`, {
+      return api(ctx, "POST", `users/${seg(user.id)}/retweets`, {
         tweet_id: (input as Record<string, unknown>).tweetId,
       });
     },
@@ -188,9 +178,9 @@ export default function twitter(rl: RunlinePluginAPI) {
       if (p.tweetFields) qs["tweet.fields"] = p.tweetFields;
       const limit = p.limit as number | undefined;
       if (limit) {
-        return paginate(t(ctx), "/tweets/search/recent", qs, limit);
+        return paginate(ctx, "tweets/search/recent", qs, limit);
       }
-      return paginate(t(ctx), "/tweets/search/recent", qs);
+      return paginate(ctx, "tweets/search/recent", qs);
     },
   });
 
@@ -214,12 +204,12 @@ export default function twitter(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      if (p.me) return api(t(ctx), "GET", "/users/me");
+      if (p.me) return api(ctx, "GET", "users/me");
       if (p.username) {
         const name = (p.username as string).replace(/^@/, "");
-        return api(t(ctx), "GET", `/users/by/username/${name}`);
+        return api(ctx, "GET", `users/by/username/${seg(name)}`);
       }
-      if (p.id) return api(t(ctx), "GET", `/users/${p.id}`);
+      if (p.id) return api(ctx, "GET", `users/${seg(p.id)}`);
       throw new Error("Provide username, id, or set me=true");
     },
   });
@@ -235,7 +225,7 @@ export default function twitter(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "POST", `/lists/${p.listId}/members`, {
+      return api(ctx, "POST", `lists/${seg(p.listId)}/members`, {
         user_id: p.userId,
       });
     },
@@ -260,9 +250,9 @@ export default function twitter(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { text: p.text };
       if (p.mediaId) body.attachments = [{ media_id: p.mediaId }];
       return api(
-        t(ctx),
+        ctx,
         "POST",
-        `/dm_conversations/with/${p.userId}/messages`,
+        `dm_conversations/with/${seg(p.userId)}/messages`,
         body,
       );
     },

@@ -253,7 +253,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "twake/src/index.ts",
   "twilio/src/index.ts",
   "twist/src/index.ts",
-  "twitter/src/index.ts",
   "typesafe/src/shared.ts",
   "unleashedSoftware/src/index.ts",
   "uplead/src/index.ts",
