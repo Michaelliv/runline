@@ -9,6 +9,7 @@ import {
   headerName,
   injectedHeaders,
   injectedParams,
+  placementsFor,
   refuseCredentialParams,
   resourceUrl,
   TARGET_RESPONSE_LIMIT_BYTES,
@@ -41,10 +42,19 @@ export const OAuthTokensSchema = t.Object(
  * A Basic part may be empty (a key as the username with no password, or
  * the reverse); the transport refuses an empty part anywhere else.
  */
-export function staticSecretSchema(parts: readonly string[]) {
-  return t.Object(Object.fromEntries(parts.map((part) => [part, t.String()])), {
-    additionalProperties: false,
-  });
+export function staticSecretSchema(
+  parts: readonly string[],
+  optional: readonly string[] = [],
+) {
+  return t.Object(
+    Object.fromEntries(
+      parts.map((part) => [
+        part,
+        optional.includes(part) ? t.Optional(t.String()) : t.String(),
+      ]),
+    ),
+    { additionalProperties: false },
+  );
 }
 
 export const OAuthGrantSchema = t.Object(
@@ -60,6 +70,7 @@ type ObjectSchema = {
   type?: string;
   additionalProperties?: boolean;
   properties?: Record<string, { type?: string }>;
+  required?: string[];
 };
 
 function identifier(value: string): void {
@@ -68,15 +79,17 @@ function identifier(value: string): void {
 }
 
 /**
- * A static secret's parts and placements agree with each other and with
- * the stored shape: the stored field holds exactly the declared parts, each
- * a string; every placement names a declared part, every part is placed,
- * no header or query parameter is claimed twice, and at most one part
- * takes the one path position.
+ * A static secret's parts and placements agree with each other, with the
+ * stored shape and with the method's targets: the stored field holds
+ * exactly the declared parts, each a string, required unless optional;
+ * every placement names a declared part and only declared targets; every
+ * part is placed; and on each target no header or query parameter is
+ * claimed twice and at most one part takes the one path position.
  */
 function validateStatic(
   auth: Extract<CredentialAuthentication, { kind: "static" }>,
   stored: unknown,
+  targets: string[],
 ): void {
   const parts = auth.parts;
   if (
@@ -88,13 +101,25 @@ function validateStatic(
   )
     throw new AuthError("invalid_definition");
   for (const part of parts) identifier(part);
+  const optional = auth.optionalParts ?? [];
+  if (
+    !Array.isArray(optional) ||
+    new Set(optional).size !== optional.length ||
+    optional.some((part) => !parts.includes(part))
+  )
+    throw new AuthError("invalid_definition");
   const shape = stored as ObjectSchema;
   if (
     shape?.type !== "object" ||
     shape.additionalProperties !== false ||
     !shape.properties ||
     Object.keys(shape.properties).sort().join() !== [...parts].sort().join() ||
-    Object.values(shape.properties).some((part) => part.type !== "string")
+    Object.values(shape.properties).some((part) => part.type !== "string") ||
+    [...(shape.required ?? [])].sort().join() !==
+      parts
+        .filter((part) => !optional.includes(part))
+        .sort()
+        .join()
   )
     throw new AuthError("invalid_definition");
   const used = new Set<string>();
@@ -104,6 +129,13 @@ function validateStatic(
     used.add(part);
   };
   for (const placement of auth.placements) {
+    if (
+      placement.targets !== undefined &&
+      (!Array.isArray(placement.targets) ||
+        !placement.targets.length ||
+        placement.targets.some((target) => !targets.includes(target)))
+    )
+      throw new AuthError("invalid_definition");
     if (placement.in === "header") {
       place(placement.part);
       headerName(placement.name);
@@ -129,16 +161,20 @@ function validateStatic(
       place(placement.password);
     } else throw new AuthError("invalid_definition");
   }
-  if (auth.placements.filter((placement) => placement.in === "path").length > 1)
-    throw new AuthError("invalid_definition");
-  const headers = injectedHeaders(auth);
-  const params = injectedParams(auth).map((name) => name.toLowerCase());
-  if (
-    used.size !== parts.length ||
-    new Set(headers).size !== headers.length ||
-    new Set(params).size !== params.length
-  )
-    throw new AuthError("invalid_definition");
+  if (used.size !== parts.length) throw new AuthError("invalid_definition");
+  for (const target of targets) {
+    const headers = injectedHeaders(auth, target);
+    const params = injectedParams(auth, target).map((name) =>
+      name.toLowerCase(),
+    );
+    if (
+      new Set(headers).size !== headers.length ||
+      new Set(params).size !== params.length ||
+      placementsFor(auth, target).filter((placement) => placement.in === "path")
+        .length > 1
+    )
+      throw new AuthError("invalid_definition");
+  }
 }
 
 function validateMethod(method: CredentialMethod): void {
@@ -160,7 +196,11 @@ function validateMethod(method: CredentialMethod): void {
       throw new AuthError("invalid_definition");
   }
   if (auth.kind === "static")
-    validateStatic(auth, schema.properties[auth.field]);
+    validateStatic(
+      auth,
+      schema.properties[auth.field],
+      Object.keys(method.targets ?? {}),
+    );
   else if (auth.kind === "oauth2") {
     identifier(auth.definition.id);
     identifier(auth.definition.provider);
@@ -216,11 +256,11 @@ function validateMethod(method: CredentialMethod): void {
         throw new AuthError("invalid_definition");
     }
   } else if (auth.kind !== "none") throw new AuthError("invalid_definition");
-  const injected = injectedHeaders(auth);
   if (!Object.keys(method.targets).length)
     throw new AuthError("invalid_definition");
   for (const [name, target] of Object.entries(method.targets)) {
     identifier(name);
+    const injected = injectedHeaders(auth, name);
     targetBase(target);
     if (
       !Array.isArray(target.methods) ||
@@ -283,7 +323,7 @@ function validateMethod(method: CredentialMethod): void {
       throw new AuthError("invalid_definition");
     refuseCredentialParams(
       resourceUrl(target, probe.path),
-      injectedParams(auth),
+      injectedParams(auth, probe.target),
     );
   }
 }

@@ -3,6 +3,7 @@ import type {
   CredentialAuthentication,
   CredentialTarget,
   HttpMethod,
+  SecretPlacement,
 } from "./types.js";
 
 export const HTTP_METHODS: readonly HttpMethod[] = [
@@ -100,11 +101,24 @@ function safePath(path: string, encodedSlashes = false): void {
   }
 }
 
-/** Headers a method's authentication sets, lowercased; callers never set them. */
-export function injectedHeaders(auth: CredentialAuthentication): string[] {
+/** The static placements that sign requests to `target`. */
+export function placementsFor(
+  auth: Extract<CredentialAuthentication, { kind: "static" }>,
+  target: string,
+): SecretPlacement[] {
+  return auth.placements.filter(
+    (placement) => !placement.targets || placement.targets.includes(target),
+  );
+}
+
+/** Headers a method's authentication sets on `target`, lowercased; callers never set them. */
+export function injectedHeaders(
+  auth: CredentialAuthentication,
+  target: string,
+): string[] {
   if (auth.kind === "none") return [];
   if (auth.kind === "oauth2") return ["authorization"];
-  return auth.placements.flatMap((placement) =>
+  return placementsFor(auth, target).flatMap((placement) =>
     placement.in === "header"
       ? [headerName(placement.name)]
       : placement.in === "basic"
@@ -114,20 +128,27 @@ export function injectedHeaders(auth: CredentialAuthentication): string[] {
 }
 
 /**
- * Query parameters a method's authentication sets, a body part's included
- * (it reaches the query when a request has no body); callers never set them.
+ * Query parameters a method's authentication sets on `target`, a body
+ * part's included (it reaches the query when a request has no body);
+ * callers never set them.
  */
-export function injectedParams(auth: CredentialAuthentication): string[] {
+export function injectedParams(
+  auth: CredentialAuthentication,
+  target: string,
+): string[] {
   if (auth.kind !== "static") return [];
-  return auth.placements.flatMap((placement) =>
+  return placementsFor(auth, target).flatMap((placement) =>
     placement.in === "query" || placement.in === "body" ? [placement.name] : [],
   );
 }
 
-/** Body fields a method's authentication sets; callers never set them. */
-export function injectedFields(auth: CredentialAuthentication): string[] {
+/** Body fields a method's authentication sets on `target`; callers never set them. */
+export function injectedFields(
+  auth: CredentialAuthentication,
+  target: string,
+): string[] {
   if (auth.kind !== "static") return [];
-  return auth.placements.flatMap((placement) =>
+  return placementsFor(auth, target).flatMap((placement) =>
     placement.in === "body" ? [placement.name] : [],
   );
 }

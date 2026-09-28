@@ -17,6 +17,7 @@ import {
   injectedFields,
   injectedHeaders,
   injectedParams,
+  placementsFor,
   refuseCredentialParams,
   resourceUrl,
   TARGET_RESPONSE_LIMIT_BYTES,
@@ -215,23 +216,30 @@ function addField(request: Outgoing, name: string, value: string): void {
 }
 
 /**
- * A static secret's signer, every part checked before any IO. `parts` has
- * passed the method's schema, which the registry pins to exactly the
- * declared parts, each a string.
+ * A static secret's signer for one target, every part it places checked
+ * before any IO. `parts` has passed the method's schema, which the
+ * registry pins to exactly the declared parts, each a string; an optional
+ * part the connection lacks refuses the targets that place it.
  */
 function placeStatic(
   auth: Extract<CredentialAuthentication, { kind: "static" }>,
-  parts: Record<string, string>,
+  parts: Record<string, string | undefined>,
+  target: string,
 ): Signer {
-  const steps = auth.placements.map((placement): Signer => {
+  const part = (name: string) => {
+    const value = parts[name];
+    if (value === undefined) throw new AuthError("invalid_credentials");
+    return value;
+  };
+  const steps = placementsFor(auth, target).map((placement): Signer => {
     if (placement.in === "basic") {
       const value = basicCredentials(
-        parts[placement.username],
-        parts[placement.password],
+        part(placement.username),
+        part(placement.password),
       );
       return ({ headers }) => headers.set("authorization", `Basic ${value}`);
     }
-    const value = secret(parts[placement.part]);
+    const value = secret(part(placement.part));
     if (placement.in === "query")
       return ({ url }) => url.searchParams.append(placement.name, value);
     if (placement.in === "body")
@@ -396,8 +404,8 @@ export class CredentialTransport {
     )
       throw new AuthError("request_not_allowed");
     const auth = method.authentication;
-    refuseCredentialParams(url, injectedParams(auth));
-    const reserved = injectedHeaders(auth);
+    refuseCredentialParams(url, injectedParams(auth, input.target));
+    const reserved = injectedHeaders(auth, input.target);
     let headers: Headers;
     let body: Buffer | undefined;
     try {
@@ -433,7 +441,9 @@ export class CredentialTransport {
             : input.body.byteLength;
         if (size > this.options.maxRequestBytes) throw new Error();
         body = Buffer.from(input.body);
-        const fields = injectedFields(auth).map((name) => name.toLowerCase());
+        const fields = injectedFields(auth, input.target).map((name) =>
+          name.toLowerCase(),
+        );
         if (
           fields.length &&
           bodyFields(headers, body).some((name) =>
@@ -453,7 +463,7 @@ export class CredentialTransport {
       input.retry !== "never" &&
       (verb === "GET" || verb === "HEAD" || input.idempotencyKey !== undefined);
     const base = targetBase(target).pathname;
-    let { sign, grant } = await this.authorize(binding, method);
+    let { sign, grant } = await this.authorize(binding, method, input.target);
     const send = async (signer: Signer) => {
       const outgoing: Outgoing = {
         headers: new Headers(headers),
@@ -521,13 +531,18 @@ export class CredentialTransport {
   private async authorize(
     binding: CredentialBinding,
     method: CredentialMethod,
+    target: string,
   ): Promise<{ sign: Signer; grant?: OAuthGrant }> {
     const config = await this.read(binding, method);
     const auth = method.authentication;
     if (auth.kind === "none") return { sign: () => {} };
     if (auth.kind === "static")
       return {
-        sign: placeStatic(auth, config[auth.field] as Record<string, string>),
+        sign: placeStatic(
+          auth,
+          config[auth.field] as Record<string, string | undefined>,
+          target,
+        ),
       };
     let grant = grantFrom(method, config);
     if (!fresh(grant))

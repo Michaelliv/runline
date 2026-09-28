@@ -38,20 +38,25 @@ function authorityOf(selection: CredentialSelection): string {
 /**
  * A static secret's structured shape, from the flat fields and fixed values
  * the declaration names, joined in order where a part concatenates them.
- * Absent when any named field is missing, so the transport refuses it as
- * invalid_credentials before any IO.
+ * Absent when a required part's field is missing, so the transport refuses
+ * it as invalid_credentials before any IO; a missing optional part is left
+ * out, refusing only the targets that place it.
  */
 function staticSecret(
   current: Readonly<Record<string, unknown>>,
   sources: CredentialSelection["localSecret"],
+  optional: readonly string[],
 ): Record<string, string> | undefined {
   if (!sources) return undefined;
   const secret: Record<string, string> = {};
-  for (const [key, source] of Object.entries(sources)) {
+  sources: for (const [key, source] of Object.entries(sources)) {
     let joined = "";
     for (const part of "concat" in source ? source.concat : [source]) {
       const value = "value" in part ? part.value : current[part.field];
-      if (typeof value !== "string") return undefined;
+      if (typeof value !== "string") {
+        if (optional.includes(key)) continue sources;
+        return undefined;
+      }
       joined += value;
     }
     secret[key] = joined;
@@ -76,7 +81,11 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
       throw new AuthError("binding_changed");
     if (auth.kind === "none") return {};
     if (auth.kind === "static") {
-      const secret = staticSecret(current, selection.localSecret);
+      const secret = staticSecret(
+        current,
+        selection.localSecret,
+        auth.optionalParts ?? [],
+      );
       return secret ? { [auth.field]: secret } : {};
     }
     const compatible =

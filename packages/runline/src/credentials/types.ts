@@ -46,7 +46,7 @@ export interface CredentialTarget {
  * reserved: a caller may never supply that header, query parameter or
  * body field.
  */
-export type SecretPlacement =
+export type SecretPlacement = (
   | {
       in: "header";
       part: string;
@@ -66,7 +66,15 @@ export type SecretPlacement =
    */
   | { in: "path"; part: string; prefix?: string }
   /** HTTP Basic in Authorization, from two parts; either may be empty. */
-  | { in: "basic"; username: string; password: string };
+  | { in: "basic"; username: string; password: string }
+) & {
+  /**
+   * The targets this placement signs; every target when absent. Two
+   * credentials in one connection, each for its own API, are two parts
+   * scoped to their own targets.
+   */
+  targets?: string[];
+};
 
 /**
  * How a request is signed. `field` names the one top-level config field
@@ -82,6 +90,11 @@ export type CredentialAuthentication =
       kind: "static";
       field: string;
       parts: string[];
+      /**
+       * Parts a connection may lack; a request to a target that places a
+       * missing part is refused as invalid_credentials.
+       */
+      optionalParts?: string[];
       placements: SecretPlacement[];
     }
   | {

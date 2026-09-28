@@ -35,15 +35,23 @@ type StaticAuth =
   | { kind: "apiKey"; header: string; prefix?: string }
   | { kind: "queryKey"; param: string }
   | { kind: "basic" }
-  | { kind: "static"; parts: string[]; placements: SecretPlacement[] };
+  | {
+      kind: "static";
+      parts: string[];
+      optionalParts?: string[];
+      placements: SecretPlacement[];
+    };
 
 /** The parts and placements a shorthand, or the general form, declares. */
 function placementsOf(auth: StaticAuth): {
   parts: string[];
+  optionalParts?: string[];
   placements: SecretPlacement[];
 } {
-  if (auth.kind === "static")
-    return { parts: auth.parts, placements: auth.placements };
+  if (auth.kind === "static") {
+    const { kind: _, ...declared } = auth;
+    return declared;
+  }
   if (auth.kind === "basic")
     return {
       parts: ["username", "password"],
@@ -107,7 +115,7 @@ export function staticCredential(
   spec: StaticCredentialSpec,
 ): CredentialDeclaration {
   const field = "credential";
-  const { parts, placements } = placementsOf(spec.auth);
+  const { parts, optionalParts, placements } = placementsOf(spec.auth);
   if (Object.keys(spec.local).sort().join() !== [...parts].sort().join())
     throw new AuthError("invalid_definition");
   const localSecret = Object.fromEntries(
@@ -134,10 +142,16 @@ export function staticCredential(
         methods: {
           [spec.auth.kind]: {
             schema: t.Object(
-              { [field]: staticSecretSchema(parts) },
+              { [field]: staticSecretSchema(parts, optionalParts) },
               { additionalProperties: false },
             ),
-            authentication: { kind: "static", field, parts, placements },
+            authentication: {
+              kind: "static",
+              field,
+              parts,
+              ...(optionalParts ? { optionalParts } : {}),
+              placements,
+            },
             targets,
             ...(spec.probe ? { probe: spec.probe } : {}),
           },
