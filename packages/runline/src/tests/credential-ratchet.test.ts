@@ -60,7 +60,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["brevo", "phase 3: not yet migrated"],
   ["bubble", "phase 3: not yet migrated"],
   ["chargebee", "phase 3: not yet migrated"],
-  ["circleci", "phase 2: not yet migrated"],
   ["ciscoWebex", "phase 2: not yet migrated"],
   ["clearbit", "phase 3: not yet migrated"],
   ["clickup", "phase 2: not yet migrated"],
