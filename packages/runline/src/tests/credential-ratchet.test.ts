@@ -258,7 +258,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["thehiveProject", "phase 3: not yet migrated"],
   ["todoist", "phase 2: not yet migrated"],
   ["together", "phase 3: not yet migrated"],
-  ["travisci", "phase 2: not yet migrated"],
+  [
+    "travisci",
+    "encoded path segment: repo slugs travel %2F-encoded, which the path policy refuses",
+  ],
   ["trello", "two secrets per request: key and token query parameters"],
   ["twake", "phase 3: not yet migrated"],
   ["twilio", "phase 3: not yet migrated"],
