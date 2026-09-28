@@ -1,49 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { apiTemplateIoCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.apitemplate.io/v1";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
-  qs?: Record<string, unknown>,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
+  query?: Record<string, unknown>,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, apiTemplateIoCredential, "apiTemplateIo", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-KEY": apiKey,
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`APITemplate.io error ${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-function getKey(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function apiTemplateIo(rl: RunlinePluginAPI) {
   rl.setName("apiTemplateIo");
   rl.setVersion("0.1.0");
+  rl.setCredential(apiTemplateIoCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -58,7 +36,7 @@ export default function apiTemplateIo(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get account information",
     async execute(_input, ctx) {
-      return apiRequest(getKey(ctx), "GET", "/account-information");
+      return apiRequest(ctx, "GET", "account-information");
     },
   });
 
@@ -75,9 +53,9 @@ export default function apiTemplateIo(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { format } = (input ?? {}) as { format?: string };
       const templates = (await apiRequest(
-        getKey(ctx),
+        ctx,
         "GET",
-        "/list-templates",
+        "list-templates",
       )) as Array<Record<string, unknown>>;
       if (format) {
         return templates.filter((t) => t.format === format.toUpperCase());
@@ -109,9 +87,9 @@ export default function apiTemplateIo(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if (overrides) body.overrides = overrides;
       return apiRequest(
-        getKey(ctx),
+        ctx,
         "POST",
-        "/create",
+        "create",
         { template_id: templateId },
         body,
       );
@@ -139,9 +117,9 @@ export default function apiTemplateIo(rl: RunlinePluginAPI) {
         properties: Record<string, unknown>;
       };
       return apiRequest(
-        getKey(ctx),
+        ctx,
         "POST",
-        "/create",
+        "create",
         { template_id: templateId },
         properties,
       );
