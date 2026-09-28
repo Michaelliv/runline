@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { bubbleCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -26,8 +23,9 @@ function api(
   });
 }
 
-function normalizeTypeName(name: string): string {
-  return name.replace(/\s/g, "").toLowerCase();
+/** A data type name as Bubble expects it — no whitespace, lowercase — encoded as one path segment. */
+function typeSegment(name: string): string {
+  return pathSegment(name.replace(/\s/g, "").toLowerCase());
 }
 
 export default function bubble(rl: RunlinePluginAPI) {
@@ -90,7 +88,7 @@ export default function bubble(rl: RunlinePluginAPI) {
         typeName: string;
         properties: Record<string, unknown>;
       };
-      return api(ctx, "POST", `obj/${normalizeTypeName(typeName)}`, properties);
+      return api(ctx, "POST", `obj/${typeSegment(typeName)}`, properties);
     },
   });
 
@@ -117,7 +115,7 @@ export default function bubble(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `obj/${normalizeTypeName(typeName)}/${seg(objectId)}`,
+        `obj/${typeSegment(typeName)}/${pathSegment(objectId)}`,
       )) as Record<string, unknown>;
       return data.response;
     },
@@ -160,7 +158,7 @@ export default function bubble(rl: RunlinePluginAPI) {
         if (descending) qs.descending = "true";
       }
 
-      const endpoint = `obj/${normalizeTypeName(typeName as string)}`;
+      const endpoint = `obj/${typeSegment(typeName as string)}`;
 
       if (limit) {
         qs.limit = limit;
@@ -222,7 +220,7 @@ export default function bubble(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "PATCH",
-        `obj/${normalizeTypeName(typeName)}/${seg(objectId)}`,
+        `obj/${typeSegment(typeName)}/${pathSegment(objectId)}`,
         properties,
       );
       return { success: true };
@@ -252,7 +250,7 @@ export default function bubble(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `obj/${normalizeTypeName(typeName)}/${seg(objectId)}`,
+        `obj/${typeSegment(typeName)}/${pathSegment(objectId)}`,
       );
       return { success: true };
     },
