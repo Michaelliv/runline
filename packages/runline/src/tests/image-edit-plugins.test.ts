@@ -390,11 +390,11 @@ describe("xai image.edit", () => {
       input: RequestInfo | URL,
       init?: RequestInit,
     ) => {
+      // The broker's transport sends a Headers instance and a buffered body.
       seen = {
         url: String(input),
-        contentType: (init?.headers as Record<string, string>)?.[
-          "Content-Type"
-        ],
+        contentType:
+          new Headers(init?.headers).get("content-type") ?? undefined,
         body: JSON.parse(String(init?.body)),
       };
       return new Response(
