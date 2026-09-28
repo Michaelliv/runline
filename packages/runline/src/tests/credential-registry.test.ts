@@ -277,6 +277,44 @@ describe("credential registry", () => {
           [{ in: "body", part: "secret", name: "api key" }],
         );
       },
+      // A placement scoped to a target the method lacks; two placements
+      // claiming one header on an overlapping target; an optional part the
+      // stored shape still requires.
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [
+            {
+              in: "header",
+              part: "secret",
+              name: "X-Key",
+              targets: ["missing"],
+            },
+          ],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.schema = t.Object(
+          { key: staticSecretSchema(["a", "b"]) },
+          { additionalProperties: false },
+        );
+        d.methods.apiKey.authentication = placed(
+          ["a", "b"],
+          [
+            { in: "header", part: "a", name: "X-Key", targets: ["api"] },
+            { in: "header", part: "b", name: "X-Key" },
+          ],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.authentication = {
+          ...placed(
+            ["secret"],
+            [{ in: "header", part: "secret", name: "X-Key" }],
+          ),
+          optionalParts: ["secret"],
+        } as never;
+      },
       // One path position: two path placements, or a prefix that is not
       // plain path text.
       (d) => {

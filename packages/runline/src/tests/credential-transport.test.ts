@@ -579,6 +579,81 @@ describe("constrained credential transport", () => {
     assert.equal(seen.length, 1);
   });
 
+  it("places a part only on the targets it is scoped to, so two parts may share a header across targets", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.client = {
+      baseUrl: "https://api.example/v1/",
+      methods: ["GET"],
+    };
+    placed(
+      def,
+      ["app", "client"],
+      [
+        { in: "header", part: "app", name: "X-Key", targets: ["api"] },
+        { in: "header", part: "client", name: "X-Key", targets: ["client"] },
+      ],
+    );
+    const seen: Array<string | null> = [];
+    const h = await harness(
+      mock((_url, init) => {
+        seen.push(new Headers(init.headers).get("x-key"));
+        return Response.json({});
+      }),
+      { key: { app: "a1", client: "c1" } },
+      def,
+    );
+    await h.transport.request(h.binding, request);
+    await h.transport.request(h.binding, { target: "client", path: "x" });
+    assert.deepEqual(seen, ["a1", "c1"]);
+  });
+
+  it("refuses a target whose optional part the connection lacks, and signs the others", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.management = {
+      baseUrl: "https://api.example/v2/",
+      methods: ["GET"],
+    };
+    def.methods.selected.schema = t.Object(
+      {
+        key: staticSecretSchema(
+          ["content", "management"],
+          ["content", "management"],
+        ),
+      },
+      { additionalProperties: false },
+    );
+    def.methods.selected.authentication = {
+      kind: "static",
+      field: "key",
+      parts: ["content", "management"],
+      optionalParts: ["content", "management"],
+      placements: [
+        { in: "query", part: "content", name: "token", targets: ["api"] },
+        {
+          in: "header",
+          part: "management",
+          name: "Authorization",
+          targets: ["management"],
+        },
+      ],
+    };
+    const seen: string[] = [];
+    const h = await harness(
+      mock((url) => {
+        seen.push(url);
+        return Response.json({});
+      }),
+      { key: { content: "ct" } },
+      def,
+    );
+    await h.transport.request(h.binding, request);
+    await assert.rejects(
+      h.transport.request(h.binding, { target: "management", path: "x" }),
+      errorCode("invalid_credentials"),
+    );
+    assert.deepEqual(seen, ["https://api.example/v1/items?token=ct"]);
+  });
+
   it("refuses an empty part in a header or query placement, before any IO", async () => {
     const def = definition("bearer");
     placed(
