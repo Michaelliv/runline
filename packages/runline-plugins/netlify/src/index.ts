@@ -1,7 +1,7 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
-  credentialRequest,
+  credentialOk,
   pathSegment,
 } from "../../_shared/credentials.js";
 import { netlifyCredential } from "./credentials.js";
@@ -32,13 +32,11 @@ async function paginate(
   let page = 0;
   const perPage = 100;
   while (true) {
-    const response = await credentialRequest(ctx, netlifyCredential, {
+    const response = await credentialOk(ctx, netlifyCredential, "netlify", {
       target: "api",
       path,
       query: { page, per_page: perPage, ...query },
     });
-    if (!response.ok)
-      throw new Error(`netlify: request failed (HTTP ${response.status})`);
     const items = (await response.json()) as unknown[];
     all.push(...items);
     const link = response.headers.get("link") ?? "";
