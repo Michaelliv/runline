@@ -40,6 +40,7 @@ import {
   StringOrStringArray,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
+import { seg } from "../../_shared/provider.js";
 
 // `rrule` ships as CJS; named imports fail under Node ESM.
 const { RRule } = rrulePkg as unknown as { RRule: typeof import("rrule").RRule };
@@ -134,9 +135,9 @@ async function paginateAll(
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function encodeCalendarId(id: string): string {
-  // Calendar IDs are email-shaped. Decode-then-encode tolerates
-  // double-encoded input from upstream callers.
-  return encodeURIComponent(decodeURIComponent(id));
+  // Calendar IDs are email-shaped. Decoding first tolerates
+  // already-encoded input from upstream callers.
+  return seg(decodeURIComponent(id), "calendar ID", "googleCalendar");
 }
 
 function splitAttendees(input: unknown): Array<{ email: string }> | undefined {
@@ -859,7 +860,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       const res = (await calRequest(
         ctx,
         "GET",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${p.eventId}`,
+        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${seg(p.eventId, "event ID", "googleCalendar")}`,
         undefined,
         qs,
       )) as RecurringEvent;
@@ -924,7 +925,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       if (p.pageToken) qs.pageToken = p.pageToken;
       const path = `/calendars/${encodeCalendarId(
         p.calendarId as string,
-      )}/events/${p.eventId}/instances`;
+      )}/events/${seg(p.eventId, "event ID", "googleCalendar")}/instances`;
       if (p.returnAll) return paginateAll(ctx, path, "items", qs);
       if (p.maxResults) qs.maxResults = p.maxResults;
       return calRequest(ctx, "GET", path, undefined, qs);
@@ -946,7 +947,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
         const instance = (await calRequest(
           ctx,
           "GET",
-          `/calendars/${calendarId}/events/${eventId}`,
+          `/calendars/${calendarId}/events/${seg(eventId, "event ID", "googleCalendar")}`,
         )) as { recurringEventId?: string };
         if (!instance.recurringEventId) {
           throw new Error(
@@ -984,7 +985,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       return calRequest(
         ctx,
         "PATCH",
-        `/calendars/${calendarId}/events/${eventId}`,
+        `/calendars/${calendarId}/events/${seg(eventId, "event ID", "googleCalendar")}`,
         body as unknown as Record<string, unknown>,
         qs,
       );
@@ -1002,7 +1003,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       return calRequest(
         ctx,
         "DELETE",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${p.eventId}`,
+        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${seg(p.eventId, "event ID", "googleCalendar")}`,
         undefined,
         qs,
       );
@@ -1022,7 +1023,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       return calRequest(
         ctx,
         "POST",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${p.eventId}/move`,
+        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${seg(p.eventId, "event ID", "googleCalendar")}/move`,
         undefined,
         qs,
       );
@@ -1152,7 +1153,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       return calRequest(
         ctx, "PATCH",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl/${encodeURIComponent(p.ruleId as string)}`,
+        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl/${seg(p.ruleId, "rule ID", "googleCalendar")}`,
         { role: p.role },
       );
     },
@@ -1166,7 +1167,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       await calRequest(
         ctx, "DELETE",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl/${encodeURIComponent(p.ruleId as string)}`,
+        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl/${seg(p.ruleId, "rule ID", "googleCalendar")}`,
       );
       return { success: true };
     },
@@ -1189,7 +1190,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     inputSchema: settingsSchemas.get,
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      return calRequest(ctx, "GET", `/users/me/settings/${encodeURIComponent(p.setting as string)}`);
+      return calRequest(ctx, "GET", `/users/me/settings/${seg(p.setting, "setting", "googleCalendar")}`);
     },
   });
 }

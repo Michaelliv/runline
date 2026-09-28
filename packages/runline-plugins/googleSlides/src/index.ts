@@ -36,6 +36,7 @@ import {
   StringArray,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
+import { seg } from "../../_shared/provider.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ function extractPresentationId(input: string): string {
   if (!input)
     throw new Error("googleSlides: presentationId or URL is required");
   const m = input.match(PRES_URL_REGEX);
-  return m ? m[1] : input;
+  return seg(m ? m[1] : input, "presentation ID", "googleSlides");
 }
 
 // ─── Plugin ──────────────────────────────────────────────────────
@@ -332,7 +333,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       return slidesRequest(
         ctx,
         "GET",
-        `/presentations/${id}/pages/${p.pageObjectId}`,
+        `/presentations/${id}/pages/${seg(p.pageObjectId, "page ID", "googleSlides")}`,
       );
     },
   });
@@ -369,7 +370,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       const res = (await slidesRequest(
         ctx,
         "GET",
-        `/presentations/${id}/pages/${p.pageObjectId}/thumbnail`,
+        `/presentations/${id}/pages/${seg(p.pageObjectId, "page ID", "googleSlides")}/thumbnail`,
         undefined,
         qs,
       )) as { contentUrl: string; width?: number; height?: number };
