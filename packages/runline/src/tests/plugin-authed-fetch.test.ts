@@ -71,7 +71,6 @@ const UNBROKERED_FETCH = new Set([
   "nextcloud/src/index.ts",
   "npm/src/index.ts",
   "odoo/src/index.ts",
-  "plivo/src/index.ts",
   "reddit/src/index.ts",
   "salesforce/src/shared.ts",
   "signl4/src/index.ts",
@@ -80,7 +79,6 @@ const UNBROKERED_FETCH = new Set([
   "strapi/src/index.ts",
   "telegram/src/index.ts",
   "travisci/src/index.ts",
-  "twilio/src/index.ts",
   "unleashedSoftware/src/index.ts",
 ]);
 

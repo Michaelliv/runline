@@ -84,10 +84,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["odoo", "login: the password rides in every JSON-RPC argument list"],
   [
-    "plivo",
-    "config split: authId is both the Basic username, stored as a secret, and a path segment a brokered config must still hold",
-  ],
-  [
     "reddit",
     "optional credential: a secret-free config cannot say whether to sign",
   ],
@@ -112,10 +108,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   [
     "travisci",
     "encoded path segment: repo slugs travel %2F-encoded, which the path policy refuses",
-  ],
-  [
-    "twilio",
-    "config split: accountSid is both the Basic username, stored as a secret, and a path segment a brokered config must still hold",
   ],
   ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
