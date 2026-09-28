@@ -501,9 +501,10 @@ A static placement is one of:
 |---|---|
 | `{ in: "header", part, name, prefix? }` | `<name>: <prefix><part>` |
 | `{ in: "query", part, name }` | `?<name>=<part>` |
+| `{ in: "body", part, name }` | a top-level field of a JSON-object or form body; `?<name>=<part>` when the request has no body |
 | `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
 
-Every header and query parameter a placement sets is reserved: a caller may never supply it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`).
+Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`).
 
 Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
 

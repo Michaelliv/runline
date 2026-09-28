@@ -109,12 +109,55 @@ export function injectedHeaders(auth: CredentialAuthentication): string[] {
   );
 }
 
-/** Query parameters a method's authentication sets; callers never set them. */
+/**
+ * Query parameters a method's authentication sets, a body part's included
+ * (it reaches the query when a request has no body); callers never set them.
+ */
 export function injectedParams(auth: CredentialAuthentication): string[] {
   if (auth.kind === "oauth2") return [];
   return auth.placements.flatMap((placement) =>
-    placement.in === "query" ? [placement.name] : [],
+    placement.in === "query" || placement.in === "body" ? [placement.name] : [],
   );
+}
+
+/** Body fields a method's authentication sets; callers never set them. */
+export function injectedFields(auth: CredentialAuthentication): string[] {
+  if (auth.kind === "oauth2") return [];
+  return auth.placements.flatMap((placement) =>
+    placement.in === "body" ? [placement.name] : [],
+  );
+}
+
+/** A request body the transport can add a field to, by its Content-Type. */
+export function bodyFormat(headers: Headers): "json" | "form" | undefined {
+  const type = headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+  return type === "application/json"
+    ? "json"
+    : type === "application/x-www-form-urlencoded"
+      ? "form"
+      : undefined;
+}
+
+/**
+ * The top-level field names of a JSON-object or form body. Anything else —
+ * no recognized Content-Type, malformed JSON, a JSON value that is not an
+ * object — cannot carry a body part and is refused.
+ */
+export function bodyFields(headers: Headers, body: Uint8Array): string[] {
+  const text = Buffer.from(body).toString();
+  const format = bodyFormat(headers);
+  if (format === "form") return [...new URLSearchParams(text).keys()];
+  if (format === "json") {
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      throw new AuthError("request_not_allowed");
+    }
+    if (value && typeof value === "object" && !Array.isArray(value))
+      return Object.keys(value);
+  }
+  throw new AuthError("request_not_allowed");
 }
 
 /**

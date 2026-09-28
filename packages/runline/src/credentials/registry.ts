@@ -112,7 +112,7 @@ function validateStatic(
           !/^[\x21-\x7e][\x20-\x7e]{0,31}$/.test(placement.prefix))
       )
         throw new AuthError("invalid_definition");
-    } else if (placement.in === "query") {
+    } else if (placement.in === "query" || placement.in === "body") {
       place(placement.part);
       identifier(placement.name);
     } else if (placement.in === "basic") {

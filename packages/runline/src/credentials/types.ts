@@ -47,6 +47,11 @@ export type SecretPlacement =
       prefix?: string;
     }
   | { in: "query"; part: string; name: string }
+  /**
+   * A top-level field of a JSON-object or form body; in the query when
+   * the request carries no body.
+   */
+  | { in: "body"; part: string; name: string }
   /** HTTP Basic in Authorization, from two parts; either may be empty. */
   | { in: "basic"; username: string; password: string };
 

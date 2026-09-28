@@ -10,8 +10,11 @@ import type { OAuthRuntimeOptions } from "../auth/types.js";
 import type { ConnectionConfig } from "../plugin/types.js";
 import { sendResource } from "./http.js";
 import {
+  bodyFields,
+  bodyFormat,
   bounded,
   headerName,
+  injectedFields,
   injectedHeaders,
   injectedParams,
   refuseCredentialParams,
@@ -162,11 +165,39 @@ function basicCredentials(username: string, password: string): string {
   return Buffer.from(`${username}:${password}`).toString("base64");
 }
 
-/** Applies a credential to one outgoing request's headers and URL. */
-type Signer = (headers: Headers, url: URL) => void;
+/** One outgoing request, as a signer may change it. */
+interface Outgoing {
+  headers: Headers;
+  url: URL;
+  body?: Buffer;
+}
+
+/** Applies a credential to one outgoing request. */
+type Signer = (request: Outgoing) => void;
 
 function bearer(token: string): Signer {
-  return (headers) => headers.set("authorization", `Bearer ${token}`);
+  return ({ headers }) => headers.set("authorization", `Bearer ${token}`);
+}
+
+/**
+ * Adds a field to a JSON-object or form body, whose shape was checked
+ * before any IO; with no body, to the query.
+ */
+function addField(request: Outgoing, name: string, value: string): void {
+  if (!request.body) {
+    request.url.searchParams.append(name, value);
+    return;
+  }
+  const text = request.body.toString();
+  if (bodyFormat(request.headers) === "form") {
+    const form = new URLSearchParams(text);
+    form.append(name, value);
+    request.body = Buffer.from(form.toString());
+  } else {
+    request.body = Buffer.from(
+      JSON.stringify({ ...JSON.parse(text), [name]: value }),
+    );
+  }
 }
 
 /**
@@ -184,16 +215,19 @@ function placeStatic(
         parts[placement.username],
         parts[placement.password],
       );
-      return (headers) => headers.set("authorization", `Basic ${value}`);
+      return ({ headers }) => headers.set("authorization", `Basic ${value}`);
     }
     const value = secret(parts[placement.part]);
     if (placement.in === "query")
-      return (_headers, url) => url.searchParams.append(placement.name, value);
+      return ({ url }) => url.searchParams.append(placement.name, value);
+    if (placement.in === "body")
+      return (request) => addField(request, placement.name, value);
     const name = headerName(placement.name);
-    return (headers) => headers.set(name, `${placement.prefix ?? ""}${value}`);
+    return ({ headers }) =>
+      headers.set(name, `${placement.prefix ?? ""}${value}`);
   });
-  return (headers, url) => {
-    for (const step of steps) step(headers, url);
+  return (request) => {
+    for (const step of steps) step(request);
   };
 }
 
@@ -378,6 +412,12 @@ export class CredentialTransport {
             : input.body.byteLength;
         if (size > this.options.maxRequestBytes) throw new Error();
         body = Buffer.from(input.body);
+        const fields = injectedFields(auth);
+        if (
+          fields.length &&
+          bodyFields(headers, body).some((name) => fields.includes(name))
+        )
+          throw new Error();
       }
       if (input.idempotencyKey !== undefined) {
         if (!target.idempotency?.methods.includes(verb)) throw new Error();
@@ -391,21 +431,30 @@ export class CredentialTransport {
       (verb === "GET" || verb === "HEAD" || input.idempotencyKey !== undefined);
     let { sign, grant } = await this.authorize(binding, method);
     const send = async (signer: Signer) => {
-      const signed = new Headers(headers);
-      const destination = new URL(url);
-      signer(signed, destination);
-      return sendResource(destination.toString(), verb, signed, body, {
-        fetch: this.options.fetch,
-        timeoutMs: Math.min(
-          target.timeoutMs ?? this.options.timeoutMs,
-          this.options.maxTargetTimeoutMs,
-        ),
-        maxResponseBytes: Math.min(
-          target.maxResponseBytes ?? this.options.maxResponseBytes,
-          this.options.maxTargetResponseBytes,
-        ),
-        resumableUpload: target.resumableUpload,
-      });
+      const outgoing: Outgoing = {
+        headers: new Headers(headers),
+        url: new URL(url),
+        body,
+      };
+      signer(outgoing);
+      return sendResource(
+        outgoing.url.toString(),
+        verb,
+        outgoing.headers,
+        outgoing.body,
+        {
+          fetch: this.options.fetch,
+          timeoutMs: Math.min(
+            target.timeoutMs ?? this.options.timeoutMs,
+            this.options.maxTargetTimeoutMs,
+          ),
+          maxResponseBytes: Math.min(
+            target.maxResponseBytes ?? this.options.maxResponseBytes,
+            this.options.maxTargetResponseBytes,
+          ),
+          resumableUpload: target.resumableUpload,
+        },
+      );
     };
     const first = await send(sign);
     if (
