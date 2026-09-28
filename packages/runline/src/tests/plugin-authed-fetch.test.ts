@@ -68,7 +68,6 @@ const UNBROKERED_FETCH = new Set([
   "odoo/src/index.ts",
   "salesforce/src/shared.ts",
   "steel/src/shared.ts",
-  "storyblok/src/index.ts",
   "strapi/src/index.ts",
   "unleashedSoftware/src/index.ts",
 ]);

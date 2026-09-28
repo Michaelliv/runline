@@ -72,10 +72,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "WebSocket: the key rides in a wss:// CDP URL the transport cannot carry",
   ],
   [
-    "storyblok",
-    "two credentials in one connection: content query token and management header token",
-  ],
-  [
     "strapi",
     "login: password mode mints a JWT; one plugin cannot sign two ways",
   ],
