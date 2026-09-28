@@ -1,5 +1,5 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { brandfetchCredential } from "./credentials.js";
 
 function apiRequest(
@@ -8,7 +8,7 @@ function apiRequest(
 ): Promise<Record<string, unknown>> {
   return credentialJson(ctx, brandfetchCredential, "brandfetch", {
     target: "api",
-    path: `brands/${encodeURIComponent(domain)}`,
+    path: `brands/${pathSegment(domain)}`,
   }) as Promise<Record<string, unknown>>;
 }
 
