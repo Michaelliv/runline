@@ -107,7 +107,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["getresponse", "phase 3: not yet migrated"],
   ["gett", "login: phone OTP login and a rotating, device-bound refresh grant"],
   ["ghost", "signature: a JWT is minted per request from the admin key"],
-  ["github", "phase 2: not yet migrated"],
   ["gitlab", "phase 2: not yet migrated"],
   ["gong", "phase 3: not yet migrated"],
   ["googleImage", "phase 3: not yet migrated"],

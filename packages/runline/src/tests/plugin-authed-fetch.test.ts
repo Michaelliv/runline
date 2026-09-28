@@ -136,7 +136,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "freshworksCrm/src/index.ts",
   "getresponse/src/index.ts",
   "ghost/src/index.ts",
-  "github/src/index.ts",
   "gitlab/src/index.ts",
   "gong/src/index.ts",
   "googleImage/src/index.ts",
