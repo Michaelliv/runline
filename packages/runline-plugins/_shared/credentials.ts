@@ -357,19 +357,23 @@ export function errorIdentifier(value: unknown): string | undefined {
 }
 
 /**
- * How a failed request reads: the status, and the identifiers a provider
- * returns for correcting the call — its error `code` and the offending
- * `param` — never its free-text message.
+ * How a failed request reads: its HTTP status when the status is the
+ * failure, and the identifiers a provider returns for correcting the call
+ * — its error `code` and the offending `param` — never its free-text
+ * message.
  */
 export function failureMessage(
   plugin: string,
-  status: number,
+  status: number | undefined,
   detail: { code?: string; param?: string } = {},
 ): string {
-  const parts = [detail.code, detail.param && `param: ${detail.param}`]
+  const identifiers = [detail.code, detail.param && `param: ${detail.param}`]
     .filter(Boolean)
     .join(", ");
-  return `${plugin}: request failed (HTTP ${status}${parts ? ` ${parts}` : ""})`;
+  const inner = [status === undefined ? "" : `HTTP ${status}`, identifiers]
+    .filter(Boolean)
+    .join(" ");
+  return `${plugin}: request failed${inner ? ` (${inner})` : ""}`;
 }
 
 /**
@@ -378,8 +382,11 @@ export function failureMessage(
  * identifier — never its free-text message.
  */
 export function answerFailed(plugin: string, code: unknown): Error {
-  const name = errorIdentifier(typeof code === "number" ? String(code) : code);
-  return new Error(`${plugin}: request failed${name ? ` (${name})` : ""}`);
+  return new Error(
+    failureMessage(plugin, undefined, {
+      code: errorIdentifier(typeof code === "number" ? String(code) : code),
+    }),
+  );
 }
 
 /** A failed request, reported by status alone. */
