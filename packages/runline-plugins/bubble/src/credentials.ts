@@ -8,6 +8,8 @@ import {
  * A Data API token, sent as a bearer to the app's own base: the app's
  * bubbleapps.io host, or the self-hosted domain, with the version-test
  * path prefix when the connection targets the development environment.
+ * A self-hosted connection must name its HTTPS domain; it is never sent
+ * to bubbleapps.io instead.
  */
 export const bubbleCredential = staticCredential({
   id: "bubble",
@@ -19,7 +21,7 @@ export const bubbleCredential = staticCredential({
         ? "version-test/api/1.1/"
         : "api/1.1/";
     const baseUrl =
-      config.hosting === "selfHosted" && config.domain
+      config.hosting === "selfHosted"
         ? httpsBase(config.domain, path)
         : `https://${hostLabel(config.appName)}.bubbleapps.io/${path}`;
     return {

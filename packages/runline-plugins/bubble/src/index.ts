@@ -181,10 +181,11 @@ export default function bubble(rl: RunlinePluginAPI) {
           string,
           unknown
         >;
-        const resp = data.response as Record<string, unknown>;
+        const resp = (data.response ?? {}) as Record<string, unknown>;
         const items = (resp.results as unknown[]) ?? [];
         results.push(...items);
-        if ((resp.remaining as number) === 0) break;
+        // Only a positive remaining count asks for another page.
+        if (!items.length || !((resp.remaining as number) > 0)) break;
         qs.cursor = (qs.cursor as number) + (qs.limit as number);
       }
       return results;
