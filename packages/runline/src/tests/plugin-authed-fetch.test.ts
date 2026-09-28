@@ -138,7 +138,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "mailgun/src/index.ts",
   "mailjet/src/index.ts",
   "mandrill/src/index.ts",
-  "marketstack/src/index.ts",
   "messagebird/src/index.ts",
   "mocean/src/index.ts",
   "msg91/src/index.ts",

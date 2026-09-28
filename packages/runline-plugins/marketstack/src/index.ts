@@ -1,27 +1,24 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { marketstackCredential } from "./credentials.js";
 
-async function apiRequest(
-  apiKey: string,
-  useHttps: boolean,
-  method: string,
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+function api(
+  ctx: ActionContext,
   endpoint: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown> {
-  const protocol = useHttps ? "https" : "http";
-  const url = new URL(`${protocol}://api.marketstack.com/v1${endpoint}`);
-  url.searchParams.set("access_key", apiKey);
-  for (const [k, v] of Object.entries(qs)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-  }
-  const res = await fetch(url.toString(), { method });
-  if (!res.ok)
-    throw new Error(`Marketstack API error ${res.status}: ${await res.text()}`);
-  return res.json();
+  return credentialJson(ctx, marketstackCredential, "marketstack", {
+    target: "api",
+    path: endpoint,
+    query: qs,
+  });
 }
 
 async function paginateAll(
-  apiKey: string,
-  useHttps: boolean,
+  ctx: ActionContext,
   endpoint: string,
   qs: Record<string, unknown> = {},
   limit?: number,
@@ -30,10 +27,7 @@ async function paginateAll(
   qs.offset = 0;
   let resp: Record<string, unknown>;
   do {
-    resp = (await apiRequest(apiKey, useHttps, "GET", endpoint, qs)) as Record<
-      string,
-      unknown
-    >;
+    resp = (await api(ctx, endpoint, qs)) as Record<string, unknown>;
     const data = resp.data as unknown[];
     if (data) all.push(...data);
     if (limit && all.length >= limit) return all.slice(0, limit);
@@ -45,6 +39,7 @@ async function paginateAll(
 export default function marketstack(rl: RunlinePluginAPI) {
   rl.setName("marketstack");
   rl.setVersion("0.1.0");
+  rl.setCredential(marketstackCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -56,14 +51,9 @@ export default function marketstack(rl: RunlinePluginAPI) {
     useHttps: {
       type: "boolean",
       required: false,
-      description: "Use HTTPS (requires paid plan). Default: false",
+      description: "Ignored: requests always use HTTPS",
       default: false,
     },
-  });
-
-  const conn = (ctx: { connection: { config: Record<string, unknown> } }) => ({
-    apiKey: ctx.connection.config.apiKey as string,
-    useHttps: (ctx.connection.config.useHttps as boolean) ?? false,
   });
 
   // ── End-of-Day Data ─────────────────────────────────
@@ -108,18 +98,17 @@ export default function marketstack(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const { apiKey, useHttps } = conn(ctx);
       const qs: Record<string, unknown> = { symbols: p.symbols };
       if (p.sort) qs.sort = p.sort;
       if (p.exchange) qs.exchange = p.exchange;
 
       let endpoint: string;
       if (p.latest) {
-        endpoint = "/eod/latest";
+        endpoint = "eod/latest";
       } else if (p.specificDate) {
-        endpoint = `/eod/${(p.specificDate as string).split("T")[0]}`;
+        endpoint = `eod/${seg((p.specificDate as string).split("T")[0])}`;
       } else if (p.dateFrom && p.dateTo) {
-        endpoint = "/eod";
+        endpoint = "eod";
         qs.date_from = (p.dateFrom as string).split("T")[0];
         qs.date_to = (p.dateTo as string).split("T")[0];
       } else {
@@ -128,13 +117,7 @@ export default function marketstack(rl: RunlinePluginAPI) {
         );
       }
 
-      return paginateAll(
-        apiKey,
-        useHttps,
-        endpoint,
-        qs,
-        p.limit as number | undefined,
-      );
+      return paginateAll(ctx, endpoint, qs, p.limit as number | undefined);
     },
   });
 
@@ -151,12 +134,9 @@ export default function marketstack(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { apiKey, useHttps } = conn(ctx);
-      return apiRequest(
-        apiKey,
-        useHttps,
-        "GET",
-        `/exchanges/${(input as { exchange: string }).exchange}`,
+      return api(
+        ctx,
+        `exchanges/${seg((input as { exchange: string }).exchange)}`,
       );
     },
   });
@@ -174,13 +154,7 @@ export default function marketstack(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { apiKey, useHttps } = conn(ctx);
-      return apiRequest(
-        apiKey,
-        useHttps,
-        "GET",
-        `/tickers/${(input as { symbol: string }).symbol}`,
-      );
+      return api(ctx, `tickers/${seg((input as { symbol: string }).symbol)}`);
     },
   });
 }

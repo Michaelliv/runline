@@ -129,7 +129,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "two credentials in one connection: basic pair for email, bearer for SMS",
   ],
   ["mandrill", "body key: key travels in the JSON body of every call"],
-  ["marketstack", "phase 3: not yet migrated"],
   ["messagebird", "phase 3: not yet migrated"],
   [
     "mocean",
