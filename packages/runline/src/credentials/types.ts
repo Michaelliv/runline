@@ -7,7 +7,17 @@ import type {
 } from "../auth/types.js";
 import type { ConnectionHandle } from "../connections/types.js";
 
-export type HttpMethod = "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
+/** HTTP methods, and the WebDAV methods a file API needs (RFC 4918). */
+export type HttpMethod =
+  | "GET"
+  | "HEAD"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
+  | "MKCOL"
+  | "COPY"
+  | "MOVE";
 
 /** Host-approved resource boundary. No wildcards, templates, or agent-selected origins. */
 export interface CredentialTarget {

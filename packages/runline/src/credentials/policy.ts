@@ -13,6 +13,9 @@ export const HTTP_METHODS: readonly HttpMethod[] = [
   "PUT",
   "PATCH",
   "DELETE",
+  "MKCOL",
+  "COPY",
+  "MOVE",
 ];
 
 /** The most any target may declare, and any host may allow, per request. */

@@ -284,9 +284,21 @@ function validateMethod(method: CredentialMethod): void {
       throw new AuthError("invalid_definition");
     for (const allowed of target.allowedHeaders ?? []) {
       const header = headerName(allowed);
-      if (injected.includes(header) || header === "authorization")
+      if (
+        injected.includes(header) ||
+        header === "authorization" ||
+        header === "destination"
+      )
         throw new AuthError("invalid_definition");
     }
+    // A path part is inserted into the request URL alone; a Destination on
+    // the same target would name a resource outside the signed position.
+    if (
+      auth.kind === "static" &&
+      (target.methods.includes("COPY") || target.methods.includes("MOVE")) &&
+      placementsFor(auth, name).some((placement) => placement.in === "path")
+    )
+      throw new AuthError("invalid_definition");
     if (
       target.resumableUpload !== undefined &&
       (typeof target.resumableUpload !== "boolean" ||

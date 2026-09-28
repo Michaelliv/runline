@@ -45,6 +45,12 @@ export interface AuthenticatedRequest {
   headers?: Record<string, string>;
   /** Buffered, copied before the first await. Streams and FormData are not accepted. */
   body?: string | Uint8Array;
+  /**
+   * COPY and MOVE only, and required there: where the resource goes, a
+   * path beneath the same target checked as `path` is, sent as the
+   * absolute Destination header. Callers never set that header.
+   */
+  destination?: string;
   /** Enables write replay only with a provider-declared idempotency contract. */
   idempotencyKey?: string;
   /** Disable even otherwise-safe replay for a particular request. */
@@ -421,11 +427,26 @@ export class CredentialTransport {
           !allowed.has(normalized) ||
           reserved.includes(normalized) ||
           normalized === "authorization" ||
+          normalized === "destination" ||
           normalized === target.idempotency?.header.toLowerCase() ||
           typeof value !== "string"
         )
           throw new Error();
         headers.set(normalized, value);
+      }
+      const copies = verb === "COPY" || verb === "MOVE";
+      if (copies !== (input.destination !== undefined)) throw new Error();
+      if (input.destination !== undefined) {
+        if (
+          typeof input.destination !== "string" ||
+          !input.destination ||
+          input.destination.includes("?")
+        )
+          throw new Error();
+        headers.set(
+          "destination",
+          resourceUrl(target, input.destination).toString(),
+        );
       }
       if (input.body !== undefined) {
         if (
