@@ -103,7 +103,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "contentful/src/index.ts",
   "convertkit/src/index.ts",
   "cortex/src/index.ts",
-  "currents/src/index.ts",
   "customerIo/src/index.ts",
   "deepl/src/index.ts",
   "demio/src/index.ts",

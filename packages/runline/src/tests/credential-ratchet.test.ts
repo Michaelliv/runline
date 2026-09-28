@@ -65,7 +65,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "body key: api_secret travels in the JSON body of every write",
   ],
   ["cortex", "phase 3: not yet migrated"],
-  ["currents", "phase 3: not yet migrated"],
   [
     "customerIo",
     "two credentials in one connection: tracking and app keys, used by different actions",
