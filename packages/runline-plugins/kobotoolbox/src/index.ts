@@ -1,69 +1,56 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  httpsBase,
+  pathWithin,
+} from "../../_shared/credentials.js";
+import { kobotoolboxCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  token: string,
-  method: string,
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, kobotoolboxCredential, "kobotoolbox", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Token ${token}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`KoBoToolbox API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginate(
-  baseUrl: string,
-  token: string,
+  ctx: ActionContext,
   endpoint: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown[]> {
   const all: unknown[] = [];
   qs.limit = 3000;
-  let nextUrl: string | null = `${baseUrl}${endpoint}`;
-  const initialUrl = new URL(nextUrl);
-  for (const [k, v] of Object.entries(qs)) {
-    if (v !== undefined && v !== null)
-      initialUrl.searchParams.set(k, String(v));
-  }
-  nextUrl = initialUrl.toString();
-
-  while (nextUrl) {
-    const res = await fetch(nextUrl, {
-      headers: { Authorization: `Token ${token}`, Accept: "application/json" },
-    });
-    if (!res.ok)
-      throw new Error(
-        `KoBoToolbox API error ${res.status}: ${await res.text()}`,
-      );
-    const data = (await res.json()) as Record<string, unknown>;
-    if (data.results && Array.isArray(data.results)) {
+  let path: string | undefined = endpoint;
+  let query: Record<string, unknown> | undefined = qs;
+  while (path) {
+    const data = (await apiRequest(ctx, "GET", path, undefined, query)) as
+      | Record<string, unknown>
+      | unknown[];
+    query = undefined;
+    if (!Array.isArray(data) && data.results && Array.isArray(data.results)) {
       all.push(...(data.results as unknown[]));
-      nextUrl = (data.next as string) ?? null;
+      const next = data.next as string | null | undefined;
+      // A next-page link stays beneath the connection's own API base.
+      path = next
+        ? pathWithin(httpsBase(ctx.connection.config.url, "api/v2/"), next)
+        : undefined;
     } else {
       // Non-paginated response
       return Array.isArray(data) ? data : [data];
@@ -75,6 +62,7 @@ async function paginate(
 export default function kobotoolbox(rl: RunlinePluginAPI) {
   rl.setName("kobotoolbox");
   rl.setVersion("0.1.0");
+  rl.setCredential(kobotoolboxCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -91,11 +79,6 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
   });
 
-  const conn = (ctx: { connection: { config: Record<string, unknown> } }) => ({
-    baseUrl: (ctx.connection.config.url as string).replace(/\/$/, ""),
-    token: ctx.connection.config.token as string,
-  });
-
   // ── Form ────────────────────────────────────────────
 
   rl.registerAction("form.get", {
@@ -105,12 +88,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       formId: { type: "string", required: true, description: "Form/asset UID" },
     },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/v2/assets/${(input as { formId: string }).formId}`,
+        `assets/${seg((input as { formId: string }).formId)}`,
       );
     },
   });
@@ -137,23 +118,15 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (p.filter) qs.q = p.filter;
       if (p.ordering) qs.ordering = (p.descending ? "-" : "") + p.ordering;
       if (p.limit) {
         qs.limit = p.limit;
-        return apiRequest(
-          baseUrl,
-          token,
-          "GET",
-          "/api/v2/assets/",
-          undefined,
-          qs,
-        );
+        return apiRequest(ctx, "GET", "assets/", undefined, qs);
       }
-      return paginate(baseUrl, token, "/api/v2/assets/", qs);
+      return paginate(ctx, "assets/", qs);
     },
   });
 
@@ -162,12 +135,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     description: "Redeploy a form",
     inputSchema: { formId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "PATCH",
-        `/api/v2/assets/${(input as { formId: string }).formId}/deployment/`,
+        `assets/${seg((input as { formId: string }).formId)}/deployment/`,
       );
     },
   });
@@ -188,14 +159,12 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, submissionId, fields } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       const qs: Record<string, unknown> = {};
       if (fields && Array.isArray(fields)) qs.fields = JSON.stringify(fields);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/v2/assets/${formId}/data/${submissionId}`,
+        `assets/${seg(formId)}/data/${seg(submissionId)}`,
         undefined,
         qs,
       );
@@ -222,7 +191,6 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       const qs: Record<string, unknown> = {};
       if (p.query) qs.query = p.query;
       if (p.sort) qs.sort = p.sort;
@@ -231,16 +199,15 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       if (p.limit) {
         qs.limit = p.limit;
         const data = (await apiRequest(
-          baseUrl,
-          token,
+          ctx,
           "GET",
-          `/api/v2/assets/${p.formId}/data/`,
+          `assets/${seg(p.formId)}/data/`,
           undefined,
           qs,
         )) as Record<string, unknown>;
         return data.results ?? data;
       }
-      return paginate(baseUrl, token, `/api/v2/assets/${p.formId}/data/`, qs);
+      return paginate(ctx, `assets/${seg(p.formId)}/data/`, qs);
     },
   });
 
@@ -253,12 +220,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, submissionId } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       await apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "DELETE",
-        `/api/v2/assets/${formId}/data/${submissionId}`,
+        `assets/${seg(formId)}/data/${seg(submissionId)}`,
       );
       return { success: true };
     },
@@ -273,12 +238,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, submissionId } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/v2/assets/${formId}/data/${submissionId}/validation_status/`,
+        `assets/${seg(formId)}/data/${seg(submissionId)}/validation_status/`,
       );
     },
   });
@@ -301,12 +264,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "PATCH",
-        `/api/v2/assets/${formId}/data/${submissionId}/validation_status/`,
+        `assets/${seg(formId)}/data/${seg(submissionId)}/validation_status/`,
         { "validation_status.uid": validationStatus },
       );
     },
@@ -323,12 +284,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, hookId } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/v2/assets/${formId}/hooks/${hookId}`,
+        `assets/${seg(formId)}/hooks/${seg(hookId)}`,
       );
     },
   });
@@ -342,17 +301,15 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, limit } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       if (limit)
         return apiRequest(
-          baseUrl,
-          token,
+          ctx,
           "GET",
-          `/api/v2/assets/${formId}/hooks/`,
+          `assets/${seg(formId)}/hooks/`,
           undefined,
           { limit },
         );
-      return paginate(baseUrl, token, `/api/v2/assets/${formId}/hooks/`);
+      return paginate(ctx, `assets/${seg(formId)}/hooks/`);
     },
   });
 
@@ -365,12 +322,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, hookId } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "PATCH",
-        `/api/v2/assets/${formId}/hooks/${hookId}/retry/`,
+        `assets/${seg(formId)}/hooks/${seg(hookId)}/retry/`,
       );
     },
   });
@@ -402,16 +357,14 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, token } = conn(ctx);
       const qs: Record<string, unknown> = {};
       if (startDate) qs.start = startDate;
       if (endDate) qs.end = endDate;
       if (status) qs.status = status;
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/v2/assets/${formId}/hooks/${hookId}/logs/`,
+        `assets/${seg(formId)}/hooks/${seg(hookId)}/logs/`,
         undefined,
         qs,
       );
@@ -428,12 +381,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, hookId, logId } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "PATCH",
-        `/api/v2/assets/${formId}/hooks/${hookId}/logs/${logId}/retry/`,
+        `assets/${seg(formId)}/hooks/${seg(hookId)}/logs/${seg(logId)}/retry/`,
       );
     },
   });
@@ -445,11 +396,9 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     description: "List media files for a form",
     inputSchema: { formId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return paginate(
-        baseUrl,
-        token,
-        `/api/v2/assets/${(input as { formId: string }).formId}/files`,
+        ctx,
+        `assets/${seg((input as { formId: string }).formId)}/files`,
         { file_type: "form_media" },
       );
     },
@@ -464,12 +413,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, fileId } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/v2/assets/${formId}/files/${fileId}`,
+        `assets/${seg(formId)}/files/${seg(fileId)}`,
       );
     },
   });
@@ -483,12 +430,10 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, fileId } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "DELETE",
-        `/api/v2/assets/${formId}/files/${fileId}`,
+        `assets/${seg(formId)}/files/${seg(fileId)}`,
       );
     },
   });
@@ -506,18 +451,11 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, redirectUrl } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
-      return apiRequest(
-        baseUrl,
-        token,
-        "POST",
-        `/api/v2/assets/${formId}/files/`,
-        {
-          description: "Uploaded file",
-          file_type: "form_media",
-          metadata: { redirect_url: redirectUrl },
-        },
-      );
+      return apiRequest(ctx, "POST", `assets/${seg(formId)}/files/`, {
+        description: "Uploaded file",
+        file_type: "form_media",
+        metadata: { redirect_url: redirectUrl },
+      });
     },
   });
 }
