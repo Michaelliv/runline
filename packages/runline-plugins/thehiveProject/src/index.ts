@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { thehiveProjectCredential } from "./credentials.js";
-
-/** An ID or entity name as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -24,15 +21,12 @@ function api(
 // TheHive v1 query API — paginated search
 async function query(
   ctx: ActionContext,
-  scope: { query: string; id?: string; restrictTo?: string },
+  queryName: string,
   filters?: Record<string, unknown>[],
   sortFields?: Record<string, unknown>[],
   limit?: number,
 ): Promise<unknown> {
-  const q: Record<string, unknown>[] = [];
-  if (scope.id) q.push({ _name: scope.query, idOrName: scope.id });
-  else q.push({ _name: scope.query });
-  if (scope.restrictTo) q.push({ _name: scope.restrictTo });
+  const q: Record<string, unknown>[] = [{ _name: queryName }];
   if (filters && filters.length) q.push({ _name: "filter", _and: filters });
   if (sortFields && sortFields.length)
     q.push({ _name: "sort", _fields: sortFields });
@@ -54,14 +48,11 @@ async function query(
   return results;
 }
 
-type Scope = { query: string; id?: string; restrictTo?: string };
-
 function searchAction(
   rl: RunlinePluginAPI,
   name: string,
-  scope: Scope | string,
+  queryName: string,
   description: string,
-  extraInputs?: Record<string, unknown>,
 ) {
   rl.registerAction(name, {
     access: "read",
@@ -78,27 +69,12 @@ function searchAction(
         required: false,
         description: "Array of sort field objects",
       },
-      ...extraInputs,
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      let s: Scope;
-      if (typeof scope === "string") {
-        s = { query: scope };
-      } else {
-        s = scope;
-      }
-      // If there's scope customization via input (e.g. caseId for tasks)
-      if (p.caseId && typeof scope === "object" && scope.restrictTo) {
-        s = {
-          query: "getCase",
-          id: p.caseId as string,
-          restrictTo: scope.restrictTo,
-        };
-      }
       return query(
         ctx,
-        s,
+        queryName,
         p.filters as Record<string, unknown>[] | undefined,
         p.sort as Record<string, unknown>[] | undefined,
         p.limit as number | undefined,
@@ -155,7 +131,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `v1/alert/${seg((input as Record<string, unknown>).id)}`,
+        `v1/alert/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -175,7 +151,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...body } = input as Record<string, unknown>;
-      await api(ctx, "PATCH", `v1/alert/${seg(id)}`, body);
+      await api(ctx, "PATCH", `v1/alert/${pathSegment(id)}`, body);
       return { success: true };
     },
   });
@@ -188,7 +164,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `v1/alert/${seg((input as Record<string, unknown>).id)}`,
+        `v1/alert/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -205,7 +181,11 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `alert/${seg(p.alertId)}/merge/${seg(p.caseId)}`);
+      return api(
+        ctx,
+        "POST",
+        `alert/${pathSegment(p.alertId)}/merge/${pathSegment(p.caseId)}`,
+      );
     },
   });
 
@@ -220,7 +200,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = {};
       if (p.caseTemplate) body.caseTemplate = p.caseTemplate;
-      return api(ctx, "POST", `v1/alert/${seg(p.id)}/case`, body);
+      return api(ctx, "POST", `v1/alert/${pathSegment(p.id)}/case`, body);
     },
   });
 
@@ -233,7 +213,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      await api(ctx, "PATCH", `v1/alert/${seg(p.id)}`, {
+      await api(ctx, "PATCH", `v1/alert/${pathSegment(p.id)}`, {
         status: p.status,
       });
       return { success: true };
@@ -289,7 +269,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...body } = input as Record<string, unknown>;
-      await api(ctx, "PATCH", `v1/case/${seg(id)}`, body);
+      await api(ctx, "PATCH", `v1/case/${pathSegment(id)}`, body);
       return { success: true };
     },
   });
@@ -302,7 +282,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `v1/case/${seg((input as Record<string, unknown>).id)}`,
+        `v1/case/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -318,7 +298,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `v1/case/${seg((input as Record<string, unknown>).id)}/timeline`,
+        `v1/case/${pathSegment((input as Record<string, unknown>).id)}/timeline`,
       );
     },
   });
@@ -338,7 +318,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { caseId, ...body } = input as Record<string, unknown>;
-      return api(ctx, "POST", `v1/case/${seg(caseId)}/task`, body);
+      return api(ctx, "POST", `v1/case/${pathSegment(caseId)}/task`, body);
     },
   });
 
@@ -368,7 +348,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...body } = input as Record<string, unknown>;
-      await api(ctx, "PATCH", `v1/task/${seg(id)}`, body);
+      await api(ctx, "PATCH", `v1/task/${pathSegment(id)}`, body);
       return { success: true };
     },
   });
@@ -381,7 +361,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `v1/task/${seg((input as Record<string, unknown>).id)}`,
+        `v1/task/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -421,7 +401,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `v1/${seg(createIn)}/${seg(parentId)}/observable`,
+        `v1/${pathSegment(createIn)}/${pathSegment(parentId)}/observable`,
         body,
       );
     },
@@ -456,7 +436,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...body } = input as Record<string, unknown>;
-      await api(ctx, "PATCH", `v1/observable/${seg(id)}`, body);
+      await api(ctx, "PATCH", `v1/observable/${pathSegment(id)}`, body);
       return { success: true };
     },
   });
@@ -469,7 +449,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `v1/observable/${seg((input as Record<string, unknown>).id)}`,
+        `v1/observable/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -489,9 +469,14 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `v1/${seg(p.addTo)}/${seg(p.parentId)}/comment`, {
-        message: p.message,
-      });
+      return api(
+        ctx,
+        "POST",
+        `v1/${pathSegment(p.addTo)}/${pathSegment(p.parentId)}/comment`,
+        {
+          message: p.message,
+        },
+      );
     },
   });
 
@@ -504,7 +489,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "PATCH", `v1/comment/${seg(p.id)}`, {
+      return api(ctx, "PATCH", `v1/comment/${pathSegment(p.id)}`, {
         message: p.message,
       });
     },
@@ -518,7 +503,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `v1/comment/${seg((input as Record<string, unknown>).id)}`,
+        `v1/comment/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -539,7 +524,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { taskId, ...body } = input as Record<string, unknown>;
-      return api(ctx, "POST", `v1/task/${seg(taskId)}/log`, body);
+      return api(ctx, "POST", `v1/task/${pathSegment(taskId)}/log`, body);
     },
   });
 
@@ -564,7 +549,7 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `v1/log/${seg((input as Record<string, unknown>).id)}`,
+        `v1/log/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -589,7 +574,9 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { caseId, ...body } = input as Record<string, unknown>;
-      const endpoint = caseId ? `v1/case/${seg(caseId)}/page` : "v1/page";
+      const endpoint = caseId
+        ? `v1/case/${pathSegment(caseId)}/page`
+        : "v1/page";
       return api(ctx, "POST", endpoint, body);
     },
   });
@@ -608,8 +595,8 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { pageId, caseId, ...body } = input as Record<string, unknown>;
       const endpoint = caseId
-        ? `v1/case/${seg(caseId)}/page/${seg(pageId)}`
-        : `v1/page/${seg(pageId)}`;
+        ? `v1/case/${pathSegment(caseId)}/page/${pathSegment(pageId)}`
+        : `v1/page/${pathSegment(pageId)}`;
       return api(ctx, "PATCH", endpoint, body);
     },
   });
@@ -624,8 +611,8 @@ export default function theHiveProject(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const endpoint = p.caseId
-        ? `v1/case/${seg(p.caseId)}/page/${seg(p.pageId)}`
-        : `v1/page/${seg(p.pageId)}`;
+        ? `v1/case/${pathSegment(p.caseId)}/page/${pathSegment(p.pageId)}`
+        : `v1/page/${pathSegment(p.pageId)}`;
       await api(ctx, "DELETE", endpoint);
       return { success: true };
     },
