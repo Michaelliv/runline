@@ -105,9 +105,9 @@ export function registerBrowserActions(rl: RunlinePluginAPI) {
       }
 
       const session = await api(ctx, "/v1/sessions", { method: "POST", body: compactRecord(sessionOptions) }) as Record<string, unknown>;
-      const endpoint = await socketUrl(ctx, String(session.id));
       let browser: Awaited<ReturnType<typeof playwright.chromium.connectOverCDP>> | undefined;
       try {
+        const endpoint = await socketUrl(ctx, String(session.id));
         // No fallback shim on purpose. A hand-rolled lookalike that
         // answers to the same names but implements a fraction of the API
         // does not fail — it returns wrong results, which is worse.

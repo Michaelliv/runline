@@ -21,6 +21,7 @@ import {
   TARGET_TIMEOUT_LIMIT_MS,
   TRANSPORT_HEADERS,
   targetBase,
+  targetOf,
 } from "./policy.js";
 import type {
   CredentialAuthentication,
@@ -261,8 +262,13 @@ function validateMethod(method: CredentialMethod): void {
       oauthEndpoint(auth.definition.authorization.url);
       providerParameters(auth.definition.authorization.parameters);
     }
-    for (const name of Object.values(auth.definition.password?.fields ?? {}))
+    const fields = Object.values(auth.definition.password?.fields ?? {});
+    for (const name of fields) {
       identifier(name);
+      providerParameters({ [name]: "" });
+    }
+    if (new Set(fields).size !== fields.length)
+      throw new AuthError("invalid_definition");
     for (const operation of [
       "exchange",
       "refresh",
@@ -373,11 +379,10 @@ function validateMethod(method: CredentialMethod): void {
   }
   if (method.probe) {
     const probe = method.probe;
-    const target = Object.hasOwn(method.targets, probe.target)
-      ? method.targets[probe.target]
-      : undefined;
+    const target = targetOf(method, probe.target);
     if (
       !target ||
+      target.socket ||
       !["GET", "HEAD"].includes(probe.method) ||
       !target.methods.includes(probe.method) ||
       !probe.acceptedStatuses.length ||
