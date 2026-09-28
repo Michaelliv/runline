@@ -120,7 +120,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "gong/src/index.ts",
   "googleImage/src/index.ts",
   "gotify/src/index.ts",
-  "grafana/src/index.ts",
   "graphql/src/index.ts",
   "hackernews/src/index.ts",
   "halopsa/src/index.ts",

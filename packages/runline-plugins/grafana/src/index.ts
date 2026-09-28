@@ -1,62 +1,35 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { grafanaCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+function gf(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}/api${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, grafanaCredential, "grafana", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Grafana API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    baseUrl: (ctx.connection.config.baseUrl as string).replace(/\/$/, ""),
-    apiKey: ctx.connection.config.apiKey as string,
-  };
-}
-
-function gf(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { baseUrl, apiKey } = getConn(ctx);
-  return apiRequest(baseUrl, apiKey, method, endpoint, body, qs);
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function grafana(rl: RunlinePluginAPI) {
   rl.setName("grafana");
   rl.setVersion("0.1.0");
+  rl.setCredential(grafanaCredential);
 
   rl.setConnectionSchema({
     baseUrl: {
@@ -101,7 +74,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       if (folderId !== undefined) body.folderId = folderId;
       if (overwrite !== undefined) body.overwrite = overwrite;
       if (message) body.message = message;
-      return gf(ctx, "POST", "/dashboards/db", body);
+      return gf(ctx, "POST", "dashboards/db", body);
     },
   });
 
@@ -115,7 +88,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "GET",
-        `/dashboards/uid/${(input as { uid: string }).uid}`,
+        `dashboards/uid/${seg((input as { uid: string }).uid)}`,
       );
     },
   });
@@ -149,7 +122,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       if (type) qs.type = type;
       if (folderId !== undefined) qs.folderIds = folderId;
       if (limit) qs.limit = limit;
-      return gf(ctx, "GET", "/search", undefined, qs);
+      return gf(ctx, "GET", "search", undefined, qs);
     },
   });
 
@@ -163,7 +136,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "DELETE",
-        `/dashboards/uid/${(input as { uid: string }).uid}`,
+        `dashboards/uid/${seg((input as { uid: string }).uid)}`,
       );
     },
   });
@@ -196,7 +169,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       };
       if (folderId !== undefined) body.folderId = folderId;
       if (message) body.message = message;
-      return gf(ctx, "POST", "/dashboards/db", body);
+      return gf(ctx, "POST", "dashboards/db", body);
     },
   });
 
@@ -213,7 +186,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       const { name, email } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { name };
       if (email) body.email = email;
-      return gf(ctx, "POST", "/teams", body);
+      return gf(ctx, "POST", "teams", body);
     },
   });
 
@@ -224,7 +197,11 @@ export default function grafana(rl: RunlinePluginAPI) {
       teamId: { type: "number", required: true, description: "Team ID" },
     },
     async execute(input, ctx) {
-      return gf(ctx, "GET", `/teams/${(input as { teamId: number }).teamId}`);
+      return gf(
+        ctx,
+        "GET",
+        `teams/${seg((input as { teamId: number }).teamId)}`,
+      );
     },
   });
 
@@ -245,7 +222,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       const data = (await gf(
         ctx,
         "GET",
-        "/teams/search",
+        "teams/search",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -266,7 +243,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if (name) body.name = name;
       if (email) body.email = email;
-      return gf(ctx, "PUT", `/teams/${teamId}`, body);
+      return gf(ctx, "PUT", `teams/${seg(teamId)}`, body);
     },
   });
 
@@ -280,7 +257,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "DELETE",
-        `/teams/${(input as { teamId: number }).teamId}`,
+        `teams/${seg((input as { teamId: number }).teamId)}`,
       );
     },
   });
@@ -296,7 +273,7 @@ export default function grafana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { teamId, userId } = input as { teamId: number; userId: number };
-      return gf(ctx, "POST", `/teams/${teamId}/members`, { userId });
+      return gf(ctx, "POST", `teams/${seg(teamId)}/members`, { userId });
     },
   });
 
@@ -313,7 +290,7 @@ export default function grafana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { teamId, userId } = input as { teamId: number; userId: number };
-      return gf(ctx, "DELETE", `/teams/${teamId}/members/${userId}`);
+      return gf(ctx, "DELETE", `teams/${seg(teamId)}/members/${seg(userId)}`);
     },
   });
 
@@ -327,7 +304,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "GET",
-        `/teams/${(input as { teamId: number }).teamId}/members`,
+        `teams/${seg((input as { teamId: number }).teamId)}/members`,
       );
     },
   });
@@ -354,7 +331,7 @@ export default function grafana(rl: RunlinePluginAPI) {
         loginOrEmail: string;
         role: string;
       };
-      return gf(ctx, "POST", "/org/users", { loginOrEmail, role });
+      return gf(ctx, "POST", "org/users", { loginOrEmail, role });
     },
   });
 
@@ -362,7 +339,7 @@ export default function grafana(rl: RunlinePluginAPI) {
     access: "read",
     description: "List users in the current organization",
     async execute(_input, ctx) {
-      return gf(ctx, "GET", "/org/users");
+      return gf(ctx, "GET", "org/users");
     },
   });
 
@@ -379,7 +356,7 @@ export default function grafana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId, role } = input as { userId: number; role: string };
-      return gf(ctx, "PATCH", `/org/users/${userId}`, { role });
+      return gf(ctx, "PATCH", `org/users/${seg(userId)}`, { role });
     },
   });
 
@@ -393,7 +370,7 @@ export default function grafana(rl: RunlinePluginAPI) {
       return gf(
         ctx,
         "DELETE",
-        `/org/users/${(input as { userId: number }).userId}`,
+        `org/users/${seg((input as { userId: number }).userId)}`,
       );
     },
   });
