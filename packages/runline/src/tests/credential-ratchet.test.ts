@@ -40,7 +40,6 @@ const NO_CREDENTIAL = new Map<string, string>([
 
 /** Plugins that carry a credential but do not declare it yet, and why. */
 const UNDECLARED_BACKLOG = new Map<string, string>([
-  ["gett", "login: phone OTP login and a rotating, device-bound refresh grant"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 

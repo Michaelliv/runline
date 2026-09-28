@@ -30,6 +30,10 @@ const CREDENTIAL_FREE_FETCH = new Map<string, string>([
     "fal/src/shared.ts",
     "downloads generated media from fal's public CDN, re-validating each redirect hop",
   ],
+  [
+    "gett/src/login.ts",
+    "the owner login: unsigned calls whose inputs come from the person logging in; local only",
+  ],
   ["hackernews/src/index.ts", "public API; no connection secret"],
   [
     "node/src/index.ts",

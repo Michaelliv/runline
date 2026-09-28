@@ -1,5 +1,7 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { gettCredential } from "./credentials.js";
+import { refuseUnderHost } from "./login.js";
 import { search } from "./places.js";
 import { book, optionsOf, plan, previewOf, quoteFor } from "./rides.js";
 import {
@@ -12,7 +14,6 @@ import {
 } from "./session.js";
 import {
   accepted,
-  accessToken,
   arr,
   authed,
   cfgOf,
@@ -79,6 +80,7 @@ function bias(input: Record<string, unknown>, ctx: ActionContext) {
 export default function gett(rl: RunlinePluginAPI) {
   rl.setName("gett");
   rl.setVersion("0.1.0");
+  rl.setCredential(gettCredential);
 
   rl.setConnectionSchema(
     t.Object({
@@ -220,10 +222,12 @@ export default function gett(rl: RunlinePluginAPI) {
   rl.registerAction("account.refresh", {
     access: "write",
     description:
-      "Force a fresh access token from the stored refresh token. Rarely needed: every action renews on demand, and the refresh token is long-lived (~90 days), so no keepalive schedule is required. Useful to prove a stored session is still good.",
+      "Force a fresh access token from the stored refresh token and prove it on a live call. Rarely needed: every action renews on demand, and the refresh token is long-lived (~90 days), so no keepalive schedule is required. Runs where the grant lives: locally, not under a host that keeps it.",
     inputSchema: t.Object({}, STRICT),
     async execute(_input, ctx) {
-      await accessToken(ctx, true);
+      refuseUnderHost(ctx);
+      await ctx.updateConnection({ accessTokenExpiresAt: 1 });
+      await createSession(ctx, DEF_LAT, DEF_LON);
       const cfg = cfgOf(ctx);
       return {
         refreshed: true,

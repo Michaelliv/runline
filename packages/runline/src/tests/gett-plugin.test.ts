@@ -617,10 +617,18 @@ describe("gett plugin surface", () => {
 
   it("surfaces a broken session instead of reporting an empty road", async () => {
     const { ctx } = await context();
-    mock([["drivers/locations", new Response("", { status: 401 })]]);
+    // A 401 renews once and replays; one that persists is the answer.
+    const calls = mock([
+      ["auth/token", { access_token: "fresh", expires_in: 3600 }],
+      ["drivers/locations", () => new Response("", { status: 401 })],
+    ]);
     await assert.rejects(
       () => action("driver.listNearby").execute({}, ctx) as Promise<unknown>,
       /HTTP 401/,
+    );
+    assert.deepEqual(
+      calls.map((c) => c.auth),
+      ["Bearer access-1", "Bearer refresh-1", "Bearer fresh"],
     );
   });
 
