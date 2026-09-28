@@ -131,6 +131,31 @@ describe("github plugin commit and branch actions", () => {
     assert.deepEqual(result, { ok: true });
   });
 
+  it("file.delete sends the sha and commit message GitHub requires in its DELETE body", async () => {
+    const action = getAction(makeGithub(), "file.delete");
+
+    mockJsonFetch((url, init) => {
+      assert.equal(init?.method, "DELETE");
+      assert.equal(url.pathname, "/repos/octo/hello/contents/docs/a.md");
+      assert.deepEqual(
+        JSON.parse(new TextDecoder().decode(init?.body as Uint8Array)),
+        { sha: "abc", message: "remove", branch: "main" },
+      );
+    });
+
+    await action.execute(
+      {
+        owner: "octo",
+        repo: "hello",
+        path: "docs/a.md",
+        sha: "abc",
+        message: "remove",
+        branch: "main",
+      },
+      ctx(),
+    );
+  });
+
   it("actions.find can discover latest commit actions", async () => {
     const registry = new PluginRegistry();
     registry.register(makeGithub());
