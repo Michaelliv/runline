@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { iterableCredential } from "./credentials.js";
 
 function apiRequest(
@@ -138,11 +138,7 @@ export default function iterable(rl: RunlinePluginAPI) {
         );
         return (data as Record<string, unknown>).user ?? data;
       }
-      return apiRequest(
-        ctx,
-        "GET",
-        `users/byUserId/${encodeURIComponent(value as string)}`,
-      );
+      return apiRequest(ctx, "GET", `users/byUserId/${pathSegment(value)}`);
     },
   });
 
@@ -165,8 +161,8 @@ export default function iterable(rl: RunlinePluginAPI) {
       const { by, value } = input as Record<string, unknown>;
       const endpoint =
         by === "email"
-          ? `users/${encodeURIComponent(value as string)}`
-          : `users/byUserId/${encodeURIComponent(value as string)}`;
+          ? `users/${pathSegment(value)}`
+          : `users/byUserId/${pathSegment(value)}`;
       return apiRequest(ctx, "DELETE", endpoint);
     },
   });
