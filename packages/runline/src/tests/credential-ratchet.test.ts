@@ -221,7 +221,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["uplead", "phase 3: not yet migrated"],
   ["uproc", "phase 3: not yet migrated"],
   ["uptimerobot", "body key: api_key travels in the form body"],
-  ["urlscanio", "phase 3: not yet migrated"],
   ["vero", "body key: auth_token travels in the form body"],
   ["vonage", "body key: api_key and api_secret travel in the form body"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
