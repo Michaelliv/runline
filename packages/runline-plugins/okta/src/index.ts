@@ -1,47 +1,33 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialRequest } from "../../_shared/credentials.js";
+import { oktaCredential } from "./credentials.js";
 
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
-  const url = (c.url as string).replace(/\/$/, "");
-  return { url, apiToken: c.apiToken as string };
-}
+/** An ID or login as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
-  conn: { url: string; apiToken: string },
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<{ data: unknown; linkHeader?: string }> {
-  const u = new URL(`${conn.url}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) u.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  const res = await credentialRequest(ctx, oktaCredential, {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `SSWS ${conn.apiToken}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(u.toString(), init);
-  if (!res.ok)
-    throw new Error(`Okta API error ${res.status}: ${await res.text()}`);
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
+  if (!res.ok) throw new Error(`okta: request failed (HTTP ${res.status})`);
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
   return { data, linkHeader: res.headers.get("link") ?? undefined };
 }
 
 async function paginate(
-  conn: { url: string; apiToken: string },
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown[]> {
   const all: unknown[] = [];
@@ -50,9 +36,9 @@ async function paginate(
     if (after) qs.after = after;
     qs.limit = 200;
     const { data, linkHeader } = await apiRequest(
-      conn,
+      ctx,
       "GET",
-      endpoint,
+      path,
       undefined,
       qs,
     );
@@ -70,6 +56,7 @@ async function paginate(
 export default function okta(rl: RunlinePluginAPI) {
   rl.setName("okta");
   rl.setVersion("0.1.0");
+  rl.setCredential(oktaCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -113,7 +100,6 @@ export default function okta(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const conn = getConn(ctx);
       const body: Record<string, unknown> = {
         profile: {
           firstName: p.firstName,
@@ -129,13 +115,7 @@ export default function okta(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {
         activate: p.activate !== false ? "true" : "false",
       };
-      const { data } = await apiRequest(
-        conn,
-        "POST",
-        "/api/v1/users/",
-        body,
-        qs,
-      );
+      const { data } = await apiRequest(ctx, "POST", "users/", body, qs);
       return data;
     },
   });
@@ -152,11 +132,7 @@ export default function okta(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId } = input as Record<string, unknown>;
-      const { data } = await apiRequest(
-        getConn(ctx),
-        "GET",
-        `/api/v1/users/${userId}`,
-      );
+      const { data } = await apiRequest(ctx, "GET", `users/${seg(userId)}`);
       return data;
     },
   });
@@ -178,21 +154,14 @@ export default function okta(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const conn = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (p.search) qs.search = p.search;
       if (p.limit) {
         qs.limit = p.limit;
-        const { data } = await apiRequest(
-          conn,
-          "GET",
-          "/api/v1/users/",
-          undefined,
-          qs,
-        );
+        const { data } = await apiRequest(ctx, "GET", "users/", undefined, qs);
         return data;
       }
-      return paginate(conn, "/api/v1/users/", qs);
+      return paginate(ctx, "users/", qs);
     },
   });
 
@@ -210,12 +179,9 @@ export default function okta(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId, profile } = input as Record<string, unknown>;
-      const { data } = await apiRequest(
-        getConn(ctx),
-        "POST",
-        `/api/v1/users/${userId}`,
-        { profile },
-      );
+      const { data } = await apiRequest(ctx, "POST", `users/${seg(userId)}`, {
+        profile,
+      });
       return data;
     },
   });
@@ -228,7 +194,7 @@ export default function okta(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId } = input as Record<string, unknown>;
-      await apiRequest(getConn(ctx), "DELETE", `/api/v1/users/${userId}`);
+      await apiRequest(ctx, "DELETE", `users/${seg(userId)}`);
       return { success: true };
     },
   });
