@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialRequest,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialOk, pathSegment as seg } from "../../_shared/credentials.js";
 import { bambooHrCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -12,7 +9,7 @@ async function apiRequest(
   body?: Record<string, unknown>,
   query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await credentialRequest(ctx, bambooHrCredential, {
+  const res = await credentialOk(ctx, bambooHrCredential, "bambooHr", {
     target: "api",
     path,
     method,
@@ -24,7 +21,6 @@ async function apiRequest(
       ? { json: body }
       : {}),
   });
-  if (!res.ok) throw new Error(`bambooHr: request failed (HTTP ${res.status})`);
   if (res.status === 204 || res.headers.get("content-length") === "0")
     return { success: true };
   const contentType = res.headers.get("content-type") ?? "";
@@ -96,14 +92,12 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const body = input as Record<string, unknown>;
-      const res = await credentialRequest(ctx, bambooHrCredential, {
+      const res = await credentialOk(ctx, bambooHrCredential, "bambooHr", {
         target: "api",
         path: "employees",
         method: "POST",
         json: body,
       });
-      if (!res.ok)
-        throw new Error(`bambooHr: request failed (HTTP ${res.status})`);
       const location = res.headers.get("location") ?? "";
       const employeeId = location.split("/").pop();
       return { id: employeeId };
