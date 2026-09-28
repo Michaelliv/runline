@@ -1,14 +1,18 @@
+import type { ActionContext } from "runline";
 import * as t from "typebox";
+import { credentialRequest } from "../../_shared/credentials.js";
+import { typesafeCredential } from "./credentials.js";
 
 /**
- * Shared plumbing for the TypeSafe (Jev) plugin: connection reading, the
- * single evaluation endpoint, retry policy, and the context-window guard.
+ * Shared plumbing for the TypeSafe (Jev) plugin: the single evaluation
+ * endpoint, retry policy, and the context-window guard.
  *
  * One endpoint does all the work — POST /v1/systemone — so everything here
  * is about getting a well-formed body to it and a faithful body back.
+ * Every request signs through the declared credential.
  */
 
-export type Ctx = { connection: { config: Record<string, unknown> } };
+export type Ctx = ActionContext;
 
 export const STRICT = { additionalProperties: false } as const;
 
@@ -46,23 +50,6 @@ function config(ctx: Ctx): Record<string, unknown> {
   return ctx.connection?.config ?? {};
 }
 
-function apiKey(ctx: Ctx): string {
-  const key = config(ctx).apiKey;
-  if (typeof key !== "string" || !key.trim()) {
-    throw new Error(
-      "Missing TYPESAFE_API_KEY. Create a key at https://console.typesafe.ai/settings/keys and store it as a secret.",
-    );
-  }
-  return key.trim();
-}
-
-function baseUrl(ctx: Ctx): string {
-  const raw = config(ctx).baseUrl;
-  const base =
-    typeof raw === "string" && raw.trim() ? raw.trim() : DEFAULT_BASE;
-  return base.replace(/\/+$/, "");
-}
-
 export function resolveModel(ctx: Ctx, override?: unknown): string {
   if (typeof override === "string" && override.trim()) return override.trim();
   const fallback = config(ctx).model;
@@ -96,23 +83,23 @@ function retryDelayMs(response: Response, attempt: number): number {
   return Math.min(250 * 2 ** attempt, 8_000);
 }
 
-function explain(status: number, body: string): string {
-  const detail = body.slice(0, 500);
+/** By status alone: provider error text can echo request data and is dropped. */
+function explain(status: number): string {
   switch (status) {
     case 401:
-      return `TypeSafe 401: the API key was rejected. ${detail}`;
+      return "TypeSafe 401: the API key was rejected.";
     case 422:
-      return `TypeSafe 422: the request body failed validation — a missing field or a malformed question. ${detail}`;
+      return "TypeSafe 422: the request body failed validation — a missing field or a malformed question.";
     case 429:
-      return `TypeSafe 429: rate limit exceeded (250k tokens/sec, 1,200 req/min). Raise the connection's maxRetries or slow the caller. ${detail}`;
+      return "TypeSafe 429: rate limit exceeded (250k tokens/sec, 1,200 req/min). Raise the connection's maxRetries or slow the caller.";
     case 503:
-      return `TypeSafe 503: the model is unavailable. Transient — retry, and contact TypeSafe if it persists. ${detail}`;
+      return "TypeSafe 503: the model is unavailable. Transient — retry, and contact TypeSafe if it persists.";
     case 529:
-      return `TypeSafe 529: the service is overloaded. Retry after a short delay. ${detail}`;
+      return "TypeSafe 529: the service is overloaded. Retry after a short delay.";
     default:
       return status >= 500
-        ? `TypeSafe ${status}: the service failed this request. Transient — retry after a short delay. ${detail}`
-        : `TypeSafe ${status}: ${detail}`;
+        ? `TypeSafe ${status}: the service failed this request. Transient — retry after a short delay.`
+        : `TypeSafe ${status}: request failed.`;
   }
 }
 
@@ -123,35 +110,29 @@ async function sleep(ms: number): Promise<void> {
 export async function request<T>(
   ctx: Ctx,
   path: string,
-  init: RequestInit = {},
+  json?: unknown,
 ): Promise<T> {
-  const url = `${baseUrl(ctx)}${path}`;
-  const headers = new Headers(init.headers);
-  headers.set("authorization", `Bearer ${apiKey(ctx)}`);
-  headers.set("accept", "application/json");
-  if (init.body && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
-  }
-
   const attempts = maxRetries(ctx);
   for (let attempt = 0; ; attempt++) {
-    const response = await fetch(url, { ...init, headers });
+    const response = await credentialRequest(ctx, typesafeCredential, {
+      target: "api",
+      path,
+      ...(json !== undefined ? { method: "POST", json } : {}),
+    });
     if (response.ok) {
       const text = await response.text();
       if (!text) return {} as T;
       try {
         return JSON.parse(text) as T;
       } catch {
-        throw new Error(
-          `TypeSafe returned a non-JSON body: ${text.slice(0, 200)}`,
-        );
+        throw new Error("TypeSafe returned a non-JSON body.");
       }
     }
     if (retryable(response.status) && attempt < attempts) {
       await sleep(retryDelayMs(response, attempt));
       continue;
     }
-    throw new Error(explain(response.status, await response.text()));
+    throw new Error(explain(response.status));
   }
 }
 
@@ -200,9 +181,10 @@ export async function evaluate(
     throw new Error("At least one question is required.");
   }
   assertWithinContext(state, questions);
-  const body = await request<EvaluateResponse>(ctx, "/v1/systemone", {
-    method: "POST",
-    body: JSON.stringify({ state, model, questions }),
+  const body = await request<EvaluateResponse>(ctx, "systemone", {
+    state,
+    model,
+    questions,
   });
   if (!body || typeof body.answers !== "object" || body.answers === null) {
     throw new Error("TypeSafe returned a response with no answers map.");

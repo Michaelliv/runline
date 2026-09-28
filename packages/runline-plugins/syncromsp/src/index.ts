@@ -1,41 +1,29 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { syncromspCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const subdomain = ctx.connection.config.subdomain as string;
-  const apiKey = ctx.connection.config.apiKey as string;
-  return { base: `https://${subdomain}.syncromsp.com/api/v1`, apiKey };
-}
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function api(
-  base: string,
-  apiKey: string,
-  method: string,
+/** The transport appends the api_key query parameter when signing. */
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${base}/${endpoint}`);
-  url.searchParams.set("api_key", apiKey);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, syncromspCredential, "syncromsp", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`SyncroMSP error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : { success: true };
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 async function paginate(
-  base: string,
-  apiKey: string,
+  ctx: ActionContext,
   endpoint: string,
   key: string,
   qs: Record<string, unknown> = {},
@@ -45,14 +33,10 @@ async function paginate(
   let batch: unknown[];
   do {
     qs.page = page;
-    const res = (await api(
-      base,
-      apiKey,
-      "GET",
-      endpoint,
-      undefined,
-      qs,
-    )) as Record<string, unknown>;
+    const res = (await api(ctx, "GET", endpoint, undefined, qs)) as Record<
+      string,
+      unknown
+    >;
     batch = (res[key] ?? []) as unknown[];
     results.push(...batch);
     page++;
@@ -63,6 +47,7 @@ async function paginate(
 export default function syncromsp(rl: RunlinePluginAPI) {
   rl.setName("syncromsp");
   rl.setVersion("0.1.0");
+  rl.setCredential(syncromspCredential);
   rl.setConnectionSchema({
     subdomain: {
       type: "string",
@@ -96,7 +81,6 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       zip: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { email: p.email };
       if (p.businessName) body.business_name = p.businessName;
@@ -108,13 +92,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (p.city) body.city = p.city;
       if (p.state) body.state = p.state;
       if (p.zip) body.zip = p.zip;
-      const res = (await api(
-        base,
-        apiKey,
-        "POST",
-        "customers",
-        body,
-      )) as Record<string, unknown>;
+      const res = (await api(ctx, "POST", "customers", body)) as Record<
+        string,
+        unknown
+      >;
       return res.customer ?? res;
     },
   });
@@ -124,12 +105,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "Get a customer",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const res = (await api(
-        base,
-        apiKey,
+        ctx,
         "GET",
-        `customers/${(input as Record<string, unknown>).id}`,
+        `customers/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return res.customer ?? res;
     },
@@ -144,7 +123,6 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       includeDisabled: { type: "boolean", required: false },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (p.businessName) qs.business_name = p.businessName;
@@ -152,8 +130,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (p.limit) {
         qs.per_page = p.limit;
         const res = (await api(
-          base,
-          apiKey,
+          ctx,
           "GET",
           "customers",
           undefined,
@@ -161,7 +138,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
         )) as Record<string, unknown>;
         return res.customers ?? res;
       }
-      return paginate(base, apiKey, "customers", "customers", qs);
+      return paginate(ctx, "customers", "customers", qs);
     },
   });
 
@@ -178,7 +155,6 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       notes: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const { id, ...fields } = input as Record<string, unknown>;
       const body: Record<string, unknown> = {};
       if (fields.email) body.email = fields.email;
@@ -188,10 +164,9 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (fields.phone) body.phone = fields.phone;
       if (fields.notes) body.notes = fields.notes;
       const res = (await api(
-        base,
-        apiKey,
+        ctx,
         "PUT",
-        `customers/${id}`,
+        `customers/${seg(id)}`,
         body,
       )) as Record<string, unknown>;
       return res.customer ?? res;
@@ -203,12 +178,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "Delete a customer",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       await api(
-        base,
-        apiKey,
+        ctx,
         "DELETE",
-        `customers/${(input as Record<string, unknown>).id}`,
+        `customers/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -227,7 +200,6 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       notes: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = {
         customer_id: p.customerId,
@@ -236,7 +208,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (p.name) body.name = p.name;
       if (p.phone) body.phone = p.phone;
       if (p.notes) body.notes = p.notes;
-      return api(base, apiKey, "POST", "contacts", body);
+      return api(ctx, "POST", "contacts", body);
     },
   });
 
@@ -245,12 +217,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "Get a contact",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       return api(
-        base,
-        apiKey,
+        ctx,
         "GET",
-        `contacts/${(input as Record<string, unknown>).id}`,
+        `contacts/${seg((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -260,16 +230,15 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "List contacts",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       if (p.limit) {
-        const res = (await api(base, apiKey, "GET", "contacts")) as Record<
+        const res = (await api(ctx, "GET", "contacts")) as Record<
           string,
           unknown
         >;
         return ((res.contacts ?? []) as unknown[]).slice(0, p.limit as number);
       }
-      return paginate(base, apiKey, "contacts", "contacts");
+      return paginate(ctx, "contacts", "contacts");
     },
   });
 
@@ -285,7 +254,6 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       notes: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const { id, ...fields } = input as Record<string, unknown>;
       const body: Record<string, unknown> = {};
       if (fields.customerId) body.customer_id = fields.customerId;
@@ -293,7 +261,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (fields.name) body.name = fields.name;
       if (fields.phone) body.phone = fields.phone;
       if (fields.notes) body.notes = fields.notes;
-      return api(base, apiKey, "PUT", `contacts/${id}`, body);
+      return api(ctx, "PUT", `contacts/${seg(id)}`, body);
     },
   });
 
@@ -302,12 +270,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "Delete a contact",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       await api(
-        base,
-        apiKey,
+        ctx,
         "DELETE",
-        `contacts/${(input as Record<string, unknown>).id}`,
+        `contacts/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -327,7 +293,6 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       contactId: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = {
         customer_id: p.customerId,
@@ -337,7 +302,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (p.status) body.status = p.status;
       if (p.assetId) body.asset_id = p.assetId;
       if (p.contactId) body.contact_id = p.contactId;
-      const res = (await api(base, apiKey, "POST", "tickets", body)) as Record<
+      const res = (await api(ctx, "POST", "tickets", body)) as Record<
         string,
         unknown
       >;
@@ -350,12 +315,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "Get a ticket",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const res = (await api(
-        base,
-        apiKey,
+        ctx,
         "GET",
-        `tickets/${(input as Record<string, unknown>).id}`,
+        `tickets/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return res.ticket ?? res;
     },
@@ -369,23 +332,18 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       status: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (p.status) qs.status = p.status;
       if (p.limit) {
         qs.per_page = p.limit;
-        const res = (await api(
-          base,
-          apiKey,
-          "GET",
-          "tickets",
-          undefined,
-          qs,
-        )) as Record<string, unknown>;
+        const res = (await api(ctx, "GET", "tickets", undefined, qs)) as Record<
+          string,
+          unknown
+        >;
         return res.tickets ?? res;
       }
-      return paginate(base, apiKey, "tickets", "tickets", qs);
+      return paginate(ctx, "tickets", "tickets", qs);
     },
   });
 
@@ -403,7 +361,6 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       contactId: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const { id, ...fields } = input as Record<string, unknown>;
       const body: Record<string, unknown> = {};
       if (fields.subject) body.subject = fields.subject;
@@ -413,13 +370,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       if (fields.assetId) body.asset_id = fields.assetId;
       if (fields.dueDate) body.due_date = fields.dueDate;
       if (fields.contactId) body.contact_id = fields.contactId;
-      const res = (await api(
-        base,
-        apiKey,
-        "PUT",
-        `tickets/${id}`,
-        body,
-      )) as Record<string, unknown>;
+      const res = (await api(ctx, "PUT", `tickets/${seg(id)}`, body)) as Record<
+        string,
+        unknown
+      >;
       return res.ticket ?? res;
     },
   });
@@ -429,12 +383,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "Delete a ticket",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       await api(
-        base,
-        apiKey,
+        ctx,
         "DELETE",
-        `tickets/${(input as Record<string, unknown>).id}`,
+        `tickets/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -451,9 +403,8 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       description: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = input as Record<string, unknown>;
-      const res = (await api(base, apiKey, "POST", "rmm_alerts", {
+      const res = (await api(ctx, "POST", "rmm_alerts", {
         customer_id: p.customerId,
         asset_id: p.assetId,
         description: p.description,
@@ -467,12 +418,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "Get an RMM alert",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const res = (await api(
-        base,
-        apiKey,
+        ctx,
         "GET",
-        `rmm_alerts/${(input as Record<string, unknown>).id}`,
+        `rmm_alerts/${seg((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return res.rmm_alert ?? res;
     },
@@ -490,14 +439,12 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { status: p.status ?? "all" };
       if (p.limit) {
         qs.per_page = p.limit;
         const res = (await api(
-          base,
-          apiKey,
+          ctx,
           "GET",
           "rmm_alerts",
           undefined,
@@ -505,7 +452,7 @@ export default function syncromsp(rl: RunlinePluginAPI) {
         )) as Record<string, unknown>;
         return res.rmm_alerts ?? res;
       }
-      return paginate(base, apiKey, "rmm_alerts", "rmm_alerts", qs);
+      return paginate(ctx, "rmm_alerts", "rmm_alerts", qs);
     },
   });
 
@@ -514,12 +461,10 @@ export default function syncromsp(rl: RunlinePluginAPI) {
     description: "Delete an RMM alert",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       await api(
-        base,
-        apiKey,
+        ctx,
         "DELETE",
-        `rmm_alerts/${(input as Record<string, unknown>).id}`,
+        `rmm_alerts/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -537,9 +482,8 @@ export default function syncromsp(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { base, apiKey } = getConn(ctx);
       const p = input as Record<string, unknown>;
-      return api(base, apiKey, "POST", `rmm_alerts/${p.id}/mute`, {
+      return api(ctx, "POST", `rmm_alerts/${seg(p.id)}/mute`, {
         id: p.id,
         mute_for: p.muteFor,
       });

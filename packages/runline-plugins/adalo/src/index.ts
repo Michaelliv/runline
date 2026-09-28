@@ -1,43 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { adaloCredential } from "./credentials.js";
 
-async function apiRequest(
-  appId: string,
-  apiKey: string,
-  method: string,
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+/** A path beneath the connection's app, signed through the credential. */
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`https://api.adalo.com/v0/apps/${appId}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  const appId = seg(ctx.connection.config.appId);
+  return credentialJson(ctx, adaloCredential, "adalo", {
+    target: "api",
+    path: `${appId}/${path}`,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Adalo API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 async function paginate(
-  appId: string,
-  apiKey: string,
+  ctx: ActionContext,
   collectionId: string,
   limit?: number,
 ): Promise<unknown[]> {
@@ -47,10 +34,9 @@ async function paginate(
 
   while (true) {
     const data = (await apiRequest(
-      appId,
-      apiKey,
+      ctx,
       "GET",
-      `/collections/${collectionId}`,
+      `collections/${seg(collectionId)}`,
       undefined,
       {
         limit: pageSize,
@@ -69,16 +55,10 @@ async function paginate(
   return results;
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    appId: ctx.connection.config.appId as string,
-    apiKey: ctx.connection.config.apiKey as string,
-  };
-}
-
 export default function adalo(rl: RunlinePluginAPI) {
   rl.setName("adalo");
   rl.setVersion("0.1.0");
+  rl.setCredential(adaloCredential);
 
   rl.setConnectionSchema({
     appId: {
@@ -115,12 +95,10 @@ export default function adalo(rl: RunlinePluginAPI) {
         collectionId: string;
         fields: Record<string, unknown>;
       };
-      const { appId, apiKey } = getConn(ctx);
       return apiRequest(
-        appId,
-        apiKey,
+        ctx,
         "POST",
-        `/collections/${collectionId}`,
+        `collections/${seg(collectionId)}`,
         fields,
       );
     },
@@ -142,12 +120,10 @@ export default function adalo(rl: RunlinePluginAPI) {
         collectionId: string;
         rowId: string;
       };
-      const { appId, apiKey } = getConn(ctx);
       return apiRequest(
-        appId,
-        apiKey,
+        ctx,
         "GET",
-        `/collections/${collectionId}/${rowId}`,
+        `collections/${seg(collectionId)}/${seg(rowId)}`,
       );
     },
   });
@@ -172,8 +148,7 @@ export default function adalo(rl: RunlinePluginAPI) {
         collectionId: string;
         limit?: number;
       };
-      const { appId, apiKey } = getConn(ctx);
-      return paginate(appId, apiKey, collectionId, limit);
+      return paginate(ctx, collectionId, limit);
     },
   });
 
@@ -199,12 +174,10 @@ export default function adalo(rl: RunlinePluginAPI) {
         rowId: string;
         fields: Record<string, unknown>;
       };
-      const { appId, apiKey } = getConn(ctx);
       return apiRequest(
-        appId,
-        apiKey,
+        ctx,
         "PUT",
-        `/collections/${collectionId}/${rowId}`,
+        `collections/${seg(collectionId)}/${seg(rowId)}`,
         fields,
       );
     },
@@ -226,12 +199,10 @@ export default function adalo(rl: RunlinePluginAPI) {
         collectionId: string;
         rowId: string;
       };
-      const { appId, apiKey } = getConn(ctx);
       return apiRequest(
-        appId,
-        apiKey,
+        ctx,
         "DELETE",
-        `/collections/${collectionId}/${rowId}`,
+        `collections/${seg(collectionId)}/${seg(rowId)}`,
       );
     },
   });
