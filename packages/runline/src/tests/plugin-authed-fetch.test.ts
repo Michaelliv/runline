@@ -95,7 +95,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "bitwarden/src/index.ts",
   "brandfetch/src/index.ts",
   "brevo/src/index.ts",
-  "bubble/src/index.ts",
   "chargebee/src/index.ts",
   "clearbit/src/index.ts",
   "cloudflare/src/index.ts",
