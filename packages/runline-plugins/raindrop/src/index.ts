@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { raindropCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -80,7 +77,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `raindrop/${seg(bookmarkId)}`,
+        `raindrop/${pathSegment(bookmarkId)}`,
       )) as Record<string, unknown>;
       return data.item;
     },
@@ -98,7 +95,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `raindrops/${seg(p.collectionId)}`,
+        `raindrops/${pathSegment(p.collectionId)}`,
       )) as Record<string, unknown>;
       let items = (data.items ?? []) as unknown[];
       if (p.limit) items = items.slice(0, p.limit as number);
@@ -131,7 +128,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `raindrop/${seg(p.bookmarkId)}`,
+        `raindrop/${pathSegment(p.bookmarkId)}`,
         body,
       )) as Record<string, unknown>;
       return data.item;
@@ -144,7 +141,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
     inputSchema: { bookmarkId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { bookmarkId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "DELETE", `raindrop/${seg(bookmarkId)}`);
+      return apiRequest(ctx, "DELETE", `raindrop/${pathSegment(bookmarkId)}`);
     },
   });
 
@@ -184,7 +181,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `collection/${seg(collectionId)}`,
+        `collection/${pathSegment(collectionId)}`,
       )) as Record<string, unknown>;
       return data.item;
     },
@@ -231,7 +228,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `collection/${seg(p.collectionId)}`,
+        `collection/${pathSegment(p.collectionId)}`,
         body,
       )) as Record<string, unknown>;
       return data.item;
@@ -244,7 +241,11 @@ export default function raindrop(rl: RunlinePluginAPI) {
     inputSchema: { collectionId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { collectionId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "DELETE", `collection/${seg(collectionId)}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `collection/${pathSegment(collectionId)}`,
+      );
     },
   });
 
@@ -259,7 +260,9 @@ export default function raindrop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const endpoint = p.collectionId ? `tags/${seg(p.collectionId)}` : "tags";
+      const endpoint = p.collectionId
+        ? `tags/${pathSegment(p.collectionId)}`
+        : "tags";
       const data = (await apiRequest(ctx, "GET", endpoint)) as Record<
         string,
         unknown
@@ -283,7 +286,9 @@ export default function raindrop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const endpoint = p.collectionId ? `tags/${seg(p.collectionId)}` : "tags";
+      const endpoint = p.collectionId
+        ? `tags/${pathSegment(p.collectionId)}`
+        : "tags";
       return apiRequest(ctx, "DELETE", endpoint, {
         tags: (p.tags as string).split(",").map((t) => t.trim()),
       });
@@ -304,7 +309,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const userId = (input as Record<string, unknown>)?.userId;
-      const endpoint = userId ? `user/${seg(userId)}` : "user";
+      const endpoint = userId ? `user/${pathSegment(userId)}` : "user";
       const data = (await apiRequest(ctx, "GET", endpoint)) as Record<
         string,
         unknown
