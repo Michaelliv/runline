@@ -200,8 +200,21 @@ export interface CredentialCall {
   query?: Record<string, unknown>;
   /** Serialized as the JSON body, with a JSON Content-Type. */
   json?: unknown;
+  /** Serialized as a form body, by the query's rules, with a form Content-Type. */
+  form?: Record<string, unknown>;
   body?: string | Uint8Array;
   headers?: Record<string, string>;
+}
+
+/** Parameters as `a=1&b=2`: arrays repeat the key; null and undefined are skipped. */
+function encodeParams(params: Record<string, unknown>): string {
+  const encoded = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue;
+    for (const entry of Array.isArray(value) ? value : [value])
+      encoded.append(key, String(entry));
+  }
+  return encoded.toString();
 }
 
 function withQuery(
@@ -209,13 +222,7 @@ function withQuery(
   query: Record<string, unknown> | undefined,
 ): string {
   if (!query) return path;
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === null) continue;
-    for (const entry of Array.isArray(value) ? value : [value])
-      params.append(key, String(entry));
-  }
-  const encoded = params.toString();
+  const encoded = encodeParams(query);
   if (!encoded) return path;
   return `${path}${path.includes("?") ? "&" : "?"}${encoded}`;
 }
@@ -226,18 +233,26 @@ export function credentialRequest(
   declaration: CredentialDeclaration,
   call: CredentialCall,
 ): Promise<Response> {
-  const json = call.json !== undefined;
+  const body =
+    call.json !== undefined
+      ? { type: "application/json", body: JSON.stringify(call.json) }
+      : call.form !== undefined
+        ? {
+            type: "application/x-www-form-urlencoded",
+            body: encodeParams(call.form),
+          }
+        : undefined;
   return credentialBroker(ctx, declaration).request({
     target: call.target,
     path: withQuery(call.path, call.query),
     method: call.method ?? "GET",
     headers: {
       Accept: "application/json",
-      ...(json ? { "Content-Type": "application/json" } : {}),
+      ...(body ? { "Content-Type": body.type } : {}),
       ...call.headers,
     },
-    ...(json
-      ? { body: JSON.stringify(call.json) }
+    ...(body
+      ? { body: body.body }
       : call.body !== undefined
         ? { body: call.body }
         : {}),
