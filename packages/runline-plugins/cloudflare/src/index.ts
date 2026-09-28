@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { cloudflareCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -59,7 +56,7 @@ export default function cloudflare(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `zones/${seg(zoneId)}/origin_tls_client_auth/${seg(certificateId)}`,
+        `zones/${pathSegment(zoneId)}/origin_tls_client_auth/${pathSegment(certificateId)}`,
       )) as Record<string, unknown>;
       return data.result;
     },
@@ -79,7 +76,7 @@ export default function cloudflare(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `zones/${seg(zoneId)}/origin_tls_client_auth`,
+        `zones/${pathSegment(zoneId)}/origin_tls_client_auth`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -111,7 +108,7 @@ export default function cloudflare(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `zones/${seg(zoneId)}/origin_tls_client_auth`,
+        `zones/${pathSegment(zoneId)}/origin_tls_client_auth`,
         {
           certificate,
           private_key: privateKey,
@@ -140,7 +137,7 @@ export default function cloudflare(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "DELETE",
-        `zones/${seg(zoneId)}/origin_tls_client_auth/${seg(certificateId)}`,
+        `zones/${pathSegment(zoneId)}/origin_tls_client_auth/${pathSegment(certificateId)}`,
       )) as Record<string, unknown>;
       return data.result;
     },
