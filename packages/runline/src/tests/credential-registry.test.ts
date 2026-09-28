@@ -4,6 +4,7 @@ import * as t from "typebox";
 import {
   CredentialRegistry,
   OAuthGrantSchema,
+  SecretSchema,
   validateCredential,
 } from "../credentials/registry.js";
 import type { CredentialType } from "../credentials/types.js";
@@ -13,10 +14,7 @@ function definition(): CredentialType {
     id: "example",
     methods: {
       apiKey: {
-        schema: t.Object(
-          { key: t.String({ minLength: 1 }) },
-          { additionalProperties: false },
-        ),
+        schema: t.Object({ key: SecretSchema }, { additionalProperties: false }),
         authentication: { kind: "apiKey", field: "key", header: "X-Api-Key" },
         targets: {
           api: { baseUrl: "https://api.example/v1/", methods: ["GET", "POST"] },
@@ -35,7 +33,7 @@ function definition(): CredentialType {
         ),
         authentication: {
           kind: "oauth2",
-          grantField: "grant",
+          field: "grant",
           renewal: "refresh",
           definition: {
             id: "example.oauth",
@@ -59,9 +57,17 @@ describe("credential registry", () => {
     const registry = new CredentialRegistry();
     registry.register(definition());
     const method = registry.select("example", "apiKey");
-    validateCredential(method, { key: "secret" });
+    validateCredential(method, { key: { secret: "secret" } });
     assert.throws(
-      () => validateCredential(method, { key: "secret", extra: "private" }),
+      () =>
+        validateCredential(method, {
+          key: { secret: "secret" },
+          extra: "private",
+        }),
+      { message: "Missing or invalid authentication credentials" },
+    );
+    assert.throws(
+      () => validateCredential(method, { key: { secret: "s", extra: "p" } }),
       { message: "Missing or invalid authentication credentials" },
     );
     assert.throws(() => registry.select("example", ""));
@@ -141,6 +147,22 @@ describe("credential registry", () => {
       },
       (d) => {
         d.methods.apiKey.schema = t.Object({ key: t.String() });
+      },
+      (d) => {
+        d.methods.apiKey.authentication = {
+          kind: "apiKey",
+          field: "key",
+          header: "Authorization",
+          prefix: "Bearer\n",
+        };
+      },
+      (d) => {
+        d.methods.apiKey.authentication = {
+          kind: "apiKey",
+          field: "key",
+          header: "X-Api-Key",
+          prefix: 7 as unknown as string,
+        };
       },
       (d) => {
         d.methods.apiKey.targets.api.allowedHeaders =

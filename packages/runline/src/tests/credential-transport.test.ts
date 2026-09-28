@@ -6,6 +6,7 @@ import { MemoryConnectionProvider } from "../connections/memory.js";
 import {
   CredentialRegistry,
   OAuthGrantSchema,
+  SecretSchema,
 } from "../credentials/registry.js";
 import {
   type AuthenticatedRequest,
@@ -32,15 +33,12 @@ function definition(
             { grant: t.Optional(OAuthGrantSchema) },
             { additionalProperties: false },
           )
-        : t.Object(
-            { key: t.String({ minLength: 1 }) },
-            { additionalProperties: false },
-          ),
+        : t.Object({ key: SecretSchema }, { additionalProperties: false }),
     authentication:
       kind === "oauth2"
         ? {
             kind,
-            grantField: "grant",
+            field: "grant",
             renewal: "refresh",
             definition: {
               id: "example.oauth",
@@ -109,7 +107,7 @@ const errorCode = (code: string) => (error: unknown) =>
   error instanceof AuthError && error.code === code;
 
 describe("constrained credential transport", () => {
-  it("injects API keys and bearer tokens without query credentials or ambient cookies", async () => {
+  it("injects API keys and bearer tokens from their stored secret without query credentials or ambient cookies", async () => {
     for (const kind of ["apiKey", "bearer"] as const) {
       const h = await harness(
         mock((url, init) => {
@@ -123,7 +121,7 @@ describe("constrained credential transport", () => {
           );
           return Response.json({ ok: true });
         }),
-        { key: "private" },
+        { key: { secret: "private" } },
         definition(kind),
       );
       assert.deepEqual(
@@ -131,6 +129,45 @@ describe("constrained credential transport", () => {
         { ok: true },
       );
     }
+  });
+
+  it("prefixes an API key only with its declared scheme, in its declared header", async () => {
+    const def = definition("apiKey");
+    def.methods.selected.authentication = {
+      kind: "apiKey",
+      field: "key",
+      header: "Authorization",
+      prefix: "SSWS ",
+    };
+    const h = await harness(
+      mock((_url, init) => {
+        assert.equal(
+          new Headers(init.headers).get("authorization"),
+          "SSWS private",
+        );
+        return Response.json({});
+      }),
+      { key: { secret: "private" } },
+      def,
+    );
+    assert.equal((await h.transport.request(h.binding, request)).status, 200);
+  });
+
+  it("refuses a static secret stored flat instead of in its structured field", async () => {
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: "private" },
+      definition("bearer"),
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, request),
+      errorCode("invalid_credentials"),
+    );
+    assert.equal(calls, 0);
   });
 
   it("rejects escape paths, header overrides, methods and single-use bodies before reading credentials", async () => {
@@ -655,7 +692,7 @@ describe("constrained credential transport", () => {
           assert.equal(url, "https://api.example/v1/me");
           return new Response(null, { status });
         }),
-        { key: "secret" },
+        { key: { secret: "secret" } },
         definition("apiKey"),
       );
       assert.deepEqual(await h.transport.probe(h.binding), {
