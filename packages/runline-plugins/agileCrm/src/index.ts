@@ -1,49 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { agileCrmCredential } from "./credentials.js";
 
-async function apiRequest(
-  subdomain: string,
-  email: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: unknown,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`https://${subdomain}.agilecrm.com/dev/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, agileCrmCredential, "agileCrm", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Basic ${btoa(`${email}:${apiKey}`)}`,
-    },
-  };
-  if (body && method !== "GET" && method !== "DELETE") {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Agile CRM API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204 || res.headers.get("content-length") === "0")
-    return { success: true };
-  return res.json();
+    query,
+    ...(body && method !== "GET" && method !== "DELETE" ? { json: body } : {}),
+  });
 }
 
 async function paginateAll(
-  subdomain: string,
-  email: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
   limit?: number,
@@ -55,11 +36,9 @@ async function paginateAll(
 
   while (true) {
     const data = (await apiRequest(
-      subdomain,
-      email,
-      apiKey,
+      ctx,
       method,
-      endpoint,
+      path,
       Object.keys(_body).length > 0 ? _body : undefined,
       Object.keys(_qs).length > 0 ? _qs : undefined,
     )) as Array<Record<string, unknown>>;
@@ -82,17 +61,10 @@ async function paginateAll(
   return results;
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    subdomain: ctx.connection.config.subdomain as string,
-    email: ctx.connection.config.email as string,
-    apiKey: ctx.connection.config.apiKey as string,
-  };
-}
-
 export default function agileCrm(rl: RunlinePluginAPI) {
   rl.setName("agileCrm");
   rl.setVersion("0.1.0");
+  rl.setCredential(agileCrmCredential);
 
   rl.setConnectionSchema({
     subdomain: {
@@ -150,7 +122,6 @@ export default function agileCrm(rl: RunlinePluginAPI) {
         tags,
         starValue,
       } = input as Record<string, unknown>;
-      const { subdomain, email: userEmail, apiKey } = getConn(ctx);
 
       const properties: Array<Record<string, unknown>> = [];
       if (firstName)
@@ -174,14 +145,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
       if (tags) body.tags = tags;
       if (starValue !== undefined) body.star_value = starValue;
 
-      return apiRequest(
-        subdomain,
-        userEmail,
-        apiKey,
-        "POST",
-        "api/contacts",
-        body,
-      );
+      return apiRequest(ctx, "POST", "api/contacts", body);
     },
   });
 
@@ -193,14 +157,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      const { subdomain, email, apiKey } = getConn(ctx);
-      return apiRequest(
-        subdomain,
-        email,
-        apiKey,
-        "GET",
-        `api/contacts/${contactId}`,
-      );
+      return apiRequest(ctx, "GET", `api/contacts/${seg(contactId)}`);
     },
   });
 
@@ -216,15 +173,12 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { subdomain, email, apiKey } = getConn(ctx);
       const body = {
         page_size: limit ?? 100,
         filterJson: JSON.stringify({ contact_type: "PERSON" }),
       };
       return paginateAll(
-        subdomain,
-        email,
-        apiKey,
+        ctx,
         "POST",
         "api/filters/filter/dynamic-filter",
         body,
@@ -267,8 +221,6 @@ export default function agileCrm(rl: RunlinePluginAPI) {
         starValue,
         leadScore,
       } = input as Record<string, unknown>;
-      const { subdomain, email, apiKey } = getConn(ctx);
-      const baseUri = `https://${subdomain}.agilecrm.com/dev/`;
 
       const properties: Array<Record<string, unknown>> = [];
       if (firstName)
@@ -285,44 +237,29 @@ export default function agileCrm(rl: RunlinePluginAPI) {
         properties.push({ type: "SYSTEM", name: "company", value: company });
 
       let result: unknown;
-      const auth = `Basic ${btoa(`${email}:${apiKey}`)}`;
-      const headers = {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: auth,
-      };
-
       if (properties.length > 0) {
-        const res = await fetch(`${baseUri}api/contacts/edit-properties`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ id: contactId, properties }),
+        result = await apiRequest(ctx, "PUT", "api/contacts/edit-properties", {
+          id: contactId,
+          properties,
         });
-        result = await res.json();
       }
       if (leadScore !== undefined) {
-        const res = await fetch(`${baseUri}api/contacts/edit/lead-score`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ id: contactId, lead_score: leadScore }),
+        result = await apiRequest(ctx, "PUT", "api/contacts/edit/lead-score", {
+          id: contactId,
+          lead_score: leadScore,
         });
-        result = await res.json();
       }
       if (tags) {
-        const res = await fetch(`${baseUri}api/contacts/edit/tags`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ id: contactId, tags }),
+        result = await apiRequest(ctx, "PUT", "api/contacts/edit/tags", {
+          id: contactId,
+          tags,
         });
-        result = await res.json();
       }
       if (starValue !== undefined) {
-        const res = await fetch(`${baseUri}api/contacts/edit/add-star`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ id: contactId, star_value: starValue }),
+        result = await apiRequest(ctx, "PUT", "api/contacts/edit/add-star", {
+          id: contactId,
+          star_value: starValue,
         });
-        result = await res.json();
       }
 
       return result ?? { success: true };
@@ -337,14 +274,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      const { subdomain, email, apiKey } = getConn(ctx);
-      return apiRequest(
-        subdomain,
-        email,
-        apiKey,
-        "DELETE",
-        `api/contacts/${contactId}`,
-      );
+      return apiRequest(ctx, "DELETE", `api/contacts/${seg(contactId)}`);
     },
   });
 
@@ -370,7 +300,6 @@ export default function agileCrm(rl: RunlinePluginAPI) {
         phone,
         tags,
       } = input as Record<string, unknown>;
-      const { subdomain, email, apiKey } = getConn(ctx);
 
       const properties: Array<Record<string, unknown>> = [];
       if (name) properties.push({ type: "SYSTEM", name: "name", value: name });
@@ -382,7 +311,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { type: "COMPANY", properties };
       if (tags) body.tags = tags;
 
-      return apiRequest(subdomain, email, apiKey, "POST", "api/contacts", body);
+      return apiRequest(ctx, "POST", "api/contacts", body);
     },
   });
 
@@ -394,14 +323,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { companyId } = input as { companyId: string };
-      const { subdomain, email, apiKey } = getConn(ctx);
-      return apiRequest(
-        subdomain,
-        email,
-        apiKey,
-        "GET",
-        `api/contacts/${companyId}`,
-      );
+      return apiRequest(ctx, "GET", `api/contacts/${seg(companyId)}`);
     },
   });
 
@@ -417,15 +339,12 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { subdomain, email, apiKey } = getConn(ctx);
       const body = {
         page_size: limit ?? 100,
         filterJson: JSON.stringify({ contact_type: "COMPANY" }),
       };
       return paginateAll(
-        subdomain,
-        email,
-        apiKey,
+        ctx,
         "POST",
         "api/filters/filter/dynamic-filter",
         body,
@@ -464,8 +383,6 @@ export default function agileCrm(rl: RunlinePluginAPI) {
         tags,
         starValue,
       } = input as Record<string, unknown>;
-      const { subdomain, email, apiKey } = getConn(ctx);
-      const baseUri = `https://${subdomain}.agilecrm.com/dev/`;
 
       const properties: Array<Record<string, unknown>> = [];
       if (name) properties.push({ type: "SYSTEM", name: "name", value: name });
@@ -475,36 +392,23 @@ export default function agileCrm(rl: RunlinePluginAPI) {
         properties.push({ type: "SYSTEM", name: "phone", value: phone });
 
       let result: unknown;
-      const auth = `Basic ${btoa(`${email}:${apiKey}`)}`;
-      const headers = {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: auth,
-      };
-
       if (properties.length > 0) {
-        const res = await fetch(`${baseUri}api/contacts/edit-properties`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ id: companyId, properties }),
+        result = await apiRequest(ctx, "PUT", "api/contacts/edit-properties", {
+          id: companyId,
+          properties,
         });
-        result = await res.json();
       }
       if (tags) {
-        const res = await fetch(`${baseUri}api/contacts/edit/tags`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ id: companyId, tags }),
+        result = await apiRequest(ctx, "PUT", "api/contacts/edit/tags", {
+          id: companyId,
+          tags,
         });
-        result = await res.json();
       }
       if (starValue !== undefined) {
-        const res = await fetch(`${baseUri}api/contacts/edit/add-star`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ id: companyId, star_value: starValue }),
+        result = await apiRequest(ctx, "PUT", "api/contacts/edit/add-star", {
+          id: companyId,
+          star_value: starValue,
         });
-        result = await res.json();
       }
 
       return result ?? { success: true };
@@ -519,14 +423,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { companyId } = input as { companyId: string };
-      const { subdomain, email, apiKey } = getConn(ctx);
-      return apiRequest(
-        subdomain,
-        email,
-        apiKey,
-        "DELETE",
-        `api/contacts/${companyId}`,
-      );
+      return apiRequest(ctx, "DELETE", `api/contacts/${seg(companyId)}`);
     },
   });
 
@@ -572,7 +469,6 @@ export default function agileCrm(rl: RunlinePluginAPI) {
         closeDate,
         contactIds,
       } = input as Record<string, unknown>;
-      const { subdomain, email, apiKey } = getConn(ctx);
       const body: Record<string, unknown> = {
         name,
         expected_value: expectedValue,
@@ -581,14 +477,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
         close_date: new Date(closeDate as string).getTime(),
       };
       if (contactIds) body.contactIds = contactIds;
-      return apiRequest(
-        subdomain,
-        email,
-        apiKey,
-        "POST",
-        "api/opportunity",
-        body,
-      );
+      return apiRequest(ctx, "POST", "api/opportunity", body);
     },
   });
 
@@ -600,14 +489,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId } = input as { dealId: string };
-      const { subdomain, email, apiKey } = getConn(ctx);
-      return apiRequest(
-        subdomain,
-        email,
-        apiKey,
-        "GET",
-        `api/opportunity/${dealId}`,
-      );
+      return apiRequest(ctx, "GET", `api/opportunity/${seg(dealId)}`);
     },
   });
 
@@ -623,11 +505,8 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { subdomain, email, apiKey } = getConn(ctx);
       return paginateAll(
-        subdomain,
-        email,
-        apiKey,
+        ctx,
         "GET",
         "api/opportunity",
         undefined,
@@ -662,20 +541,12 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { dealId, name, expectedValue, probability, contactIds } =
         input as Record<string, unknown>;
-      const { subdomain, email, apiKey } = getConn(ctx);
       const body: Record<string, unknown> = { id: dealId };
       if (name) body.name = name;
       if (expectedValue !== undefined) body.expected_value = expectedValue;
       if (probability !== undefined) body.probability = probability;
       if (contactIds) body.contactIds = contactIds;
-      return apiRequest(
-        subdomain,
-        email,
-        apiKey,
-        "PUT",
-        "api/opportunity/partial-update",
-        body,
-      );
+      return apiRequest(ctx, "PUT", "api/opportunity/partial-update", body);
     },
   });
 
@@ -687,14 +558,7 @@ export default function agileCrm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId } = input as { dealId: string };
-      const { subdomain, email, apiKey } = getConn(ctx);
-      return apiRequest(
-        subdomain,
-        email,
-        apiKey,
-        "DELETE",
-        `api/opportunity/${dealId}`,
-      );
+      return apiRequest(ctx, "DELETE", `api/opportunity/${seg(dealId)}`);
     },
   });
 }
