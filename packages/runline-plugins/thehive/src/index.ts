@@ -1,43 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { thehiveCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    apiKey: c.apiKey as string,
-  };
-}
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function api(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.url}/api${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, thehiveCredential, "thehive", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${conn.apiKey}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`TheHive error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function thehive(rl: RunlinePluginAPI) {
   rl.setName("thehive");
   rl.setVersion("0.1.0");
+  rl.setCredential(thehiveCredential);
   rl.setConnectionSchema({
     url: {
       type: "string",
@@ -73,7 +60,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { ...p, date: Date.now() };
       if (p.tags)
         body.tags = (p.tags as string).split(",").map((t) => t.trim());
-      return api(getConn(ctx), "POST", "/alert", body);
+      return api(ctx, "POST", "alert", body);
     },
   });
 
@@ -83,9 +70,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/alert/${(input as Record<string, unknown>).id}`,
+        `alert/${seg((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -102,7 +89,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       >;
       if (p.limit)
         (body.query as unknown[]).push({ _name: "page", from: 0, to: p.limit });
-      return api(getConn(ctx), "POST", "/v1/query", body, { name: "alerts" });
+      return api(ctx, "POST", "v1/query", body, { name: "alerts" });
     },
   });
 
@@ -116,9 +103,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "PATCH",
-        `/alert/${p.id}`,
+        `alert/${seg(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -130,9 +117,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        `/alert/${(input as Record<string, unknown>).id}/markAsRead`,
+        `alert/${seg((input as Record<string, unknown>).id)}/markAsRead`,
       );
     },
   });
@@ -143,9 +130,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        `/alert/${(input as Record<string, unknown>).id}/markAsUnread`,
+        `alert/${seg((input as Record<string, unknown>).id)}/markAsUnread`,
       );
     },
   });
@@ -156,9 +143,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        `/alert/${(input as Record<string, unknown>).id}/createCase`,
+        `alert/${seg((input as Record<string, unknown>).id)}/createCase`,
       );
     },
   });
@@ -172,7 +159,7 @@ export default function thehive(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(getConn(ctx), "POST", `/alert/${p.alertId}/merge/${p.caseId}`);
+      return api(ctx, "POST", `alert/${seg(p.alertId)}/merge/${seg(p.caseId)}`);
     },
   });
 
@@ -194,7 +181,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { ...p, startDate: Date.now() };
       if (p.tags)
         body.tags = (p.tags as string).split(",").map((t) => t.trim());
-      return api(getConn(ctx), "POST", "/case", body);
+      return api(ctx, "POST", "case", body);
     },
   });
 
@@ -204,9 +191,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/case/${(input as Record<string, unknown>).id}`,
+        `case/${seg((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -223,7 +210,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       >;
       if (p.limit)
         (body.query as unknown[]).push({ _name: "page", from: 0, to: p.limit });
-      return api(getConn(ctx), "POST", "/v1/query", body, { name: "cases" });
+      return api(ctx, "POST", "v1/query", body, { name: "cases" });
     },
   });
 
@@ -237,9 +224,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "PATCH",
-        `/case/${p.id}`,
+        `case/${seg(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -261,7 +248,7 @@ export default function thehive(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { caseId, ...body } = input as Record<string, unknown>;
-      return api(getConn(ctx), "POST", `/case/${caseId}/artifact`, body);
+      return api(ctx, "POST", `case/${seg(caseId)}/artifact`, body);
     },
   });
 
@@ -271,9 +258,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        "/v1/query",
+        "v1/query",
         {
           query: [
             {
@@ -304,7 +291,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       } as Record<string, unknown>;
       if (p.limit)
         (body.query as unknown[]).push({ _name: "page", from: 0, to: p.limit });
-      return api(getConn(ctx), "POST", "/v1/query", body, {
+      return api(ctx, "POST", "v1/query", body, {
         name: "observables",
       });
     },
@@ -320,9 +307,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "PATCH",
-        `/case/artifact/${p.id}`,
+        `case/artifact/${seg(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -345,7 +332,7 @@ export default function thehive(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { caseId, ...body } = input as Record<string, unknown>;
-      return api(getConn(ctx), "POST", `/case/${caseId}/task`, body);
+      return api(ctx, "POST", `case/${seg(caseId)}/task`, body);
     },
   });
 
@@ -355,9 +342,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        "/v1/query",
+        "v1/query",
         {
           query: [
             {
@@ -385,7 +372,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       } as Record<string, unknown>;
       if (p.limit)
         (body.query as unknown[]).push({ _name: "page", from: 0, to: p.limit });
-      return api(getConn(ctx), "POST", "/v1/query", body, {
+      return api(ctx, "POST", "v1/query", body, {
         name: "case-tasks",
       });
     },
@@ -401,9 +388,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "PATCH",
-        `/case/task/${p.id}`,
+        `case/task/${seg(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -422,7 +409,7 @@ export default function thehive(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { taskId, ...body } = input as Record<string, unknown>;
       (body as Record<string, unknown>).startDate = Date.now();
-      return api(getConn(ctx), "POST", `/case/task/${taskId}/log`, body);
+      return api(ctx, "POST", `case/task/${seg(taskId)}/log`, body);
     },
   });
 
@@ -432,9 +419,9 @@ export default function thehive(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        "/v1/query",
+        "v1/query",
         {
           query: [
             {
@@ -462,7 +449,7 @@ export default function thehive(rl: RunlinePluginAPI) {
       } as Record<string, unknown>;
       if (p.limit)
         (body.query as unknown[]).push({ _name: "page", from: 0, to: p.limit });
-      return api(getConn(ctx), "POST", "/v1/query", body, {
+      return api(ctx, "POST", "v1/query", body, {
         name: "case-task-logs",
       });
     },

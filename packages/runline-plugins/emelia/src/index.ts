@@ -1,25 +1,20 @@
-import type { RunlinePluginAPI } from "runline";
-
-const GQL_URL = "https://graphql.emelia.io/graphql";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { emeliaCredential } from "./credentials.js";
 
 async function gql(
-  apiKey: string,
+  ctx: ActionContext,
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const body: Record<string, unknown> = { query };
   if (variables) body.variables = variables;
-  const res = await fetch(GQL_URL, {
+  const data = (await credentialJson(ctx, emeliaCredential, "emelia", {
+    target: "gql",
+    path: "graphql",
     method: "POST",
-    headers: {
-      Authorization: apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok)
-    throw new Error(`Emelia API error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
+    json: body,
+  })) as Record<string, unknown>;
   if (data.errors)
     throw new Error(`Emelia GraphQL error: ${JSON.stringify(data.errors)}`);
   return data.data as Record<string, unknown>;
@@ -28,6 +23,7 @@ async function gql(
 export default function emelia(rl: RunlinePluginAPI) {
   rl.setName("emelia");
   rl.setVersion("0.1.0");
+  rl.setCredential(emeliaCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -37,9 +33,6 @@ export default function emelia(rl: RunlinePluginAPI) {
       env: "EMELIA_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   // ── Campaign ────────────────────────────────────────
 
@@ -51,7 +44,7 @@ export default function emelia(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const data = await gql(
-        key(ctx),
+        ctx,
         `
         mutation createCampaign($name: String!) {
           createCampaign(name: $name) { _id name status createdAt provider startAt estimatedEnd }
@@ -74,7 +67,7 @@ export default function emelia(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const data = await gql(
-        key(ctx),
+        ctx,
         `
         query campaign($id: ID!) {
           campaign(id: $id) {
@@ -98,7 +91,7 @@ export default function emelia(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
       const data = await gql(
-        key(ctx),
+        ctx,
         `
         query all_campaigns {
           all_campaigns {
@@ -139,7 +132,7 @@ export default function emelia(rl: RunlinePluginAPI) {
       if (lastName) contact.lastName = lastName;
       if (customFields) Object.assign(contact, customFields);
       const data = await gql(
-        key(ctx),
+        ctx,
         `
         mutation AddContactToCampaignHook($id: ID!, $contact: JSON!) {
           addContactToCampaignHook(id: $id, contact: $contact)
@@ -162,7 +155,7 @@ export default function emelia(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       await gql(
-        key(ctx),
+        ctx,
         `mutation startCampaign($id: ID!) { startCampaign(id: $id) }`,
         { id: (input as { campaignId: string }).campaignId },
       );
@@ -182,7 +175,7 @@ export default function emelia(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       await gql(
-        key(ctx),
+        ctx,
         `mutation pauseCampaign($id: ID!) { pauseCampaign(id: $id) }`,
         { id: (input as { campaignId: string }).campaignId },
       );
@@ -235,7 +228,7 @@ export default function emelia(rl: RunlinePluginAPI) {
         copyProvider = true,
       } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `
         mutation duplicateCampaign($fromId: ID!, $name: String!, $copySettings: Boolean!, $copyMails: Boolean!, $copyContacts: Boolean!, $copyProvider: Boolean!) {
           duplicateCampaign(fromId: $fromId, name: $name, copySettings: $copySettings, copyMails: $copyMails, copyContacts: $copyContacts, copyProvider: $copyProvider)
@@ -264,7 +257,7 @@ export default function emelia(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
       const data = await gql(
-        key(ctx),
+        ctx,
         `
         query contact_lists {
           contact_lists { _id name contactCount fields usedInCampaign }
@@ -302,7 +295,7 @@ export default function emelia(rl: RunlinePluginAPI) {
       if (lastName) contact.lastName = lastName;
       if (customFields) Object.assign(contact, customFields);
       const data = await gql(
-        key(ctx),
+        ctx,
         `
         mutation AddContactsToListHook($id: ID!, $contact: JSON!) {
           addContactsToListHook(id: $id, contact: $contact)

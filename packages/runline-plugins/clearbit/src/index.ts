@@ -1,37 +1,24 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { clearbitCredential } from "./credentials.js";
 
 async function apiRequest(
-  apiKey: string,
-  subdomain: string,
+  ctx: ActionContext,
+  target: "person" | "company" | "autocomplete",
   endpoint: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`https://${subdomain}.clearbit.com${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${apiKey}` },
+  return credentialJson(ctx, clearbitCredential, "clearbit", {
+    target,
+    path: endpoint,
+    query: qs,
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Clearbit API error ${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-function getKey(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
 }
 
 export default function clearbit(rl: RunlinePluginAPI) {
   rl.setName("clearbit");
   rl.setVersion("0.1.0");
+  rl.setCredential(clearbitCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -116,7 +103,7 @@ export default function clearbit(rl: RunlinePluginAPI) {
       if (linkedin) qs.linkedin = linkedin;
       if (twitter) qs.twitter = twitter;
       if (facebook) qs.facebook = facebook;
-      return apiRequest(getKey(ctx), "person-stream", "/v2/people/find", qs);
+      return apiRequest(ctx, "person", "people/find", qs);
     },
   });
 
@@ -154,12 +141,7 @@ export default function clearbit(rl: RunlinePluginAPI) {
       if (linkedin) qs.linkedin = linkedin;
       if (twitter) qs.twitter = twitter;
       if (facebook) qs.facebook = facebook;
-      return apiRequest(
-        getKey(ctx),
-        "company-stream",
-        "/v2/companies/find",
-        qs,
-      );
+      return apiRequest(ctx, "company", "companies/find", qs);
     },
   });
 
@@ -175,7 +157,7 @@ export default function clearbit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name } = input as { name: string };
-      return apiRequest(getKey(ctx), "autocomplete", "/v1/companies/suggest", {
+      return apiRequest(ctx, "autocomplete", "companies/suggest", {
         query: name,
       });
     },

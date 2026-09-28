@@ -1,56 +1,39 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { deeplCredential } from "./credentials.js";
 
 async function apiRequest(
-  apiKey: string,
-  isPro: boolean,
-  method: string,
+  ctx: ActionContext,
+  method: "GET" | "POST",
   endpoint: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  const baseUrl = isPro
-    ? "https://api.deepl.com/v2"
-    : "https://api-free.deepl.com/v2";
-  const url = new URL(`${baseUrl}${endpoint}`);
-
-  const opts: RequestInit = {
+  const entries = Object.entries(params ?? {}).filter(
+    ([, v]) => v !== undefined && v !== null,
+  );
+  // DeepL takes form-encoded bodies, not JSON.
+  const form = new URLSearchParams(
+    entries.map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return credentialJson(ctx, deeplCredential, "deepl", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `DeepL-Auth-Key ${apiKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-  };
-
-  if (params && Object.keys(params).length > 0) {
-    if (method === "GET") {
-      for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-      }
-    } else {
-      opts.body = new URLSearchParams(
-        Object.entries(params)
-          .filter(([, v]) => v !== undefined && v !== null)
-          .map(([k, v]) => [k, String(v)]),
-      ).toString();
-    }
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`DeepL API error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  return {
-    apiKey: cfg.apiKey as string,
-    isPro: cfg.plan === "pro",
-  };
+    ...(method === "GET"
+      ? { query: Object.fromEntries(entries) }
+      : form
+        ? {
+            body: form,
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          }
+        : {}),
+  });
 }
 
 export default function deepl(rl: RunlinePluginAPI) {
   rl.setName("deepl");
   rl.setVersion("0.1.0");
+  rl.setCredential(deeplCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -91,7 +74,6 @@ export default function deepl(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { text, targetLang, sourceLang } = input as Record<string, unknown>;
-      const { apiKey, isPro } = getConn(ctx);
       const params: Record<string, unknown> = {
         text,
         target_lang: targetLang,
@@ -102,10 +84,9 @@ export default function deepl(rl: RunlinePluginAPI) {
           : sourceLang;
       }
       const data = (await apiRequest(
-        apiKey,
-        isPro,
+        ctx,
         "POST",
-        "/translate",
+        "translate",
         params,
       )) as Record<string, unknown>;
       const translations = data.translations as Array<Record<string, unknown>>;
@@ -125,8 +106,7 @@ export default function deepl(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { type = "target" } = (input ?? {}) as { type?: string };
-      const { apiKey, isPro } = getConn(ctx);
-      return apiRequest(apiKey, isPro, "GET", "/languages", { type });
+      return apiRequest(ctx, "GET", "languages", { type });
     },
   });
 }
