@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { matrixCredential } from "./credentials.js";
 
 function apiRequest(
@@ -16,10 +16,6 @@ function apiRequest(
     query,
     ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
   });
-}
-
-function generateTxnId(): string {
-  return crypto.randomUUID();
 }
 
 export default function matrix(rl: RunlinePluginAPI) {
@@ -92,7 +88,7 @@ export default function matrix(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `rooms/${encodeURIComponent((input as { roomIdOrAlias: string }).roomIdOrAlias)}/join`,
+        `rooms/${pathSegment((input as { roomIdOrAlias: string }).roomIdOrAlias)}/join`,
       );
     },
   });
@@ -105,7 +101,7 @@ export default function matrix(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `rooms/${encodeURIComponent((input as { roomId: string }).roomId)}/leave`,
+        `rooms/${pathSegment((input as { roomId: string }).roomId)}/leave`,
       );
     },
   });
@@ -123,12 +119,9 @@ export default function matrix(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { roomId, userId } = input as Record<string, unknown>;
-      return apiRequest(
-        ctx,
-        "POST",
-        `rooms/${encodeURIComponent(roomId as string)}/invite`,
-        { user_id: userId },
-      );
+      return apiRequest(ctx, "POST", `rooms/${pathSegment(roomId)}/invite`, {
+        user_id: userId,
+      });
     },
   });
 
@@ -148,12 +141,7 @@ export default function matrix(rl: RunlinePluginAPI) {
       const { roomId, userId, reason } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { user_id: userId };
       if (reason) body.reason = reason;
-      return apiRequest(
-        ctx,
-        "POST",
-        `rooms/${encodeURIComponent(roomId as string)}/kick`,
-        body,
-      );
+      return apiRequest(ctx, "POST", `rooms/${pathSegment(roomId)}/kick`, body);
     },
   });
 
@@ -203,11 +191,10 @@ export default function matrix(rl: RunlinePluginAPI) {
         body.formatted_body = text;
         body.body = fallbackText || text;
       }
-      const txnId = generateTxnId();
       return apiRequest(
         ctx,
         "PUT",
-        `rooms/${encodeURIComponent(roomId as string)}/send/m.room.message/${txnId}`,
+        `rooms/${pathSegment(roomId)}/send/m.room.message/${crypto.randomUUID()}`,
         body,
       );
     },
@@ -241,7 +228,7 @@ export default function matrix(rl: RunlinePluginAPI) {
         const data = (await apiRequest(
           ctx,
           "GET",
-          `rooms/${encodeURIComponent(roomId as string)}/messages`,
+          `rooms/${pathSegment(roomId)}/messages`,
           undefined,
           qs,
         )) as Record<string, unknown>;
@@ -259,7 +246,7 @@ export default function matrix(rl: RunlinePluginAPI) {
         const data = (await apiRequest(
           ctx,
           "GET",
-          `rooms/${encodeURIComponent(roomId as string)}/messages`,
+          `rooms/${pathSegment(roomId)}/messages`,
           undefined,
           qs,
         )) as Record<string, unknown>;
@@ -289,7 +276,7 @@ export default function matrix(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `rooms/${encodeURIComponent(roomId as string)}/event/${encodeURIComponent(eventId as string)}`,
+        `rooms/${pathSegment(roomId)}/event/${pathSegment(eventId)}`,
       );
     },
   });
@@ -323,7 +310,7 @@ export default function matrix(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `rooms/${encodeURIComponent(roomId as string)}/members`,
+        `rooms/${pathSegment(roomId)}/members`,
         undefined,
         qs,
       )) as Record<string, unknown>;

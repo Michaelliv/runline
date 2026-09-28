@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { activeCampaignCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -108,7 +105,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      return apiRequest(ctx, "GET", `contacts/${seg(contactId)}`);
+      return apiRequest(ctx, "GET", `contacts/${pathSegment(contactId)}`);
     },
   });
 
@@ -140,7 +137,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `contacts/${seg(contactId)}`, {
+      return apiRequest(ctx, "PUT", `contacts/${pathSegment(contactId)}`, {
         contact: fields,
       });
     },
@@ -154,7 +151,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      return apiRequest(ctx, "DELETE", `contacts/${seg(contactId)}`);
+      return apiRequest(ctx, "DELETE", `contacts/${pathSegment(contactId)}`);
     },
   });
 
@@ -182,7 +179,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { accountId } = input as { accountId: string };
-      return apiRequest(ctx, "GET", `accounts/${seg(accountId)}`);
+      return apiRequest(ctx, "GET", `accounts/${pathSegment(accountId)}`);
     },
   });
 
@@ -211,7 +208,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { accountId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `accounts/${seg(accountId)}`, {
+      return apiRequest(ctx, "PUT", `accounts/${pathSegment(accountId)}`, {
         account: fields,
       });
     },
@@ -225,7 +222,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { accountId } = input as { accountId: string };
-      return apiRequest(ctx, "DELETE", `accounts/${seg(accountId)}`);
+      return apiRequest(ctx, "DELETE", `accounts/${pathSegment(accountId)}`);
     },
   });
 
@@ -263,7 +260,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `accountContacts/${seg(accountContactId)}`,
+        `accountContacts/${pathSegment(accountContactId)}`,
         {
           accountContact: fields,
         },
@@ -286,7 +283,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `accountContacts/${seg(accountContactId)}`,
+        `accountContacts/${pathSegment(accountContactId)}`,
       );
     },
   });
@@ -323,7 +320,11 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactTagId } = input as { contactTagId: string };
-      return apiRequest(ctx, "DELETE", `contactTags/${seg(contactTagId)}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `contactTags/${pathSegment(contactTagId)}`,
+      );
     },
   });
 
@@ -412,7 +413,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tagId } = input as { tagId: string };
-      return apiRequest(ctx, "GET", `tags/${seg(tagId)}`);
+      return apiRequest(ctx, "GET", `tags/${pathSegment(tagId)}`);
     },
   });
 
@@ -448,7 +449,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
       const tag: Record<string, unknown> = { ...rest };
       if (name) tag.tag = name;
       if (tagType) tag.tagType = tagType;
-      return apiRequest(ctx, "PUT", `tags/${seg(tagId)}`, {
+      return apiRequest(ctx, "PUT", `tags/${pathSegment(tagId)}`, {
         tag,
       });
     },
@@ -462,7 +463,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tagId } = input as { tagId: string };
-      return apiRequest(ctx, "DELETE", `tags/${seg(tagId)}`);
+      return apiRequest(ctx, "DELETE", `tags/${pathSegment(tagId)}`);
     },
   });
 
@@ -511,7 +512,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId } = input as { dealId: string };
-      return apiRequest(ctx, "GET", `deals/${seg(dealId)}`);
+      return apiRequest(ctx, "GET", `deals/${pathSegment(dealId)}`);
     },
   });
 
@@ -545,7 +546,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `deals/${seg(dealId)}`, {
+      return apiRequest(ctx, "PUT", `deals/${pathSegment(dealId)}`, {
         deal: fields,
       });
     },
@@ -559,7 +560,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId } = input as { dealId: string };
-      return apiRequest(ctx, "DELETE", `deals/${seg(dealId)}`);
+      return apiRequest(ctx, "DELETE", `deals/${pathSegment(dealId)}`);
     },
   });
 
@@ -572,7 +573,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId, note } = input as { dealId: string; note: string };
-      return apiRequest(ctx, "POST", `deals/${seg(dealId)}/notes`, {
+      return apiRequest(ctx, "POST", `deals/${pathSegment(dealId)}/notes`, {
         note: { note },
       });
     },
@@ -595,7 +596,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `deals/${seg(dealId)}/notes/${seg(noteId)}`,
+        `deals/${pathSegment(dealId)}/notes/${pathSegment(noteId)}`,
         {
           note: { note },
         },
@@ -638,7 +639,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { connectionId } = input as { connectionId: string };
-      return apiRequest(ctx, "GET", `connections/${seg(connectionId)}`);
+      return apiRequest(ctx, "GET", `connections/${pathSegment(connectionId)}`);
     },
   });
 
@@ -670,9 +671,14 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { connectionId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `connections/${seg(connectionId)}`, {
-        connection: fields,
-      });
+      return apiRequest(
+        ctx,
+        "PUT",
+        `connections/${pathSegment(connectionId)}`,
+        {
+          connection: fields,
+        },
+      );
     },
   });
 
@@ -688,7 +694,11 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { connectionId } = input as { connectionId: string };
-      return apiRequest(ctx, "DELETE", `connections/${seg(connectionId)}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `connections/${pathSegment(connectionId)}`,
+      );
     },
   });
 
@@ -739,7 +749,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { customerId } = input as { customerId: string };
-      return apiRequest(ctx, "GET", `ecomCustomers/${seg(customerId)}`);
+      return apiRequest(ctx, "GET", `ecomCustomers/${pathSegment(customerId)}`);
     },
   });
 
@@ -783,9 +793,14 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
       if (acceptsMarketing !== undefined) {
         customer.acceptsMarketing = acceptsMarketing ? "1" : "0";
       }
-      return apiRequest(ctx, "PUT", `ecomCustomers/${seg(customerId)}`, {
-        ecomCustomer: customer,
-      });
+      return apiRequest(
+        ctx,
+        "PUT",
+        `ecomCustomers/${pathSegment(customerId)}`,
+        {
+          ecomCustomer: customer,
+        },
+      );
     },
   });
 
@@ -801,7 +816,11 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { customerId } = input as { customerId: string };
-      return apiRequest(ctx, "DELETE", `ecomCustomers/${seg(customerId)}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `ecomCustomers/${pathSegment(customerId)}`,
+      );
     },
   });
 
@@ -860,7 +879,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { orderId } = input as { orderId: string };
-      return apiRequest(ctx, "GET", `ecomOrders/${seg(orderId)}`);
+      return apiRequest(ctx, "GET", `ecomOrders/${pathSegment(orderId)}`);
     },
   });
 
@@ -888,7 +907,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { orderId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `ecomOrders/${seg(orderId)}`, {
+      return apiRequest(ctx, "PUT", `ecomOrders/${pathSegment(orderId)}`, {
         ecomOrder: fields,
       });
     },
@@ -902,7 +921,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { orderId } = input as { orderId: string };
-      return apiRequest(ctx, "DELETE", `ecomOrders/${seg(orderId)}`);
+      return apiRequest(ctx, "DELETE", `ecomOrders/${pathSegment(orderId)}`);
     },
   });
 
@@ -916,7 +935,11 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { productId } = input as { productId: string };
-      return apiRequest(ctx, "GET", `ecomOrderProducts/${seg(productId)}`);
+      return apiRequest(
+        ctx,
+        "GET",
+        `ecomOrderProducts/${pathSegment(productId)}`,
+      );
     },
   });
 
@@ -928,7 +951,11 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { orderId } = input as { orderId: string };
-      return apiRequest(ctx, "GET", `ecomOrders/${seg(orderId)}/orderProducts`);
+      return apiRequest(
+        ctx,
+        "GET",
+        `ecomOrders/${pathSegment(orderId)}/orderProducts`,
+      );
     },
   });
 

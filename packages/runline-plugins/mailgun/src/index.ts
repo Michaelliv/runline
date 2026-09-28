@@ -1,5 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { mailgunCredential, mailgunRegion } from "./credentials.js";
 
 export default function mailgun(rl: RunlinePluginAPI) {
@@ -64,7 +64,6 @@ export default function mailgun(rl: RunlinePluginAPI) {
         unknown
       >;
       const cfg = ctx.connection.config;
-      const emailDomain = cfg.emailDomain as string;
 
       const form = new URLSearchParams();
       form.set("to", to as string);
@@ -77,7 +76,7 @@ export default function mailgun(rl: RunlinePluginAPI) {
 
       return credentialJson(ctx, mailgunCredential, "mailgun", {
         target: mailgunRegion(cfg),
-        path: `${encodeURIComponent(emailDomain)}/messages`,
+        path: `${pathSegment(cfg.emailDomain)}/messages`,
         method: "POST",
         body: form.toString(),
         headers: { "Content-Type": "application/x-www-form-urlencoded" },

@@ -2,12 +2,10 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
   credentialRequest,
+  pathSegment,
   pathWithin,
 } from "../../_shared/credentials.js";
 import { shopifyBase, shopifyCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -125,7 +123,7 @@ export default function shopify(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `orders/${seg(p.orderId)}.json`,
+        `orders/${pathSegment(p.orderId)}.json`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -185,7 +183,7 @@ export default function shopify(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `orders/${seg(p.orderId)}.json`,
+        `orders/${pathSegment(p.orderId)}.json`,
         { order },
       )) as Record<string, unknown>;
       return data.order;
@@ -200,7 +198,7 @@ export default function shopify(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `orders/${seg((input as Record<string, unknown>).orderId)}.json`,
+        `orders/${pathSegment((input as Record<string, unknown>).orderId)}.json`,
       );
       return { success: true };
     },
@@ -241,7 +239,7 @@ export default function shopify(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `products/${seg(p.productId)}.json`,
+        `products/${pathSegment(p.productId)}.json`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -291,7 +289,7 @@ export default function shopify(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `products/${seg(productId)}.json`,
+        `products/${pathSegment(productId)}.json`,
         { product: fields },
       )) as Record<string, unknown>;
       return data.product;
@@ -306,7 +304,7 @@ export default function shopify(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `products/${seg((input as Record<string, unknown>).productId)}.json`,
+        `products/${pathSegment((input as Record<string, unknown>).productId)}.json`,
       );
       return { success: true };
     },

@@ -1,9 +1,6 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { nasaCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -107,7 +104,7 @@ export default function nasa(rl: RunlinePluginAPI) {
       >;
       const data = (await apiRequest(
         ctx,
-        `neo/rest/v1/neo/${seg(asteroidId)}`,
+        `neo/rest/v1/neo/${pathSegment(asteroidId)}`,
       )) as Record<string, unknown>;
       if (!includeCloseApproachData) delete data.close_approach_data;
       return data;

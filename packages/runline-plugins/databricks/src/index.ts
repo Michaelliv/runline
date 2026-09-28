@@ -2,11 +2,9 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
   credentialRequest,
+  pathSegment,
 } from "../../_shared/credentials.js";
 import { databricksCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** A caller-supplied path spanning segments, each encoded. */
 const segs = (value: unknown) =>
@@ -117,7 +115,7 @@ export default function databricks(rl: RunlinePluginAPI) {
         result = (await api(
           ctx,
           "GET",
-          `api/2.0/sql/statements/${seg(statementId)}`,
+          `api/2.0/sql/statements/${pathSegment(statementId)}`,
         )) as Record<string, unknown>;
         status = (result.status as Record<string, string>).state;
         retries++;
@@ -139,7 +137,7 @@ export default function databricks(rl: RunlinePluginAPI) {
         const chunk = (await api(
           ctx,
           "GET",
-          `api/2.0/sql/statements/${seg(statementId)}/result/chunks/${seg(chunkIdx)}`,
+          `api/2.0/sql/statements/${pathSegment(statementId)}/result/chunks/${pathSegment(chunkIdx)}`,
         )) as Record<string, unknown>;
         if (chunk.data_array)
           allRows.push(...(chunk.data_array as unknown[][]));
@@ -178,7 +176,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "PUT",
-        `api/2.0/fs/directories/Volumes/${seg(cat)}/${seg(sch)}/${seg(vol)}/${segs(p.directoryPath)}`,
+        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.directoryPath)}`,
       );
       return { success: true, directoryPath: p.directoryPath };
     },
@@ -201,7 +199,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `api/2.0/fs/directories/Volumes/${seg(cat)}/${seg(sch)}/${seg(vol)}/${segs(p.directoryPath)}`,
+        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.directoryPath)}`,
       );
       return { success: true };
     },
@@ -224,7 +222,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `api/2.0/fs/files/Volumes/${seg(cat)}/${seg(sch)}/${seg(vol)}/${segs(p.filePath)}`,
+        `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.filePath)}`,
       );
       return { success: true };
     },
@@ -246,7 +244,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
       const res = await credentialRequest(ctx, databricksCredential, {
         target: "workspace",
-        path: `api/2.0/fs/files/Volumes/${seg(cat)}/${seg(sch)}/${seg(vol)}/${segs(p.filePath)}`,
+        path: `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.filePath)}`,
         method: "HEAD",
       });
       if (!res.ok)
@@ -283,7 +281,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.0/fs/directories/Volumes/${seg(cat)}/${seg(sch)}/${seg(vol)}${dir}`,
+        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}${dir}`,
         undefined,
         qs,
       );
@@ -304,7 +302,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `api/2.0/genie/spaces/${seg(p.spaceId)}/start-conversation`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/start-conversation`,
         { content: p.initialMessage },
       );
     },
@@ -323,7 +321,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `api/2.0/genie/spaces/${seg(p.spaceId)}/conversations/${seg(p.conversationId)}/messages`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/conversations/${pathSegment(p.conversationId)}/messages`,
         { content: p.message },
       );
     },
@@ -342,7 +340,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.0/genie/spaces/${seg(p.spaceId)}/conversations/${seg(p.conversationId)}/messages/${seg(p.messageId)}`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/conversations/${pathSegment(p.conversationId)}/messages/${pathSegment(p.messageId)}`,
       );
     },
   });
@@ -361,7 +359,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.0/genie/spaces/${seg(p.spaceId)}/conversations/${seg(p.conversationId)}/messages/${seg(p.messageId)}/attachments/${seg(p.attachmentId)}/query-result`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/conversations/${pathSegment(p.conversationId)}/messages/${pathSegment(p.messageId)}/attachments/${pathSegment(p.attachmentId)}/query-result`,
       );
     },
   });
@@ -380,7 +378,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `api/2.0/genie/spaces/${seg(p.spaceId)}/conversations/${seg(p.conversationId)}/messages/${seg(p.messageId)}/attachments/${seg(p.attachmentId)}/execute-query`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/conversations/${pathSegment(p.conversationId)}/messages/${pathSegment(p.messageId)}/attachments/${pathSegment(p.attachmentId)}/execute-query`,
       );
     },
   });
@@ -393,7 +391,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.0/genie/spaces/${seg((input as Record<string, unknown>).spaceId)}`,
+        `api/2.0/genie/spaces/${pathSegment((input as Record<string, unknown>).spaceId)}`,
       );
     },
   });
@@ -418,7 +416,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `serving-endpoints/${seg(p.endpointName)}/invocations`,
+        `serving-endpoints/${pathSegment(p.endpointName)}/invocations`,
         body,
       );
     },
@@ -449,7 +447,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.1/unity-catalog/catalogs/${seg((input as Record<string, unknown>).name)}`,
+        `api/2.1/unity-catalog/catalogs/${pathSegment((input as Record<string, unknown>).name)}`,
       );
     },
   });
@@ -475,7 +473,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PATCH",
-        `api/2.1/unity-catalog/catalogs/${seg(p.name)}`,
+        `api/2.1/unity-catalog/catalogs/${pathSegment(p.name)}`,
         { comment: p.comment },
       );
     },
@@ -489,7 +487,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `api/2.1/unity-catalog/catalogs/${seg((input as Record<string, unknown>).name)}`,
+        `api/2.1/unity-catalog/catalogs/${pathSegment((input as Record<string, unknown>).name)}`,
       );
       return { success: true };
     },
@@ -542,7 +540,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.1/unity-catalog/tables/${seg((input as Record<string, unknown>).fullName)}`,
+        `api/2.1/unity-catalog/tables/${pathSegment((input as Record<string, unknown>).fullName)}`,
       );
     },
   });
@@ -577,7 +575,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `api/2.1/unity-catalog/tables/${seg((input as Record<string, unknown>).fullName)}`,
+        `api/2.1/unity-catalog/tables/${pathSegment((input as Record<string, unknown>).fullName)}`,
       );
       return { success: true };
     },
@@ -633,7 +631,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.1/unity-catalog/volumes/${seg(p.catalogName)}.${seg(p.schemaName)}.${seg(p.volumeName)}`,
+        `api/2.1/unity-catalog/volumes/${pathSegment(p.catalogName)}.${pathSegment(p.schemaName)}.${pathSegment(p.volumeName)}`,
       );
     },
   });
@@ -667,7 +665,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `api/2.1/unity-catalog/volumes/${seg(p.catalogName)}.${seg(p.schemaName)}.${seg(p.volumeName)}`,
+        `api/2.1/unity-catalog/volumes/${pathSegment(p.catalogName)}.${pathSegment(p.schemaName)}.${pathSegment(p.volumeName)}`,
       );
       return { success: true };
     },
@@ -751,7 +749,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.1/unity-catalog/functions/${seg((input as Record<string, unknown>).fullName)}`,
+        `api/2.1/unity-catalog/functions/${pathSegment((input as Record<string, unknown>).fullName)}`,
       );
     },
   });
@@ -786,7 +784,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `api/2.1/unity-catalog/functions/${seg((input as Record<string, unknown>).fullName)}`,
+        `api/2.1/unity-catalog/functions/${pathSegment((input as Record<string, unknown>).fullName)}`,
       );
       return { success: true };
     },
@@ -841,7 +839,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `api/2.0/vector-search/indexes/${seg((input as Record<string, unknown>).indexName)}`,
+        `api/2.0/vector-search/indexes/${pathSegment((input as Record<string, unknown>).indexName)}`,
       );
     },
   });
@@ -923,7 +921,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `api/2.0/vector-search/indexes/${seg(p.indexName)}/query`,
+        `api/2.0/vector-search/indexes/${pathSegment(p.indexName)}/query`,
         body,
       );
     },

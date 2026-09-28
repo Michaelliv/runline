@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { nocodbCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -80,7 +77,12 @@ export default function nocodb(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, rows } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `tables/${seg(tableId)}/records`, rows);
+      return apiRequest(
+        ctx,
+        "POST",
+        `tables/${pathSegment(tableId)}/records`,
+        rows,
+      );
     },
   });
 
@@ -96,7 +98,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `tables/${seg(tableId)}/records/${seg(rowId)}`,
+        `tables/${pathSegment(tableId)}/records/${pathSegment(rowId)}`,
       );
     },
   });
@@ -139,7 +141,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const endpoint = `tables/${seg(p.tableId)}/records`;
+      const endpoint = `tables/${pathSegment(p.tableId)}/records`;
       const qs: Record<string, unknown> = {};
       if (p.where) qs.where = p.where;
       if (p.sort) qs.sort = p.sort;
@@ -176,7 +178,12 @@ export default function nocodb(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, rows } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PATCH", `tables/${seg(tableId)}/records`, rows);
+      return apiRequest(
+        ctx,
+        "PATCH",
+        `tables/${pathSegment(tableId)}/records`,
+        rows,
+      );
     },
   });
 
@@ -194,7 +201,12 @@ export default function nocodb(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, ids } = input as Record<string, unknown>;
-      return apiRequest(ctx, "DELETE", `tables/${seg(tableId)}/records`, ids);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `tables/${pathSegment(tableId)}/records`,
+        ids,
+      );
     },
   });
 }

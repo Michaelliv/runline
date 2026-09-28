@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { boxCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -99,7 +96,13 @@ export default function box(rl: RunlinePluginAPI) {
       if (version) body.version = version;
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
-      return apiRequest(ctx, "POST", `files/${seg(fileId)}/copy`, body, qs);
+      return apiRequest(
+        ctx,
+        "POST",
+        `files/${pathSegment(fileId)}/copy`,
+        body,
+        qs,
+      );
     },
   });
 
@@ -111,7 +114,7 @@ export default function box(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileId } = input as { fileId: string };
-      await apiRequest(ctx, "DELETE", `files/${seg(fileId)}`);
+      await apiRequest(ctx, "DELETE", `files/${pathSegment(fileId)}`);
       return { success: true };
     },
   });
@@ -131,7 +134,13 @@ export default function box(rl: RunlinePluginAPI) {
       const { fileId, fields } = input as { fileId: string; fields?: string };
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
-      return apiRequest(ctx, "GET", `files/${seg(fileId)}`, undefined, qs);
+      return apiRequest(
+        ctx,
+        "GET",
+        `files/${pathSegment(fileId)}`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -303,9 +312,15 @@ export default function box(rl: RunlinePluginAPI) {
         folderId: string;
         recursive?: boolean;
       };
-      await apiRequest(ctx, "DELETE", `folders/${seg(folderId)}`, undefined, {
-        recursive: recursive ?? false,
-      });
+      await apiRequest(
+        ctx,
+        "DELETE",
+        `folders/${pathSegment(folderId)}`,
+        undefined,
+        {
+          recursive: recursive ?? false,
+        },
+      );
       return { success: true };
     },
   });
@@ -318,7 +333,7 @@ export default function box(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { folderId } = input as { folderId: string };
-      return apiRequest(ctx, "GET", `folders/${seg(folderId)}`);
+      return apiRequest(ctx, "GET", `folders/${pathSegment(folderId)}`);
     },
   });
 
@@ -468,7 +483,13 @@ export default function box(rl: RunlinePluginAPI) {
       if (tags) body.tags = (tags as string).split(",").map((t) => t.trim());
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
-      return apiRequest(ctx, "PUT", `folders/${seg(folderId)}`, body, qs);
+      return apiRequest(
+        ctx,
+        "PUT",
+        `folders/${pathSegment(folderId)}`,
+        body,
+        qs,
+      );
     },
   });
 }

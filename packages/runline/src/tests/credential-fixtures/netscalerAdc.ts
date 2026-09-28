@@ -11,11 +11,11 @@ export default {
   },
   secrets: ["password"],
   action: "file.delete",
-  input: { fileName: "old.crt" },
+  input: { fileName: "old server.crt" },
   response: {},
   target: "api",
   wire: {
-    url: "https://adc.example.com/nitro/v1/config/systemfile?args=filename:old.crt,filelocation:%2Fnsconfig%2Fssl%2F",
+    url: "https://adc.example.com/nitro/v1/config/systemfile?args=filename:old%20server.crt,filelocation:%2Fnsconfig%2Fssl%2F",
     header: ["x-nitro-pass", "ns_secret"],
   },
 } satisfies CredentialFixture;

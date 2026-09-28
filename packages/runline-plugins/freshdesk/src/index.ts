@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { freshdeskCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 const STATUS: Record<string, number> = {
   open: 2,
@@ -183,7 +180,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "GET",
-        `tickets/${seg((input as { ticketId: string }).ticketId)}`,
+        `tickets/${pathSegment((input as { ticketId: string }).ticketId)}`,
       );
     },
   });
@@ -320,7 +317,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       if (dueBy) body.due_by = dueBy;
       if (frDueBy) body.fr_due_by = frDueBy;
       if (customFields) body.custom_fields = customFields;
-      return req(ctx, "PUT", `tickets/${seg(ticketId)}`, body);
+      return req(ctx, "PUT", `tickets/${pathSegment(ticketId)}`, body);
     },
   });
 
@@ -334,7 +331,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       await req(
         ctx,
         "DELETE",
-        `tickets/${seg((input as { ticketId: string }).ticketId)}`,
+        `tickets/${pathSegment((input as { ticketId: string }).ticketId)}`,
       );
       return { success: true };
     },
@@ -402,7 +399,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "GET",
-        `contacts/${seg((input as { contactId: string }).contactId)}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       );
     },
   });
@@ -489,7 +486,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       if (jobTitle) body.job_title = jobTitle;
       if (tags) body.tags = tags;
       if (customFields) body.custom_fields = customFields;
-      return req(ctx, "PUT", `contacts/${seg(contactId)}`, body);
+      return req(ctx, "PUT", `contacts/${pathSegment(contactId)}`, body);
     },
   });
 
@@ -503,7 +500,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       await req(
         ctx,
         "DELETE",
-        `contacts/${seg((input as { contactId: string }).contactId)}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       );
       return { success: true };
     },

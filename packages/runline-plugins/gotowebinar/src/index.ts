@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { gotowebinarCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -101,7 +98,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `organizers/${seg(organizerKey)}/webinars`,
+        `organizers/${pathSegment(organizerKey)}/webinars`,
         body,
       );
     },
@@ -122,7 +119,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment((input as { webinarKey: string }).webinarKey)}`,
       );
     },
   });
@@ -138,7 +135,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars`,
+        `organizers/${pathSegment(organizerKey)}/webinars`,
       )) as Record<string, unknown>;
       const list =
         (data._embedded as Record<string, unknown>)?.webinars ?? data;
@@ -187,7 +184,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}`,
         body,
       );
     },
@@ -220,7 +217,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}`,
         undefined,
         qs,
       );
@@ -252,7 +249,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/registrants`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/registrants`,
         { firstName, lastName, email },
       );
     },
@@ -279,7 +276,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/registrants/${seg(registrantKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/registrants/${pathSegment(registrantKey)}`,
       );
     },
   });
@@ -299,7 +296,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}/registrants`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment((input as { webinarKey: string }).webinarKey)}/registrants`,
       );
     },
   });
@@ -325,7 +322,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/registrants/${seg(registrantKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/registrants/${pathSegment(registrantKey)}`,
       );
       return { success: true };
     },
@@ -354,7 +351,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/sessions/${seg(sessionKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/sessions/${pathSegment(sessionKey)}`,
       );
     },
   });
@@ -374,7 +371,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}/sessions`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment((input as { webinarKey: string }).webinarKey)}/sessions`,
       );
     },
   });
@@ -400,7 +397,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/sessions/${seg(sessionKey)}/performance`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/sessions/${pathSegment(sessionKey)}/performance`,
       );
     },
   });
@@ -436,7 +433,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/sessions/${seg(sessionKey)}/attendees/${seg(registrantKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/sessions/${pathSegment(sessionKey)}/attendees/${pathSegment(registrantKey)}`,
       );
     },
   });
@@ -462,7 +459,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/sessions/${seg(sessionKey)}/attendees`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/sessions/${pathSegment(sessionKey)}/attendees`,
       );
     },
   });
@@ -515,7 +512,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/coorganizers`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/coorganizers`,
         [body],
       );
     },
@@ -536,7 +533,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}/coorganizers`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment((input as { webinarKey: string }).webinarKey)}/coorganizers`,
       );
     },
   });
@@ -572,7 +569,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/coorganizers/${seg(coorganizerKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/coorganizers/${pathSegment(coorganizerKey)}`,
         undefined,
         qs,
       );
@@ -600,7 +597,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/panelists`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/panelists`,
         [{ name, email }],
       );
     },
@@ -621,7 +618,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}/panelists`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment((input as { webinarKey: string }).webinarKey)}/panelists`,
       );
     },
   });
@@ -647,7 +644,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/panelists/${seg(panelistKey)}`,
+        `organizers/${pathSegment(organizerKey)}/webinars/${pathSegment(webinarKey)}/panelists/${pathSegment(panelistKey)}`,
       );
       return { success: true };
     },
