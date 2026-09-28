@@ -130,7 +130,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "humanticAi/src/index.ts",
   "hunter/src/index.ts",
   "intercom/src/index.ts",
-  "iterable/src/index.ts",
   "lemlist/src/index.ts",
   "lingvanex/src/index.ts",
   "lonescale/src/index.ts",
