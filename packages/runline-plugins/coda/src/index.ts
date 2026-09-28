@@ -1,45 +1,34 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { codaCredential } from "./credentials.js";
 
-const BASE_URL = "https://coda.io/apis/v1";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, codaCredential, "coda", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  };
-  if (
-    body &&
+    query,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Coda API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginateAll(
-  token: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   qs?: Record<string, unknown>,
   limit?: number,
 ): Promise<unknown[]> {
@@ -48,13 +37,10 @@ async function paginateAll(
   while (true) {
     const q = { ...qs } as Record<string, unknown>;
     if (pageToken) q.pageToken = pageToken;
-    const data = (await apiRequest(
-      token,
-      "GET",
-      endpoint,
-      undefined,
-      q,
-    )) as Record<string, unknown>;
+    const data = (await apiRequest(ctx, "GET", path, undefined, q)) as Record<
+      string,
+      unknown
+    >;
     const items = (data.items as unknown[]) ?? [];
     results.push(...items);
     if (limit && results.length >= limit) return results.slice(0, limit);
@@ -64,15 +50,10 @@ async function paginateAll(
   return results;
 }
 
-function getToken(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.accessToken as string;
-}
-
 export default function coda(rl: RunlinePluginAPI) {
   rl.setName("coda");
   rl.setVersion("0.1.0");
+  rl.setCredential(codaCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -118,9 +99,9 @@ export default function coda(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { rows: [{ cells: row }] };
       if (keyColumns) body.keyColumns = keyColumns;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "POST",
-        `/docs/${docId}/tables/${tableId}/rows`,
+        `docs/${seg(docId)}/tables/${seg(tableId)}/rows`,
         body,
         qs,
       );
@@ -156,9 +137,9 @@ export default function coda(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { useColumnNames };
       if (valueFormat) qs.valueFormat = valueFormat;
       const data = (await apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `/docs/${docId}/tables/${tableId}/rows/${rowId}`,
+        `docs/${seg(docId)}/tables/${seg(tableId)}/rows/${seg(rowId)}`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -208,8 +189,8 @@ export default function coda(rl: RunlinePluginAPI) {
       if (valueFormat) qs.valueFormat = valueFormat;
       if (visibleOnly) qs.visibleOnly = visibleOnly;
       const rows = await paginateAll(
-        getToken(ctx),
-        `/docs/${docId}/tables/${tableId}/rows`,
+        ctx,
+        `docs/${seg(docId)}/tables/${seg(tableId)}/rows`,
         qs,
         limit as number | undefined,
       );
@@ -231,9 +212,9 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, tableId, rowId } = input as Record<string, string>;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "DELETE",
-        `/docs/${docId}/tables/${tableId}/rows`,
+        `docs/${seg(docId)}/tables/${seg(tableId)}/rows`,
         { rowIds: [rowId] },
       );
     },
@@ -258,9 +239,9 @@ export default function coda(rl: RunlinePluginAPI) {
         string
       >;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "POST",
-        `/docs/${docId}/tables/${tableId}/rows/${rowId}/buttons/${columnId}`,
+        `docs/${seg(docId)}/tables/${seg(tableId)}/rows/${seg(rowId)}/buttons/${seg(columnId)}`,
       );
     },
   });
@@ -278,9 +259,9 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, tableId, columnId } = input as Record<string, string>;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `/docs/${docId}/tables/${tableId}/columns/${columnId}`,
+        `docs/${seg(docId)}/tables/${seg(tableId)}/columns/${seg(columnId)}`,
       );
     },
   });
@@ -299,8 +280,8 @@ export default function coda(rl: RunlinePluginAPI) {
         unknown
       >;
       return paginateAll(
-        getToken(ctx),
-        `/docs/${docId}/tables/${tableId}/columns`,
+        ctx,
+        `docs/${seg(docId)}/tables/${seg(tableId)}/columns`,
         undefined,
         limit as number | undefined,
       );
@@ -319,9 +300,9 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, formulaId } = input as Record<string, string>;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `/docs/${docId}/formulas/${formulaId}`,
+        `docs/${seg(docId)}/formulas/${seg(formulaId)}`,
       );
     },
   });
@@ -336,8 +317,8 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, limit } = (input ?? {}) as Record<string, unknown>;
       return paginateAll(
-        getToken(ctx),
-        `/docs/${docId}/formulas`,
+        ctx,
+        `docs/${seg(docId)}/formulas`,
         undefined,
         limit as number | undefined,
       );
@@ -356,9 +337,9 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, controlId } = input as Record<string, string>;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `/docs/${docId}/controls/${controlId}`,
+        `docs/${seg(docId)}/controls/${seg(controlId)}`,
       );
     },
   });
@@ -373,8 +354,8 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, limit } = (input ?? {}) as Record<string, unknown>;
       return paginateAll(
-        getToken(ctx),
-        `/docs/${docId}/controls`,
+        ctx,
+        `docs/${seg(docId)}/controls`,
         undefined,
         limit as number | undefined,
       );
@@ -392,11 +373,7 @@ export default function coda(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { docId, viewId } = input as Record<string, string>;
-      return apiRequest(
-        getToken(ctx),
-        "GET",
-        `/docs/${docId}/tables/${viewId}`,
-      );
+      return apiRequest(ctx, "GET", `docs/${seg(docId)}/tables/${seg(viewId)}`);
     },
   });
 
@@ -410,8 +387,8 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, limit } = (input ?? {}) as Record<string, unknown>;
       return paginateAll(
-        getToken(ctx),
-        `/docs/${docId}/tables`,
+        ctx,
+        `docs/${seg(docId)}/tables`,
         { tableTypes: "view" },
         limit as number | undefined,
       );
@@ -453,8 +430,8 @@ export default function coda(rl: RunlinePluginAPI) {
       if (sortBy) qs.sortBy = sortBy;
       if (valueFormat) qs.valueFormat = valueFormat;
       const rows = await paginateAll(
-        getToken(ctx),
-        `/docs/${docId}/tables/${viewId}/rows`,
+        ctx,
+        `docs/${seg(docId)}/tables/${seg(viewId)}/rows`,
         qs,
         limit as number | undefined,
       );
@@ -476,9 +453,9 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, viewId, rowId } = input as Record<string, string>;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "DELETE",
-        `/docs/${docId}/tables/${viewId}/rows/${rowId}`,
+        `docs/${seg(docId)}/tables/${seg(viewId)}/rows/${seg(rowId)}`,
       );
     },
   });
@@ -512,9 +489,9 @@ export default function coda(rl: RunlinePluginAPI) {
         ([column, value]) => ({ column, value }),
       );
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "PUT",
-        `/docs/${docId}/tables/${viewId}/rows/${rowId}`,
+        `docs/${seg(docId)}/tables/${seg(viewId)}/rows/${seg(rowId)}`,
         { row: { cells: row } },
         qs,
       );
@@ -540,9 +517,9 @@ export default function coda(rl: RunlinePluginAPI) {
         string
       >;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "POST",
-        `/docs/${docId}/tables/${viewId}/rows/${rowId}/buttons/${columnId}`,
+        `docs/${seg(docId)}/tables/${seg(viewId)}/rows/${seg(rowId)}/buttons/${seg(columnId)}`,
       );
     },
   });
@@ -558,8 +535,8 @@ export default function coda(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { docId, viewId, limit } = (input ?? {}) as Record<string, unknown>;
       return paginateAll(
-        getToken(ctx),
-        `/docs/${docId}/tables/${viewId}/columns`,
+        ctx,
+        `docs/${seg(docId)}/tables/${seg(viewId)}/columns`,
         undefined,
         limit as number | undefined,
       );
