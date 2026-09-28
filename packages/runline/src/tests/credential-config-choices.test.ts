@@ -6,7 +6,10 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { configChoice } from "../../../runline-plugins/_shared/credentials.js";
+import {
+  configChoice,
+  configFlag,
+} from "../../../runline-plugins/_shared/credentials.js";
 import { bitwardenCredential } from "../../../runline-plugins/bitwarden/src/credentials.js";
 import { bubbleCredential } from "../../../runline-plugins/bubble/src/credentials.js";
 import { contentfulCredential } from "../../../runline-plugins/contentful/src/credentials.js";
@@ -14,7 +17,9 @@ import { customerIoCredential } from "../../../runline-plugins/customerIo/src/cr
 import { deeplCredential } from "../../../runline-plugins/deepl/src/credentials.js";
 import { gristCredential } from "../../../runline-plugins/grist/src/credentials.js";
 import { halopsaCredential } from "../../../runline-plugins/halopsa/src/credentials.js";
+import { homeAssistantCredential } from "../../../runline-plugins/homeAssistant/src/credentials.js";
 import { mailgunRegion } from "../../../runline-plugins/mailgun/src/credentials.js";
+import { paddleCredential } from "../../../runline-plugins/paddle/src/credentials.js";
 import { paypalCredential } from "../../../runline-plugins/paypal/src/credentials.js";
 
 const refused = { code: "invalid_credentials" };
@@ -27,6 +32,18 @@ describe("configChoice", () => {
     assert.equal(configChoice(null, choices, "us"), "us");
     for (const value of ["EU", "", "toString", 1, true])
       assert.throws(() => configChoice(value, choices, "us"), refused);
+  });
+});
+
+describe("configFlag", () => {
+  it("takes a boolean or its CLI string form, false when absent, and refuses anything else", () => {
+    assert.equal(configFlag(true), true);
+    assert.equal(configFlag("true"), true);
+    assert.equal(configFlag(false), false);
+    assert.equal(configFlag("false"), false);
+    assert.equal(configFlag(undefined), false);
+    for (const value of ["yes", "1", "TRUE", 1, ""])
+      assert.throws(() => configFlag(value), refused);
   });
 });
 
@@ -46,6 +63,8 @@ describe("plugins choosing hosts from config", () => {
         }),
       () => bubbleCredential({ appName: "app", environment: "dev" }),
       () => paypalCredential({ env: "production" }),
+      () => paddleCredential({ sandbox: "yes" }),
+      () => homeAssistantCredential({ host: "ha.example.com", ssl: "yes" }),
       () => customerIoCredential({ region: "eu" }),
       () => mailgunRegion({ apiDomain: "api.mailgun.org" }),
       () => contentfulCredential({ source: "Preview" }),
