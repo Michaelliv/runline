@@ -104,7 +104,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "cortex/src/index.ts",
   "currents/src/index.ts",
   "customerIo/src/index.ts",
-  "deepl/src/index.ts",
   "demio/src/index.ts",
   "dhl/src/index.ts",
   "discord/src/index.ts",

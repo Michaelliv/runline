@@ -69,7 +69,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "customerIo",
     "two credentials in one connection: tracking and app keys, used by different actions",
   ],
-  ["deepl", "phase 3: not yet migrated"],
   ["demio", "two secrets per request: Api-Key and Api-Secret headers"],
   ["dhl", "phase 3: not yet migrated"],
   ["discord", "phase 3: not yet migrated"],
