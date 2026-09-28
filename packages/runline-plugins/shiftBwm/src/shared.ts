@@ -1,13 +1,13 @@
 import { type ActionContext, AuthError, type HttpMethod } from "runline";
 import * as t from "typebox";
 import { credentialBroker } from "../../_shared/credentialAdapter.js";
-import { SHIFT_API_URL, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
 import {
-  shiftCredential,
+  SHIFT_API_URL,
+  STRICT_OBJECT,
   shiftErrorMessage,
   shiftIdentifier,
-  shiftPath,
-} from "../../_shared/shiftCredentials.js";
+} from "../../_shared/shiftCloud.js";
+import { shiftCredential, shiftPath } from "../../_shared/shiftCredentials.js";
 import {
   BusinessWorldModelClient,
   BwmClientError,

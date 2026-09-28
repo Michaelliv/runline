@@ -1,6 +1,9 @@
+import type { ActionContext } from "runline";
 import * as t from "typebox";
 import { authedFetch } from "./authedFetch.js";
 import { readBounded } from "./provider.js";
+
+export { pathSegment } from "./credentials.js";
 
 /**
  * Shared helpers for plugins that talk to the Shift cloud API: one base
@@ -10,7 +13,7 @@ import { readBounded } from "./provider.js";
  * long-held requests exceed the credential transport's deadline.
  */
 
-export type Ctx = { connection: { config: Record<string, unknown> } };
+export type Ctx = ActionContext;
 
 export const STRICT_OBJECT = { additionalProperties: false } as const;
 export const STRICT_UPDATE_OBJECT = {
@@ -97,6 +100,49 @@ export function apiKey(ctx: Ctx): string {
   return key;
 }
 
+/** A Shift error identifier worth handing back: a plain name, never text. */
+export function shiftIdentifier(value: unknown): string | undefined {
+  return typeof value === "string" && /^[\w.$-]{1,100}$/.test(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * The status, with the service's `code` and the offending `param`. Those
+ * name what to correct; the free-text `message` can echo request data and
+ * is never part of it.
+ */
+export function shiftErrorMessage(
+  plugin: string,
+  status: number,
+  code?: string,
+  param?: string,
+): string {
+  const detail = [code, param && `param: ${param}`].filter(Boolean).join(", ");
+  return `${plugin}: request failed (HTTP ${status}${detail ? ` ${detail}` : ""})`;
+}
+
+/** A failed response, read as a Shift error envelope when it is one. */
+export async function shiftError(
+  plugin: string,
+  response: Response,
+): Promise<Error> {
+  let code: string | undefined;
+  let param: string | undefined;
+  try {
+    const error = ((await response.json()) as { error?: unknown }).error;
+    if (typeof error === "string") code = shiftIdentifier(error);
+    else if (error && typeof error === "object") {
+      const shaped = error as Record<string, unknown>;
+      code = shiftIdentifier(shaped.code) ?? shiftIdentifier(shaped.type);
+      param = shiftIdentifier(shaped.param);
+    }
+  } catch {
+    // Not an error envelope: the status alone.
+  }
+  return new Error(shiftErrorMessage(plugin, response.status, code, param));
+}
+
 export async function request<T>(
   ctx: Ctx,
   path: string,
@@ -115,17 +161,9 @@ export async function request<T>(
     { ...init, headers },
     timeoutMs,
   );
-  if (!response.ok) {
-    throw new Error(
-      `Shift Labs API error ${response.status}: ${await response.text()}`,
-    );
-  }
+  if (!response.ok) throw await shiftError(ctx.connection.plugin, response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
-}
-
-export function pathSegment(value: string): string {
-  return encodeURIComponent(value);
 }
 
 export function listParams(input: unknown): URLSearchParams {

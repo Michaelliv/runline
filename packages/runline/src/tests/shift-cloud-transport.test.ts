@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { request } from "../../../runline-plugins/_shared/shiftCloud.js";
+import type { ActionContext } from "../plugin/types.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const ctx = { connection: { config: { apiKey: "sk_live_test" } } };
+const ctx: ActionContext = {
+  connection: {
+    name: "shiftOcr",
+    plugin: "shiftOcr",
+    config: { apiKey: "sk_live_test" },
+  },
+  log: { info() {}, warn() {}, error() {} },
+  async updateConnection() {},
+};
 
 describe("shared Shift cloud transport", () => {
   it("sends the key with redirects refused and a deadline", async () => {
@@ -54,6 +63,28 @@ describe("shared Shift cloud transport", () => {
     await assert.rejects(
       request(ctx, "/v1/crm/accounts"),
       /Refusing a redirect/,
+    );
+  });
+
+  it("reports a failure with the service code and param, never its message", async () => {
+    globalThis.fetch = (async () =>
+      Response.json(
+        {
+          error: {
+            type: "invalid_request",
+            code: "file_too_large",
+            param: "file",
+            message: "private-provider-detail",
+          },
+        },
+        { status: 413 },
+      )) as typeof fetch;
+    await assert.rejects(
+      request(ctx, "/v1/services/ocr/extract", { method: "POST" }),
+      {
+        message:
+          "shiftOcr: request failed (HTTP 413 file_too_large, param: file)",
+      },
     );
   });
 

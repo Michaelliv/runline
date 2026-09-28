@@ -6,7 +6,7 @@ import {
 } from "runline";
 import { credentialBroker } from "./credentialAdapter.js";
 import { staticCredential } from "./credentials.js";
-import { SHIFT_API_URL } from "./shiftCloud.js";
+import { SHIFT_API_URL, shiftError } from "./shiftCloud.js";
 
 /**
  * The Shift family (shiftAtlas, shiftBwm, shiftCrm, shiftObjects,
@@ -43,49 +43,6 @@ export function shiftCredential(probe?: string): CredentialDeclaration {
 export function shiftPath(route: string): string {
   if (!route.startsWith("/v1/")) throw new AuthError("request_not_allowed");
   return route.slice("/v1/".length);
-}
-
-/** A Shift error identifier worth handing back: a plain name, never text. */
-export function shiftIdentifier(value: unknown): string | undefined {
-  return typeof value === "string" && /^[\w.$-]{1,100}$/.test(value)
-    ? value
-    : undefined;
-}
-
-/**
- * The status, with the service's `code` and the offending `param`. Those
- * name what to correct; the free-text `message` can echo request data and
- * is never part of it.
- */
-export function shiftErrorMessage(
-  plugin: string,
-  status: number,
-  code?: string,
-  param?: string,
-): string {
-  const detail = [code, param && `param: ${param}`].filter(Boolean).join(", ");
-  return `${plugin}: request failed (HTTP ${status}${detail ? ` ${detail}` : ""})`;
-}
-
-/** A failed response, read as a Shift error envelope when it is one. */
-export async function shiftError(
-  plugin: string,
-  response: Response,
-): Promise<Error> {
-  let code: string | undefined;
-  let param: string | undefined;
-  try {
-    const error = ((await response.json()) as { error?: unknown }).error;
-    if (typeof error === "string") code = shiftIdentifier(error);
-    else if (error && typeof error === "object") {
-      const shaped = error as Record<string, unknown>;
-      code = shiftIdentifier(shaped.code) ?? shiftIdentifier(shaped.type);
-      param = shiftIdentifier(shaped.param);
-    }
-  } catch {
-    // Not an error envelope: the status alone.
-  }
-  return new Error(shiftErrorMessage(plugin, response.status, code, param));
 }
 
 /**
