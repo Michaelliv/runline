@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { freshworksCrmCredential } from "./credentials.js";
 
 function req(
@@ -66,7 +66,7 @@ function registerCrud(
           await req(
             ctx,
             "GET",
-            `${apiPath}/${encodeURIComponent((input as { id: number }).id)}`,
+            `${apiPath}/${pathSegment((input as { id: number }).id)}`,
           ),
         );
       },
@@ -108,7 +108,7 @@ function registerCrud(
         properties: Record<string, unknown>;
       };
       return unwrap(
-        await req(ctx, "PUT", `${apiPath}/${encodeURIComponent(id)}`, {
+        await req(ctx, "PUT", `${apiPath}/${pathSegment(id)}`, {
           [wrapKey]: properties,
         }),
       );
@@ -126,7 +126,7 @@ function registerCrud(
         await req(
           ctx,
           "DELETE",
-          `${apiPath}/${encodeURIComponent((input as { id: number }).id)}`,
+          `${apiPath}/${pathSegment((input as { id: number }).id)}`,
         );
         return { success: true };
       },
