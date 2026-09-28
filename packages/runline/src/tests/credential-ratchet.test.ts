@@ -228,7 +228,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["woocommerce", "phase 3: not yet migrated"],
   ["xai", "phase 3: not yet migrated"],
   ["yourls", "phase 3: not yet migrated"],
-  ["zammad", "phase 3: not yet migrated"],
   [
     "zendesk",
     "composite secret: the Basic username joins the email config field with a fixed /token suffix",

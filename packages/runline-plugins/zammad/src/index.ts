@@ -1,48 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { zammadCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    token: c.token as string,
-  };
-}
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function api(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.url}/api/v1${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, zammadCredential, "zammad", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Token token=${conn.token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Zammad error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 function registerCrud(
   rl: RunlinePluginAPI,
   resource: string,
   plural: string,
-  conn: (ctx: {
-    connection: { config: Record<string, unknown> };
-  }) => ReturnType<typeof getConn>,
   createSchema: Record<
     string,
     { type: string; required: boolean; description?: string }
@@ -53,12 +35,7 @@ function registerCrud(
     description: `Create a ${resource}`,
     inputSchema: createSchema,
     async execute(input, ctx) {
-      return api(
-        conn(ctx),
-        "POST",
-        `/${plural}`,
-        input as Record<string, unknown>,
-      );
+      return api(ctx, "POST", plural, input as Record<string, unknown>);
     },
   });
 
@@ -68,9 +45,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        conn(ctx),
+        ctx,
         "GET",
-        `/${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${seg((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -82,7 +59,7 @@ function registerCrud(
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { per_page: p.limit ?? 100 };
-      return api(conn(ctx), "GET", `/${plural}`, undefined, qs);
+      return api(ctx, "GET", plural, undefined, qs);
     },
   });
 
@@ -96,9 +73,9 @@ function registerCrud(
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        conn(ctx),
+        ctx,
         "PUT",
-        `/${plural}/${p.id}`,
+        `${plural}/${seg(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -110,9 +87,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        conn(ctx),
+        ctx,
         "DELETE",
-        `/${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -122,6 +99,7 @@ function registerCrud(
 export default function zammad(rl: RunlinePluginAPI) {
   rl.setName("zammad");
   rl.setVersion("0.1.0");
+  rl.setCredential(zammadCredential);
   rl.setConnectionSchema({
     url: {
       type: "string",
@@ -137,15 +115,15 @@ export default function zammad(rl: RunlinePluginAPI) {
     },
   });
 
-  registerCrud(rl, "user", "users", getConn, {
+  registerCrud(rl, "user", "users", {
     firstname: { type: "string", required: true },
     lastname: { type: "string", required: true },
     email: { type: "string", required: false },
   });
-  registerCrud(rl, "organization", "organizations", getConn, {
+  registerCrud(rl, "organization", "organizations", {
     name: { type: "string", required: true },
   });
-  registerCrud(rl, "group", "groups", getConn, {
+  registerCrud(rl, "group", "groups", {
     name: { type: "string", required: true },
   });
 
@@ -176,7 +154,7 @@ export default function zammad(rl: RunlinePluginAPI) {
       };
       if (p.articleSubject)
         (body.article as Record<string, unknown>).subject = p.articleSubject;
-      return api(getConn(ctx), "POST", "/tickets", body);
+      return api(ctx, "POST", "tickets", body);
     },
   });
 
@@ -185,13 +163,16 @@ export default function zammad(rl: RunlinePluginAPI) {
     description: "Get a ticket with articles",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const c = getConn(ctx);
       const id = (input as Record<string, unknown>).id;
-      const ticket = (await api(c, "GET", `/tickets/${id}`)) as Record<
+      const ticket = (await api(ctx, "GET", `tickets/${seg(id)}`)) as Record<
         string,
         unknown
       >;
-      ticket.articles = await api(c, "GET", `/ticket_articles/by_ticket/${id}`);
+      ticket.articles = await api(
+        ctx,
+        "GET",
+        `ticket_articles/by_ticket/${seg(id)}`,
+      );
       return ticket;
     },
   });
@@ -204,7 +185,7 @@ export default function zammad(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {
         per_page: ((input ?? {}) as Record<string, unknown>).limit ?? 100,
       };
-      return api(getConn(ctx), "GET", "/tickets", undefined, qs);
+      return api(ctx, "GET", "tickets", undefined, qs);
     },
   });
 
@@ -218,9 +199,9 @@ export default function zammad(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `/tickets/${p.id}`,
+        `tickets/${seg(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -232,9 +213,9 @@ export default function zammad(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/tickets/${(input as Record<string, unknown>).id}`,
+        `tickets/${seg((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -247,7 +228,7 @@ export default function zammad(rl: RunlinePluginAPI) {
     description: "Get the current user",
     inputSchema: {},
     async execute(_input, ctx) {
-      return api(getConn(ctx), "GET", "/users/me");
+      return api(ctx, "GET", "users/me");
     },
   });
 
@@ -262,7 +243,7 @@ export default function zammad(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { query: p.query };
       if (p.limit) qs.per_page = p.limit;
-      return api(getConn(ctx), "GET", "/users/search", undefined, qs);
+      return api(ctx, "GET", "users/search", undefined, qs);
     },
   });
 }
