@@ -1,6 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { LIST_INPUT_SCHEMA, SESSION_OPTIONS_SCHEMA, api, cdpUrl, compactRecord } from "./shared.js";
+import { pathSegment } from "../../_shared/credentials.js";
+import { LIST_INPUT_SCHEMA, SESSION_OPTIONS_SCHEMA, api, compactRecord, socketUrl } from "./shared.js";
 
 export function registerSessionActions(rl: RunlinePluginAPI) {
   rl.registerAction("session.create", {
@@ -26,7 +27,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
     description: "Get a Steel session by ID.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/sessions/${encodeURIComponent((input as { id: string }).id)}`);
+      return api(ctx, `/v1/sessions/${pathSegment((input as { id: string }).id)}`);
     },
   });
 
@@ -35,7 +36,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
     description: "Release a Steel session when work is done.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/sessions/${encodeURIComponent((input as { id: string }).id)}/release`, { method: "POST" });
+      return api(ctx, `/v1/sessions/${pathSegment((input as { id: string }).id)}/release`, { method: "POST" });
     },
   });
 
@@ -52,7 +53,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
       for (const session of live) {
         const id = String(session.id);
         try {
-          released.push({ id, result: await api(ctx, `/v1/sessions/${encodeURIComponent(id)}/release`, { method: "POST" }) });
+          released.push({ id, result: await api(ctx, `/v1/sessions/${pathSegment(id)}/release`, { method: "POST" }) });
         } catch (error) {
           failed.push({ id, error: String((error as Error).message ?? error) });
         }
@@ -66,7 +67,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
     description: "Capture cookies/localStorage context from a live session. Treat output as sensitive auth material.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/sessions/${encodeURIComponent((input as { id: string }).id)}/context`);
+      return api(ctx, `/v1/sessions/${pathSegment((input as { id: string }).id)}/context`);
     },
   });
 
@@ -80,7 +81,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { id, ...query } = input as Record<string, unknown>;
-      return api(ctx, `/v1/sessions/${encodeURIComponent(String(id))}/agent-traces`, { query });
+      return api(ctx, `/v1/sessions/${pathSegment(id)}/agent-traces`, { query });
     },
   });
 
@@ -102,7 +103,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { id, deltaX, deltaY, ...body } = input as Record<string, unknown>;
       const payload = compactRecord({ ...body, delta_x: deltaX, delta_y: deltaY });
-      return api(ctx, `/v1/sessions/${encodeURIComponent(String(id))}/computer`, { method: "POST", body: payload });
+      return api(ctx, `/v1/sessions/${pathSegment(id)}/computer`, { method: "POST", body: payload });
     },
   });
 
@@ -111,7 +112,7 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
     description: "Fetch legacy recorded session events for replay tooling.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/sessions/${encodeURIComponent((input as { id: string }).id)}/events`);
+      return api(ctx, `/v1/sessions/${pathSegment((input as { id: string }).id)}/events`);
     },
   });
 
@@ -120,17 +121,16 @@ export function registerSessionActions(rl: RunlinePluginAPI) {
     description: "Fetch the HLS playlist for a recorded headful Steel session.",
     inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/sessions/${encodeURIComponent((input as { id: string }).id)}/hls`);
+      return api(ctx, `/v1/sessions/${pathSegment((input as { id: string }).id)}/hls`);
     },
   });
 
   rl.registerAction("session.cdpUrl", {
     access: "read",
-    description: "Build a Playwright/Puppeteer CDP URL for a Steel session using the configured API key.",
-    inputSchema: t.Object({ id: t.String({ description: "Session ID" }), websocketUrl: t.Optional(t.String({ description: "Optional websocketUrl returned by session.create. If omitted, uses wss://connect.steel.dev with sessionId." })) }),
+    description: "A Playwright/Puppeteer CDP URL for a Steel session. Locally it carries the connection's API key, so treat it as secret; under a host that keeps the key it is the host's relay.",
+    inputSchema: t.Object({ id: t.String({ description: "Session ID" }) }),
     async execute(input, ctx) {
-      const { id, websocketUrl } = input as { id: string; websocketUrl?: string };
-      return { cdpUrl: cdpUrl(ctx, id, websocketUrl) };
+      return { cdpUrl: await socketUrl(ctx, (input as { id: string }).id) };
     },
   });
 }

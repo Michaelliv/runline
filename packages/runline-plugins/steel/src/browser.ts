@@ -1,6 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { SESSION_OPTIONS_SCHEMA, api, cdpUrl, compactRecord } from "./shared.js";
+import { pathSegment } from "../../_shared/credentials.js";
+import { SESSION_OPTIONS_SCHEMA, api, compactRecord, socketUrl } from "./shared.js";
 
 const SCRAPE_SCHEMA = {
   url: t.String({ description: "URL to scrape" }),
@@ -104,7 +105,7 @@ export function registerBrowserActions(rl: RunlinePluginAPI) {
       }
 
       const session = await api(ctx, "/v1/sessions", { method: "POST", body: compactRecord(sessionOptions) }) as Record<string, unknown>;
-      const endpoint = cdpUrl(ctx, String(session.id));
+      const endpoint = await socketUrl(ctx, String(session.id));
       let browser: Awaited<ReturnType<typeof playwright.chromium.connectOverCDP>> | undefined;
       try {
         // No fallback shim on purpose. A hand-rolled lookalike that
@@ -119,7 +120,7 @@ export function registerBrowserActions(rl: RunlinePluginAPI) {
       } finally {
         await browser?.close()?.catch?.(() => {});
         if (release !== false && session.id) {
-          await api(ctx, `/v1/sessions/${encodeURIComponent(String(session.id))}/release`, { method: "POST" }).catch(() => {});
+          await api(ctx, `/v1/sessions/${pathSegment(session.id)}/release`, { method: "POST" }).catch(() => {});
         }
       }
     },

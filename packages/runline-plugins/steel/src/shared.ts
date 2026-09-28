@@ -1,69 +1,42 @@
+import type { ActionContext, HttpMethod } from "runline";
 import * as t from "typebox";
+import { credentialOk, credentialSocketUrl, jsonAnswer, multipartBody } from "../../_shared/credentials.js";
+import { steelCredential } from "./auth.js";
 
-const BASE_URL = "https://api.steel.dev";
-
-export type Ctx = { connection: { config: Record<string, unknown> } };
-
-export function apiKey(ctx: Ctx): string {
-  return ctx.connection.config.apiKey as string;
-}
+export type Ctx = ActionContext;
 
 export type RequestOptions = {
-  method?: string;
+  method?: HttpMethod;
   query?: Record<string, unknown>;
   body?: unknown;
-  headers?: Record<string, string>;
 };
 
+/** A REST call: a JSON answer parsed, any other answer (a file) as text. */
 export async function api(ctx: Ctx, path: string, options: RequestOptions = {}): Promise<unknown> {
-  const url = new URL(path, BASE_URL);
-  for (const [key, value] of Object.entries(options.query ?? {})) {
-    if (value === undefined || value === null || value === "") continue;
-    if (Array.isArray(value)) {
-      for (const item of value) url.searchParams.append(key, String(item));
-    } else {
-      url.searchParams.set(key, String(value));
-    }
-  }
-
-  const headers: Record<string, string> = {
-    "steel-api-key": apiKey(ctx),
-    ...(options.headers ?? {}),
-  };
-  let body: BodyInit | undefined;
-  if (options.body !== undefined) {
-    if (options.body instanceof FormData) {
-      body = options.body;
-    } else {
-      headers["Content-Type"] = "application/json";
-      body = JSON.stringify(options.body);
-    }
-  }
-
-  const res = await fetch(url.toString(), {
+  const query = Object.fromEntries(Object.entries(options.query ?? {}).filter(([, value]) => value !== ""));
+  const upload = options.body instanceof FormData ? await multipartBody(options.body) : undefined;
+  const res = await credentialOk(ctx, steelCredential, "steel", {
+    target: "api",
+    path: path.replace(/^\//, ""),
     method: options.method ?? "GET",
-    headers,
-    body,
+    query,
+    ...(upload
+      ? { body: upload.body, headers: { "Content-Type": upload.contentType } }
+      : options.body !== undefined
+        ? { json: options.body }
+        : {}),
   });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Steel API error ${res.status}: ${text || res.statusText}`);
-  if (!text) return {};
-  const contentType = res.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json") || text.startsWith("{") || text.startsWith("[")) return JSON.parse(text);
-  return text;
+  const type = res.headers.get("content-type") ?? "";
+  return res.status === 204 || type.includes("application/json") ? jsonAnswer(res) : res.text();
 }
 
 /**
- * The CDP endpoint for a session. One definition: this URL carries the
- * API key, so a second hand-written copy is a second place to leak it or
- * to forget encoding.
+ * The CDP socket URL for a session, from the broker: signed with the key
+ * by the local signer, or a relay the host controls. One definition, so
+ * no copy builds a key-bearing URL by hand.
  */
-export function cdpUrl(ctx: Ctx, sessionId: string, websocketUrl?: string): string {
-  const key = encodeURIComponent(apiKey(ctx));
-  if (websocketUrl) {
-    return `${websocketUrl}${websocketUrl.includes("?") ? "&" : "?"}apiKey=${key}`;
-  }
-  return `wss://connect.steel.dev?apiKey=${key}&sessionId=${encodeURIComponent(sessionId)}`;
+export function socketUrl(ctx: Ctx, sessionId: string): Promise<string> {
+  return credentialSocketUrl(ctx, steelCredential, { target: "cdp", path: "", query: { sessionId } });
 }
 
 export function compactRecord(input: Record<string, unknown>): Record<string, unknown> {

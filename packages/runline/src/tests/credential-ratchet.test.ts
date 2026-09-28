@@ -49,10 +49,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "graphql",
     "generic client: arbitrary endpoint and caller-composed auth header",
   ],
-  [
-    "steel",
-    "WebSocket: the key rides in a wss:// CDP URL the transport cannot carry",
-  ],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 
