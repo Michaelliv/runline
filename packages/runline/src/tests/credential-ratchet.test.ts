@@ -133,7 +133,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["mandrill", "body key: key travels in the JSON body of every call"],
   ["marketstack", "phase 3: not yet migrated"],
-  ["messagebird", "phase 3: not yet migrated"],
   [
     "mocean",
     "body key: mocean-api-key and mocean-api-secret travel in the form body",
