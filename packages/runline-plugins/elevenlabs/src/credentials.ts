@@ -1,13 +1,16 @@
 import { staticCredential } from "../../_shared/credentials.js";
 
-/** The largest request deadline the input schemas allow (schemas.ts `timeout`). */
-export const MAX_TIMEOUT_MS = 3_600_000;
+/**
+ * The longest request deadline: the input schemas' `timeout` maximum and the
+ * `audio` target's deadline, at the transport's default host ceiling.
+ */
+export const MAX_TIMEOUT_MS = 10 * 60_000;
 
 /**
  * An ElevenLabs API key, sent as `xi-api-key` to the one API origin. The
  * `audio` target carries generation, transcription, and downloads: it
- * declares the longest deadline the input schemas allow and the 100 MiB
- * audio ceiling, both capped by the host. The `api` target is the catalog
+ * declares `MAX_TIMEOUT_MS` and the 100 MiB audio ceiling, both capped by
+ * the host. The `api` target is the catalog
  * and management surface on the transport defaults.
  */
 export const elevenlabsCredential = staticCredential({

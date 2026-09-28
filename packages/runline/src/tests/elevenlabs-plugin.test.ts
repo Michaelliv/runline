@@ -202,6 +202,12 @@ describe("elevenlabs plugin", () => {
     });
     assert.equal(calls[0].init.method, "DELETE");
   });
+  it("accepts deadlines up to the audio target's ten minutes, and no longer ones", () => {
+    const schema = action("speech.create").inputSchema as TSchema;
+    const input = { voiceId: "v", text: "hello" };
+    assert.ok(Check(schema, { ...input, timeoutMs: 600_000 }));
+    assert.equal(Check(schema, { ...input, timeoutMs: 600_001 }), false);
+  });
   it("rejects unsafe voice IDs on all voice-specific actions", async () => {
     const calls = mock();
     for (const name of [
