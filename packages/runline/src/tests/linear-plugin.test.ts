@@ -910,6 +910,58 @@ describe("linear plugin scoped issue access", () => {
     await action.execute({}, ctx({ scopeLabelIds: LABEL_ID }));
   });
 
+  // A brokered connection carries no secret, so two people's connections can
+  // share every public field. Whose workspace a directory belongs to is known
+  // only to the broker; a directory read for one call must not answer another.
+  it("never answers one brokered connection from another's label directory", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    globalThis.fetch = (async () => {
+      throw new Error("a brokered plugin must not reach the network itself");
+    }) as unknown as typeof fetch;
+    const brokerFor = (labelId: string, seen: unknown[]) => ({
+      async request(input: { body?: string | Uint8Array }) {
+        const body = JSON.parse(String(input.body)) as {
+          query: string;
+          variables?: Record<string, unknown>;
+        };
+        if (DIRECTORY_QUERY.test(body.query))
+          return Response.json({
+            data: {
+              issueLabels: {
+                nodes: [{ id: labelId, name: "requester:yosi" }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          });
+        seen.push(body.variables?.filter);
+        return Response.json({
+          data: { issues: { nodes: [], pageInfo: { hasNextPage: false } } },
+        });
+      },
+      async probe() {
+        return { outcome: "unverified" as const };
+      },
+    });
+    const brokered = (labelId: string, seen: unknown[]): ActionContext => ({
+      connection: {
+        name: "linear",
+        plugin: "linear",
+        config: { scopeLabelIds: "requester:yosi" },
+      },
+      credentials: brokerFor(labelId, seen),
+      log: { info() {}, warn() {}, error() {} },
+      async updateConnection() {},
+    });
+    const DANA = "11111111-1111-4111-8111-111111111111";
+    const GABI = "22222222-2222-4222-8222-222222222222";
+    const dana: unknown[] = [];
+    const gabi: unknown[] = [];
+    await action.execute({}, brokered(DANA, dana));
+    await action.execute({}, brokered(GABI, gabi));
+    assert.deepEqual(dana, [{ labels: { id: { in: [DANA] } } }]);
+    assert.deepEqual(gabi, [{ labels: { id: { in: [GABI] } } }]);
+  });
+
   it("injects the scope label filter on issue.search with caller filters", async () => {
     const action = getAction(makeLinear(), "issue.search");
 
