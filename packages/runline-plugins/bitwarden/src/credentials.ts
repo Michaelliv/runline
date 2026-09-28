@@ -10,14 +10,13 @@ import { httpsBase } from "../../_shared/credentials.js";
  * An organization API key (client id and secret), exchanged for a bearer
  * token via the client-credentials grant against Bitwarden's identity
  * service — the cloud one, or the self-hosted instance's own. Requests go
- * to the matching Public API beneath /public/. The device fields are the
- * fixed client registration Bitwarden's token endpoint requires.
+ * to the matching Public API beneath /public/. A self-hosted connection
+ * must name its HTTPS domain; it is never sent to the cloud instead. The
+ * device fields are the fixed client registration Bitwarden's token
+ * endpoint requires.
  */
 export const bitwardenCredential: CredentialDeclaration = (config) => {
-  const selfHosted =
-    config.environment === "selfHosted" &&
-    typeof config.domain === "string" &&
-    config.domain;
+  const selfHosted = config.environment === "selfHosted";
   const api: CredentialTarget = {
     baseUrl: selfHosted
       ? httpsBase(config.domain, "api/public/")
