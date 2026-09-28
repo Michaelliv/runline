@@ -96,10 +96,10 @@ export interface StaticCredentialSpec {
 
 /**
  * A static-key plugin's declaration. The secret lives in one structured
- * `credential` field — `{ secret }`, or `{ username, password }` for basic —
- * and the method is named for the shorthand, so every static declaration
- * has the same shape. A host stores the structured field; the CLI's flat
- * fields are named by `local`.
+ * `credential` field — `{ secret }`, `{ username, password }` for basic, or
+ * the general form's named parts — and the method is named for the auth
+ * kind, so every static declaration has the same shape. A host stores the
+ * structured field; the CLI's flat fields are named by `local`.
  */
 export function staticCredential(
   spec: StaticCredentialSpec,
@@ -224,13 +224,7 @@ export function pathSegments(value: unknown): string {
  * `encodedSlashes`. An empty or dot piece, or a backslash, is refused.
  */
 export function slashEncodedSegment(value: unknown): string {
-  const raw = value === undefined || value === null ? "" : String(value);
-  if (
-    raw.includes("\\") ||
-    raw.split("/").some((piece) => !piece || piece === "." || piece === "..")
-  )
-    throw new AuthError("request_not_allowed");
-  return encodeURIComponent(raw);
+  return pathSegments(value).replaceAll("/", "%2F");
 }
 
 export interface CredentialCall {
@@ -284,6 +278,7 @@ export function credentialRequest(
             body: encodeParams(call.form),
           }
         : undefined;
+  const payload = body?.body ?? call.body;
   return credentialBroker(ctx, declaration).request({
     target: call.target,
     path: withQuery(call.path, call.query),
@@ -293,11 +288,7 @@ export function credentialRequest(
       ...(body ? { "Content-Type": body.type } : {}),
       ...call.headers,
     },
-    ...(body
-      ? { body: body.body }
-      : call.body !== undefined
-        ? { body: call.body }
-        : {}),
+    ...(payload !== undefined ? { body: payload } : {}),
   });
 }
 

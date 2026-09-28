@@ -1,10 +1,21 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  type CredentialCall,
-  credentialJson,
-  pathSegment,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { stripeCredential } from "./credentials.js";
+
+/** Stripe's form keys for nested objects: `metadata[plan]`. */
+function flatten(
+  obj: Record<string, unknown>,
+  prefix = "",
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}[${k}]` : k;
+    if (v && typeof v === "object" && !Array.isArray(v))
+      Object.assign(out, flatten(v as Record<string, unknown>, key));
+    else out[key] = v;
+  }
+  return out;
+}
 
 function apiRequest(
   ctx: ActionContext,
@@ -13,29 +24,13 @@ function apiRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const call: CredentialCall = { target: "api", path, method, query: qs };
-  if (body && Object.keys(body).length > 0) {
-    const form = new URLSearchParams();
-    function flatten(obj: Record<string, unknown>, prefix = "") {
-      for (const [k, v] of Object.entries(obj)) {
-        const key = prefix ? `${prefix}[${k}]` : k;
-        if (
-          v !== null &&
-          v !== undefined &&
-          typeof v === "object" &&
-          !Array.isArray(v)
-        ) {
-          flatten(v as Record<string, unknown>, key);
-        } else if (v !== null && v !== undefined) {
-          form.set(key, String(v));
-        }
-      }
-    }
-    flatten(body);
-    call.body = form.toString();
-    call.headers = { "Content-Type": "application/x-www-form-urlencoded" };
-  }
-  return credentialJson(ctx, stripeCredential, "stripe", call);
+  return credentialJson(ctx, stripeCredential, "stripe", {
+    target: "api",
+    path,
+    method,
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { form: flatten(body) } : {}),
+  });
 }
 
 export default function stripe(rl: RunlinePluginAPI) {

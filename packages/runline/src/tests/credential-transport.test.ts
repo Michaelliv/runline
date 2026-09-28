@@ -409,6 +409,12 @@ describe("constrained credential transport", () => {
         headers: json,
         body: '{"token":"evil"}',
       },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: '{"TOKEN":"evil"}',
+      },
       { ...request, method: "POST" as const, headers: json, body: "[1]" },
       { ...request, method: "POST" as const, headers: json, body: "not json" },
       {

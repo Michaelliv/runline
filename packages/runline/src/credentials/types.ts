@@ -43,7 +43,8 @@ export interface CredentialTarget {
 
 /**
  * Where the transport puts a static secret's parts. Every name it sets is
- * reserved: a caller may never supply that header or query parameter.
+ * reserved: a caller may never supply that header, query parameter or
+ * body field.
  */
 export type SecretPlacement =
   | {

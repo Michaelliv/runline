@@ -11,29 +11,13 @@ async function api(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  let form: string | undefined;
-  if (body && Object.keys(body).length > 0) {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(body)) {
-      if (v === undefined || v === null) continue;
-      if (Array.isArray(v)) {
-        for (const item of v) params.append(k, String(item));
-      } else params.set(k, String(v));
-    }
-    form = params.toString();
-  }
   const json = (await credentialJson(ctx, splunkCredential, "splunk", {
     target: "api",
     path,
     method,
     // JSON output always; callers never set output_mode themselves.
     query: { output_mode: "json", ...qs },
-    ...(form !== undefined
-      ? {
-          body: form,
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        }
-      : {}),
+    ...(body && Object.keys(body).length > 0 ? { form: body } : {}),
   })) as Record<string, unknown>;
 
   // Format entry array if present

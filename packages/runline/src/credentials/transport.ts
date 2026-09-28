@@ -433,10 +433,12 @@ export class CredentialTransport {
             : input.body.byteLength;
         if (size > this.options.maxRequestBytes) throw new Error();
         body = Buffer.from(input.body);
-        const fields = injectedFields(auth);
+        const fields = injectedFields(auth).map((name) => name.toLowerCase());
         if (
           fields.length &&
-          bodyFields(headers, body).some((name) => fields.includes(name))
+          bodyFields(headers, body).some((name) =>
+            fields.includes(name.toLowerCase()),
+          )
         )
           throw new Error();
       }
@@ -450,13 +452,14 @@ export class CredentialTransport {
     const replay =
       input.retry !== "never" &&
       (verb === "GET" || verb === "HEAD" || input.idempotencyKey !== undefined);
+    const base = targetBase(target).pathname;
     let { sign, grant } = await this.authorize(binding, method);
     const send = async (signer: Signer) => {
       const outgoing: Outgoing = {
         headers: new Headers(headers),
         url: new URL(url),
         body,
-        base: targetBase(target).pathname,
+        base,
       };
       signer(outgoing);
       return sendResource(

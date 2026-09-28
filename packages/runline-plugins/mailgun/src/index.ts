@@ -65,21 +65,19 @@ export default function mailgun(rl: RunlinePluginAPI) {
       >;
       const cfg = ctx.connection.config;
 
-      const form = new URLSearchParams();
-      form.set("to", to as string);
-      form.set("from", from as string);
-      form.set("subject", subject as string);
-      if (text) form.set("text", text as string);
-      if (html) form.set("html", html as string);
-      if (cc) form.set("cc", cc as string);
-      if (bcc) form.set("bcc", bcc as string);
-
       return credentialJson(ctx, mailgunCredential, "mailgun", {
         target: mailgunRegion(cfg),
         path: `${pathSegment(cfg.emailDomain)}/messages`,
         method: "POST",
-        body: form.toString(),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        form: {
+          to,
+          from,
+          subject,
+          text: text || undefined,
+          html: html || undefined,
+          cc: cc || undefined,
+          bcc: bcc || undefined,
+        },
       });
     },
   });

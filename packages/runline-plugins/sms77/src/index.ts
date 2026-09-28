@@ -7,19 +7,12 @@ function apiRequest(
   endpoint: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  const form = new URLSearchParams();
-  for (const [k, v] of Object.entries(body)) {
-    if (v !== undefined && v !== null) form.set(k, String(v));
-  }
   return credentialJson(ctx, sms77Credential, "sms77", {
     target: "api",
     path: endpoint,
     method: "POST",
-    body: form.toString(),
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      SentWith: "runline",
-    },
+    form: body,
+    headers: { SentWith: "runline" },
   });
 }
 

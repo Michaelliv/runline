@@ -3,13 +3,13 @@ import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { zulipCredential } from "./credentials.js";
 
 /** Zulip takes form-encoded parameters; nested values are JSON strings. */
-function encodeForm(body: Record<string, unknown>): URLSearchParams {
-  const form = new URLSearchParams();
-  for (const [k, v] of Object.entries(body)) {
-    if (v !== undefined && v !== null)
-      form.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
-  }
-  return form;
+function zulipParams(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(body).map(([k, v]) => [
+      k,
+      v && typeof v === "object" ? JSON.stringify(v) : v,
+    ]),
+  );
 }
 
 function apiRequest(
@@ -18,20 +18,17 @@ function apiRequest(
   path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const form =
-    body && Object.keys(body).length > 0 ? encodeForm(body) : undefined;
+  const params =
+    body && Object.keys(body).length > 0 ? zulipParams(body) : undefined;
   // GET parameters ride in the query string; a GET carries no body.
   return credentialJson(ctx, zulipCredential, "zulip", {
     target: "api",
     path,
     method,
-    ...(form && method === "GET"
-      ? { query: Object.fromEntries(form) }
-      : form
-        ? {
-            body: form.toString(),
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          }
+    ...(params && method === "GET"
+      ? { query: params }
+      : params
+        ? { form: params }
         : {}),
   });
 }

@@ -9,25 +9,12 @@ function apiRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  let form: string | undefined;
-  if (body && Object.keys(body).length > 0) {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(body)) {
-      if (v !== undefined && v !== null) params.set(k, String(v));
-    }
-    form = params.toString();
-  }
   return credentialJson(ctx, stravaCredential, "strava", {
     target: "api",
     path,
     method,
     query: qs,
-    ...(form !== undefined
-      ? {
-          body: form,
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        }
-      : {}),
+    ...(body && Object.keys(body).length > 0 ? { form: body } : {}),
   });
 }
 

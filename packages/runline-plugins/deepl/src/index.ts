@@ -8,25 +8,15 @@ async function apiRequest(
   endpoint: string,
   params?: Record<string, unknown>,
 ): Promise<unknown> {
-  const entries = Object.entries(params ?? {}).filter(
-    ([, v]) => v !== undefined && v !== null,
+  const given = Object.values(params ?? {}).some(
+    (v) => v !== undefined && v !== null,
   );
   // DeepL takes form-encoded bodies, not JSON.
-  const form = new URLSearchParams(
-    entries.map(([k, v]) => [k, String(v)]),
-  ).toString();
   return credentialJson(ctx, deeplCredential, "deepl", {
     target: "api",
     path: endpoint,
     method,
-    ...(method === "GET"
-      ? { query: Object.fromEntries(entries) }
-      : form
-        ? {
-            body: form,
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          }
-        : {}),
+    ...(method === "GET" ? { query: params } : given ? { form: params } : {}),
   });
 }
 
