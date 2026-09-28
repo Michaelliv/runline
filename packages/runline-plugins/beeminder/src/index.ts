@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { beeminderCredential } from "./credentials.js";
-
-/** A goal slug or datapoint ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -79,7 +76,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `users/me/goals/${seg(goalName)}/datapoints.json`,
+        `users/me/goals/${pathSegment(goalName)}/datapoints.json`,
         body,
       );
     },
@@ -104,7 +101,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `users/me/goals/${seg(goalName)}/datapoints/create_all.json`,
+        `users/me/goals/${pathSegment(goalName)}/datapoints/create_all.json`,
         { datapoints },
       );
     },
@@ -129,7 +126,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `users/me/goals/${seg(goalName)}/datapoints/${seg(datapointId)}.json`,
+        `users/me/goals/${pathSegment(goalName)}/datapoints/${pathSegment(datapointId)}.json`,
       );
     },
   });
@@ -171,14 +168,14 @@ export default function beeminder(rl: RunlinePluginAPI) {
         return apiRequest(
           ctx,
           "GET",
-          `users/me/goals/${seg(goalName)}/datapoints.json`,
+          `users/me/goals/${pathSegment(goalName)}/datapoints.json`,
           undefined,
           qs,
         );
       }
       return paginateAll(
         ctx,
-        `users/me/goals/${seg(goalName)}/datapoints.json`,
+        `users/me/goals/${pathSegment(goalName)}/datapoints.json`,
         qs,
       );
     },
@@ -210,7 +207,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `users/me/goals/${seg(goalName)}/datapoints/${seg(datapointId)}.json`,
+        `users/me/goals/${pathSegment(goalName)}/datapoints/${pathSegment(datapointId)}.json`,
         body,
       );
     },
@@ -235,7 +232,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `users/me/goals/${seg(goalName)}/datapoints/${seg(datapointId)}.json`,
+        `users/me/goals/${pathSegment(goalName)}/datapoints/${pathSegment(datapointId)}.json`,
       );
     },
   });
@@ -363,7 +360,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `users/me/goals/${seg(goalName)}.json`,
+        `users/me/goals/${pathSegment(goalName)}.json`,
         undefined,
         qs,
       );
@@ -452,7 +449,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `users/me/goals/${seg(goalName)}.json`,
+        `users/me/goals/${pathSegment(goalName)}.json`,
         body,
       );
     },
@@ -469,7 +466,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `users/me/goals/${seg(goalName)}/refresh_graph.json`,
+        `users/me/goals/${pathSegment(goalName)}/refresh_graph.json`,
       );
     },
   });
@@ -485,7 +482,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `users/me/goals/${seg(goalName)}/shortcircuit.json`,
+        `users/me/goals/${pathSegment(goalName)}/shortcircuit.json`,
       );
     },
   });
@@ -501,7 +498,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `users/me/goals/${seg(goalName)}/stepdown.json`,
+        `users/me/goals/${pathSegment(goalName)}/stepdown.json`,
       );
     },
   });
@@ -517,7 +514,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `users/me/goals/${seg(goalName)}/cancel_stepdown.json`,
+        `users/me/goals/${pathSegment(goalName)}/cancel_stepdown.json`,
       );
     },
   });
@@ -533,7 +530,7 @@ export default function beeminder(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `users/me/goals/${seg(goalName)}/uncleme.json`,
+        `users/me/goals/${pathSegment(goalName)}/uncleme.json`,
       );
     },
   });
