@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { servicenowCredential } from "./credentials.js";
-
-/** A table name or sys_id as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -44,7 +41,7 @@ function registerTableResource(
       const data = (await api(
         ctx,
         "POST",
-        `now/table/${seg(table)}`,
+        `now/table/${pathSegment(table)}`,
         (input as Record<string, unknown>).data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.result;
@@ -59,7 +56,7 @@ function registerTableResource(
       const data = (await api(
         ctx,
         "GET",
-        `now/table/${seg(table)}/${seg((input as Record<string, unknown>).sysId)}`,
+        `now/table/${pathSegment(table)}/${pathSegment((input as Record<string, unknown>).sysId)}`,
       )) as Record<string, unknown>;
       return data.result;
     },
@@ -90,7 +87,7 @@ function registerTableResource(
       const data = (await api(
         ctx,
         "GET",
-        `now/table/${seg(table)}`,
+        `now/table/${pathSegment(table)}`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -110,7 +107,7 @@ function registerTableResource(
       const data = (await api(
         ctx,
         "PATCH",
-        `now/table/${seg(table)}/${seg(p.sysId)}`,
+        `now/table/${pathSegment(table)}/${pathSegment(p.sysId)}`,
         p.data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.result;
@@ -125,7 +122,7 @@ function registerTableResource(
       await api(
         ctx,
         "DELETE",
-        `now/table/${seg(table)}/${seg((input as Record<string, unknown>).sysId)}`,
+        `now/table/${pathSegment(table)}/${pathSegment((input as Record<string, unknown>).sysId)}`,
       );
       return { success: true };
     },
@@ -175,7 +172,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "POST",
-        `now/table/${seg(p.tableName)}`,
+        `now/table/${pathSegment(p.tableName)}`,
         p.data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.result;
@@ -194,7 +191,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `now/table/${seg(p.tableName)}/${seg(p.sysId)}`,
+        `now/table/${pathSegment(p.tableName)}/${pathSegment(p.sysId)}`,
       )) as Record<string, unknown>;
       return data.result;
     },
@@ -216,7 +213,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `now/table/${seg(p.tableName)}`,
+        `now/table/${pathSegment(p.tableName)}`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -237,7 +234,7 @@ export default function servicenow(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "PATCH",
-        `now/table/${seg(p.tableName)}/${seg(p.sysId)}`,
+        `now/table/${pathSegment(p.tableName)}/${pathSegment(p.sysId)}`,
         p.data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.result;
@@ -253,7 +250,11 @@ export default function servicenow(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      await api(ctx, "DELETE", `now/table/${seg(p.tableName)}/${seg(p.sysId)}`);
+      await api(
+        ctx,
+        "DELETE",
+        `now/table/${pathSegment(p.tableName)}/${pathSegment(p.sysId)}`,
+      );
       return { success: true };
     },
   });
