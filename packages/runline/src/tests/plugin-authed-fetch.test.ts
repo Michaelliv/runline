@@ -71,7 +71,6 @@ const UNBROKERED_FETCH = new Set([
   "nextcloud/src/index.ts",
   "npm/src/index.ts",
   "odoo/src/index.ts",
-  "paddle/src/index.ts",
   "plivo/src/index.ts",
   "reddit/src/index.ts",
   "salesforce/src/shared.ts",

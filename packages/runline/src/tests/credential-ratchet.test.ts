@@ -83,7 +83,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "optional credential: a secret-free config cannot say whether to sign",
   ],
   ["odoo", "login: the password rides in every JSON-RPC argument list"],
-  ["paddle", "body key: vendor_auth_code travels in the JSON body"],
   [
     "plivo",
     "config split: authId is both the Basic username, stored as a secret, and a path segment a brokered config must still hold",
