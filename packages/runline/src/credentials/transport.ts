@@ -11,6 +11,7 @@ import type { ConnectionConfig } from "../plugin/types.js";
 import { sendResource } from "./http.js";
 import { headerName, resourceUrl } from "./policy.js";
 import {
+  BasicSecretSchema,
   type CredentialRegistry,
   OAuthGrantSchema,
   SecretSchema,
@@ -129,6 +130,25 @@ function secret(value: unknown): string {
   )
     throw new AuthError("invalid_credentials");
   return value;
+}
+
+/**
+ * RFC 7617 user-pass. A colon in the username, or any byte outside printable
+ * ASCII, would make the header ambiguous or encoding-dependent.
+ */
+function basicCredentials(value: unknown): string {
+  if (!Check(BasicSecretSchema, value))
+    throw new AuthError("invalid_credentials");
+  const { username, password } = value;
+  if (
+    (!username && !password) ||
+    username.includes(":") ||
+    [...username, ...password].some(
+      (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) > 126,
+    )
+  )
+    throw new AuthError("invalid_credentials");
+  return Buffer.from(`${username}:${password}`).toString("base64");
 }
 
 /**
@@ -343,7 +363,9 @@ export class CredentialTransport {
         authHeader,
         auth.kind === "apiKey"
           ? `${auth.prefix ?? ""}${value}`
-          : `Bearer ${value}`,
+          : auth.kind === "basic"
+            ? `Basic ${value}`
+            : `Bearer ${value}`,
       );
       return sendResource(url.toString(), verb, signed, body, {
         ...this.options,
@@ -393,6 +415,8 @@ export class CredentialTransport {
   ): Promise<{ token: string; grant?: OAuthGrant }> {
     const config = await this.read(binding, method);
     const auth = method.authentication;
+    if (auth.kind === "basic")
+      return { token: basicCredentials(config[auth.field]) };
     if (auth.kind !== "oauth2") {
       const stored = config[auth.field];
       if (!Check(SecretSchema, stored))

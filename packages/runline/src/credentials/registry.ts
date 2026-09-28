@@ -27,6 +27,15 @@ export const SecretSchema = t.Object(
   { additionalProperties: false },
 );
 
+/**
+ * Stored shape of an HTTP Basic credential. Either part may be empty — many
+ * APIs send a key as the username with no password, or the reverse.
+ */
+export const BasicSecretSchema = t.Object(
+  { username: t.String(), password: t.String() },
+  { additionalProperties: false },
+);
+
 export const OAuthGrantSchema = t.Object(
   {
     tokens: t.Partial(OAuthTokensSchema),
@@ -120,7 +129,8 @@ function validateMethod(method: CredentialMethod): void {
       )
         throw new AuthError("invalid_definition");
     }
-  } else if (auth.kind !== "bearer") throw new AuthError("invalid_definition");
+  } else if (auth.kind !== "bearer" && auth.kind !== "basic")
+    throw new AuthError("invalid_definition");
   if (!Object.keys(method.targets).length)
     throw new AuthError("invalid_definition");
   for (const [name, target] of Object.entries(method.targets)) {
