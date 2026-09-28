@@ -53,11 +53,7 @@ describe("homeAssistant template.render", () => {
       context(),
     );
 
-    assert.equal(urls.length, 1);
-    assert.ok(
-      urls[0].endsWith("/api/template"),
-      `expected /api/template, got ${urls[0]}`,
-    );
+    assert.deepEqual(urls, ["https://ha.example.com:8123/api/template"]);
     assert.equal(result, rendered);
   });
 });

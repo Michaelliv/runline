@@ -57,7 +57,7 @@ function ctx(config: Record<string, unknown>): ActionContext {
 
 const B64_RESULT = PNG_1X1.toString("base64");
 
-/** openai's edit upload travels as buffered multipart bytes; parse them back. */
+/** An edit upload travels as buffered multipart bytes; parse them back. */
 async function multipartForm(init?: RequestInit): Promise<FormData> {
   const contentType = new Headers(init?.headers).get("content-type") ?? "";
   assert.ok(
@@ -436,23 +436,14 @@ describe("xai image.edit", () => {
 });
 
 describe("recraft image.edit", () => {
-  it("POSTs a buffered multipart form to /v1/images/imageToImage with strength", async () => {
+  it("POSTs a multipart form to /v1/images/imageToImage with strength", async () => {
     const action = getAction(makePlugin("recraft", recraft), "image.edit");
-    // The credential transport buffers the multipart form into bytes with
-    // an explicit boundary before sending; no live FormData crosses it.
-    let seen: { url: string; contentType?: string; body?: string } = {
-      url: "",
-    };
+    let seen: { url: string; init?: RequestInit } = { url: "" };
     globalThis.fetch = (async (
       input: RequestInfo | URL,
       init?: RequestInit,
     ) => {
-      seen = {
-        url: String(input),
-        contentType:
-          new Headers(init?.headers).get("content-type") ?? undefined,
-        body: Buffer.from(init?.body as Uint8Array).toString(),
-      };
+      seen = { url: String(input), init };
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -471,12 +462,10 @@ describe("recraft image.edit", () => {
       seen.url,
       "https://external.api.recraft.ai/v1/images/imageToImage",
     );
-    assert.ok(seen.contentType?.startsWith("multipart/form-data; boundary="));
-    assert.ok(seen.body?.includes('name="prompt"'));
-    assert.ok(seen.body?.includes("winter"));
-    assert.ok(seen.body?.includes('name="strength"'));
-    assert.ok(seen.body?.includes("0.4"));
-    assert.ok(seen.body?.includes('name="image"'));
+    const form = await multipartForm(seen.init);
+    assert.equal(form.get("prompt"), "winter");
+    assert.equal(form.get("strength"), "0.4");
+    assert.ok(form.get("image") instanceof Blob, "image should be a file part");
   });
 });
 

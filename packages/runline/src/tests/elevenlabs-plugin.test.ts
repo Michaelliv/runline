@@ -175,7 +175,7 @@ describe("elevenlabs plugin", () => {
           {},
           { ...ctx, connection: { ...ctx.connection, config: {} } },
         ),
-      /invalid authentication credentials/,
+      { code: "invalid_credentials" },
     );
     assert.equal(calls.length, 0);
   });
@@ -459,10 +459,9 @@ describe("elevenlabs plugin", () => {
   });
   it("rejects redirects, even when fetch ignores redirect:error", async () => {
     mock(new Response(null, { status: 302 }));
-    await assert.rejects(
-      () => run("models.list"),
-      /Authenticated request failed/,
-    );
+    await assert.rejects(() => run("models.list"), {
+      code: "transport_failed",
+    });
   });
   it("reports quota errors without retrying", async () => {
     const calls = mock(

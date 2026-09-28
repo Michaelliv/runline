@@ -626,7 +626,7 @@ describe("fal polling and response safety", () => {
           { model: "fal-ai/flux", input: {} },
           ctx(),
         ),
-      /Authenticated request failed/,
+      { code: "transport_failed" },
     );
   });
 
@@ -768,10 +768,7 @@ describe("fal failure reporting", () => {
   });
 
   it("reports a failed download rather than claiming success with fewer files", async () => {
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("v3.fal.media"))
         return new Response("nope", { status: 404 });
@@ -782,7 +779,6 @@ describe("fal failure reporting", () => {
         });
       if (url.endsWith("/status")) return json({ status: "COMPLETED" });
       if (url.includes("/requests/")) return json(IMAGE_OUTPUT);
-      void init;
       return json({
         request_id: "req-1",
         status_url: "s",
