@@ -152,14 +152,16 @@ describe("credential registry", () => {
       (d) => {
         d.methods.apiKey.schema = t.Object({ key: t.String() });
       },
-      (d) => {
-        d.methods.apiKey.authentication = {
-          kind: "apiKey",
-          field: "key",
-          header: "Authorization",
-          prefix: "Bearer\n",
-        };
-      },
+      ...["Bearer\n", " leading", "", "x".repeat(33), "café "].map(
+        (prefix) => (d: CredentialType) => {
+          d.methods.apiKey.authentication = {
+            kind: "apiKey",
+            field: "key",
+            header: "Authorization",
+            prefix,
+          };
+        },
+      ),
       (d) => {
         d.methods.apiKey.authentication = {
           kind: "apiKey",

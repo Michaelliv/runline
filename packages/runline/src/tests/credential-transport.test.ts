@@ -133,25 +133,27 @@ describe("constrained credential transport", () => {
   });
 
   it("prefixes an API key only with its declared scheme, in its declared header", async () => {
-    const def = definition("apiKey");
-    def.methods.selected.authentication = {
-      kind: "apiKey",
-      field: "key",
-      header: "Authorization",
-      prefix: "SSWS ",
-    };
-    const h = await harness(
-      mock((_url, init) => {
-        assert.equal(
-          new Headers(init.headers).get("authorization"),
-          "SSWS private",
-        );
-        return Response.json({});
-      }),
-      { key: { secret: "private" } },
-      def,
-    );
-    assert.equal((await h.transport.request(h.binding, request)).status, 200);
+    for (const prefix of ["SSWS ", "Token token=", "api-key ", "Bot "]) {
+      const def = definition("apiKey");
+      def.methods.selected.authentication = {
+        kind: "apiKey",
+        field: "key",
+        header: "Authorization",
+        prefix,
+      };
+      const h = await harness(
+        mock((_url, init) => {
+          assert.equal(
+            new Headers(init.headers).get("authorization"),
+            `${prefix}private`,
+          );
+          return Response.json({});
+        }),
+        { key: { secret: "private" } },
+        def,
+      );
+      assert.equal((await h.transport.request(h.binding, request)).status, 200);
+    }
   });
 
   it("signs HTTP Basic from a stored username and password, either of which may be empty", async () => {
