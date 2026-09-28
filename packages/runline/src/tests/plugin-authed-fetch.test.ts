@@ -132,7 +132,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "hubspot/src/index.ts",
   "intercom/src/index.ts",
   "iterable/src/index.ts",
-  "lingvanex/src/index.ts",
   "lonescale/src/index.ts",
   "magento/src/index.ts",
   "mailcheck/src/index.ts",
