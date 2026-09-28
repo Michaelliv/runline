@@ -1,6 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { registerAccessActions } from "./access.js";
+import { shiftCrmCredential } from "./credentials.js";
 import { registerAccountActions } from "./accounts.js";
 import { registerActivityActions } from "./activities.js";
 import { registerImportActions } from "./imports.js";
@@ -15,6 +16,7 @@ import { registerTaskActions } from "./tasks.js";
 export default function shiftCrm(rl: RunlinePluginAPI) {
   rl.setName("shiftCrm");
   rl.setVersion("0.1.0");
+  rl.setCredential(shiftCrmCredential);
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({

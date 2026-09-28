@@ -224,7 +224,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["servicenow", "phase 2: not yet migrated"],
   ["shiftAtlas", "phase 3: not yet migrated"],
   ["shiftBwm", "phase 3: not yet migrated"],
-  ["shiftCrm", "phase 2: not yet migrated"],
   ["shiftObjects", "phase 3: not yet migrated"],
   [
     "shiftOcr",
