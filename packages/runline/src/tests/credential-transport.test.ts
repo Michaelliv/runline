@@ -820,7 +820,7 @@ describe("constrained credential transport", () => {
     );
     const capped = new CredentialTransport(h.registry, {
       fetch: stalled,
-      maxTimeoutMs: 20,
+      maxTargetTimeoutMs: 20,
     });
     await assert.rejects(
       capped.request(h.binding, { target: "slow", path: "x" }),

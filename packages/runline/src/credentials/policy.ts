@@ -10,6 +10,19 @@ export const HTTP_METHODS: readonly HttpMethod[] = [
   "DELETE",
 ];
 
+/** The most any target may declare, and any host may allow, per request. */
+export const TARGET_TIMEOUT_LIMIT_MS = 60 * 60_000;
+export const TARGET_RESPONSE_LIMIT_BYTES = 1024 * 1024 * 1024;
+
+/** A positive integer no larger than `limit`. */
+export function bounded(value: unknown, limit: number): boolean {
+  return (
+    Number.isSafeInteger(value) &&
+    (value as number) > 0 &&
+    (value as number) <= limit
+  );
+}
+
 export function headerName(name: string): string {
   if (typeof name !== "string" || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name))
     throw new AuthError("invalid_definition");

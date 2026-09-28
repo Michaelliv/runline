@@ -9,7 +9,14 @@ import {
 import type { OAuthRuntimeOptions } from "../auth/types.js";
 import type { ConnectionConfig } from "../plugin/types.js";
 import { sendResource } from "./http.js";
-import { headerName, refuseCredentialParams, resourceUrl } from "./policy.js";
+import {
+  bounded,
+  headerName,
+  refuseCredentialParams,
+  resourceUrl,
+  TARGET_RESPONSE_LIMIT_BYTES,
+  TARGET_TIMEOUT_LIMIT_MS,
+} from "./policy.js";
 import {
   BasicSecretSchema,
   type CredentialRegistry,
@@ -61,9 +68,15 @@ export interface CredentialBrokerCall {
 export interface CredentialTransportOptions {
   /** Mandatory trusted transport: enforce DNS/IP egress policy for token AND API requests. */
   fetch: typeof globalThis.fetch;
+  /** Deadline for token requests and for targets that declare none. */
   timeoutMs?: number;
+  /** Response ceiling for targets that declare none. */
   maxResponseBytes?: number;
   maxRequestBytes?: number;
+  /** The longest deadline a target may declare. */
+  maxTargetTimeoutMs?: number;
+  /** The largest response ceiling a target may declare. */
+  maxTargetResponseBytes?: number;
 }
 
 function boundSnapshot(
@@ -167,18 +180,17 @@ export class CredentialTransport {
       timeoutMs: options.timeoutMs ?? 20_000,
       maxResponseBytes: options.maxResponseBytes ?? 8 * 1024 * 1024,
       maxRequestBytes: options.maxRequestBytes ?? 1024 * 1024,
+      maxTargetTimeoutMs: options.maxTargetTimeoutMs ?? 10 * 60_000,
+      maxTargetResponseBytes:
+        options.maxTargetResponseBytes ?? 256 * 1024 * 1024,
     };
     if (
       typeof this.options.fetch !== "function" ||
-      !Number.isInteger(this.options.timeoutMs) ||
-      this.options.timeoutMs <= 0 ||
-      this.options.timeoutMs > 120_000 ||
-      !Number.isSafeInteger(this.options.maxResponseBytes) ||
-      this.options.maxResponseBytes <= 0 ||
-      this.options.maxResponseBytes > 64 * 1024 * 1024 ||
-      !Number.isSafeInteger(this.options.maxRequestBytes) ||
-      this.options.maxRequestBytes <= 0 ||
-      this.options.maxRequestBytes > 64 * 1024 * 1024
+      !bounded(this.options.timeoutMs, 120_000) ||
+      !bounded(this.options.maxResponseBytes, 64 * 1024 * 1024) ||
+      !bounded(this.options.maxRequestBytes, 64 * 1024 * 1024) ||
+      !bounded(this.options.maxTargetTimeoutMs, TARGET_TIMEOUT_LIMIT_MS) ||
+      !bounded(this.options.maxTargetResponseBytes, TARGET_RESPONSE_LIMIT_BYTES)
     )
       throw new AuthError("invalid_definition");
   }
@@ -364,7 +376,15 @@ export class CredentialTransport {
               : `Bearer ${value}`,
         );
       return sendResource(destination.toString(), verb, signed, body, {
-        ...this.options,
+        fetch: this.options.fetch,
+        timeoutMs: Math.min(
+          target.timeoutMs ?? this.options.timeoutMs,
+          this.options.maxTargetTimeoutMs,
+        ),
+        maxResponseBytes: Math.min(
+          target.maxResponseBytes ?? this.options.maxResponseBytes,
+          this.options.maxTargetResponseBytes,
+        ),
         resumableUpload: target.resumableUpload,
       });
     };

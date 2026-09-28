@@ -4,10 +4,13 @@ import { AuthError } from "../auth/errors.js";
 import { validateOAuth2ExchangePolicy } from "../auth/oauth2.js";
 import { oauthEndpoint, providerParameters } from "../auth/token.js";
 import {
+  bounded,
   HTTP_METHODS,
   headerName,
   refuseCredentialParams,
   resourceUrl,
+  TARGET_RESPONSE_LIMIT_BYTES,
+  TARGET_TIMEOUT_LIMIT_MS,
   targetBase,
 } from "./policy.js";
 import type { CredentialMethod, CredentialType } from "./types.js";
@@ -149,8 +152,12 @@ function validateMethod(method: CredentialMethod): void {
     )
       throw new AuthError("invalid_definition");
     if (
-      target.allowedHeaders !== undefined &&
-      !Array.isArray(target.allowedHeaders)
+      (target.allowedHeaders !== undefined &&
+        !Array.isArray(target.allowedHeaders)) ||
+      (target.timeoutMs !== undefined &&
+        !bounded(target.timeoutMs, TARGET_TIMEOUT_LIMIT_MS)) ||
+      (target.maxResponseBytes !== undefined &&
+        !bounded(target.maxResponseBytes, TARGET_RESPONSE_LIMIT_BYTES))
     )
       throw new AuthError("invalid_definition");
     for (const name of target.allowedHeaders ?? []) {

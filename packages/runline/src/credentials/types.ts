@@ -20,6 +20,18 @@ export interface CredentialTarget {
   resumableUpload?: boolean;
   /** Declare only when the provider guarantees deduplication for these methods. */
   idempotency?: { header: string; methods: HttpMethod[] };
+  /**
+   * Deadline for requests to this target when the provider holds them open
+   * longer than the transport default (synchronous extraction, long polls).
+   * Capped by the host's `maxTargetTimeoutMs`.
+   */
+  timeoutMs?: number;
+  /**
+   * Response ceiling for this target when its answers are larger than the
+   * transport default (audio, documents). Capped by the host's
+   * `maxTargetResponseBytes`.
+   */
+  maxResponseBytes?: number;
 }
 
 /**
