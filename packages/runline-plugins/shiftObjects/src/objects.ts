@@ -4,10 +4,8 @@ import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   enumSchema,
-  listParams,
   pathSegment,
   STRICT_OBJECT,
-  withQuery,
 } from "../../_shared/shiftCloud.js";
 import {
   GENERAL_MEDIA_TYPES,
@@ -181,7 +179,8 @@ export function registerObjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ objects: StoredObject[] }>(
         ctx,
-        withQuery(`${OBJECTS_BASE}/objects`, listParams(input)),
+        `${OBJECTS_BASE}/objects`,
+        { query: input },
       );
       return body.objects;
     },

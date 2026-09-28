@@ -63,6 +63,17 @@ export function shiftPath(route: string): string {
   return route.slice("/v1/".length);
 }
 
+/** A Shift call's method, JSON body text, and query parameters. */
+export interface ShiftInit {
+  method?: string;
+  body?: string;
+  /**
+   * An action's schema-validated list input, appended as the query;
+   * undefined and null values are skipped.
+   */
+  query?: unknown;
+}
+
 /**
  * A Shift plugin's credential and its request function, bound together so
  * a plugin cannot sign with one declaration and declare another.
@@ -74,7 +85,7 @@ export function shiftClient(plugin: string, options?: ShiftCredentialOptions) {
     request: <T = unknown>(
       ctx: ActionContext,
       route: string,
-      init?: { method?: string; body?: string },
+      init?: ShiftInit,
     ) => shiftRequest<T>(ctx, credential, plugin, route, init),
   };
 }
@@ -89,12 +100,13 @@ export async function shiftRequest<T = unknown>(
   declaration: CredentialDeclaration,
   plugin: string,
   route: string,
-  init: { method?: string; body?: string } = {},
+  init: ShiftInit = {},
 ): Promise<T> {
   const response = await credentialRequest(ctx, declaration, {
     target: "api",
     path: shiftPath(route),
     method: (init.method ?? "GET") as HttpMethod,
+    query: init.query as Record<string, unknown> | undefined,
     ...(init.body !== undefined
       ? { body: init.body, headers: { "Content-Type": "application/json" } }
       : {}),

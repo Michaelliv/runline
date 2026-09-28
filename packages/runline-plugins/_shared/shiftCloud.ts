@@ -81,18 +81,3 @@ export async function shiftError(
   }
   return new Error(failureMessage(plugin, response.status, { code, param }));
 }
-
-export function listParams(input: unknown): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(
-    (input ?? {}) as Record<string, unknown>,
-  )) {
-    if (value !== undefined) params.set(key, String(value));
-  }
-  return params;
-}
-
-export function withQuery(path: string, params: URLSearchParams): string {
-  const query = params.toString();
-  return query ? `${path}?${query}` : path;
-}

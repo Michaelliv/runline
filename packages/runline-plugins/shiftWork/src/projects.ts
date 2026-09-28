@@ -4,7 +4,6 @@ import {
   cursorSchema,
   enumSchema,
   idSchema,
-  listParams,
   PROJECT_STATUS,
   pathSegment,
   request,
@@ -31,7 +30,8 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ projects: ShiftProject[] }>(
         ctx,
-        `/v1/projects?${listParams(input)}`,
+        `/v1/projects`,
+        { query: input },
       );
       return body.projects;
     },
@@ -44,7 +44,8 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ projects: ShiftProject[]; nextCursor?: string }>(
         ctx,
-        `/v1/projects?${listParams(input)}`,
+        `/v1/projects`,
+        { query: input },
       );
     },
   });

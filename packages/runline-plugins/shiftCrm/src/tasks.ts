@@ -8,7 +8,6 @@ import {
   createRecordFields,
   enumSchema,
   idSchema,
-  listParams,
   nullableTimestamp,
   paginationFields,
   pathSegment,
@@ -17,7 +16,6 @@ import {
   STRICT_UPDATE_OBJECT,
   timestampSchema,
   updateRecordFields,
-  withQuery,
 } from "./shared.js";
 
 const taskListFields = {
@@ -35,7 +33,8 @@ export function registerTaskActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ tasks: CrmTask[] }>(
         ctx,
-        withQuery(`${CRM_BASE}/tasks`, listParams(input)),
+        `${CRM_BASE}/tasks`,
+        { query: input },
       );
       return body.tasks;
     },
@@ -48,7 +47,8 @@ export function registerTaskActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ tasks: CrmTask[]; nextCursor?: string }>(
         ctx,
-        withQuery(`${CRM_BASE}/tasks`, listParams(input)),
+        `${CRM_BASE}/tasks`,
+        { query: input },
       );
     },
   });

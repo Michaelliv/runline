@@ -9,12 +9,10 @@ import {
   createRecordFields,
   enumSchema,
   idSchema,
-  listParams,
   paginationFields,
   request,
   STRICT_OBJECT,
   timestampSchema,
-  withQuery,
 } from "./shared.js";
 
 const activityListFields = {
@@ -31,7 +29,8 @@ export function registerActivityActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ activities: CrmActivity[] }>(
         ctx,
-        withQuery(`${CRM_BASE}/activities`, listParams(input)),
+        `${CRM_BASE}/activities`,
+        { query: input },
       );
       return body.activities;
     },
@@ -44,7 +43,8 @@ export function registerActivityActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ activities: CrmActivity[]; nextCursor?: string }>(
         ctx,
-        withQuery(`${CRM_BASE}/activities`, listParams(input)),
+        `${CRM_BASE}/activities`,
+        { query: input },
       );
     },
   });
