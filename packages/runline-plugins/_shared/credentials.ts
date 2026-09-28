@@ -26,20 +26,24 @@ import { credentialBroker } from "./credentialAdapter.js";
 type LocalSource = string | { value: string } | { concat: LocalSecretPart[] };
 
 /**
- * Shorthands for the common single-secret placements. Each names the
- * method, so a stored selection keeps its method name.
+ * How the secret is placed: a shorthand for a common single-secret case,
+ * or the general form of named parts and their placements. The kind names
+ * the method, so a stored selection keeps its method name.
  */
 type StaticAuth =
   | { kind: "bearer" }
   | { kind: "apiKey"; header: string; prefix?: string }
   | { kind: "queryKey"; param: string }
-  | { kind: "basic" };
+  | { kind: "basic" }
+  | { kind: "static"; parts: string[]; placements: SecretPlacement[] };
 
-/** A shorthand's parts and placements. */
+/** The parts and placements a shorthand, or the general form, declares. */
 function placementsOf(auth: StaticAuth): {
   parts: string[];
   placements: SecretPlacement[];
 } {
+  if (auth.kind === "static")
+    return { parts: auth.parts, placements: auth.placements };
   if (auth.kind === "basic")
     return {
       parts: ["username", "password"],
@@ -68,10 +72,12 @@ export interface StaticCredentialSpec {
   /** Credential type id; one per provider, shared by its plugins. */
   id: string;
   auth: StaticAuth;
-  /** Where a CLI connection keeps each part: `secret` for the single-secret shorthands, `username` and `password` for basic. */
-  local:
-    | { secret: LocalSource }
-    | { username: LocalSource; password: LocalSource };
+  /**
+   * Where a CLI connection keeps each part: `secret` for the single-secret
+   * shorthands, `username` and `password` for basic, and one entry per
+   * part for the general form.
+   */
+  local: Record<string, LocalSource>;
   /** Fixed targets, or targets built from public config (hosts, account paths). */
   targets:
     | Record<string, CredentialTarget>
@@ -93,6 +99,8 @@ export function staticCredential(
 ): CredentialDeclaration {
   const field = "credential";
   const { parts, placements } = placementsOf(spec.auth);
+  if (Object.keys(spec.local).sort().join() !== [...parts].sort().join())
+    throw new AuthError("invalid_definition");
   const localSecret = Object.fromEntries(
     Object.entries(spec.local).map(([key, source]: [string, LocalSource]) => [
       key,
