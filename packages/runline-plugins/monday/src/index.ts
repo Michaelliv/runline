@@ -286,32 +286,10 @@ export default function monday(rl: RunlinePluginAPI) {
         `query ($boardId: [ID!], $groupId: [String], $limit: Int) { boards(ids: $boardId) { groups(ids: $groupId) { id items_page(limit: $limit) { cursor items { id name created_at state column_values { id text type value column { title archived description settings_str } } } } } } }`,
         { boardId, groupId, limit },
       );
-      return (data.boards as Array<Record<string, unknown>>)?.[0]
-        ? (
-            (data.boards as Array<Record<string, unknown>>)[0].groups as Array<
-              Record<string, unknown>
-            >
-          )?.[0]
-          ? ((
-              (data.boards as Array<Record<string, unknown>>)[0]
-                .groups as Array<Record<string, unknown>>
-            )[0] as Record<string, unknown>)
-            ? ((
-                (
-                  (data.boards as Array<Record<string, unknown>>)[0]
-                    .groups as Array<Record<string, unknown>>
-                )[0] as Record<string, unknown>
-              ).items_page as Record<string, unknown>)
-              ? (
-                  (
-                    (data.boards as Array<Record<string, unknown>>)[0]
-                      .groups as Array<Record<string, unknown>>
-                  )[0] as Record<string, unknown>
-                ).items_page
-              : []
-            : []
-          : []
-        : [];
+      const boards = data.boards as
+        | Array<{ groups?: Array<{ items_page?: unknown }> }>
+        | undefined;
+      return boards?.[0]?.groups?.[0]?.items_page ?? [];
     },
   });
 
