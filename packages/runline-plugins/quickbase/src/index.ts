@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { quickbaseCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -78,7 +75,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `files/${seg(tableId)}/${seg(recordId)}/${seg(fieldId)}/${seg(versionNumber)}`,
+        `files/${pathSegment(tableId)}/${pathSegment(recordId)}/${pathSegment(fieldId)}/${pathSegment(versionNumber)}`,
       );
     },
   });
@@ -203,9 +200,15 @@ export default function quickbase(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, reportId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "GET", `reports/${seg(reportId)}`, undefined, {
-        tableId,
-      });
+      return apiRequest(
+        ctx,
+        "GET",
+        `reports/${pathSegment(reportId)}`,
+        undefined,
+        {
+          tableId,
+        },
+      );
     },
   });
 
@@ -221,7 +224,13 @@ export default function quickbase(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { tableId: p.tableId };
       if (p.limit) qs.top = p.limit;
-      return apiRequest(ctx, "POST", `reports/${seg(p.reportId)}/run`, {}, qs);
+      return apiRequest(
+        ctx,
+        "POST",
+        `reports/${pathSegment(p.reportId)}/run`,
+        {},
+        qs,
+      );
     },
   });
 }
