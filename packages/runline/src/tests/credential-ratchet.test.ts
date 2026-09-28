@@ -49,10 +49,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "body key: api_secret travels in the JSON body of every write",
   ],
   [
-    "cortex",
-    "deadline: analyzer.execute holds /job/{id}/waitreport for a caller-chosen atMost timeout beyond the transport's 120 s ceiling",
-  ],
-  [
     "customerIo",
     "two credentials in one connection: tracking and app keys, used by different actions",
   ],

@@ -87,7 +87,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "airtop/src/index.ts",
   "coingecko/src/index.ts",
   "convertkit/src/index.ts",
-  "cortex/src/index.ts",
   "customerIo/src/index.ts",
   "demio/src/index.ts",
   "elasticsearch/src/index.ts",
