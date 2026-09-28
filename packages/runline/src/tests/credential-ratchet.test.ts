@@ -64,7 +64,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "convertkit",
     "body key: api_secret travels in the JSON body of every write",
   ],
-  ["cortex", "phase 3: not yet migrated"],
+  [
+    "cortex",
+    "deadline: analyzer.execute holds /job/{id}/waitreport for a caller-chosen atMost timeout beyond the transport's 120 s ceiling",
+  ],
   ["currents", "phase 3: not yet migrated"],
   [
     "customerIo",
