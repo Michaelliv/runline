@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { quickbooksCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -50,7 +47,7 @@ function registerQbResource(rl: RunlinePluginAPI, resource: string) {
       const data = (await api(
         ctx,
         "GET",
-        `${resource}/${seg((input as Record<string, unknown>).id)}`,
+        `${resource}/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data[cap];
     },
