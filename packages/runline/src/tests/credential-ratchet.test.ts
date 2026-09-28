@@ -140,7 +140,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "body key: mocean-api-key and mocean-api-secret travel in the form body",
   ],
   ["msg91", "phase 3: not yet migrated"],
-  ["nasa", "phase 3: not yet migrated"],
   ["netscalerAdc", "phase 4: not yet migrated"],
   [
     "nextcloud",
