@@ -13,6 +13,7 @@ import {
   credentialRequest,
   hostLabel,
   httpsBase,
+  jsonOrAcknowledged,
   multipartBody,
   pathSegment,
   pathSegments,
@@ -385,6 +386,32 @@ describe("credentialRequest and credentialJson", () => {
     const { ctx } = brokered("not json <private>");
     await assert.rejects(
       credentialJson(ctx, example, "example", { target: "api", path: "x" }),
+      { code: "invalid_response" },
+    );
+  });
+});
+
+describe("jsonOrAcknowledged", () => {
+  it("reads a JSON answer, and takes any other body as an acknowledgement", async () => {
+    assert.deepEqual(
+      await jsonOrAcknowledged(
+        new Response('{"a":1}', {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      ),
+      { a: 1 },
+    );
+    for (const response of [
+      new Response("OK", { headers: { "content-type": "text/plain" } }),
+      new Response(null, { status: 204 }),
+    ])
+      assert.deepEqual(await jsonOrAcknowledged(response), { success: true });
+    await assert.rejects(
+      jsonOrAcknowledged(
+        new Response("<private>", {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
       { code: "invalid_response" },
     );
   });
