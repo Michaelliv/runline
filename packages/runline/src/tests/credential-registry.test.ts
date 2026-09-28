@@ -410,6 +410,12 @@ describe("credential registry", () => {
         d.methods.apiKey.targets.api.allowedHeaders = ["Destination"];
       },
       (d) => {
+        d.methods.apiKey.targets.api.idempotency = {
+          header: "Destination",
+          methods: ["POST"],
+        };
+      },
+      (d) => {
         d.methods.apiKey.targets.api.methods = ["GET", "MOVE"];
         d.methods.apiKey.authentication = placed(
           ["secret"],
