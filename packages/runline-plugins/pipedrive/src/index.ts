@@ -58,7 +58,6 @@ function registerCrud(
     extraUpdate?: Record<string, unknown>;
   },
 ) {
-  const cap = resource.charAt(0).toUpperCase() + resource.slice(1);
   const updateMethod = (opts?.updateMethod ?? "PATCH") as HttpMethod;
 
   rl.registerAction(`${resource}.create`, {

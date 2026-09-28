@@ -133,7 +133,6 @@ function registerCrmResource(rl: RunlinePluginAPI, resource: string) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const body = p.data as Record<string, unknown>;
-      const qs: Record<string, unknown> = {};
       if (p.duplicateCheckFields) {
         body.duplicate_check_fields = (p.duplicateCheckFields as string)
           .split(",")
