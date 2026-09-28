@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { stackbyCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -14,7 +11,7 @@ function apiRequest(
 ): Promise<unknown> {
   return credentialJson(ctx, stackbyCredential, "stackby", {
     target: "api",
-    path: endpoint.replace(/^\//, ""),
+    path: endpoint,
     method,
     query: qs,
     ...(body !== undefined ? { json: body } : {}),
@@ -48,7 +45,7 @@ export default function stackby(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `/rowlist/${seg(p.stackId)}/${encodeURIComponent(p.table as string)}`,
+        `rowlist/${pathSegment(p.stackId)}/${pathSegment(p.table)}`,
         undefined,
         { rowIds: p.rowId },
       )) as Array<Record<string, unknown>>;
@@ -73,7 +70,7 @@ export default function stackby(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `/rowlist/${seg(p.stackId)}/${encodeURIComponent(p.table as string)}`,
+        `rowlist/${pathSegment(p.stackId)}/${pathSegment(p.table)}`,
         undefined,
         qs,
       )) as Array<Record<string, unknown>>;
@@ -98,7 +95,7 @@ export default function stackby(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `/rowcreate/${seg(p.stackId)}/${encodeURIComponent(p.table as string)}`,
+        `rowcreate/${pathSegment(p.stackId)}/${pathSegment(p.table)}`,
         { records: p.records },
       )) as Array<Record<string, unknown>>;
       return data.map((d) => d.field);
@@ -118,7 +115,7 @@ export default function stackby(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `/rowdelete/${seg(p.stackId)}/${encodeURIComponent(p.table as string)}`,
+        `rowdelete/${pathSegment(p.stackId)}/${pathSegment(p.table)}`,
         undefined,
         { rowIds: p.rowId },
       );
