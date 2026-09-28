@@ -1,11 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { splunkCredential } from "./credentials.js";
 
-/** A job SID, report name, or username as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
-
-// Splunk REST API uses form-urlencoded for POST, returns JSON when output_mode=json
+// The Splunk REST API takes form-urlencoded POST bodies and answers JSON
+// because every request carries output_mode=json.
 async function api(
   ctx: ActionContext,
   method: HttpMethod,
@@ -97,13 +95,13 @@ export default function splunk(rl: RunlinePluginAPI) {
       if (p.latestTime) body.latest_time = p.latestTime;
       if (p.maxTime) body.max_time = p.maxTime;
       if (p.namespace) body.namespace = p.namespace;
-      // Create returns XML with sid, then we fetch JSON
+      // Create answers { sid }; the follow-up read returns the full job.
       const createRes = (await api(ctx, "POST", "search/jobs", body)) as Record<
         string,
         unknown
       >;
       const sid = createRes.sid as string | undefined;
-      if (sid) return api(ctx, "GET", `search/jobs/${seg(sid)}`);
+      if (sid) return api(ctx, "GET", `search/jobs/${pathSegment(sid)}`);
       return createRes;
     },
   });
@@ -116,7 +114,7 @@ export default function splunk(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `search/jobs/${seg((input as Record<string, unknown>).searchJobId)}`,
+        `search/jobs/${pathSegment((input as Record<string, unknown>).searchJobId)}`,
       );
     },
   });
@@ -148,7 +146,7 @@ export default function splunk(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `search/jobs/${seg((input as Record<string, unknown>).searchJobId)}`,
+        `search/jobs/${pathSegment((input as Record<string, unknown>).searchJobId)}`,
       );
       return { success: true };
     },
@@ -181,7 +179,7 @@ export default function splunk(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `search/jobs/${seg(p.searchJobId)}/results`,
+        `search/jobs/${pathSegment(p.searchJobId)}/results`,
         undefined,
         qs,
       );
@@ -246,7 +244,7 @@ export default function splunk(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `saved/searches/${seg((input as Record<string, unknown>).reportId)}`,
+        `saved/searches/${pathSegment((input as Record<string, unknown>).reportId)}`,
       );
     },
   });
@@ -272,7 +270,7 @@ export default function splunk(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `saved/searches/${seg((input as Record<string, unknown>).reportId)}`,
+        `saved/searches/${pathSegment((input as Record<string, unknown>).reportId)}`,
       );
       return { success: true };
     },
@@ -317,7 +315,7 @@ export default function splunk(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `authentication/users/${seg((input as Record<string, unknown>).userId)}`,
+        `authentication/users/${pathSegment((input as Record<string, unknown>).userId)}`,
       );
     },
   });
@@ -356,7 +354,12 @@ export default function splunk(rl: RunlinePluginAPI) {
       if (fields.realname) body.realname = fields.realname;
       if (fields.password) body.password = fields.password;
       if (fields.roles) body.roles = fields.roles;
-      return api(ctx, "POST", `authentication/users/${seg(userId)}`, body);
+      return api(
+        ctx,
+        "POST",
+        `authentication/users/${pathSegment(userId)}`,
+        body,
+      );
     },
   });
 
@@ -370,7 +373,7 @@ export default function splunk(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `authentication/users/${seg((input as Record<string, unknown>).userId)}`,
+        `authentication/users/${pathSegment((input as Record<string, unknown>).userId)}`,
       );
       return { success: true };
     },
