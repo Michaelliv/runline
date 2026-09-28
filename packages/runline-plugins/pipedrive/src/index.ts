@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { pipedriveCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function api(
   ctx: ActionContext,
@@ -93,7 +90,7 @@ function registerCrud(
       return api(
         ctx,
         "GET",
-        `${endpoint}/${seg((input as Record<string, unknown>).id)}`,
+        `${endpoint}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -130,7 +127,7 @@ function registerCrud(
       return api(
         ctx,
         updateMethod,
-        `${endpoint}/${seg(p.id)}`,
+        `${endpoint}/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -144,7 +141,7 @@ function registerCrud(
       await api(
         ctx,
         "DELETE",
-        `${endpoint}/${seg((input as Record<string, unknown>).id)}`,
+        `${endpoint}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -197,7 +194,7 @@ function registerCrud(
         return api(
           ctx,
           "POST",
-          `${endpoint}/${seg((input as Record<string, unknown>).id)}/duplicate`,
+          `${endpoint}/${pathSegment((input as Record<string, unknown>).id)}/duplicate`,
         );
       },
     });
@@ -242,7 +239,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId, ...body } = input as Record<string, unknown>;
-      return api(ctx, "POST", `deals/${seg(dealId)}/products`, {
+      return api(ctx, "POST", `deals/${pathSegment(dealId)}/products`, {
         product_id: body.productId,
         item_price: body.itemPrice,
         quantity: body.quantity,
@@ -264,7 +261,13 @@ export default function pipedrive(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.limit = p.limit;
-      return api(ctx, "GET", `deals/${seg(p.dealId)}/products`, undefined, qs);
+      return api(
+        ctx,
+        "GET",
+        `deals/${pathSegment(p.dealId)}/products`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -281,7 +284,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PATCH",
-        `deals/${seg(p.dealId)}/products/${seg(p.productAttachmentId)}`,
+        `deals/${pathSegment(p.dealId)}/products/${pathSegment(p.productAttachmentId)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -299,7 +302,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `deals/${seg(p.dealId)}/products/${seg(p.productAttachmentId)}`,
+        `deals/${pathSegment(p.dealId)}/products/${pathSegment(p.productAttachmentId)}`,
       );
       return { success: true };
     },
@@ -314,7 +317,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `files/${seg((input as Record<string, unknown>).id)}`,
+        `files/${pathSegment((input as Record<string, unknown>).id)}`,
         undefined,
         undefined,
         "v1",
@@ -330,7 +333,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `files/${seg((input as Record<string, unknown>).id)}`,
+        `files/${pathSegment((input as Record<string, unknown>).id)}`,
         undefined,
         undefined,
         "v1",
@@ -349,7 +352,7 @@ export default function pipedrive(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...body } = input as Record<string, unknown>;
-      return api(ctx, "PUT", `files/${seg(id)}`, body, undefined, "v1");
+      return api(ctx, "PUT", `files/${pathSegment(id)}`, body, undefined, "v1");
     },
   });
 
