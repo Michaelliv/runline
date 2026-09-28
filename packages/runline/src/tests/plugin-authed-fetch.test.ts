@@ -101,7 +101,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "cloudflare/src/index.ts",
   "cockpit/src/index.ts",
   "coingecko/src/index.ts",
-  "contentful/src/index.ts",
   "convertkit/src/index.ts",
   "cortex/src/index.ts",
   "currents/src/index.ts",

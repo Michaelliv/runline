@@ -60,7 +60,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "coingecko",
     "optional credential: a secret-free config cannot say whether to sign",
   ],
-  ["contentful", "phase 3: not yet migrated"],
   [
     "convertkit",
     "body key: api_secret travels in the JSON body of every write",
