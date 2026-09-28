@@ -206,7 +206,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["stripe", "phase 3: not yet migrated"],
   ["supabase", "one secret injected twice: apikey header and bearer"],
-  ["syncromsp", "phase 3: not yet migrated"],
   ["tapfiliate", "phase 3: not yet migrated"],
   ["telegram", "path token: the bot token is a URL path segment"],
   ["thehive", "phase 3: not yet migrated"],
