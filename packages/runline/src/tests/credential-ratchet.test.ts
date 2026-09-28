@@ -45,10 +45,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "two credentials in one connection: tracking and app keys, used by different actions",
   ],
   [
-    "elasticsearch",
-    "optional credential: username and password are optional, and the empty Basic pair sent today is one the transport refuses",
-  ],
-  [
     "facebookGraph",
     "agent-selected host: hostUrl is a per-call action input, not config",
   ],
