@@ -1,9 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import {
+  credentialRequest,
+  pathSegment as seg,
+} from "../../_shared/credentials.js";
 import { bambooHrCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
   ctx: ActionContext,

@@ -20,7 +20,11 @@
 
 import { Buffer } from "node:buffer";
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson, pathWithin } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  pathSegment,
+  pathWithin,
+} from "../../_shared/credentials.js";
 import {
   readImageInput,
   type SavedMedia,
@@ -87,8 +91,8 @@ async function runPrediction(opts: {
   const { ctx, model, input, timeoutMs, saveDir } = opts;
   const deadline = Date.now() + timeoutMs;
 
-  // A model id is owner/name: each side is one encoded path segment.
-  const modelPath = model.split("/").map(encodeURIComponent).join("/");
+  // A model id is owner/name: each side is one encoded, non-empty path segment.
+  const modelPath = model.split("/").map(pathSegment).join("/");
   let prediction = (await credentialJson(
     ctx,
     replicateCredential,

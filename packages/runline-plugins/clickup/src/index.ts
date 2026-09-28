@@ -1,9 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  pathSegment as seg,
+} from "../../_shared/credentials.js";
 import { clickupCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -21,10 +21,7 @@ function apiRequest(
     path: endpoint,
     method,
     query,
-    ...(body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
       ? { json: body }
       : {}),
   });

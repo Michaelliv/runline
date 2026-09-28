@@ -1,9 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  pathSegment as seg,
+} from "../../_shared/credentials.js";
 import { affinityCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -26,12 +26,13 @@ async function paginateAll(
   path: string,
   dataKey: string,
   limit?: number,
+  extraQuery?: Record<string, unknown>,
 ): Promise<unknown[]> {
   const results: unknown[] = [];
   let pageToken: string | undefined;
 
   while (true) {
-    const qs: Record<string, unknown> = { page_size: 500 };
+    const qs: Record<string, unknown> = { ...extraQuery, page_size: 500 };
     if (pageToken) qs.page_token = pageToken;
 
     const data = (await apiRequest(ctx, "GET", path, undefined, qs)) as Record<
@@ -248,9 +249,13 @@ export default function affinity(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { term, limit } =
         (input as { term?: string; limit?: number }) ?? {};
-      const qs: Record<string, unknown> = {};
-      if (term) qs.term = term;
-      return paginateAll(ctx, "persons", "persons", limit);
+      return paginateAll(
+        ctx,
+        "persons",
+        "persons",
+        limit,
+        term ? { term } : undefined,
+      );
     },
   });
 
@@ -355,9 +360,13 @@ export default function affinity(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { term, limit } =
         (input as { term?: string; limit?: number }) ?? {};
-      const qs: Record<string, unknown> = {};
-      if (term) qs.term = term;
-      return paginateAll(ctx, "organizations", "organizations", limit);
+      return paginateAll(
+        ctx,
+        "organizations",
+        "organizations",
+        limit,
+        term ? { term } : undefined,
+      );
     },
   });
 

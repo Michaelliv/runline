@@ -1,9 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  pathSegment as seg,
+} from "../../_shared/credentials.js";
 import { airtableCredential } from "./credentials.js";
-
-/** An ID or table name as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
