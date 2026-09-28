@@ -2,12 +2,10 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
   httpsBase,
+  pathSegment,
   pathWithin,
 } from "../../_shared/credentials.js";
 import { kobotoolboxCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -91,7 +89,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `assets/${seg((input as { formId: string }).formId)}`,
+        `assets/${pathSegment((input as { formId: string }).formId)}`,
       );
     },
   });
@@ -138,7 +136,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PATCH",
-        `assets/${seg((input as { formId: string }).formId)}/deployment/`,
+        `assets/${pathSegment((input as { formId: string }).formId)}/deployment/`,
       );
     },
   });
@@ -164,7 +162,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `assets/${seg(formId)}/data/${seg(submissionId)}`,
+        `assets/${pathSegment(formId)}/data/${pathSegment(submissionId)}`,
         undefined,
         qs,
       );
@@ -201,13 +199,13 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
         const data = (await apiRequest(
           ctx,
           "GET",
-          `assets/${seg(p.formId)}/data/`,
+          `assets/${pathSegment(p.formId)}/data/`,
           undefined,
           qs,
         )) as Record<string, unknown>;
         return data.results ?? data;
       }
-      return paginate(ctx, `assets/${seg(p.formId)}/data/`, qs);
+      return paginate(ctx, `assets/${pathSegment(p.formId)}/data/`, qs);
     },
   });
 
@@ -223,7 +221,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `assets/${seg(formId)}/data/${seg(submissionId)}`,
+        `assets/${pathSegment(formId)}/data/${pathSegment(submissionId)}`,
       );
       return { success: true };
     },
@@ -241,7 +239,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `assets/${seg(formId)}/data/${seg(submissionId)}/validation_status/`,
+        `assets/${pathSegment(formId)}/data/${pathSegment(submissionId)}/validation_status/`,
       );
     },
   });
@@ -267,7 +265,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PATCH",
-        `assets/${seg(formId)}/data/${seg(submissionId)}/validation_status/`,
+        `assets/${pathSegment(formId)}/data/${pathSegment(submissionId)}/validation_status/`,
         { "validation_status.uid": validationStatus },
       );
     },
@@ -287,7 +285,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `assets/${seg(formId)}/hooks/${seg(hookId)}`,
+        `assets/${pathSegment(formId)}/hooks/${pathSegment(hookId)}`,
       );
     },
   });
@@ -305,11 +303,11 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
         return apiRequest(
           ctx,
           "GET",
-          `assets/${seg(formId)}/hooks/`,
+          `assets/${pathSegment(formId)}/hooks/`,
           undefined,
           { limit },
         );
-      return paginate(ctx, `assets/${seg(formId)}/hooks/`);
+      return paginate(ctx, `assets/${pathSegment(formId)}/hooks/`);
     },
   });
 
@@ -325,7 +323,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PATCH",
-        `assets/${seg(formId)}/hooks/${seg(hookId)}/retry/`,
+        `assets/${pathSegment(formId)}/hooks/${pathSegment(hookId)}/retry/`,
       );
     },
   });
@@ -364,7 +362,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `assets/${seg(formId)}/hooks/${seg(hookId)}/logs/`,
+        `assets/${pathSegment(formId)}/hooks/${pathSegment(hookId)}/logs/`,
         undefined,
         qs,
       );
@@ -384,7 +382,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PATCH",
-        `assets/${seg(formId)}/hooks/${seg(hookId)}/logs/${seg(logId)}/retry/`,
+        `assets/${pathSegment(formId)}/hooks/${pathSegment(hookId)}/logs/${pathSegment(logId)}/retry/`,
       );
     },
   });
@@ -398,7 +396,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return paginate(
         ctx,
-        `assets/${seg((input as { formId: string }).formId)}/files`,
+        `assets/${pathSegment((input as { formId: string }).formId)}/files`,
         { file_type: "form_media" },
       );
     },
@@ -416,7 +414,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `assets/${seg(formId)}/files/${seg(fileId)}`,
+        `assets/${pathSegment(formId)}/files/${pathSegment(fileId)}`,
       );
     },
   });
@@ -433,7 +431,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `assets/${seg(formId)}/files/${seg(fileId)}`,
+        `assets/${pathSegment(formId)}/files/${pathSegment(fileId)}`,
       );
     },
   });
@@ -451,7 +449,7 @@ export default function kobotoolbox(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { formId, redirectUrl } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `assets/${seg(formId)}/files/`, {
+      return apiRequest(ctx, "POST", `assets/${pathSegment(formId)}/files/`, {
         description: "Uploaded file",
         file_type: "form_media",
         metadata: { redirect_url: redirectUrl },
