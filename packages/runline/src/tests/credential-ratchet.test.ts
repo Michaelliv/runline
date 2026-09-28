@@ -285,7 +285,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["zammad", "phase 3: not yet migrated"],
   ["zendesk", "phase 2: not yet migrated"],
   ["zoho", "phase 2: not yet migrated"],
-  ["zoom", "phase 2: not yet migrated"],
   ["zulip", "phase 3: not yet migrated"],
 ]);
 

@@ -268,7 +268,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "zammad/src/index.ts",
   "zendesk/src/index.ts",
   "zoho/src/index.ts",
-  "zoom/src/index.ts",
   "zulip/src/index.ts",
 ]);
 
