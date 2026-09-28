@@ -21,10 +21,7 @@ function apiRequest(
     path: endpoint,
     method,
     query,
-    ...(body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
       ? { json: body }
       : {}),
   });
