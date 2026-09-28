@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { mailerliteCredential } from "./credentials.js";
 
 function api(
@@ -117,7 +117,7 @@ export default function mailerlite(rl: RunlinePluginAPI) {
       const resp = (await api(
         ctx,
         "GET",
-        `subscribers/${encodeURIComponent((input as { subscriberId: string }).subscriberId)}`,
+        `subscribers/${pathSegment((input as { subscriberId: string }).subscriberId)}`,
       )) as Record<string, unknown>;
       return resp.data;
     },
@@ -189,12 +189,7 @@ export default function mailerlite(rl: RunlinePluginAPI) {
       for (const [k, v] of Object.entries(rest)) {
         if (v !== undefined && v !== null && k !== "subscriberId") body[k] = v;
       }
-      return api(
-        ctx,
-        "PUT",
-        `subscribers/${encodeURIComponent(subscriberId as string)}`,
-        body,
-      );
+      return api(ctx, "PUT", `subscribers/${pathSegment(subscriberId)}`, body);
     },
   });
 }
