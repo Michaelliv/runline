@@ -410,6 +410,43 @@ describe("credential registry", () => {
         if (a.kind === "oauth2" && a.definition.refresh)
           a.definition.refresh.headers = { Authorization: "x" };
       },
+      // A probe on a socket target could never be sent.
+      (d) => {
+        d.methods.apiKey.targets.cdp = {
+          baseUrl: "wss://connect.example/",
+          methods: ["GET"],
+          socket: true,
+        };
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [
+            {
+              in: "header",
+              part: "secret",
+              name: "X-Api-Key",
+              targets: ["api"],
+            },
+            { in: "query", part: "secret", name: "apiKey", targets: ["cdp"] },
+          ],
+        );
+        if (d.methods.apiKey.probe) d.methods.apiKey.probe.target = "cdp";
+      },
+      // A password renewal's field names are distinct, and none replaces a
+      // protocol parameter.
+      ...[
+        { username: "login", password: "login" },
+        { username: "grant_type" },
+        { password: "client_secret" },
+      ].map((fields) => (d: CredentialType) => {
+        const a = d.methods.delegated.authentication;
+        if (a.kind !== "oauth2") return;
+        a.renewal = "password";
+        a.definition.password = {
+          url: "https://auth.example/login",
+          clientAuthentication: "none",
+          fields,
+        };
+      }),
       // A password renewal needs its endpoint, and plain field names.
       (d) => {
         const a = d.methods.delegated.authentication;

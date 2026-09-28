@@ -309,6 +309,27 @@ describe("steel plugin REST actions", () => {
     );
   });
 
+  it("releases the session browser.run created when no socket URL can be had", async () => {
+    const action = getAction(makeSteel(), "browser.run");
+    const paths: string[] = [];
+    const hosted = ctx();
+    hosted.connection.config = {};
+    hosted.credentials = {
+      request: async (input) => {
+        paths.push(`${input.method} ${input.path}`);
+        return Response.json({ id: "sess_9" });
+      },
+      probe: async () => ({ outcome: "unverified" }),
+    };
+    await assert.rejects(action.execute({ script: "return 1" }, hosted), {
+      code: "unsupported_operation",
+    });
+    assert.deepEqual(paths, [
+      "POST v1/sessions",
+      "POST v1/sessions/sess_9/release",
+    ]);
+  });
+
   it("reports a failed request by its status", async () => {
     const action = getAction(makeSteel(), "session.get");
     globalThis.fetch = (async () =>
