@@ -238,7 +238,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["slack", "phase 2: not yet migrated"],
   ["sms77", "phase 3: not yet migrated"],
   ["splunk", "phase 2: not yet migrated"],
-  ["spotify", "phase 2: not yet migrated"],
   ["stackby", "phase 2: not yet migrated"],
   [
     "steel",

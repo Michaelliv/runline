@@ -231,7 +231,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "slack/src/index.ts",
   "sms77/src/index.ts",
   "splunk/src/index.ts",
-  "spotify/src/index.ts",
   "stackby/src/index.ts",
   "steel/src/shared.ts",
   "storyblok/src/index.ts",
