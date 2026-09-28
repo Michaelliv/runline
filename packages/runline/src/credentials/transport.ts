@@ -21,6 +21,7 @@ import {
   resourceUrl,
   TARGET_RESPONSE_LIMIT_BYTES,
   TARGET_TIMEOUT_LIMIT_MS,
+  targetBase,
 } from "./policy.js";
 import {
   type CredentialRegistry,
@@ -170,6 +171,19 @@ interface Outgoing {
   headers: Headers;
   url: URL;
   body?: Buffer;
+  /** The target's base path, beneath which a path part is inserted. */
+  base: string;
+}
+
+/**
+ * A secret as one path segment: `/`, `\`, `?`, `#` and dot segments are
+ * refused rather than encoded; `:` and `@`, which RFC 3986 allows in a
+ * segment, stay literal (Telegram's `bot<id>:<token>`).
+ */
+function pathPart(value: string): string {
+  if (value === "." || value === ".." || /[/\\?#]/.test(value))
+    throw new AuthError("invalid_credentials");
+  return encodeURIComponent(value).replace(/%3A/gi, ":").replace(/%40/gi, "@");
 }
 
 /** Applies a credential to one outgoing request. */
@@ -222,6 +236,13 @@ function placeStatic(
       return ({ url }) => url.searchParams.append(placement.name, value);
     if (placement.in === "body")
       return (request) => addField(request, placement.name, value);
+    if (placement.in === "path") {
+      const segment = `${placement.prefix ?? ""}${pathPart(value)}`;
+      return ({ url, base }) => {
+        const rest = url.pathname.slice(base.length);
+        url.pathname = `${base}${segment}${rest ? `/${rest}` : ""}`;
+      };
+    }
     const name = headerName(placement.name);
     return ({ headers }) =>
       headers.set(name, `${placement.prefix ?? ""}${value}`);
@@ -435,6 +456,7 @@ export class CredentialTransport {
         headers: new Headers(headers),
         url: new URL(url),
         body,
+        base: targetBase(target).pathname,
       };
       signer(outgoing);
       return sendResource(

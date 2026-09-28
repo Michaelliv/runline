@@ -452,7 +452,7 @@ describe("constrained credential transport", () => {
         });
         return Response.json({});
       }),
-      { key: { account: "12:ab@c", token: "t" } },
+      { key: { account: "AC1@x", token: "t" } },
       def,
     );
     await h.transport.request(h.binding, { ...request, path: "items?q=a" });
@@ -460,14 +460,27 @@ describe("constrained credential transport", () => {
     assert.deepEqual(
       seen.map((s) => s.url),
       [
-        "https://api.example/v1/bot12:ab@c/items?q=a",
-        "https://api.example/v1/bot12:ab@c",
+        "https://api.example/v1/botAC1@x/items?q=a",
+        "https://api.example/v1/botAC1@x",
       ],
     );
     assert.equal(
       seen[0].auth,
-      `Basic ${Buffer.from("12:ab@c:t").toString("base64")}`,
+      `Basic ${Buffer.from("AC1@x:t").toString("base64")}`,
     );
+    // A colon stays literal in a segment, as in Telegram's bot<id>:<token>.
+    const telegram = definition("bearer");
+    placed(telegram, ["token"], [{ in: "path", part: "token", prefix: "bot" }]);
+    const t = await harness(
+      mock((url) => {
+        seen.push({ url, auth: null });
+        return Response.json({});
+      }),
+      { key: { token: "123:ABC" } },
+      telegram,
+    );
+    await t.transport.request(t.binding, { ...request, path: "getMe" });
+    assert.equal(seen.at(-1)?.url, "https://api.example/v1/bot123:ABC/getMe");
   });
 
   it("refuses a path part that is not one segment, before any IO", async () => {

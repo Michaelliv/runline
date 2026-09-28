@@ -71,7 +71,8 @@ function identifier(value: string): void {
  * A static secret's parts and placements agree with each other and with
  * the stored shape: the stored field holds exactly the declared parts, each
  * a string; every placement names a declared part, every part is placed,
- * and no header or query parameter is claimed twice.
+ * no header or query parameter is claimed twice, and at most one part
+ * takes the one path position.
  */
 function validateStatic(
   auth: Extract<CredentialAuthentication, { kind: "static" }>,
@@ -115,11 +116,21 @@ function validateStatic(
     } else if (placement.in === "query" || placement.in === "body") {
       place(placement.part);
       identifier(placement.name);
+    } else if (placement.in === "path") {
+      place(placement.part);
+      if (
+        placement.prefix !== undefined &&
+        (typeof placement.prefix !== "string" ||
+          !/^[A-Za-z0-9._~-]{1,32}$/.test(placement.prefix))
+      )
+        throw new AuthError("invalid_definition");
     } else if (placement.in === "basic") {
       place(placement.username);
       place(placement.password);
     } else throw new AuthError("invalid_definition");
   }
+  if (auth.placements.filter((placement) => placement.in === "path").length > 1)
+    throw new AuthError("invalid_definition");
   const headers = injectedHeaders(auth);
   const params = injectedParams(auth).map((name) => name.toLowerCase());
   if (

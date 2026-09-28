@@ -52,6 +52,11 @@ export type SecretPlacement =
    * the request carries no body.
    */
   | { in: "body"; part: string; name: string }
+  /**
+   * The first path segment beneath the target's base, as `<prefix><part>`:
+   * Telegram's `bot<token>`, an account ID before its resources.
+   */
+  | { in: "path"; part: string; prefix?: string }
   /** HTTP Basic in Authorization, from two parts; either may be empty. */
   | { in: "basic"; username: string; password: string };
 
