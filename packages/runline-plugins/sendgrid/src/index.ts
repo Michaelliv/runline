@@ -4,7 +4,7 @@ import {
   type HttpMethod,
   type RunlinePluginAPI,
 } from "runline";
-import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
+import { credentialOk, pathSegment } from "../../_shared/credentials.js";
 import { sendgridCredential } from "./credentials.js";
 
 /** A JSON request whose response headers stay readable (mail.send's x-message-id). */
@@ -15,14 +15,13 @@ async function apiRequest(
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<{ data: unknown; headers: Record<string, string> }> {
-  const res = await credentialRequest(ctx, sendgridCredential, {
+  const res = await credentialOk(ctx, sendgridCredential, "sendgrid", {
     target: "api",
     path: endpoint,
     method,
     query: qs,
     ...(body !== undefined ? { json: body } : {}),
   });
-  if (!res.ok) throw new Error(`sendgrid: request failed (HTTP ${res.status})`);
   const text = await res.text();
   const headers: Record<string, string> = {};
   res.headers.forEach((v, k) => {
