@@ -1,7 +1,7 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
-  credentialRequest,
+  credentialOk,
   pathSegment,
 } from "../../_shared/credentials.js";
 import { databricksCredential } from "./credentials.js";
@@ -242,13 +242,11 @@ export default function databricks(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
-      const res = await credentialRequest(ctx, databricksCredential, {
+      const res = await credentialOk(ctx, databricksCredential, "databricks", {
         target: "workspace",
         path: `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.filePath)}`,
         method: "HEAD",
       });
-      if (!res.ok)
-        throw new Error(`databricks: request failed (HTTP ${res.status})`);
       return {
         filePath: p.filePath,
         contentLength: res.headers.get("content-length"),
