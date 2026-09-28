@@ -1,5 +1,9 @@
 import { AuthError } from "../auth/errors.js";
-import type { CredentialTarget, HttpMethod } from "./types.js";
+import type {
+  CredentialAuthentication,
+  CredentialTarget,
+  HttpMethod,
+} from "./types.js";
 
 export const HTTP_METHODS: readonly HttpMethod[] = [
   "GET",
@@ -93,19 +97,42 @@ function safePath(path: string): void {
   }
 }
 
+/** Headers a method's authentication sets, lowercased; callers never set them. */
+export function injectedHeaders(auth: CredentialAuthentication): string[] {
+  if (auth.kind === "oauth2") return ["authorization"];
+  return auth.placements.flatMap((placement) =>
+    placement.in === "header"
+      ? [headerName(placement.name)]
+      : placement.in === "basic"
+        ? ["authorization"]
+        : [],
+  );
+}
+
+/** Query parameters a method's authentication sets; callers never set them. */
+export function injectedParams(auth: CredentialAuthentication): string[] {
+  if (auth.kind === "oauth2") return [];
+  return auth.placements.flatMap((placement) =>
+    placement.in === "query" ? [placement.name] : [],
+  );
+}
+
 /**
  * Query parameters only the transport may set: common credential names,
- * and the method's own declared query key. Compared case-insensitively,
- * since providers differ in how they match parameter names.
+ * and the method's own placed query parameters. Compared
+ * case-insensitively, since providers differ in how they match names.
  */
-export function refuseCredentialParams(url: URL, declared?: string): void {
+export function refuseCredentialParams(
+  url: URL,
+  declared: readonly string[] = [],
+): void {
   const reserved = [
     "access_token",
     "refresh_token",
     "client_secret",
     "api_key",
     "authorization",
-    ...(declared === undefined ? [] : [declared.toLowerCase()]),
+    ...declared.map((name) => name.toLowerCase()),
   ];
   for (const name of url.searchParams.keys())
     if (reserved.includes(name.toLowerCase()))

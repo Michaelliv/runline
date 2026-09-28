@@ -1,13 +1,13 @@
 import {
   type ActionContext,
   AuthError,
-  BasicSecretSchema,
   type CredentialDeclaration,
   type CredentialProbe,
   type CredentialTarget,
   type HttpMethod,
   type LocalSecretPart,
-  SecretSchema,
+  type SecretPlacement,
+  staticSecretSchema,
 } from "runline";
 import * as t from "typebox";
 import { credentialBroker } from "./credentialAdapter.js";
@@ -25,15 +25,49 @@ import { credentialBroker } from "./credentialAdapter.js";
  */
 type LocalSource = string | { value: string } | { concat: LocalSecretPart[] };
 
+/**
+ * Shorthands for the common single-secret placements. Each names the
+ * method, so a stored selection keeps its method name.
+ */
 type StaticAuth =
   | { kind: "bearer" }
   | { kind: "apiKey"; header: string; prefix?: string }
-  | { kind: "queryKey"; param: string };
+  | { kind: "queryKey"; param: string }
+  | { kind: "basic" };
+
+/** A shorthand's parts and placements. */
+function placementsOf(auth: StaticAuth): {
+  parts: string[];
+  placements: SecretPlacement[];
+} {
+  if (auth.kind === "basic")
+    return {
+      parts: ["username", "password"],
+      placements: [{ in: "basic", username: "username", password: "password" }],
+    };
+  const placement: SecretPlacement =
+    auth.kind === "bearer"
+      ? {
+          in: "header",
+          part: "secret",
+          name: "Authorization",
+          prefix: "Bearer ",
+        }
+      : auth.kind === "queryKey"
+        ? { in: "query", part: "secret", name: auth.param }
+        : {
+            in: "header",
+            part: "secret",
+            name: auth.header,
+            ...(auth.prefix === undefined ? {} : { prefix: auth.prefix }),
+          };
+  return { parts: ["secret"], placements: [placement] };
+}
 
 export interface StaticCredentialSpec {
   /** Credential type id; one per provider, shared by its plugins. */
   id: string;
-  auth: StaticAuth | { kind: "basic" };
+  auth: StaticAuth;
   /** Where a CLI connection keeps the secret: `secret` for key kinds, `username` and `password` for basic. */
   local:
     | { secret: LocalSource }
@@ -50,14 +84,15 @@ export interface StaticCredentialSpec {
 /**
  * A static-key plugin's declaration. The secret lives in one structured
  * `credential` field — `{ secret }`, or `{ username, password }` for basic —
- * and the method is named for the kind, so every static declaration has the
- * same shape. A host stores the structured field; the CLI's flat fields are
- * named by `local`.
+ * and the method is named for the shorthand, so every static declaration
+ * has the same shape. A host stores the structured field; the CLI's flat
+ * fields are named by `local`.
  */
 export function staticCredential(
   spec: StaticCredentialSpec,
 ): CredentialDeclaration {
   const field = "credential";
+  const { parts, placements } = placementsOf(spec.auth);
   const localSecret = Object.fromEntries(
     Object.entries(spec.local).map(([key, source]: [string, LocalSource]) => [
       key,
@@ -70,13 +105,10 @@ export function staticCredential(
       methods: {
         [spec.auth.kind]: {
           schema: t.Object(
-            {
-              [field]:
-                spec.auth.kind === "basic" ? BasicSecretSchema : SecretSchema,
-            },
+            { [field]: staticSecretSchema(parts) },
             { additionalProperties: false },
           ),
-          authentication: { ...spec.auth, field },
+          authentication: { kind: "static", field, parts, placements },
           targets:
             typeof spec.targets === "function"
               ? spec.targets(config)

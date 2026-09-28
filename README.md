@@ -488,15 +488,22 @@ const rl = Runline.create({
 
 The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application and JWT identity — never with anything the plugin's process sends.
 
-Each method's `authentication.field` names the one config field a host stores the secret in, in its kind's shape:
+Each method's `authentication.field` names the one config field a host stores the secret in. There are two kinds:
 
 | kind | stored shape | sent as |
 |---|---|---|
-| `bearer` | `{ secret }` (`SecretSchema`) | `Authorization: Bearer <secret>` |
-| `apiKey` | `{ secret }` (`SecretSchema`) | `<header>: <prefix><secret>` |
-| `queryKey` | `{ secret }` (`SecretSchema`) | `?<param>=<secret>`; callers may never supply `<param>` |
-| `basic` | `{ username, password }` (`BasicSecretSchema`) | `Authorization: Basic base64(username:password)` |
+| `static` | its named `parts`, each a string (`staticSecretSchema(parts)`) | each part through its `placements` |
 | `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection |
+
+A static placement is one of:
+
+| placement | sent as |
+|---|---|
+| `{ in: "header", part, name, prefix? }` | `<name>: <prefix><part>` |
+| `{ in: "query", part, name }` | `?<name>=<part>` |
+| `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
+
+Every header and query parameter a placement sets is reserved: a caller may never supply it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`).
 
 Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
 

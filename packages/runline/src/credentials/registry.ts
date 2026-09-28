@@ -7,13 +7,19 @@ import {
   bounded,
   HTTP_METHODS,
   headerName,
+  injectedHeaders,
+  injectedParams,
   refuseCredentialParams,
   resourceUrl,
   TARGET_RESPONSE_LIMIT_BYTES,
   TARGET_TIMEOUT_LIMIT_MS,
   targetBase,
 } from "./policy.js";
-import type { CredentialMethod, CredentialType } from "./types.js";
+import type {
+  CredentialAuthentication,
+  CredentialMethod,
+  CredentialType,
+} from "./types.js";
 
 /** Normalized grant storage; application registration remains host-owned. */
 export const OAuthTokensSchema = t.Object(
@@ -30,20 +36,16 @@ export const OAuthTokensSchema = t.Object(
   { additionalProperties: false },
 );
 
-/** Stored shape of a bearer, API-key or query-key secret. */
-export const SecretSchema = t.Object(
-  { secret: t.String({ minLength: 1 }) },
-  { additionalProperties: false },
-);
-
 /**
- * Stored shape of an HTTP Basic credential. Either part may be empty — many
- * APIs send a key as the username with no password, or the reverse.
+ * Stored shape of a static secret: exactly its named parts, each a string.
+ * A Basic part may be empty (a key as the username with no password, or
+ * the reverse); the transport refuses an empty part anywhere else.
  */
-export const BasicSecretSchema = t.Object(
-  { username: t.String(), password: t.String() },
-  { additionalProperties: false },
-);
+export function staticSecretSchema(parts: readonly string[]) {
+  return t.Object(Object.fromEntries(parts.map((part) => [part, t.String()])), {
+    additionalProperties: false,
+  });
+}
 
 export const OAuthGrantSchema = t.Object(
   {
@@ -55,6 +57,71 @@ export const OAuthGrantSchema = t.Object(
 
 function identifier(value: string): void {
   if (typeof value !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(value))
+    throw new AuthError("invalid_definition");
+}
+
+/**
+ * A static secret's parts and placements agree with each other and with
+ * the stored shape: every placement names a declared part, every part is
+ * placed, and no header, Basic slot or query parameter is claimed twice.
+ */
+function validateStatic(
+  auth: Extract<CredentialAuthentication, { kind: "static" }>,
+  stored: unknown,
+): void {
+  const parts = auth.parts;
+  if (
+    !Array.isArray(parts) ||
+    !parts.length ||
+    new Set(parts).size !== parts.length ||
+    !Array.isArray(auth.placements) ||
+    !auth.placements.length
+  )
+    throw new AuthError("invalid_definition");
+  for (const part of parts) identifier(part);
+  const shape = stored as {
+    type?: string;
+    additionalProperties?: boolean;
+    properties?: Record<string, unknown>;
+  };
+  if (
+    shape?.type !== "object" ||
+    shape.additionalProperties !== false ||
+    !shape.properties ||
+    Object.keys(shape.properties).sort().join() !== [...parts].sort().join()
+  )
+    throw new AuthError("invalid_definition");
+  const used = new Set<string>();
+  const place = (part: unknown) => {
+    if (typeof part !== "string" || !parts.includes(part))
+      throw new AuthError("invalid_definition");
+    used.add(part);
+  };
+  for (const placement of auth.placements) {
+    if (placement.in === "header") {
+      place(placement.part);
+      headerName(placement.name);
+      if (
+        placement.prefix !== undefined &&
+        (typeof placement.prefix !== "string" ||
+          !/^[\x21-\x7e][\x20-\x7e]{0,31}$/.test(placement.prefix))
+      )
+        throw new AuthError("invalid_definition");
+    } else if (placement.in === "query") {
+      place(placement.part);
+      identifier(placement.name);
+    } else if (placement.in === "basic") {
+      place(placement.username);
+      place(placement.password);
+    } else throw new AuthError("invalid_definition");
+  }
+  const headers = injectedHeaders(auth);
+  const params = injectedParams(auth).map((name) => name.toLowerCase());
+  if (
+    used.size !== parts.length ||
+    new Set(headers).size !== headers.length ||
+    new Set(params).size !== params.length
+  )
     throw new AuthError("invalid_definition");
 }
 
@@ -74,16 +141,9 @@ function validateMethod(method: CredentialMethod): void {
   identifier(auth.field);
   if (!Object.hasOwn(schema.properties, auth.field))
     throw new AuthError("invalid_definition");
-  let injected = "authorization";
-  if (auth.kind === "apiKey") {
-    injected = headerName(auth.header);
-    if (
-      auth.prefix !== undefined &&
-      (typeof auth.prefix !== "string" ||
-        !/^[\x21-\x7e][\x20-\x7e]{0,31}$/.test(auth.prefix))
-    )
-      throw new AuthError("invalid_definition");
-  } else if (auth.kind === "oauth2") {
+  if (auth.kind === "static")
+    validateStatic(auth, schema.properties[auth.field]);
+  else if (auth.kind === "oauth2") {
     identifier(auth.definition.id);
     identifier(auth.definition.provider);
     validateOAuth2ExchangePolicy(auth.definition.exchange);
@@ -137,9 +197,8 @@ function validateMethod(method: CredentialMethod): void {
       )
         throw new AuthError("invalid_definition");
     }
-  } else if (auth.kind === "queryKey") identifier(auth.param);
-  else if (auth.kind !== "bearer" && auth.kind !== "basic")
-    throw new AuthError("invalid_definition");
+  } else throw new AuthError("invalid_definition");
+  const injected = injectedHeaders(auth);
   if (!Object.keys(method.targets).length)
     throw new AuthError("invalid_definition");
   for (const [name, target] of Object.entries(method.targets)) {
@@ -162,7 +221,7 @@ function validateMethod(method: CredentialMethod): void {
       throw new AuthError("invalid_definition");
     for (const allowed of target.allowedHeaders ?? []) {
       const header = headerName(allowed);
-      if (header === injected || header === "authorization")
+      if (injected.includes(header) || header === "authorization")
         throw new AuthError("invalid_definition");
     }
     if (
@@ -177,7 +236,7 @@ function validateMethod(method: CredentialMethod): void {
     if (target.idempotency) {
       const header = headerName(target.idempotency.header);
       if (
-        header === injected ||
+        injected.includes(header) ||
         header === "authorization" ||
         !target.idempotency.methods.length ||
         target.idempotency.methods.some(
@@ -204,7 +263,7 @@ function validateMethod(method: CredentialMethod): void {
       throw new AuthError("invalid_definition");
     refuseCredentialParams(
       resourceUrl(target, probe.path),
-      auth.kind === "queryKey" ? auth.param : undefined,
+      injectedParams(auth),
     );
   }
 }

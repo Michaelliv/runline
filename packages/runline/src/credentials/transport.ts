@@ -12,19 +12,20 @@ import { sendResource } from "./http.js";
 import {
   bounded,
   headerName,
+  injectedHeaders,
+  injectedParams,
   refuseCredentialParams,
   resourceUrl,
   TARGET_RESPONSE_LIMIT_BYTES,
   TARGET_TIMEOUT_LIMIT_MS,
 } from "./policy.js";
 import {
-  BasicSecretSchema,
   type CredentialRegistry,
   OAuthGrantSchema,
-  SecretSchema,
   validateCredential,
 } from "./registry.js";
 import type {
+  CredentialAuthentication,
   CredentialBinding,
   CredentialMethod,
   CredentialProbeResult,
@@ -149,10 +150,7 @@ function secret(value: unknown): string {
  * RFC 7617 user-pass. A colon in the username, or any byte outside printable
  * ASCII, would make the header ambiguous or encoding-dependent.
  */
-function basicCredentials(value: unknown): string {
-  if (!Check(BasicSecretSchema, value))
-    throw new AuthError("invalid_credentials");
-  const { username, password } = value;
+function basicCredentials(username: string, password: string): string {
   if (
     (!username && !password) ||
     username.includes(":") ||
@@ -162,6 +160,48 @@ function basicCredentials(value: unknown): string {
   )
     throw new AuthError("invalid_credentials");
   return Buffer.from(`${username}:${password}`).toString("base64");
+}
+
+/** Applies a credential to one outgoing request's headers and URL. */
+type Signer = (headers: Headers, url: URL) => void;
+
+function bearer(token: string): Signer {
+  return (headers) => headers.set("authorization", `Bearer ${token}`);
+}
+
+/**
+ * A static secret's signer: every part checked before any IO, then each
+ * sent through its declared placements.
+ */
+function placeStatic(
+  auth: Extract<CredentialAuthentication, { kind: "static" }>,
+  stored: unknown,
+): Signer {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored))
+    throw new AuthError("invalid_credentials");
+  const parts = stored as Record<string, unknown>;
+  const part = (name: string) => {
+    const value = parts[name];
+    if (typeof value !== "string") throw new AuthError("invalid_credentials");
+    return value;
+  };
+  const steps = auth.placements.map((placement): Signer => {
+    if (placement.in === "basic") {
+      const value = basicCredentials(
+        part(placement.username),
+        part(placement.password),
+      );
+      return (headers) => headers.set("authorization", `Basic ${value}`);
+    }
+    const value = secret(part(placement.part));
+    if (placement.in === "query")
+      return (_headers, url) => url.searchParams.append(placement.name, value);
+    const name = headerName(placement.name);
+    return (headers) => headers.set(name, `${placement.prefix ?? ""}${value}`);
+  });
+  return (headers, url) => {
+    for (const step of steps) step(headers, url);
+  };
 }
 
 /**
@@ -308,12 +348,8 @@ export class CredentialTransport {
     )
       throw new AuthError("request_not_allowed");
     const auth = method.authentication;
-    refuseCredentialParams(
-      url,
-      auth.kind === "queryKey" ? auth.param : undefined,
-    );
-    const authHeader =
-      auth.kind === "apiKey" ? headerName(auth.header) : "authorization";
+    refuseCredentialParams(url, injectedParams(auth));
+    const reserved = injectedHeaders(auth);
     let headers: Headers;
     let body: Buffer | undefined;
     try {
@@ -327,7 +363,7 @@ export class CredentialTransport {
         const normalized = headerName(name);
         if (
           !allowed.has(normalized) ||
-          normalized === authHeader ||
+          reserved.includes(normalized) ||
           normalized === "authorization" ||
           normalized === target.idempotency?.header.toLowerCase() ||
           typeof value !== "string"
@@ -360,21 +396,11 @@ export class CredentialTransport {
     const replay =
       input.retry !== "never" &&
       (verb === "GET" || verb === "HEAD" || input.idempotencyKey !== undefined);
-    let { token, grant } = await this.authorize(binding, method);
-    const send = async (value: string) => {
+    let { sign, grant } = await this.authorize(binding, method);
+    const send = async (signer: Signer) => {
       const signed = new Headers(headers);
       const destination = new URL(url);
-      if (auth.kind === "queryKey")
-        destination.searchParams.append(auth.param, value);
-      else
-        signed.set(
-          authHeader,
-          auth.kind === "apiKey"
-            ? `${auth.prefix ?? ""}${value}`
-            : auth.kind === "basic"
-              ? `Basic ${value}`
-              : `Bearer ${value}`,
-        );
+      signer(signed, destination);
       return sendResource(destination.toString(), verb, signed, body, {
         fetch: this.options.fetch,
         timeoutMs: Math.min(
@@ -388,7 +414,7 @@ export class CredentialTransport {
         resumableUpload: target.resumableUpload,
       });
     };
-    const first = await send(token);
+    const first = await send(sign);
     if (
       auth.kind !== "oauth2" ||
       !grant ||
@@ -398,7 +424,7 @@ export class CredentialTransport {
       return first;
     // Exactly one replay, only after durable renewal (or a newer committed revision).
     grant = await this.renew(binding, method, grant.revision, true);
-    return send(secret(grant.tokens.accessToken));
+    return send(bearer(secret(grant.tokens.accessToken)));
   }
 
   /** Only a declared read-only probe runs. Results never contain provider text or secrets. */
@@ -428,20 +454,14 @@ export class CredentialTransport {
   private async authorize(
     binding: CredentialBinding,
     method: CredentialMethod,
-  ): Promise<{ token: string; grant?: OAuthGrant }> {
+  ): Promise<{ sign: Signer; grant?: OAuthGrant }> {
     const config = await this.read(binding, method);
     const auth = method.authentication;
-    if (auth.kind === "basic")
-      return { token: basicCredentials(config[auth.field]) };
-    if (auth.kind !== "oauth2") {
-      const stored = config[auth.field];
-      if (!Check(SecretSchema, stored))
-        throw new AuthError("invalid_credentials");
-      return { token: secret(stored.secret) };
-    }
+    if (auth.kind === "static")
+      return { sign: placeStatic(auth, config[auth.field]) };
     let grant = grantFrom(method, config);
     if (!fresh(grant))
       grant = await this.renew(binding, method, grant?.revision);
-    return { token: secret(grant?.tokens.accessToken), grant };
+    return { sign: bearer(secret(grant?.tokens.accessToken)), grant };
   }
 }

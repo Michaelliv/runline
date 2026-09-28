@@ -64,11 +64,10 @@ export {
 } from "./core/oauth.js";
 export { downloadResource } from "./credentials/http.js";
 export {
-  BasicSecretSchema,
   CredentialRegistry,
   OAuthGrantSchema,
   OAuthTokensSchema,
-  SecretSchema,
+  staticSecretSchema,
   validateCredential,
 } from "./credentials/registry.js";
 export type {
@@ -92,6 +91,7 @@ export type {
   LocalSecretPart,
   LocalSecretSource,
   OAuthGrant,
+  SecretPlacement,
 } from "./credentials/types.js";
 export type {
   ActionDefinition,

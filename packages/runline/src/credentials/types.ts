@@ -35,26 +35,33 @@ export interface CredentialTarget {
 }
 
 /**
+ * Where the transport puts a static secret's parts. Every name it sets is
+ * reserved: a caller may never supply that header or query parameter.
+ */
+export type SecretPlacement =
+  | {
+      in: "header";
+      part: string;
+      name: string;
+      /** Fixed scheme before the secret, e.g. "Bearer ", "SSWS " or "Bot ". */
+      prefix?: string;
+    }
+  | { in: "query"; part: string; name: string }
+  /** HTTP Basic in Authorization, from two parts; either may be empty. */
+  | { in: "basic"; username: string; password: string };
+
+/**
  * How a request is signed. `field` names the one top-level config field
- * holding the secret, in the kind's structured shape: `{ secret }` for
- * bearer, apiKey and queryKey (SecretSchema), `{ username, password }` for basic
- * (BasicSecretSchema), a revisioned OAuthGrant for oauth2.
+ * holding the secret: for `static`, a record of the named `parts`
+ * (`staticSecretSchema(parts)`), each sent through its placements; for
+ * `oauth2`, a revisioned OAuthGrant.
  */
 export type CredentialAuthentication =
   | {
-      kind: "apiKey";
+      kind: "static";
       field: string;
-      header: string;
-      /** Fixed scheme before the secret, e.g. "SSWS " or "Bot ". */
-      prefix?: string;
-    }
-  | { kind: "bearer"; field: string }
-  | { kind: "basic"; field: string }
-  | {
-      kind: "queryKey";
-      field: string;
-      /** Query parameter the transport adds; callers may never supply it. */
-      param: string;
+      parts: string[];
+      placements: SecretPlacement[];
     }
   | {
       kind: "oauth2";

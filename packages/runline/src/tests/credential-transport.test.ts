@@ -234,10 +234,6 @@ describe("constrained credential transport", () => {
       let calls = 0;
       const def = definition("bearer");
       placed(def, ["username", "password"], basic);
-      def.methods.selected.schema = t.Object(
-        { key: t.Unknown() },
-        { additionalProperties: false },
-      );
       const h = await harness(
         mock(() => {
           calls++;
