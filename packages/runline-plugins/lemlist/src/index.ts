@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { lemlistCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -142,7 +139,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `campaigns/${seg(campaignId)}/stats`,
+        `campaigns/${pathSegment(campaignId)}/stats`,
         undefined,
         { startDate, endDate, timezone } as Record<string, unknown>,
       );
@@ -191,7 +188,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `campaigns/${seg(campaignId)}/leads/${seg(email)}`,
+        `campaigns/${pathSegment(campaignId)}/leads/${pathSegment(email)}`,
         body,
         Object.keys(qs).length > 0 ? qs : undefined,
       );
@@ -206,7 +203,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `leads/${seg((input as { email: string }).email)}`,
+        `leads/${pathSegment((input as { email: string }).email)}`,
       );
     },
   });
@@ -224,7 +221,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `campaigns/${seg(campaignId)}/leads/${seg(email)}`,
+        `campaigns/${pathSegment(campaignId)}/leads/${pathSegment(email)}`,
         undefined,
         { action: "remove" },
       );
@@ -243,7 +240,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `campaigns/${seg(campaignId)}/leads/${seg(email)}`,
+        `campaigns/${pathSegment(campaignId)}/leads/${pathSegment(email)}`,
       );
     },
   });
@@ -276,7 +273,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `unsubscribes/${seg((input as { email: string }).email)}`,
+        `unsubscribes/${pathSegment((input as { email: string }).email)}`,
       );
     },
   });
@@ -289,7 +286,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `unsubscribes/${seg((input as { email: string }).email)}`,
+        `unsubscribes/${pathSegment((input as { email: string }).email)}`,
       );
     },
   });
@@ -318,7 +315,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `enrich/${seg((input as { enrichId: string }).enrichId)}`,
+        `enrich/${pathSegment((input as { enrichId: string }).enrichId)}`,
       );
     },
   });
@@ -336,12 +333,18 @@ export default function lemlist(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { leadId, findEmail, verifyEmail, linkedinEnrichment, findPhone } =
         input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `leads/${seg(leadId)}/enrich/`, {}, {
-        findEmail,
-        verifyEmail,
-        linkedinEnrichment,
-        findPhone,
-      } as Record<string, unknown>);
+      return apiRequest(
+        ctx,
+        "POST",
+        `leads/${pathSegment(leadId)}/enrich/`,
+        {},
+        {
+          findEmail,
+          verifyEmail,
+          linkedinEnrichment,
+          findPhone,
+        } as Record<string, unknown>,
+      );
     },
   });
 
