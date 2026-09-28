@@ -2,7 +2,10 @@
  * The Shift family signs through one declared credential. Its errors carry
  * what an agent needs to correct a call — the service's `code` and the
  * offending `param` — and never the provider's free-text message, which can
- * echo request data back.
+ * echo request data back. A Shift service that holds a request open
+ * (synchronous OCR extraction, transcription's /await long poll) declares
+ * its deadline on the credential's target, and the transport enforces
+ * exactly that declaration.
  */
 
 import assert from "node:assert/strict";
@@ -11,6 +14,8 @@ import {
   shiftCredential,
   shiftRequest,
 } from "../../../runline-plugins/_shared/shiftCredentials.js";
+import { shiftOcrCredential } from "../../../runline-plugins/shiftOcr/src/credentials.js";
+import { shiftTranscriptionCredential } from "../../../runline-plugins/shiftTranscription/src/shared.js";
 import shiftWork from "../../../runline-plugins/shiftWork/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
@@ -42,7 +47,7 @@ function reply(response: Response) {
   globalThis.fetch = (async () => response) as unknown as typeof fetch;
 }
 
-describe("Shift errors", () => {
+describe("Shift requests", () => {
   it("keep the service code and param, never the message", async () => {
     reply(
       Response.json(
@@ -110,5 +115,67 @@ describe("Shift errors", () => {
         { code: "request_not_allowed" },
       );
     assert.equal(calls, 0);
+  });
+});
+
+function target(declaration: typeof shiftOcrCredential) {
+  const { type, method } = declaration({});
+  return type.methods[method].targets.api;
+}
+
+describe("Shift targets that hold requests open", () => {
+  it("declare the long deadline on the target the transport enforces", () => {
+    // shiftOcr's synchronous extraction: 5 minutes.
+    assert.equal(target(shiftOcrCredential).timeoutMs, 5 * 60_000);
+    // shiftTranscription's /await: the 120 s server-held wait plus 60 s.
+    assert.equal(target(shiftTranscriptionCredential).timeoutMs, 180_000);
+  });
+
+  it("abort a stalled exchange at the target's declared deadline", async () => {
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener("abort", () =>
+              controller.error(init.signal?.reason),
+            );
+          },
+        }),
+      )) as typeof fetch;
+    await assert.rejects(
+      shiftRequest(
+        ctx,
+        shiftCredential({ timeoutMs: 20 }),
+        "shiftOcr",
+        "/v1/services/ocr/extract",
+        { method: "POST" },
+      ),
+      { code: "transport_failed" },
+    );
+  });
+
+  it("bound the response body at the target's declared ceiling", async () => {
+    let cancelled = false;
+    globalThis.fetch = (async () =>
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(1024));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      )) as typeof fetch;
+    await assert.rejects(
+      shiftRequest(
+        ctx,
+        shiftCredential({ maxResponseBytes: 4096 }),
+        "shiftOcr",
+        "/v1/services/ocr/providers",
+      ),
+      { code: "response_too_large" },
+    );
+    assert.ok(cancelled);
   });
 });
