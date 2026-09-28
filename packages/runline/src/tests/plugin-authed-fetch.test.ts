@@ -181,7 +181,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "steel/src/shared.ts",
   "storyblok/src/index.ts",
   "strapi/src/index.ts",
-  "stripe/src/index.ts",
   "supabase/src/index.ts",
   "syncromsp/src/index.ts",
   "tapfiliate/src/index.ts",
