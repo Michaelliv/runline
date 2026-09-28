@@ -433,6 +433,64 @@ describe("constrained credential transport", () => {
     assert.equal(calls, 0);
   });
 
+  it("inserts a path part as the first segment beneath the base, and may place the same part in Basic too", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["account", "token"],
+      [
+        { in: "path", part: "account", prefix: "bot" },
+        { in: "basic", username: "account", password: "token" },
+      ],
+    );
+    const seen: Array<{ url: string; auth: string | null }> = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          url,
+          auth: new Headers(init.headers).get("authorization"),
+        });
+        return Response.json({});
+      }),
+      { key: { account: "12:ab@c", token: "t" } },
+      def,
+    );
+    await h.transport.request(h.binding, { ...request, path: "items?q=a" });
+    await h.transport.request(h.binding, { ...request, path: "" });
+    assert.deepEqual(
+      seen.map((s) => s.url),
+      [
+        "https://api.example/v1/bot12:ab@c/items?q=a",
+        "https://api.example/v1/bot12:ab@c",
+      ],
+    );
+    assert.equal(
+      seen[0].auth,
+      `Basic ${Buffer.from("12:ab@c:t").toString("base64")}`,
+    );
+  });
+
+  it("refuses a path part that is not one segment, before any IO", async () => {
+    for (const account of ["a/b", "..", ".", "a?b", "a#b"]) {
+      const def = definition("bearer");
+      placed(def, ["account"], [{ in: "path", part: "account" }]);
+      let calls = 0;
+      const h = await harness(
+        mock(() => {
+          calls++;
+          return Response.json({});
+        }),
+        { key: { account } },
+        def,
+      );
+      await assert.rejects(
+        h.transport.request(h.binding, request),
+        errorCode("invalid_credentials"),
+      );
+      assert.equal(calls, 0);
+    }
+  });
+
   it("refuses an empty part in a header or query placement, before any IO", async () => {
     const def = definition("bearer");
     placed(

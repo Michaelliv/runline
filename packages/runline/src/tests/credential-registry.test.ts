@@ -277,6 +277,29 @@ describe("credential registry", () => {
           [{ in: "body", part: "secret", name: "api key" }],
         );
       },
+      // One path position: two path placements, or a prefix that is not
+      // plain path text.
+      (d) => {
+        d.methods.apiKey.schema = t.Object(
+          { key: staticSecretSchema(["a", "b"]) },
+          { additionalProperties: false },
+        );
+        d.methods.apiKey.authentication = placed(
+          ["a", "b"],
+          [
+            { in: "path", part: "a" },
+            { in: "path", part: "b" },
+          ],
+        );
+      },
+      ...["a/b", "a?", "a#", "a%2f", " ", 7].map(
+        (prefix) => (d: CredentialType) => {
+          d.methods.apiKey.authentication = placed(
+            ["secret"],
+            [{ in: "path", part: "secret", prefix: prefix as string }],
+          );
+        },
+      ),
       ...[0, -1, 1.5, 3_600_001, "60000"].map(
         (timeoutMs) => (d: CredentialType) => {
           d.methods.apiKey.targets.api.timeoutMs = timeoutMs as number;
