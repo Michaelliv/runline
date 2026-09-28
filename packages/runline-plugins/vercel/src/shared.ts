@@ -1,7 +1,7 @@
 import { AuthError } from "runline";
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialOk } from "../../_shared/credentials.js";
 import { vercelCredential } from "./credentials.js";
 
 export type Ctx = ActionContext;
@@ -26,7 +26,7 @@ export async function api(
       ([, value]) => value !== undefined && value !== null && value !== "",
     ),
   );
-  const res = await credentialRequest(ctx, vercelCredential, {
+  const res = await credentialOk(ctx, vercelCredential, "vercel", {
     target: "api",
     path: path.replace(/^\/+/, ""),
     method: options.method ?? "GET",
@@ -34,9 +34,6 @@ export async function api(
     ...(options.body !== undefined ? { json: options.body } : {}),
   });
   const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`vercel: request failed (HTTP ${res.status})`);
-  }
   if (!text) return {};
   const contentType = res.headers.get("content-type") ?? "";
   if (
