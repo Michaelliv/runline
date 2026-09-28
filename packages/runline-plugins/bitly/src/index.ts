@@ -1,46 +1,29 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { bitlyCredential } from "./credentials.js";
 
-const BASE_URL = "https://api-ssl.bitly.com/v4";
+/** A bitlink ID such as "bit.ly/22u3ypK": each of its segments encoded, its slash kept. */
+const bitlinkPath = (value: unknown) =>
+  String(value).split("/").map(encodeURIComponent).join("/");
 
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, bitlyCredential, "bitly", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Bitly API error ${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-function getToken(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.accessToken as string;
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function bitly(rl: RunlinePluginAPI) {
   rl.setName("bitly");
   rl.setVersion("0.1.0");
+  rl.setCredential(bitlyCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -92,7 +75,7 @@ export default function bitly(rl: RunlinePluginAPI) {
       if (group) body.group = group;
       if (tags) body.tags = tags;
       if (deeplinks) body.deeplinks = deeplinks;
-      return apiRequest(getToken(ctx), "POST", "/bitlinks", body);
+      return apiRequest(ctx, "POST", "bitlinks", body);
     },
   });
 
@@ -108,7 +91,7 @@ export default function bitly(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { bitlink } = input as { bitlink: string };
-      return apiRequest(getToken(ctx), "GET", `/bitlinks/${bitlink}`);
+      return apiRequest(ctx, "GET", `bitlinks/${bitlinkPath(bitlink)}`);
     },
   });
 
@@ -151,7 +134,7 @@ export default function bitly(rl: RunlinePluginAPI) {
       if (group) body.group = group;
       if (tags) body.tags = tags;
       if (deeplinks) body.deeplinks = deeplinks;
-      return apiRequest(getToken(ctx), "PATCH", `/bitlinks/${bitlink}`, body);
+      return apiRequest(ctx, "PATCH", `bitlinks/${bitlinkPath(bitlink)}`, body);
     },
   });
 }

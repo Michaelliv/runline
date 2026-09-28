@@ -1,17 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    domain: (c.domain as string).replace(/\/$/, ""),
-    userId: c.userId as string,
-    authToken: c.authToken as string,
-  };
-}
+import { credentialJson } from "../../_shared/credentials.js";
+import { rocketchatCredential } from "./credentials.js";
 
 export default function rocketchat(rl: RunlinePluginAPI) {
   rl.setName("rocketchat");
   rl.setVersion("0.1.0");
+  rl.setCredential(rocketchatCredential);
 
   rl.setConnectionSchema({
     domain: {
@@ -67,7 +61,6 @@ export default function rocketchat(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const conn = getConn(ctx);
       const body: Record<string, unknown> = {
         channel: p.channel,
         text: p.text,
@@ -77,18 +70,13 @@ export default function rocketchat(rl: RunlinePluginAPI) {
       if (p.avatar) body.avatar = p.avatar;
       if (p.attachments) body.attachments = p.attachments;
 
-      const res = await fetch(`${conn.domain}/api/v1/chat.postMessage`, {
+      return credentialJson(ctx, rocketchatCredential, "rocketchat", {
+        target: "api",
+        path: "chat.postMessage",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Auth-Token": conn.authToken,
-          "X-User-Id": conn.userId,
-        },
-        body: JSON.stringify(body),
+        headers: { "X-User-Id": String(ctx.connection.config.userId ?? "") },
+        json: body,
       });
-      if (!res.ok)
-        throw new Error(`Rocket.Chat error ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 }

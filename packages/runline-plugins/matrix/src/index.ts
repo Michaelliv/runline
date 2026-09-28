@@ -1,38 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { matrixCredential } from "./credentials.js";
 
-async function apiRequest(
-  homeserver: string,
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${homeserver}/_matrix/client/r0${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null && v !== "")
-        url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, matrixCredential, "matrix", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=utf-8",
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Matrix API error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 function generateTxnId(): string {
@@ -42,6 +25,7 @@ function generateTxnId(): string {
 export default function matrix(rl: RunlinePluginAPI) {
   rl.setName("matrix");
   rl.setVersion("0.1.0");
+  rl.setCredential(matrixCredential);
 
   rl.setConnectionSchema({
     homeserverUrl: {
@@ -58,22 +42,13 @@ export default function matrix(rl: RunlinePluginAPI) {
     },
   });
 
-  const conn = (ctx: { connection: { config: Record<string, unknown> } }) => ({
-    homeserver: (ctx.connection.config.homeserverUrl as string).replace(
-      /\/$/,
-      "",
-    ),
-    token: ctx.connection.config.accessToken as string,
-  });
-
   // ── Account ─────────────────────────────────────────
 
   rl.registerAction("account.me", {
     access: "read",
     description: "Get info about the authenticated user",
     async execute(_input, ctx) {
-      const { homeserver, token } = conn(ctx);
-      return apiRequest(homeserver, token, "GET", "/account/whoami");
+      return apiRequest(ctx, "GET", "account/whoami");
     },
   });
 
@@ -97,10 +72,9 @@ export default function matrix(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name, preset, roomAlias } = input as Record<string, unknown>;
-      const { homeserver, token } = conn(ctx);
       const body: Record<string, unknown> = { name, preset };
       if (roomAlias) body.room_alias_name = roomAlias;
-      return apiRequest(homeserver, token, "POST", "/createRoom", body);
+      return apiRequest(ctx, "POST", "createRoom", body);
     },
   });
 
@@ -115,12 +89,10 @@ export default function matrix(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { homeserver, token } = conn(ctx);
       return apiRequest(
-        homeserver,
-        token,
+        ctx,
         "POST",
-        `/rooms/${encodeURIComponent((input as { roomIdOrAlias: string }).roomIdOrAlias)}/join`,
+        `rooms/${encodeURIComponent((input as { roomIdOrAlias: string }).roomIdOrAlias)}/join`,
       );
     },
   });
@@ -130,12 +102,10 @@ export default function matrix(rl: RunlinePluginAPI) {
     description: "Leave a room",
     inputSchema: { roomId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { homeserver, token } = conn(ctx);
       return apiRequest(
-        homeserver,
-        token,
+        ctx,
         "POST",
-        `/rooms/${encodeURIComponent((input as { roomId: string }).roomId)}/leave`,
+        `rooms/${encodeURIComponent((input as { roomId: string }).roomId)}/leave`,
       );
     },
   });
@@ -153,12 +123,10 @@ export default function matrix(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { roomId, userId } = input as Record<string, unknown>;
-      const { homeserver, token } = conn(ctx);
       return apiRequest(
-        homeserver,
-        token,
+        ctx,
         "POST",
-        `/rooms/${encodeURIComponent(roomId as string)}/invite`,
+        `rooms/${encodeURIComponent(roomId as string)}/invite`,
         { user_id: userId },
       );
     },
@@ -178,14 +146,12 @@ export default function matrix(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { roomId, userId, reason } = input as Record<string, unknown>;
-      const { homeserver, token } = conn(ctx);
       const body: Record<string, unknown> = { user_id: userId };
       if (reason) body.reason = reason;
       return apiRequest(
-        homeserver,
-        token,
+        ctx,
         "POST",
-        `/rooms/${encodeURIComponent(roomId as string)}/kick`,
+        `rooms/${encodeURIComponent(roomId as string)}/kick`,
         body,
       );
     },
@@ -228,7 +194,6 @@ export default function matrix(rl: RunlinePluginAPI) {
         messageFormat,
         fallbackText,
       } = input as Record<string, unknown>;
-      const { homeserver, token } = conn(ctx);
       const body: Record<string, unknown> = {
         msgtype: messageType,
         body: text,
@@ -240,10 +205,9 @@ export default function matrix(rl: RunlinePluginAPI) {
       }
       const txnId = generateTxnId();
       return apiRequest(
-        homeserver,
-        token,
+        ctx,
         "PUT",
-        `/rooms/${encodeURIComponent(roomId as string)}/send/m.room.message/${txnId}`,
+        `rooms/${encodeURIComponent(roomId as string)}/send/m.room.message/${txnId}`,
         body,
       );
     },
@@ -270,16 +234,14 @@ export default function matrix(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { homeserver, token } = conn(ctx);
 
       if (limit) {
         const qs: Record<string, unknown> = { dir: "b", limit };
         if (filter) qs.filter = filter;
         const data = (await apiRequest(
-          homeserver,
-          token,
+          ctx,
           "GET",
-          `/rooms/${encodeURIComponent(roomId as string)}/messages`,
+          `rooms/${encodeURIComponent(roomId as string)}/messages`,
           undefined,
           qs,
         )) as Record<string, unknown>;
@@ -295,10 +257,9 @@ export default function matrix(rl: RunlinePluginAPI) {
         if (from) qs.from = from;
         if (filter) qs.filter = filter;
         const data = (await apiRequest(
-          homeserver,
-          token,
+          ctx,
           "GET",
-          `/rooms/${encodeURIComponent(roomId as string)}/messages`,
+          `rooms/${encodeURIComponent(roomId as string)}/messages`,
           undefined,
           qs,
         )) as Record<string, unknown>;
@@ -325,12 +286,10 @@ export default function matrix(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { roomId, eventId } = input as Record<string, unknown>;
-      const { homeserver, token } = conn(ctx);
       return apiRequest(
-        homeserver,
-        token,
+        ctx,
         "GET",
-        `/rooms/${encodeURIComponent(roomId as string)}/event/${encodeURIComponent(eventId as string)}`,
+        `rooms/${encodeURIComponent(roomId as string)}/event/${encodeURIComponent(eventId as string)}`,
       );
     },
   });
@@ -358,15 +317,13 @@ export default function matrix(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { homeserver, token } = conn(ctx);
       const qs: Record<string, unknown> = {};
       if (membership) qs.membership = membership;
       if (notMembership) qs.not_membership = notMembership;
       const data = (await apiRequest(
-        homeserver,
-        token,
+        ctx,
         "GET",
-        `/rooms/${encodeURIComponent(roomId as string)}/members`,
+        `rooms/${encodeURIComponent(roomId as string)}/members`,
         undefined,
         qs,
       )) as Record<string, unknown>;

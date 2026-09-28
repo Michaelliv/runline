@@ -1,70 +1,47 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { GITHUB_API_VERSION, githubCredential } from "./credentials.js";
 
-async function apiRequest(
-  token: string,
-  baseUrl: string,
-  method: string,
-  endpoint: string,
+/** An owner, repo, or ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+/**
+ * A file path, ref, or branch name: each of its segments encoded, its
+ * slashes kept. The transport refuses encoded slashes inside one segment;
+ * GitHub routes nested names (feature/x) as literal path segments.
+ */
+const filePath = (value: unknown) =>
+  String(value).split("/").map(encodeURIComponent).join("/");
+
+function gh(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, githubCredential, "github", {
+    target: "api",
+    path,
     method,
+    query,
     headers: {
-      Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
-      "Content-Type": "application/json",
-      "X-GitHub-Api-Version": "2022-11-28",
+      "X-GitHub-Api-Version": GITHUB_API_VERSION,
     },
-  };
-  if (
-    body &&
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`GitHub API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  return {
-    token: cfg.token as string,
-    baseUrl: ((cfg.baseUrl as string) ?? "https://api.github.com").replace(
-      /\/$/,
-      "",
-    ),
-  };
-}
-
-function gh(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { token, baseUrl } = getConn(ctx);
-  return apiRequest(token, baseUrl, method, endpoint, body, qs);
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function github(rl: RunlinePluginAPI) {
   rl.setName("github");
   rl.setVersion("0.1.0");
+  rl.setCredential(githubCredential);
 
   rl.setConnectionSchema({
     token: {
@@ -108,7 +85,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/contents/${path}`,
+        `repos/${seg(owner)}/${seg(repo)}/contents/${filePath(path)}`,
         undefined,
         qs,
       );
@@ -152,7 +129,12 @@ export default function github(rl: RunlinePluginAPI) {
       };
       if (sha) body.sha = sha;
       if (branch) body.branch = branch;
-      return gh(ctx, "PUT", `/repos/${owner}/${repo}/contents/${path}`, body);
+      return gh(
+        ctx,
+        "PUT",
+        `repos/${seg(owner)}/${seg(repo)}/contents/${filePath(path)}`,
+        body,
+      );
     },
   });
 
@@ -189,7 +171,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "DELETE",
-        `/repos/${owner}/${repo}/contents/${path}`,
+        `repos/${seg(owner)}/${seg(repo)}/contents/${filePath(path)}`,
         body,
       );
     },
@@ -228,7 +210,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/contents/${path}`,
+        `repos/${seg(owner)}/${seg(repo)}/contents/${filePath(path)}`,
         undefined,
         qs,
       );
@@ -280,7 +262,7 @@ export default function github(rl: RunlinePluginAPI) {
       if (labels) b.labels = labels;
       if (assignees) b.assignees = assignees;
       if (milestone) b.milestone = milestone;
-      return gh(ctx, "POST", `/repos/${owner}/${repo}/issues`, b);
+      return gh(ctx, "POST", `repos/${seg(owner)}/${seg(repo)}/issues`, b);
     },
   });
 
@@ -302,7 +284,11 @@ export default function github(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { owner, repo, issueNumber } = input as Record<string, unknown>;
-      return gh(ctx, "GET", `/repos/${owner}/${repo}/issues/${issueNumber}`);
+      return gh(
+        ctx,
+        "GET",
+        `repos/${seg(owner)}/${seg(repo)}/issues/${seg(issueNumber)}`,
+      );
     },
   });
 
@@ -335,7 +321,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PATCH",
-        `/repos/${owner}/${repo}/issues/${issueNumber}`,
+        `repos/${seg(owner)}/${seg(repo)}/issues/${seg(issueNumber)}`,
         fields,
       );
     },
@@ -372,7 +358,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/issues/${issueNumber}/comments`,
+        `repos/${seg(owner)}/${seg(repo)}/issues/${seg(issueNumber)}/comments`,
         { body: commentBody },
       );
     },
@@ -409,7 +395,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "PUT",
-        `/repos/${owner}/${repo}/issues/${issueNumber}/lock`,
+        `repos/${seg(owner)}/${seg(repo)}/issues/${seg(issueNumber)}/lock`,
         body,
       );
       return { success: true };
@@ -468,7 +454,7 @@ export default function github(rl: RunlinePluginAPI) {
       if (draft !== undefined) b.draft = draft;
       if (prerelease !== undefined) b.prerelease = prerelease;
       if (targetCommitish) b.target_commitish = targetCommitish;
-      return gh(ctx, "POST", `/repos/${owner}/${repo}/releases`, b);
+      return gh(ctx, "POST", `repos/${seg(owner)}/${seg(repo)}/releases`, b);
     },
   });
 
@@ -486,7 +472,11 @@ export default function github(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { owner, repo, releaseId } = input as Record<string, unknown>;
-      return gh(ctx, "GET", `/repos/${owner}/${repo}/releases/${releaseId}`);
+      return gh(
+        ctx,
+        "GET",
+        `repos/${seg(owner)}/${seg(repo)}/releases/${seg(releaseId)}`,
+      );
     },
   });
 
@@ -515,7 +505,13 @@ export default function github(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (perPage) qs.per_page = perPage;
       if (page) qs.page = page;
-      return gh(ctx, "GET", `/repos/${owner}/${repo}/releases`, undefined, qs);
+      return gh(
+        ctx,
+        "GET",
+        `repos/${seg(owner)}/${seg(repo)}/releases`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -564,7 +560,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PATCH",
-        `/repos/${owner}/${repo}/releases/${releaseId}`,
+        `repos/${seg(owner)}/${seg(repo)}/releases/${seg(releaseId)}`,
         b,
       );
     },
@@ -584,7 +580,11 @@ export default function github(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { owner, repo, releaseId } = input as Record<string, unknown>;
-      await gh(ctx, "DELETE", `/repos/${owner}/${repo}/releases/${releaseId}`);
+      await gh(
+        ctx,
+        "DELETE",
+        `repos/${seg(owner)}/${seg(repo)}/releases/${seg(releaseId)}`,
+      );
       return { success: true };
     },
   });
@@ -645,7 +645,13 @@ export default function github(rl: RunlinePluginAPI) {
       if (until) qs.until = until;
       if (perPage) qs.per_page = perPage;
       if (page) qs.page = page;
-      return gh(ctx, "GET", `/repos/${owner}/${repo}/commits`, undefined, qs);
+      return gh(
+        ctx,
+        "GET",
+        `repos/${seg(owner)}/${seg(repo)}/commits`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -670,7 +676,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/commits/${encodeURIComponent(String(ref))}`,
+        `repos/${seg(owner)}/${seg(repo)}/commits/${filePath(ref)}`,
       );
     },
   });
@@ -692,7 +698,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/branches/${encodeURIComponent(String(branch))}`,
+        `repos/${seg(owner)}/${seg(repo)}/branches/${filePath(branch)}`,
       );
     },
   });
@@ -710,7 +716,7 @@ export default function github(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { owner, repo } = input as { owner: string; repo: string };
-      return gh(ctx, "GET", `/repos/${owner}/${repo}`);
+      return gh(ctx, "GET", `repos/${seg(owner)}/${seg(repo)}`);
     },
   });
 
@@ -727,7 +733,7 @@ export default function github(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { owner, repo } = input as { owner: string; repo: string };
-      return gh(ctx, "GET", `/repos/${owner}/${repo}/license`);
+      return gh(ctx, "GET", `repos/${seg(owner)}/${seg(repo)}/license`);
     },
   });
 
@@ -778,7 +784,13 @@ export default function github(rl: RunlinePluginAPI) {
       if (direction) qs.direction = direction;
       if (perPage) qs.per_page = perPage;
       if (page) qs.page = page;
-      return gh(ctx, "GET", `/repos/${owner}/${repo}/issues`, undefined, qs);
+      return gh(
+        ctx,
+        "GET",
+        `repos/${seg(owner)}/${seg(repo)}/issues`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -823,7 +835,13 @@ export default function github(rl: RunlinePluginAPI) {
       if (direction) qs.direction = direction;
       if (perPage) qs.per_page = perPage;
       if (page) qs.page = page;
-      return gh(ctx, "GET", `/repos/${owner}/${repo}/pulls`, undefined, qs);
+      return gh(
+        ctx,
+        "GET",
+        `repos/${seg(owner)}/${seg(repo)}/pulls`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -840,7 +858,11 @@ export default function github(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { owner, repo } = input as { owner: string; repo: string };
-      return gh(ctx, "GET", `/repos/${owner}/${repo}/traffic/popular/paths`);
+      return gh(
+        ctx,
+        "GET",
+        `repos/${seg(owner)}/${seg(repo)}/traffic/popular/paths`,
+      );
     },
   });
 
@@ -860,7 +882,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/traffic/popular/referrers`,
+        `repos/${seg(owner)}/${seg(repo)}/traffic/popular/referrers`,
       );
     },
   });
@@ -892,7 +914,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews/${reviewId}`,
+        `repos/${seg(owner)}/${seg(repo)}/pulls/${seg(pullNumber)}/reviews/${seg(reviewId)}`,
       );
     },
   });
@@ -918,7 +940,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
+        `repos/${seg(owner)}/${seg(repo)}/pulls/${seg(pullNumber)}/reviews`,
       );
     },
   });
@@ -958,7 +980,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews`,
+        `repos/${seg(owner)}/${seg(repo)}/pulls/${seg(pullNumber)}/reviews`,
         b,
       );
     },
@@ -997,7 +1019,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PUT",
-        `/repos/${owner}/${repo}/pulls/${pullNumber}/reviews/${reviewId}`,
+        `repos/${seg(owner)}/${seg(repo)}/pulls/${seg(pullNumber)}/reviews/${seg(reviewId)}`,
         { body: reviewBody },
       );
     },
@@ -1041,7 +1063,7 @@ export default function github(rl: RunlinePluginAPI) {
       if (sort) qs.sort = sort;
       if (perPage) qs.per_page = perPage;
       if (page) qs.page = page;
-      const endpoint = username ? `/users/${username}/repos` : "/user/repos";
+      const endpoint = username ? `users/${seg(username)}/repos` : "user/repos";
       return gh(ctx, "GET", endpoint, undefined, qs);
     },
   });
@@ -1072,7 +1094,7 @@ export default function github(rl: RunlinePluginAPI) {
       if (state) qs.state = state;
       if (sort) qs.sort = sort;
       if (perPage) qs.per_page = perPage;
-      return gh(ctx, "GET", "/user/issues", undefined, qs);
+      return gh(ctx, "GET", "user/issues", undefined, qs);
     },
   });
 
@@ -1107,7 +1129,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PUT",
-        `/repos/${owner}/${repo}/collaborators/${username}`,
+        `repos/${seg(owner)}/${seg(repo)}/collaborators/${seg(username)}`,
         body,
       );
     },
@@ -1147,7 +1169,7 @@ export default function github(rl: RunlinePluginAPI) {
       if (sort) qs.sort = sort;
       if (perPage) qs.per_page = perPage;
       if (page) qs.page = page;
-      return gh(ctx, "GET", `/orgs/${org}/repos`, undefined, qs);
+      return gh(ctx, "GET", `orgs/${seg(org)}/repos`, undefined, qs);
     },
   });
 
@@ -1169,7 +1191,7 @@ export default function github(rl: RunlinePluginAPI) {
       const data = (await gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/actions/workflows`,
+        `repos/${seg(owner)}/${seg(repo)}/actions/workflows`,
       )) as Record<string, unknown>;
       return data.workflows;
     },
@@ -1196,7 +1218,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/actions/workflows/${workflowId}`,
+        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}`,
       );
     },
   });
@@ -1237,7 +1259,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "POST",
-        `/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`,
+        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}/dispatches`,
         body,
       );
       return { success: true };
@@ -1265,7 +1287,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "PUT",
-        `/repos/${owner}/${repo}/actions/workflows/${workflowId}/enable`,
+        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}/enable`,
       );
       return { success: true };
     },
@@ -1292,7 +1314,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "PUT",
-        `/repos/${owner}/${repo}/actions/workflows/${workflowId}/disable`,
+        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}/disable`,
       );
       return { success: true };
     },
@@ -1319,7 +1341,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `/repos/${owner}/${repo}/actions/workflows/${workflowId}/timing`,
+        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}/timing`,
       );
     },
   });
