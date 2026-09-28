@@ -146,7 +146,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "nasa/src/index.ts",
   "netscalerAdc/src/index.ts",
   "nextcloud/src/index.ts",
-  "nocodb/src/index.ts",
   "node/src/index.ts",
   "npm/src/index.ts",
   "odoo/src/index.ts",
