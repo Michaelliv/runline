@@ -200,7 +200,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["pushbullet", "phase 2: not yet migrated"],
   ["pushcut", "phase 2: not yet migrated"],
   ["pushover", "body key: token travels in the form body"],
-  ["raindrop", "phase 2: not yet migrated"],
   ["recraft", "phase 3: not yet migrated"],
   [
     "reddit",
