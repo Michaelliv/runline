@@ -91,7 +91,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "salesforce",
     "dynamic host: the API origin comes from the token response's instance_url",
   ],
-  ["signl4", "path token: the team secret is the URL path"],
   [
     "steel",
     "WebSocket: the key rides in a wss:// CDP URL the transport cannot carry",
