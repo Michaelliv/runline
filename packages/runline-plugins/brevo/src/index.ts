@@ -1,37 +1,26 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { brevoCredential } from "./credentials.js";
 
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
-
-async function apiRequest(
+function apiRequest(
   ctx: ActionContext,
   method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const json =
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-      ? body
-      : undefined;
-  const res = await credentialRequest(ctx, brevoCredential, {
+  return credentialJson(ctx, brevoCredential, "brevo", {
     target: "api",
     path,
     method,
     query: qs,
-    ...(json !== undefined ? { json } : {}),
+    ...(body &&
+    Object.keys(body).length > 0 &&
+    method !== "GET" &&
+    method !== "DELETE"
+      ? { json: body }
+      : {}),
   });
-  if (!res.ok) throw new Error(`brevo: request failed (HTTP ${res.status})`);
-  if (res.status === 204 || res.headers.get("content-length") === "0")
-    return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
 }
 
 export default function brevo(rl: RunlinePluginAPI) {
@@ -114,7 +103,7 @@ export default function brevo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { identifier } = input as { identifier: string };
-      return apiRequest(ctx, "GET", `contacts/${seg(identifier)}`);
+      return apiRequest(ctx, "GET", `contacts/${pathSegment(identifier)}`);
     },
   });
 
@@ -196,7 +185,7 @@ export default function brevo(rl: RunlinePluginAPI) {
       if (attributes) body.attributes = attributes;
       if (listIds) body.listIds = listIds;
       if (unlinkListIds) body.unlinkListIds = unlinkListIds;
-      await apiRequest(ctx, "PUT", `contacts/${seg(identifier)}`, body);
+      await apiRequest(ctx, "PUT", `contacts/${pathSegment(identifier)}`, body);
       return { success: true };
     },
   });
@@ -213,7 +202,7 @@ export default function brevo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { identifier } = input as { identifier: string };
-      await apiRequest(ctx, "DELETE", `contacts/${seg(identifier)}`);
+      await apiRequest(ctx, "DELETE", `contacts/${pathSegment(identifier)}`);
       return { success: true };
     },
   });
@@ -259,7 +248,7 @@ export default function brevo(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "POST",
-        `contacts/attributes/${seg(category)}/${seg(name)}`,
+        `contacts/attributes/${pathSegment(category)}/${pathSegment(name)}`,
         body,
       );
       return { success: true };
@@ -294,7 +283,7 @@ export default function brevo(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `contacts/attributes/${seg(category)}/${seg(name)}`,
+        `contacts/attributes/${pathSegment(category)}/${pathSegment(name)}`,
         body,
       );
     },
@@ -312,7 +301,7 @@ export default function brevo(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `contacts/attributes/${seg(category)}/${seg(name)}`,
+        `contacts/attributes/${pathSegment(category)}/${pathSegment(name)}`,
       );
       return { success: true };
     },
@@ -454,7 +443,7 @@ export default function brevo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      await apiRequest(ctx, "DELETE", `senders/${seg(id)}`);
+      await apiRequest(ctx, "DELETE", `senders/${pathSegment(id)}`);
       return { success: true };
     },
   });
