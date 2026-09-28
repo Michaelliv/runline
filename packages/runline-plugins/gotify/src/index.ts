@@ -1,45 +1,29 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { gotifyCredential } from "./credentials.js";
 
-async function apiRequest(
-  url: string,
-  token: string,
-  method: string,
-  endpoint: string,
+/** A Gotify call on the app target (sending) or the client target (reading, deleting). */
+function apiRequest(
+  ctx: ActionContext,
+  target: "app" | "client",
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const fullUrl = new URL(`${url}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) fullUrl.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, gotifyCredential, "gotify", {
+    target,
+    path,
     method,
-    headers: {
-      "X-Gotify-Key": token,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(fullUrl.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Gotify API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function gotify(rl: RunlinePluginAPI) {
   rl.setName("gotify");
   rl.setVersion("0.1.0");
+  rl.setCredential(gotifyCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -84,13 +68,11 @@ export default function gotify(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const url = (ctx.connection.config.url as string).replace(/\/$/, "");
-      const token = ctx.connection.config.appApiToken as string;
       const body: Record<string, unknown> = { message };
       if (title) body.title = title;
       if (priority !== undefined) body.priority = priority;
       if (contentType) body.extras = { "client::display": { contentType } };
-      return apiRequest(url, token, "POST", "/message", body);
+      return apiRequest(ctx, "app", "POST", "message", body);
     },
   });
 
@@ -101,13 +83,11 @@ export default function gotify(rl: RunlinePluginAPI) {
       messageId: { type: "string", required: true, description: "Message ID" },
     },
     async execute(input, ctx) {
-      const url = (ctx.connection.config.url as string).replace(/\/$/, "");
-      const token = ctx.connection.config.clientApiToken as string;
       await apiRequest(
-        url,
-        token,
+        ctx,
+        "client",
         "DELETE",
-        `/message/${(input as { messageId: string }).messageId}`,
+        `message/${pathSegment((input as { messageId: string }).messageId)}`,
       );
       return { success: true };
     },
@@ -121,15 +101,13 @@ export default function gotify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const url = (ctx.connection.config.url as string).replace(/\/$/, "");
-      const token = ctx.connection.config.clientApiToken as string;
       const qs: Record<string, unknown> = {};
       if (limit) qs.limit = limit;
       const data = (await apiRequest(
-        url,
-        token,
+        ctx,
+        "client",
         "GET",
-        "/message",
+        "message",
         undefined,
         qs,
       )) as Record<string, unknown>;
