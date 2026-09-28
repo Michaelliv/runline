@@ -139,7 +139,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["msg91", "phase 3: not yet migrated"],
   ["nasa", "phase 3: not yet migrated"],
-  ["netscalerAdc", "phase 4: not yet migrated"],
   [
     "nextcloud",
     "WebDAV methods (PROPFIND, MKCOL, COPY, MOVE) the transport does not carry",
