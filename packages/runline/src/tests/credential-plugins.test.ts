@@ -235,11 +235,12 @@ for (const fixture of fixtures) {
       const selected = selection(fixture);
       new CredentialRegistry().register(selected.type);
       for (const source of Object.values(selected.localSecret ?? {}))
-        if ("field" in source)
-          assert.ok(
-            fixture.secrets.includes(source.field),
-            `${fixture.name} signs locally from ${source.field}, which its fixture does not list as a secret`,
-          );
+        for (const part of "concat" in source ? source.concat : [source])
+          if ("field" in part)
+            assert.ok(
+              fixture.secrets.includes(part.field),
+              `${fixture.name} signs locally from ${part.field}, which its fixture does not list as a secret`,
+            );
       const def = definition(fixture);
       const auth = selected.type.methods[selected.method].authentication;
       if (auth.kind === "oauth2" && def.oauth)

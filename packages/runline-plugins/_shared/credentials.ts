@@ -6,6 +6,7 @@ import {
   type CredentialProbe,
   type CredentialTarget,
   type HttpMethod,
+  type LocalSecretPart,
   SecretSchema,
 } from "runline";
 import * as t from "typebox";
@@ -18,8 +19,11 @@ import { credentialBroker } from "./credentialAdapter.js";
  * through their own factories (googleCredentials, microsoftCredentials).
  */
 
-/** A flat config field, or a fixed value such as Freshdesk's "X" password. */
-type LocalSource = string | { value: string };
+/**
+ * A flat config field, a fixed value such as Freshdesk's "X" password, or
+ * the two joined in order, such as Zendesk's `{email}/token` username.
+ */
+type LocalSource = string | { value: string } | { concat: LocalSecretPart[] };
 
 type StaticAuth =
   | { kind: "bearer" }

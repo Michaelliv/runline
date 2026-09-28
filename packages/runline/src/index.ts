@@ -89,6 +89,8 @@ export type {
   CredentialTarget,
   CredentialType,
   HttpMethod,
+  LocalSecretPart,
+  LocalSecretSource,
   OAuthGrant,
 } from "./credentials/types.js";
 export type {

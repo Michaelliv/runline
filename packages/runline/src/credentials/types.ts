@@ -91,11 +91,15 @@ export interface CredentialSelection {
   /**
    * How a process signing with its own flat connection config (the CLI)
    * assembles a static secret: each key of the kind's structured shape,
-   * from a named config field or a fixed value. Names and fixed values
-   * only, never a secret. Hosts that store the structured field ignore it.
+   * from a named config field, a fixed value, or the two joined in order
+   * (`{email}/token`). Names and fixed values only, never a secret. Hosts
+   * that store the structured field ignore it.
    */
-  localSecret?: Record<string, { field: string } | { value: string }>;
+  localSecret?: Record<string, LocalSecretSource>;
 }
+
+export type LocalSecretPart = { field: string } | { value: string };
+export type LocalSecretSource = LocalSecretPart | { concat: LocalSecretPart[] };
 
 /**
  * A plugin's statement of how a connection's config becomes its

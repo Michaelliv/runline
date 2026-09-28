@@ -36,9 +36,10 @@ function authorityOf(selection: CredentialSelection): string {
 }
 
 /**
- * A static secret's structured shape, from the flat fields or fixed values
- * the declaration names. Absent when any named field is missing, so the
- * transport refuses it as invalid_credentials before any IO.
+ * A static secret's structured shape, from the flat fields and fixed values
+ * the declaration names, joined in order where a part concatenates them.
+ * Absent when any named field is missing, so the transport refuses it as
+ * invalid_credentials before any IO.
  */
 function staticSecret(
   current: Readonly<Record<string, unknown>>,
@@ -47,9 +48,13 @@ function staticSecret(
   if (!sources) return undefined;
   const secret: Record<string, string> = {};
   for (const [key, source] of Object.entries(sources)) {
-    const value = "value" in source ? source.value : current[source.field];
-    if (typeof value !== "string") return undefined;
-    secret[key] = value;
+    let joined = "";
+    for (const part of "concat" in source ? source.concat : [source]) {
+      const value = "value" in part ? part.value : current[part.field];
+      if (typeof value !== "string") return undefined;
+      joined += value;
+    }
+    secret[key] = joined;
   }
   return secret;
 }
