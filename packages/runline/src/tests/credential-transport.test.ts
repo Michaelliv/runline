@@ -340,6 +340,99 @@ describe("constrained credential transport", () => {
     assert.equal(seen.length, 1);
   });
 
+  it("adds a body part to a JSON object or a form, and to the query when the request has no body", async () => {
+    const def = definition("bearer");
+    placed(def, ["key"], [{ in: "body", part: "key", name: "api_key" }]);
+    const seen: Array<{ url: string; body?: string; type: string | null }> = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          url,
+          body: init.body
+            ? Buffer.from(init.body as Uint8Array).toString()
+            : undefined,
+          type: new Headers(init.headers).get("content-type"),
+        });
+        return Response.json({});
+      }),
+      { key: { key: "k&1" } },
+      def,
+    );
+    await h.transport.request(h.binding, {
+      ...request,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ a: 1 }),
+    });
+    await h.transport.request(h.binding, {
+      ...request,
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "a=1",
+    });
+    await h.transport.request(h.binding, { ...request, path: "items?q=a" });
+    assert.deepEqual(JSON.parse(seen[0].body ?? ""), { a: 1, api_key: "k&1" });
+    assert.equal(seen[0].url, "https://api.example/v1/items");
+    assert.equal(seen[1].body, "a=1&api_key=k%261");
+    assert.equal(seen[1].url, "https://api.example/v1/items");
+    assert.equal(seen[2].body, undefined);
+    assert.deepEqual(Object.fromEntries(new URL(seen[2].url).searchParams), {
+      q: "a",
+      api_key: "k&1",
+    });
+  });
+
+  it("refuses a caller copy of a body part, or a body it cannot place it in, before reading credentials", async () => {
+    const def = definition("bearer");
+    placed(def, ["key"], [{ in: "body", part: "key", name: "token" }]);
+    let reads = 0;
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { key: "k" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    const json = { "Content-Type": "application/json" };
+    const form = { "Content-Type": "application/x-www-form-urlencoded" };
+    for (const input of [
+      { ...request, path: "items?TOKEN=evil" },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: '{"token":"evil"}',
+      },
+      { ...request, method: "POST" as const, headers: json, body: "[1]" },
+      { ...request, method: "POST" as const, headers: json, body: "not json" },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: form,
+        body: "token=evil",
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: { "Content-Type": "text/plain" },
+        body: "x",
+      },
+      { ...request, method: "POST" as const, body: "x" },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
   it("refuses an empty part in a header or query placement, before any IO", async () => {
     const def = definition("bearer");
     placed(
