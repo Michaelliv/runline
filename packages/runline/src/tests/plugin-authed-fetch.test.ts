@@ -206,7 +206,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "posthog/src/index.ts",
   "profitwell/src/index.ts",
   "pushbullet/src/index.ts",
-  "pushcut/src/index.ts",
   "pushover/src/index.ts",
   "quickbase/src/index.ts",
   "quickbooks/src/index.ts",
