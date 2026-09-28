@@ -1,10 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
-
-const BASE = "https://api.pushover.net/1";
+import { credentialJson } from "../../_shared/credentials.js";
+import { pushoverCredential } from "./credentials.js";
 
 export default function pushover(rl: RunlinePluginAPI) {
   rl.setName("pushover");
   rl.setVersion("0.1.0");
+  rl.setCredential(pushoverCredential);
 
   rl.setConnectionSchema({
     apiToken: {
@@ -14,9 +15,6 @@ export default function pushover(rl: RunlinePluginAPI) {
       env: "PUSHOVER_API_TOKEN",
     },
   });
-
-  const token = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiToken as string;
 
   rl.registerAction("message.push", {
     access: "write",
@@ -74,7 +72,6 @@ export default function pushover(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = {
-        token: token(ctx),
         user: p.userKey,
         message: p.message,
       };
@@ -89,21 +86,12 @@ export default function pushover(rl: RunlinePluginAPI) {
       if (p.expire) body.expire = p.expire;
       if (p.ttl) body.ttl = p.ttl;
 
-      const formBody = Object.entries(body)
-        .map(
-          ([k, v]) =>
-            `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-        )
-        .join("&");
-
-      const res = await fetch(`${BASE}/messages.json`, {
+      return credentialJson(ctx, pushoverCredential, "pushover", {
+        target: "api",
+        path: "messages.json",
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: formBody,
+        form: body,
       });
-      if (!res.ok)
-        throw new Error(`Pushover error ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 }
