@@ -9,19 +9,21 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-function run(config: Record<string, unknown>) {
+function run(
+  config: Record<string, unknown>,
+  action = "sms.send",
+  input: Record<string, unknown> = { from: "A", to: "+1", text: "t" },
+) {
   const { api, resolve } = createPluginAPI("mailjet");
   mailjet(api);
-  const found = resolve().actions.find((a) => a.name === "sms.send");
+  const found = resolve().actions.find((a) => a.name === action);
   assert.ok(found);
   const ctx: ActionContext = {
     connection: { name: "mj", plugin: "mailjet", config },
     log: { info() {}, warn() {}, error() {} },
     async updateConnection() {},
   };
-  return Promise.resolve(
-    found.execute({ from: "A", to: "+1", text: "t" }, ctx),
-  );
+  return Promise.resolve(found.execute(input, ctx));
 }
 
 describe("mailjet sms", () => {
@@ -47,5 +49,42 @@ describe("mailjet sms", () => {
     await assert.rejects(run({ apiKeyPublic: "p", apiKeyPrivate: "s" }), {
       code: "invalid_credentials",
     });
+  });
+});
+
+describe("mailjet email", () => {
+  const keys = { apiKeyPublic: "p", apiKeyPrivate: "s", sandboxMode: "true" };
+  const shared = {
+    fromEmail: "a@example.com",
+    fromName: "A",
+    toEmail: "b@example.com, c@example.com",
+    subject: "s",
+    cc: "d@example.com",
+    replyTo: "r@example.com",
+    priority: 2,
+    templateLanguage: false,
+  };
+  const common = {
+    From: { Email: "a@example.com", Name: "A" },
+    Subject: "s",
+    To: [{ Email: "b@example.com" }, { Email: "c@example.com" }],
+    Cc: [{ Email: "d@example.com" }],
+    ReplyTo: { Email: "r@example.com" },
+    TemplateLanguage: false,
+    Priority: 2,
+  };
+
+  it("builds one message shape for plain and template sends, in sandbox when configured", async () => {
+    const bodies: unknown[] = [];
+    globalThis.fetch = (async (_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Response.json({ Messages: [] });
+    }) as typeof fetch;
+    await run(keys, "email.send", { ...shared, textPart: "hi" });
+    await run(keys, "email.sendTemplate", { ...shared, templateId: 9 });
+    assert.deepEqual(bodies, [
+      { Messages: [{ ...common, TextPart: "hi" }], SandboxMode: true },
+      { Messages: [{ ...common, TemplateID: 9 }], SandboxMode: true },
+    ]);
   });
 });
