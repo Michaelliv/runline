@@ -11,6 +11,7 @@
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "../../_shared/credentials.js";
 import {
   googleCredential,
   googleJsonRequest,
@@ -189,7 +190,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       const res = await call<{ files?: ScriptFile[] }>(
         ctx,
         "GET",
-        `${SCRIPT_API}/projects/${p.scriptId}/content`,
+        `${SCRIPT_API}/projects/${pathSegment(p.scriptId)}/content`,
       );
       return { scriptId: p.scriptId, files: res.files ?? [] };
     },
@@ -214,7 +215,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       const res = await call<{ files?: ScriptFile[] }>(
         ctx,
         "GET",
-        `${SCRIPT_API}/projects/${p.scriptId}/content`,
+        `${SCRIPT_API}/projects/${pathSegment(p.scriptId)}/content`,
       );
       const file = (res.files ?? []).find((f) => f.name === p.name);
       if (!file)
@@ -248,7 +249,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       const cur = await call<{ files?: ScriptFile[] }>(
         ctx,
         "GET",
-        `${SCRIPT_API}/projects/${p.scriptId}/content`,
+        `${SCRIPT_API}/projects/${pathSegment(p.scriptId)}/content`,
       );
       const files = cur.files ?? [];
       const idx = files.findIndex((f) => f.name === p.name);
@@ -258,9 +259,14 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       const entry = { name: p.name, type, source: p.source };
       if (idx >= 0) files[idx] = entry;
       else files.push(entry);
-      await call(ctx, "PUT", `${SCRIPT_API}/projects/${p.scriptId}/content`, {
-        files,
-      });
+      await call(
+        ctx,
+        "PUT",
+        `${SCRIPT_API}/projects/${pathSegment(p.scriptId)}/content`,
+        {
+          files,
+        },
+      );
       return { scriptId: p.scriptId, updated: p.name, fileCount: files.length };
     },
   });
@@ -289,7 +295,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       const res = await call<{ files?: ScriptFile[] }>(
         ctx,
         "PUT",
-        `${SCRIPT_API}/projects/${p.scriptId}/content`,
+        `${SCRIPT_API}/projects/${pathSegment(p.scriptId)}/content`,
         { files: p.files },
       );
       return { scriptId: p.scriptId, fileCount: (res.files ?? []).length };
@@ -345,7 +351,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       const res = await call<{ versionNumber?: number; description?: string }>(
         ctx,
         "POST",
-        `${SCRIPT_API}/projects/${p.scriptId}/versions`,
+        `${SCRIPT_API}/projects/${pathSegment(p.scriptId)}/versions`,
         { description: p.description || "" },
       );
       return {
@@ -381,7 +387,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       const res = await call<{ deploymentId?: string; entryPoints?: unknown }>(
         ctx,
         "POST",
-        `${SCRIPT_API}/projects/${p.scriptId}/deployments`,
+        `${SCRIPT_API}/projects/${pathSegment(p.scriptId)}/deployments`,
         {
           versionNumber: p.versionNumber,
           manifestFileName: p.manifestFileName || "appsscript",
@@ -423,7 +429,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
           message?: string;
           details?: Array<{ errorMessage?: string }>;
         };
-      }>(ctx, "POST", `${SCRIPT_API}/scripts/${p.scriptId}:run`, {
+      }>(ctx, "POST", `${SCRIPT_API}/scripts/${pathSegment(p.scriptId)}:run`, {
         function: p.functionName,
         parameters: p.parameters ?? [],
         devMode: p.devMode === undefined ? true : p.devMode,

@@ -23,6 +23,7 @@
 import { writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "../../_shared/credentials.js";
 import {
   googleCredential,
   googleDownload,
@@ -87,7 +88,7 @@ function extractPresentationId(input: string): string {
   if (!input)
     throw new Error("googleSlides: presentationId or URL is required");
   const m = input.match(PRES_URL_REGEX);
-  return m ? m[1] : input;
+  return pathSegment(m ? m[1] : input);
 }
 
 // ─── Plugin ──────────────────────────────────────────────────────
@@ -332,7 +333,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       return slidesRequest(
         ctx,
         "GET",
-        `/presentations/${id}/pages/${p.pageObjectId}`,
+        `/presentations/${id}/pages/${pathSegment(p.pageObjectId)}`,
       );
     },
   });
@@ -369,7 +370,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       const res = (await slidesRequest(
         ctx,
         "GET",
-        `/presentations/${id}/pages/${p.pageObjectId}/thumbnail`,
+        `/presentations/${id}/pages/${pathSegment(p.pageObjectId)}/thumbnail`,
         undefined,
         qs,
       )) as { contentUrl: string; width?: number; height?: number };
