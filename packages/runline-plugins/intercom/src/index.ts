@@ -1,45 +1,35 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { intercomCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.intercom.io";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, intercomCredential, "intercom", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Intercom API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function intercom(rl: RunlinePluginAPI) {
   rl.setName("intercom");
   rl.setVersion("0.1.0");
+  rl.setCredential(intercomCredential);
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -48,9 +38,6 @@ export default function intercom(rl: RunlinePluginAPI) {
       env: "INTERCOM_ACCESS_TOKEN",
     },
   });
-
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   // ── Contact (unified leads + users in v2) ───────────
 
@@ -82,7 +69,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       if (phone) body.phone = phone;
       if (externalId) body.external_id = externalId;
       if (customAttributes) body.custom_attributes = customAttributes;
-      return apiRequest(tok(ctx), "POST", "/contacts", body);
+      return api(ctx, "POST", "contacts", body);
     },
   });
 
@@ -93,10 +80,10 @@ export default function intercom(rl: RunlinePluginAPI) {
       contactId: { type: "string", required: true, description: "Contact ID" },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        tok(ctx),
+      return api(
+        ctx,
         "GET",
-        `/contacts/${(input as { contactId: string }).contactId}`,
+        `contacts/${seg((input as { contactId: string }).contactId)}`,
       );
     },
   });
@@ -117,7 +104,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (limit) qs.per_page = limit;
       if (startingAfter) qs.starting_after = startingAfter;
-      return apiRequest(tok(ctx), "GET", "/contacts", undefined, qs);
+      return api(ctx, "GET", "contacts", undefined, qs);
     },
   });
 
@@ -143,7 +130,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       if (name) body.name = name;
       if (phone) body.phone = phone;
       if (customAttributes) body.custom_attributes = customAttributes;
-      return apiRequest(tok(ctx), "PUT", `/contacts/${contactId}`, body);
+      return api(ctx, "PUT", `contacts/${seg(contactId)}`, body);
     },
   });
 
@@ -154,10 +141,10 @@ export default function intercom(rl: RunlinePluginAPI) {
       contactId: { type: "string", required: true, description: "Contact ID" },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        tok(ctx),
+      return api(
+        ctx,
         "DELETE",
-        `/contacts/${(input as { contactId: string }).contactId}`,
+        `contacts/${seg((input as { contactId: string }).contactId)}`,
       );
     },
   });
@@ -181,7 +168,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       const { query, limit } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { query };
       if (limit) body.pagination = { per_page: limit };
-      return apiRequest(tok(ctx), "POST", "/contacts/search", body);
+      return api(ctx, "POST", "contacts/search", body);
     },
   });
 
@@ -213,7 +200,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       if (name) body.name = name;
       if (plan) body.plan = plan;
       if (customAttributes) body.custom_attributes = customAttributes;
-      return apiRequest(tok(ctx), "POST", "/companies", body);
+      return api(ctx, "POST", "companies", body);
     },
   });
 
@@ -228,10 +215,10 @@ export default function intercom(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        tok(ctx),
+      return api(
+        ctx,
         "GET",
-        `/companies/${(input as { companyId: string }).companyId}`,
+        `companies/${seg((input as { companyId: string }).companyId)}`,
       );
     },
   });
@@ -248,7 +235,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (limit) qs.per_page = limit;
       if (page) qs.page = page;
-      return apiRequest(tok(ctx), "GET", "/companies", undefined, qs);
+      return api(ctx, "GET", "companies", undefined, qs);
     },
   });
 
@@ -259,10 +246,10 @@ export default function intercom(rl: RunlinePluginAPI) {
       companyId: { type: "string", required: true, description: "Company ID" },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        tok(ctx),
+      return api(
+        ctx,
         "GET",
-        `/companies/${(input as { companyId: string }).companyId}/contacts`,
+        `companies/${seg((input as { companyId: string }).companyId)}/contacts`,
       );
     },
   });
