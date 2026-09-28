@@ -24,23 +24,18 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const bearer: SecretPlacement = {
-  in: "header",
-  part: "secret",
-  name: "Authorization",
-  prefix: "Bearer ",
-};
-const basic: SecretPlacement = {
-  in: "basic",
-  username: "username",
-  password: "password",
-};
 const header = (prefix: string): SecretPlacement => ({
   in: "header",
   part: "secret",
   name: "Authorization",
   prefix,
 });
+const bearer = header("Bearer ");
+const basic: SecretPlacement = {
+  in: "basic",
+  username: "username",
+  password: "password",
+};
 
 function declaration(
   placement: SecretPlacement,

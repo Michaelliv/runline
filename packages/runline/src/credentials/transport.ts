@@ -170,30 +170,23 @@ function bearer(token: string): Signer {
 }
 
 /**
- * A static secret's signer: every part checked before any IO, then each
- * sent through its declared placements.
+ * A static secret's signer, every part checked before any IO. `parts` has
+ * passed the method's schema, which the registry pins to exactly the
+ * declared parts, each a string.
  */
 function placeStatic(
   auth: Extract<CredentialAuthentication, { kind: "static" }>,
-  stored: unknown,
+  parts: Record<string, string>,
 ): Signer {
-  if (!stored || typeof stored !== "object" || Array.isArray(stored))
-    throw new AuthError("invalid_credentials");
-  const parts = stored as Record<string, unknown>;
-  const part = (name: string) => {
-    const value = parts[name];
-    if (typeof value !== "string") throw new AuthError("invalid_credentials");
-    return value;
-  };
   const steps = auth.placements.map((placement): Signer => {
     if (placement.in === "basic") {
       const value = basicCredentials(
-        part(placement.username),
-        part(placement.password),
+        parts[placement.username],
+        parts[placement.password],
       );
       return (headers) => headers.set("authorization", `Basic ${value}`);
     }
-    const value = secret(part(placement.part));
+    const value = secret(parts[placement.part]);
     if (placement.in === "query")
       return (_headers, url) => url.searchParams.append(placement.name, value);
     const name = headerName(placement.name);
@@ -458,7 +451,9 @@ export class CredentialTransport {
     const config = await this.read(binding, method);
     const auth = method.authentication;
     if (auth.kind === "static")
-      return { sign: placeStatic(auth, config[auth.field]) };
+      return {
+        sign: placeStatic(auth, config[auth.field] as Record<string, string>),
+      };
     let grant = grantFrom(method, config);
     if (!fresh(grant))
       grant = await this.renew(binding, method, grant?.revision);

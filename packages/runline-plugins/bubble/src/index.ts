@@ -185,7 +185,9 @@ export default function bubble(rl: RunlinePluginAPI) {
         const items = (resp.results as unknown[]) ?? [];
         results.push(...items);
         // Only a positive remaining count asks for another page.
-        if (!items.length || !((resp.remaining as number) > 0)) break;
+        const remaining = resp.remaining;
+        if (!items.length || typeof remaining !== "number" || remaining <= 0)
+          break;
         qs.cursor = (qs.cursor as number) + (qs.limit as number);
       }
       return results;

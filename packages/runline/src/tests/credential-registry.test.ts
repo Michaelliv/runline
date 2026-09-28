@@ -178,9 +178,20 @@ describe("credential registry", () => {
         d.methods.apiKey.schema = t.Object({ key: t.String() });
       },
       (d) => {
-        // The stored shape must hold exactly the declared parts.
+        // The stored shape must hold exactly the declared parts, as strings.
         d.methods.apiKey.schema = t.Object(
           { key: staticSecretSchema(["secret", "extra"]) },
+          { additionalProperties: false },
+        );
+      },
+      (d) => {
+        d.methods.apiKey.schema = t.Object(
+          {
+            key: t.Object(
+              { secret: t.Number() },
+              { additionalProperties: false },
+            ),
+          },
           { additionalProperties: false },
         );
       },
@@ -245,9 +256,9 @@ describe("credential registry", () => {
         );
       },
       (d) => {
-        d.methods.apiKey.authentication = {
-          ...placed(["secret"], [{ in: "nowhere", part: "secret" }] as never),
-        };
+        d.methods.apiKey.authentication = placed(["secret"], [
+          { in: "nowhere", part: "secret" },
+        ] as never);
       },
       ...[0, -1, 1.5, 3_600_001, "60000"].map(
         (timeoutMs) => (d: CredentialType) => {

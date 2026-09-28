@@ -68,7 +68,7 @@ export interface StaticCredentialSpec {
   /** Credential type id; one per provider, shared by its plugins. */
   id: string;
   auth: StaticAuth;
-  /** Where a CLI connection keeps the secret: `secret` for key kinds, `username` and `password` for basic. */
+  /** Where a CLI connection keeps each part: `secret` for the single-secret shorthands, `username` and `password` for basic. */
   local:
     | { secret: LocalSource }
     | { username: LocalSource; password: LocalSource };

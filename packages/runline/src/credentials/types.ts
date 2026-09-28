@@ -109,8 +109,8 @@ export interface CredentialSelection {
   jwtIdentity?: OAuthJwtIdentity;
   /**
    * How a process signing with its own flat connection config (the CLI)
-   * assembles a static secret: each key of the kind's structured shape,
-   * from a named config field, a fixed value, or the two joined in order
+   * assembles a static secret: each of its parts, from a named config
+   * field, a fixed value, or the two joined in order
    * (`{email}/token`). Names and fixed values only, never a secret. Hosts
    * that store the structured field ignore it.
    */

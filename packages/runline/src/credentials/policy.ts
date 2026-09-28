@@ -124,7 +124,7 @@ export function injectedParams(auth: CredentialAuthentication): string[] {
  */
 export function refuseCredentialParams(
   url: URL,
-  declared: readonly string[] = [],
+  declared: readonly string[],
 ): void {
   const reserved = [
     "access_token",

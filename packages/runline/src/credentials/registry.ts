@@ -55,6 +55,13 @@ export const OAuthGrantSchema = t.Object(
   { additionalProperties: false },
 );
 
+/** The shape of a strict object schema, as the registry inspects it. */
+type ObjectSchema = {
+  type?: string;
+  additionalProperties?: boolean;
+  properties?: Record<string, { type?: string }>;
+};
+
 function identifier(value: string): void {
   if (typeof value !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(value))
     throw new AuthError("invalid_definition");
@@ -62,8 +69,9 @@ function identifier(value: string): void {
 
 /**
  * A static secret's parts and placements agree with each other and with
- * the stored shape: every placement names a declared part, every part is
- * placed, and no header, Basic slot or query parameter is claimed twice.
+ * the stored shape: the stored field holds exactly the declared parts, each
+ * a string; every placement names a declared part, every part is placed,
+ * and no header or query parameter is claimed twice.
  */
 function validateStatic(
   auth: Extract<CredentialAuthentication, { kind: "static" }>,
@@ -79,16 +87,13 @@ function validateStatic(
   )
     throw new AuthError("invalid_definition");
   for (const part of parts) identifier(part);
-  const shape = stored as {
-    type?: string;
-    additionalProperties?: boolean;
-    properties?: Record<string, unknown>;
-  };
+  const shape = stored as ObjectSchema;
   if (
     shape?.type !== "object" ||
     shape.additionalProperties !== false ||
     !shape.properties ||
-    Object.keys(shape.properties).sort().join() !== [...parts].sort().join()
+    Object.keys(shape.properties).sort().join() !== [...parts].sort().join() ||
+    Object.values(shape.properties).some((part) => part.type !== "string")
   )
     throw new AuthError("invalid_definition");
   const used = new Set<string>();
@@ -126,11 +131,7 @@ function validateStatic(
 }
 
 function validateMethod(method: CredentialMethod): void {
-  const schema = method.schema as {
-    type?: string;
-    additionalProperties?: boolean;
-    properties?: Record<string, unknown>;
-  };
+  const schema = method.schema as ObjectSchema;
   if (
     schema.type !== "object" ||
     schema.additionalProperties !== false ||

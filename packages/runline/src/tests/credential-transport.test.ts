@@ -55,50 +55,27 @@ function definition(
   kind: "oauth2" | "bearer" | "apiKey" = "oauth2",
 ): CredentialType {
   const method: CredentialMethod = {
-    schema:
-      kind === "oauth2"
-        ? t.Object(
-            { grant: t.Optional(OAuthGrantSchema) },
-            { additionalProperties: false },
-          )
-        : t.Object(
-            { key: staticSecretSchema(["secret"]) },
-            { additionalProperties: false },
-          ),
-    authentication:
-      kind === "oauth2"
-        ? {
-            kind,
-            field: "grant",
-            renewal: "refresh",
-            definition: {
-              id: "example.oauth",
-              provider: "example",
-              refresh: {
-                url: "https://auth.example/token",
-                clientAuthentication: "none",
-              },
-              clientCredentials: {
-                url: "https://auth.example/token",
-                clientAuthentication: "client_secret_post",
-              },
-            },
-          }
-        : {
-            kind: "static",
-            field: "key",
-            parts: ["secret"],
-            placements: [
-              kind === "bearer"
-                ? {
-                    in: "header",
-                    part: "secret",
-                    name: "Authorization",
-                    prefix: "Bearer ",
-                  }
-                : { in: "header", part: "secret", name: "X-Api-Key" },
-            ],
-          },
+    schema: t.Object(
+      { grant: t.Optional(OAuthGrantSchema) },
+      { additionalProperties: false },
+    ),
+    authentication: {
+      kind: "oauth2",
+      field: "grant",
+      renewal: "refresh",
+      definition: {
+        id: "example.oauth",
+        provider: "example",
+        refresh: {
+          url: "https://auth.example/token",
+          clientAuthentication: "none",
+        },
+        clientCredentials: {
+          url: "https://auth.example/token",
+          clientAuthentication: "client_secret_post",
+        },
+      },
+    },
     targets: {
       api: {
         baseUrl: "https://api.example/v1/",
@@ -113,7 +90,27 @@ function definition(
       acceptedStatuses: [200],
     },
   };
-  return { id: "example", methods: { selected: method } };
+  const def: CredentialType = { id: "example", methods: { selected: method } };
+  if (kind === "bearer")
+    placed(
+      def,
+      ["secret"],
+      [
+        {
+          in: "header",
+          part: "secret",
+          name: "Authorization",
+          prefix: "Bearer ",
+        },
+      ],
+    );
+  if (kind === "apiKey")
+    placed(
+      def,
+      ["secret"],
+      [{ in: "header", part: "secret", name: "X-Api-Key" }],
+    );
+  return def;
 }
 function mock(
   handler: (url: string, init: RequestInit) => Promise<Response> | Response,
