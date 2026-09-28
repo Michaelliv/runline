@@ -26,12 +26,13 @@ async function paginateAll(
   path: string,
   dataKey: string,
   limit?: number,
+  extraQuery?: Record<string, unknown>,
 ): Promise<unknown[]> {
   const results: unknown[] = [];
   let pageToken: string | undefined;
 
   while (true) {
-    const qs: Record<string, unknown> = { page_size: 500 };
+    const qs: Record<string, unknown> = { ...extraQuery, page_size: 500 };
     if (pageToken) qs.page_token = pageToken;
 
     const data = (await apiRequest(ctx, "GET", path, undefined, qs)) as Record<
@@ -248,9 +249,13 @@ export default function affinity(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { term, limit } =
         (input as { term?: string; limit?: number }) ?? {};
-      const qs: Record<string, unknown> = {};
-      if (term) qs.term = term;
-      return paginateAll(ctx, "persons", "persons", limit);
+      return paginateAll(
+        ctx,
+        "persons",
+        "persons",
+        limit,
+        term ? { term } : undefined,
+      );
     },
   });
 
@@ -355,9 +360,13 @@ export default function affinity(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { term, limit } =
         (input as { term?: string; limit?: number }) ?? {};
-      const qs: Record<string, unknown> = {};
-      if (term) qs.term = term;
-      return paginateAll(ctx, "organizations", "organizations", limit);
+      return paginateAll(
+        ctx,
+        "organizations",
+        "organizations",
+        limit,
+        term ? { term } : undefined,
+      );
     },
   });
 
