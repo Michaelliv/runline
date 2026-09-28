@@ -1,6 +1,6 @@
 import { httpsBase, staticCredential } from "../../_shared/credentials.js";
 
-const DEFAULT_BASE = "https://api.parallel.ai";
+export const DEFAULT_BASE = "https://api.parallel.ai";
 
 /**
  * An API key, sent as the x-api-key header to the configured Parallel.ai
