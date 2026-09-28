@@ -118,10 +118,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["sendy", "body key: api_key travels in the form body"],
   [
-    "shiftOcr",
-    "deadline: extraction runs up to 5 minutes, beyond the transport's 120 s ceiling",
-  ],
-  [
     "shiftTranscription",
     "deadline: transcribe waits on /await for up to 120 s plus response time, past the transport's 120 s ceiling",
   ],

@@ -6,5 +6,5 @@ import { shiftClient } from "../../_shared/shiftCredentials.js";
  */
 export const { credential: shiftCrmCredential, request } = shiftClient(
   "shiftCrm",
-  "crm/access/me",
+  { probe: "crm/access/me" },
 );

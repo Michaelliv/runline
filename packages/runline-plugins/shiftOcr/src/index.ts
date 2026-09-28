@@ -2,13 +2,18 @@ import { readFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { type Ctx, request, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
+import {
+  type Ctx,
+  pathSegment,
+  STRICT_OBJECT,
+} from "../../_shared/shiftCloud.js";
 import {
   putThroughGrant,
   SIGNED_UPLOAD_MAX_BYTES,
   type SignedUploadGrant,
   statUploadFile,
 } from "../../_shared/shiftUpload.js";
+import { request, shiftOcrCredential } from "./credentials.js";
 
 /**
  * Shift OCR — text and structured-field extraction from images and
@@ -40,9 +45,6 @@ const DOCUMENT_TYPES: Record<string, string> = {
  * anything larger uploads to the object bucket instead.
  */
 const MAX_INLINE_BYTES = 20 * 1024 * 1024;
-
-/** Extraction runs synchronously; a long multi-page PDF takes minutes, not seconds. */
-const EXTRACT_TIMEOUT_MS = 5 * 60_000;
 
 interface OcrDocumentRef {
   type: "image" | "document";
@@ -96,7 +98,7 @@ async function documentFromPath(
   await putThroughGrant(created.upload, path, mediaType, sizeBytes);
   await request(
     ctx,
-    `/v1/services/objects/objects/${created.object.id}/complete`,
+    `/v1/services/objects/objects/${pathSegment(created.object.id)}/complete`,
     { method: "POST" },
   );
   return { type: "object", objectId: created.object.id };
@@ -122,6 +124,7 @@ function documentFromUrl(
 export default function shiftOcr(rl: RunlinePluginAPI) {
   rl.setName("shiftOcr");
   rl.setVersion("0.1.0");
+  rl.setCredential(shiftOcrCredential);
   rl.setConnectionSchema(
     t.Object({
       // Same Shift Labs API key as the shiftLabs plugin; the cloud
@@ -248,29 +251,25 @@ export default function shiftOcr(rl: RunlinePluginAPI) {
           ? await documentFromPath(ctx as Ctx, fields.path)
           : documentFromUrl(fields.url as string, fields.kind);
 
-      return await request(
-        ctx as Ctx,
-        "/v1/services/ocr/extract",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            document,
-            ...(fields.provider ? { provider: fields.provider } : {}),
-            ...(fields.model ? { model: fields.model } : {}),
-            ...(fields.pages ? { pages: fields.pages } : {}),
-            ...(fields.schema
-              ? {
-                  structured: {
-                    name: fields.schemaName ?? "extraction",
-                    schema: fields.schema,
-                    ...(fields.prompt ? { prompt: fields.prompt } : {}),
-                  },
-                }
-              : {}),
-          }),
-        },
-        EXTRACT_TIMEOUT_MS,
-      );
+      // The target's declared EXTRACT_TIMEOUT_MS covers the synchronous run.
+      return await request(ctx as Ctx, "/v1/services/ocr/extract", {
+        method: "POST",
+        body: JSON.stringify({
+          document,
+          ...(fields.provider ? { provider: fields.provider } : {}),
+          ...(fields.model ? { model: fields.model } : {}),
+          ...(fields.pages ? { pages: fields.pages } : {}),
+          ...(fields.schema
+            ? {
+                structured: {
+                  name: fields.schemaName ?? "extraction",
+                  schema: fields.schema,
+                  ...(fields.prompt ? { prompt: fields.prompt } : {}),
+                },
+              }
+            : {}),
+        }),
+      });
     },
   });
 
