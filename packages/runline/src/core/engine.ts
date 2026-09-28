@@ -4,6 +4,10 @@ import { Worker } from "node:worker_threads";
 import type { RunlineConfig } from "../config/types.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import type { ConnectionProvider } from "../connections/types.js";
+import type {
+  CredentialBroker,
+  CredentialBrokerCall,
+} from "../credentials/transport.js";
 import type { PluginRegistry } from "../plugin/registry.js";
 import {
   formatValidationError,
@@ -56,6 +60,11 @@ export interface ActionInvocation {
 export interface EngineHooks {
   /** Host-owned resolution and persistence. Defaults to process-local memory. */
   connectionProvider?: ConnectionProvider;
+  /**
+   * Host-signed requests: built per action call and handed to the action
+   * as `ctx.credentials`. Absent, plugins sign with their own connection.
+   */
+  credentialBroker?: (call: CredentialBrokerCall) => CredentialBroker;
   /**
    * Observer for every action invocation. Must not throw — but if it
    * does, the engine swallows it: observability never breaks a run.
@@ -531,6 +540,15 @@ export class ExecutionEngine {
     const ctx: ActionContext = {
       connection,
       context,
+      ...(this.hooks.credentialBroker
+        ? {
+            credentials: this.hooks.credentialBroker({
+              plugin: plugin.name,
+              action: action.name,
+              context,
+            }),
+          }
+        : {}),
       log: {
         info: (msg) => console.log(`[${plugin.name}] ${msg}`),
         warn: (msg) => console.warn(`[${plugin.name}] ${msg}`),

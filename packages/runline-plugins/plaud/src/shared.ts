@@ -7,7 +7,10 @@ import {
   OAuthGrantSchema,
 } from "runline";
 import * as t from "typebox";
-import { credentialRuntime } from "../../_shared/credentialAdapter.js";
+import {
+  credentialBroker,
+  credentialRuntime,
+} from "../../_shared/credentialAdapter.js";
 
 const BASE = "https://platform.plaud.ai/developer/api";
 
@@ -78,8 +81,9 @@ export async function request(
   ctx: ActionContext,
   path: string,
 ): Promise<Record<string, unknown>> {
-  const { binding, transport } = plaudRuntime(ctx);
-  const response = await transport.request(binding, { target: "api", path });
+  const response = await credentialBroker(ctx, () => plaudRuntime(ctx)).request(
+    { target: "api", path },
+  );
   if (!response.ok)
     throw new Error(`plaud: request failed (HTTP ${response.status})`);
   try {

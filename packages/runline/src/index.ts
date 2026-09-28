@@ -71,6 +71,8 @@ export {
 } from "./credentials/registry.js";
 export type {
   AuthenticatedRequest,
+  CredentialBroker,
+  CredentialBrokerCall,
   CredentialTransportOptions,
 } from "./credentials/transport.js";
 export { CredentialTransport } from "./credentials/transport.js";

@@ -4,7 +4,7 @@ import {
   downloadResource,
   type HttpMethod,
 } from "runline";
-import { credentialRuntime } from "./credentialAdapter.js";
+import { credentialBroker, credentialRuntime } from "./credentialAdapter.js";
 import {
   type GoogleAuthConfig,
   googleCredentialType,
@@ -44,7 +44,8 @@ export function googleRuntime(
   return runtime;
 }
 
-/** Trusted-runtime token compatibility only; resource consumers use googleResponse. */
+/** The local signer's token, for trusted in-process callers only: a brokered
+ *  host holds none to hand out. Resource consumers use googleResponse. */
 export async function googleAccessToken(
   ctx: ActionContext,
   pluginName: string,
@@ -87,14 +88,15 @@ export async function googleResponse(
     }
     path = `${separator < 0 ? path : path.slice(0, separator)}?${params}`;
   }
-  const { binding, transport } = googleRuntime(ctx, plugin, scopes);
-  return transport.request(binding, {
-    target,
-    path,
-    method: (init.method ?? "GET") as HttpMethod,
-    headers: init.headers,
-    body: init.body,
-  });
+  return credentialBroker(ctx, () => googleRuntime(ctx, plugin, scopes)).request(
+    {
+      target,
+      path,
+      method: (init.method ?? "GET") as HttpMethod,
+      headers: init.headers,
+      body: init.body,
+    },
+  );
 }
 
 export async function googleJsonRequest(
@@ -137,8 +139,9 @@ export async function googleProbe(
   plugin: string,
   scopes: string[],
 ) {
-  const { binding, transport } = googleRuntime(ctx, plugin, scopes);
-  return transport.probe(binding);
+  return credentialBroker(ctx, () =>
+    googleRuntime(ctx, plugin, scopes),
+  ).probe();
 }
 
 /** Only Google-issued thumbnail hosts; never attach credentials to signed URLs. */

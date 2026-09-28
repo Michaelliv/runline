@@ -36,6 +36,26 @@ export interface AuthenticatedRequest {
   retry?: "never";
 }
 
+/**
+ * Authenticated requests and probes for one connection, on behalf of one
+ * action call, signed by whoever holds its credentials. A host that keeps
+ * credentials outside the process running actions supplies one per call;
+ * the plugin never sees the token it is signed with.
+ */
+export interface CredentialBroker {
+  request(input: AuthenticatedRequest): Promise<Response>;
+  probe(): Promise<CredentialProbeResult>;
+}
+
+/** The action call a host builds a broker for. `context` is the per-run
+ *  context the embedder passed to `execute()`: host authority, never
+ *  action input. */
+export interface CredentialBrokerCall {
+  plugin: string;
+  action: string;
+  context?: unknown;
+}
+
 export interface CredentialTransportOptions {
   /** Mandatory trusted transport: enforce DNS/IP egress policy for token AND API requests. */
   fetch: typeof globalThis.fetch;

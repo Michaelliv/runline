@@ -4,7 +4,7 @@ import {
   type ActionContext,
   type HttpMethod,
 } from "runline";
-import { credentialRuntime } from "./credentialAdapter.js";
+import { credentialBroker, credentialRuntime } from "./credentialAdapter.js";
 import {
   microsoftCredentialType,
   microsoftMethod,
@@ -49,7 +49,8 @@ function runtime(ctx: ActionContext, plugin: string, scopes: string[]) {
   );
 }
 
-/** Compatibility token access uses the same grant runtime as resource requests. */
+/** The local signer's token, for trusted in-process callers only: a brokered
+ *  host holds none to hand out. Resource consumers use graphResponse. */
 export async function microsoftAccessToken(
   ctx: ActionContext,
   plugin: string,
@@ -64,8 +65,7 @@ export async function microsoftProbe(
   plugin: string,
   scopes: string[],
 ) {
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.probe(binding);
+  return credentialBroker(ctx, () => runtime(ctx, plugin, scopes)).probe();
 }
 
 export async function graphResponse(
@@ -79,8 +79,7 @@ export async function graphResponse(
 ): Promise<Response> {
   if (!path.startsWith("/") || path.startsWith("//"))
     throw new AuthError("request_not_allowed");
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.request(binding, {
+  return credentialBroker(ctx, () => runtime(ctx, plugin, scopes)).request({
     target: "graph",
     path: path.slice(1),
     method: method as HttpMethod,

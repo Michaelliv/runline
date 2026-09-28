@@ -5,9 +5,28 @@ import {
   CredentialTransport,
   type ActionContext,
   type CredentialBinding,
+  type CredentialBroker,
   type CredentialType,
   type OAuthGrant,
 } from "runline";
+
+/**
+ * Where one action call's authenticated requests go: the host's broker
+ * when it supplies one — the credentials then live with the host, and
+ * `local` is never built — else this process signs with its own
+ * connection.
+ */
+export function credentialBroker(
+  ctx: ActionContext,
+  local: () => ReturnType<typeof credentialRuntime>,
+): CredentialBroker {
+  if (ctx.credentials) return ctx.credentials;
+  const { binding, transport } = local();
+  return {
+    request: (input) => transport.request(binding, input),
+    probe: () => transport.probe(binding),
+  };
+}
 
 /** Flat CLI/env storage is a projection, not a second token cache or refresh engine. */
 export function credentialRuntime(
@@ -93,8 +112,8 @@ export function credentialRuntime(
   };
   const registry = new CredentialRegistry();
   registry.register(definition);
-  // Builtins run in the caller's trusted runtime. Vex must supply its privileged
-  // egress transport via the broker rather than execute these plugins server-side.
+  // The local signer: this process holds the credentials and egresses itself.
+  // A host that keeps them elsewhere supplies a broker, and this is never built.
   const transport = new CredentialTransport(registry, {
     fetch: globalThis.fetch,
     maxRequestBytes: 64 * 1024 * 1024,
