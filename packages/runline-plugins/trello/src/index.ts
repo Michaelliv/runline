@@ -1,45 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { trelloCredential } from "./credentials.js";
 
-const BASE = "https://api.trello.com/1";
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    apiKey: ctx.connection.config.apiKey as string,
-    token: ctx.connection.config.token as string,
-  };
-}
-
-async function apiRequest(
-  conn: { apiKey: string; token: string },
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}/${endpoint}`);
-  url.searchParams.set("key", conn.apiKey);
-  url.searchParams.set("token", conn.token);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, trelloCredential, "trello", {
+    target: "api",
+    path,
     method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET")
-    init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Trello error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function trello(rl: RunlinePluginAPI) {
   rl.setName("trello");
   rl.setVersion("0.1.0");
+  rl.setCredential(trelloCredential);
+
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -66,7 +51,7 @@ export default function trello(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "boards", {
+      return apiRequest(ctx, "POST", "boards", {
         name: p.name,
         desc: p.description,
       });
@@ -79,9 +64,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${(input as Record<string, unknown>).id}`,
+        `boards/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -101,7 +86,7 @@ export default function trello(rl: RunlinePluginAPI) {
       if (fields.name) qs.name = fields.name;
       if (fields.description !== undefined) qs.desc = fields.description;
       if (fields.closed !== undefined) qs.closed = fields.closed;
-      return apiRequest(getConn(ctx), "PUT", `boards/${id}`, undefined, qs);
+      return apiRequest(ctx, "PUT", `boards/${pathSegment(id)}`, undefined, qs);
     },
   });
 
@@ -111,9 +96,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `boards/${(input as Record<string, unknown>).id}`,
+        `boards/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -130,9 +115,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/members`,
+        `boards/${pathSegment(p.boardId)}/members`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -153,9 +138,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `boards/${p.boardId}/members/${p.memberId}`,
+        `boards/${pathSegment(p.boardId)}/members/${pathSegment(p.memberId)}`,
         undefined,
         { type: p.type },
       );
@@ -172,9 +157,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `boards/${p.boardId}/members/${p.memberId}`,
+        `boards/${pathSegment(p.boardId)}/members/${pathSegment(p.memberId)}`,
       );
     },
   });
@@ -195,7 +180,7 @@ export default function trello(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { idList: p.listId, name: p.name };
       if (p.description) body.desc = p.description;
       if (p.due) body.due = p.due;
-      return apiRequest(getConn(ctx), "POST", "cards", body);
+      return apiRequest(ctx, "POST", "cards", body);
     },
   });
 
@@ -205,9 +190,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `cards/${(input as Record<string, unknown>).id}`,
+        `cards/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -231,7 +216,7 @@ export default function trello(rl: RunlinePluginAPI) {
       if (fields.closed !== undefined) qs.closed = fields.closed;
       if (fields.idList) qs.idList = fields.idList;
       if (fields.due) qs.due = fields.due;
-      return apiRequest(getConn(ctx), "PUT", `cards/${id}`, undefined, qs);
+      return apiRequest(ctx, "PUT", `cards/${pathSegment(id)}`, undefined, qs);
     },
   });
 
@@ -241,9 +226,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `cards/${(input as Record<string, unknown>).id}`,
+        `cards/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -260,9 +245,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "POST",
-        `cards/${p.cardId}/actions/comments`,
+        `cards/${pathSegment(p.cardId)}/actions/comments`,
         { text: p.text },
       );
     },
@@ -279,9 +264,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `cards/${p.cardId}/actions/${p.commentId}/comments`,
+        `cards/${pathSegment(p.cardId)}/actions/${pathSegment(p.commentId)}/comments`,
         undefined,
         { text: p.text },
       );
@@ -298,9 +283,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `cards/${p.cardId}/actions/${p.commentId}/comments`,
+        `cards/${pathSegment(p.cardId)}/actions/${pathSegment(p.commentId)}/comments`,
       );
     },
   });
@@ -316,7 +301,7 @@ export default function trello(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "lists", {
+      return apiRequest(ctx, "POST", "lists", {
         idBoard: p.boardId,
         name: p.name,
       });
@@ -329,9 +314,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `lists/${(input as Record<string, unknown>).id}`,
+        `lists/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -346,9 +331,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/lists`,
+        `boards/${pathSegment(p.boardId)}/lists`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -364,9 +349,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `lists/${p.listId}/cards`,
+        `lists/${pathSegment(p.listId)}/cards`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -385,7 +370,7 @@ export default function trello(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (fields.name) qs.name = fields.name;
       if (fields.closed !== undefined) qs.closed = fields.closed;
-      return apiRequest(getConn(ctx), "PUT", `lists/${id}`, undefined, qs);
+      return apiRequest(ctx, "PUT", `lists/${pathSegment(id)}`, undefined, qs);
     },
   });
 
@@ -404,9 +389,9 @@ export default function trello(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { url: p.url };
       if (p.name) body.name = p.name;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "POST",
-        `cards/${p.cardId}/attachments`,
+        `cards/${pathSegment(p.cardId)}/attachments`,
         body,
       );
     },
@@ -422,9 +407,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `cards/${p.cardId}/attachments/${p.id}`,
+        `cards/${pathSegment(p.cardId)}/attachments/${pathSegment(p.id)}`,
       );
     },
   });
@@ -435,9 +420,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { cardId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `cards/${(input as Record<string, unknown>).cardId}/attachments`,
+        `cards/${pathSegment((input as Record<string, unknown>).cardId)}/attachments`,
       );
     },
   });
@@ -452,9 +437,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `cards/${p.cardId}/attachments/${p.id}`,
+        `cards/${pathSegment(p.cardId)}/attachments/${pathSegment(p.id)}`,
       );
     },
   });
@@ -470,9 +455,14 @@ export default function trello(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", `cards/${p.cardId}/checklists`, {
-        name: p.name,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `cards/${pathSegment(p.cardId)}/checklists`,
+        {
+          name: p.name,
+        },
+      );
     },
   });
 
@@ -482,9 +472,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `checklists/${(input as Record<string, unknown>).id}`,
+        `checklists/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -495,9 +485,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { cardId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `cards/${(input as Record<string, unknown>).cardId}/checklists`,
+        `cards/${pathSegment((input as Record<string, unknown>).cardId)}/checklists`,
       );
     },
   });
@@ -512,9 +502,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `cards/${p.cardId}/checklists/${p.id}`,
+        `cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.id)}`,
       );
     },
   });
@@ -529,9 +519,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "POST",
-        `checklists/${p.checklistId}/checkItems`,
+        `checklists/${pathSegment(p.checklistId)}/checkItems`,
         { name: p.name },
       );
     },
@@ -556,9 +546,9 @@ export default function trello(rl: RunlinePluginAPI) {
       if (p.state) qs.state = p.state;
       if (p.name) qs.name = p.name;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `cards/${p.cardId}/checkItem/${p.checkItemId}`,
+        `cards/${pathSegment(p.cardId)}/checkItem/${pathSegment(p.checkItemId)}`,
         undefined,
         qs,
       );
@@ -575,9 +565,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `cards/${p.cardId}/checkItem/${p.checkItemId}`,
+        `cards/${pathSegment(p.cardId)}/checkItem/${pathSegment(p.checkItemId)}`,
       );
     },
   });
@@ -599,7 +589,7 @@ export default function trello(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "labels", {
+      return apiRequest(ctx, "POST", "labels", {
         idBoard: p.boardId,
         name: p.name,
         color: p.color,
@@ -613,9 +603,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `labels/${(input as Record<string, unknown>).id}`,
+        `labels/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -626,9 +616,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `board/${(input as Record<string, unknown>).boardId}/labels`,
+        `board/${pathSegment((input as Record<string, unknown>).boardId)}/labels`,
       );
     },
   });
@@ -643,7 +633,13 @@ export default function trello(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "PUT", `labels/${id}`, undefined, fields);
+      return apiRequest(
+        ctx,
+        "PUT",
+        `labels/${pathSegment(id)}`,
+        undefined,
+        fields,
+      );
     },
   });
 
@@ -653,9 +649,9 @@ export default function trello(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `labels/${(input as Record<string, unknown>).id}`,
+        `labels/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -669,9 +665,14 @@ export default function trello(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", `cards/${p.cardId}/idLabels`, {
-        value: p.labelId,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `cards/${pathSegment(p.cardId)}/idLabels`,
+        {
+          value: p.labelId,
+        },
+      );
     },
   });
 
@@ -685,9 +686,9 @@ export default function trello(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `cards/${p.cardId}/idLabels/${p.labelId}`,
+        `cards/${pathSegment(p.cardId)}/idLabels/${pathSegment(p.labelId)}`,
       );
     },
   });

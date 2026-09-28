@@ -89,7 +89,6 @@ const UNBROKERED_FETCH = new Set([
   "supabase/src/index.ts",
   "telegram/src/index.ts",
   "travisci/src/index.ts",
-  "trello/src/index.ts",
   "twilio/src/index.ts",
   "unleashedSoftware/src/index.ts",
   "uptimerobot/src/index.ts",
