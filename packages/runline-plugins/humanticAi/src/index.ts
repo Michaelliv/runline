@@ -1,36 +1,29 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { humanticAiCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.humantic.ai/v1";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  url.searchParams.set("apikey", apiKey);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, humanticAiCredential, "humanticAi", {
+    target: "api",
+    path,
     method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET")
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Humantic AI error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function humanticAi(rl: RunlinePluginAPI) {
   rl.setName("humanticAi");
   rl.setVersion("0.1.0");
+  rl.setCredential(humanticAiCredential);
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -65,12 +58,7 @@ export default function humanticAi(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { userid: userId };
       if (linkedinUrl) body.linkedin_url = linkedinUrl;
       if (text) body.text = text;
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "POST",
-        "/user-profile/create",
-        body,
-      );
+      return apiRequest(ctx, "POST", "user-profile/create", body);
     },
   });
 
@@ -93,13 +81,7 @@ export default function humanticAi(rl: RunlinePluginAPI) {
       const { userId, persona } = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { userid: userId };
       if (persona) qs.persona = persona;
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "GET",
-        "/user-profile",
-        undefined,
-        qs,
-      );
+      return apiRequest(ctx, "GET", "user-profile", undefined, qs);
     },
   });
 
@@ -124,12 +106,7 @@ export default function humanticAi(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { userid: userId };
       if (text) body.text = text;
       if (linkedinUrl) body.linkedin_url = linkedinUrl;
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "POST",
-        "/user-profile/create",
-        body,
-      );
+      return apiRequest(ctx, "POST", "user-profile/create", body);
     },
   });
 }

@@ -1,45 +1,46 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { zulipCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    email: c.email as string,
-    apiKey: c.apiKey as string,
-  };
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
+function encodeForm(body: Record<string, unknown>): URLSearchParams {
+  const form = new URLSearchParams();
+  for (const [k, v] of Object.entries(body)) {
+    if (v !== undefined && v !== null)
+      form.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+  }
+  return form;
 }
 
-async function apiRequest(
-  conn: ReturnType<typeof getConn>,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = `${conn.url}/api/v1${endpoint}`;
-  const init: RequestInit = {
+  const form =
+    body && Object.keys(body).length > 0 ? encodeForm(body) : undefined;
+  // GET parameters ride in the query string; a GET carries no body.
+  const query = method === "GET" ? form : undefined;
+  return credentialJson(ctx, zulipCredential, "zulip", {
+    target: "api",
+    path: query ? `${path}?${query}` : path,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${conn.email}:${conn.apiKey}`)}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    const form = new URLSearchParams();
-    for (const [k, v] of Object.entries(body)) {
-      if (v !== undefined && v !== null)
-        form.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
-    }
-    init.body = form;
-  }
-  const res = await fetch(url, init);
-  if (!res.ok)
-    throw new Error(`Zulip error ${res.status}: ${await res.text()}`);
-  return res.json();
+    ...(form && !query
+      ? {
+          body: form.toString(),
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      : {}),
+  });
 }
 
 export default function zulip(rl: RunlinePluginAPI) {
   rl.setName("zulip");
   rl.setVersion("0.1.0");
+  rl.setCredential(zulipCredential);
   rl.setConnectionSchema({
     url: {
       type: "string",
@@ -76,7 +77,7 @@ export default function zulip(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "/messages", {
+      return apiRequest(ctx, "POST", "messages", {
         type: "private",
         to: p.to,
         content: p.content,
@@ -98,7 +99,7 @@ export default function zulip(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "/messages", {
+      return apiRequest(ctx, "POST", "messages", {
         type: "stream",
         to: p.stream,
         topic: p.topic,
@@ -113,9 +114,9 @@ export default function zulip(rl: RunlinePluginAPI) {
     inputSchema: { messageId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/messages/${(input as Record<string, unknown>).messageId}`,
+        `messages/${seg((input as Record<string, unknown>).messageId)}`,
       );
     },
   });
@@ -130,12 +131,7 @@ export default function zulip(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { messageId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(
-        getConn(ctx),
-        "PATCH",
-        `/messages/${messageId}`,
-        fields,
-      );
+      return apiRequest(ctx, "PATCH", `messages/${seg(messageId)}`, fields);
     },
   });
 
@@ -145,9 +141,9 @@ export default function zulip(rl: RunlinePluginAPI) {
     inputSchema: { messageId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/messages/${(input as Record<string, unknown>).messageId}`,
+        `messages/${seg((input as Record<string, unknown>).messageId)}`,
       );
     },
   });
@@ -167,12 +163,10 @@ export default function zulip(rl: RunlinePluginAPI) {
       if (p.includePublic !== undefined) body.include_public = p.includePublic;
       if (p.includeSubscribed !== undefined)
         body.include_subscribed = p.includeSubscribed;
-      const data = (await apiRequest(
-        getConn(ctx),
-        "GET",
-        "/streams",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "streams", body)) as Record<
+        string,
+        unknown
+      >;
       return data.streams;
     },
   });
@@ -183,9 +177,9 @@ export default function zulip(rl: RunlinePluginAPI) {
     inputSchema: {},
     async execute(_input, ctx) {
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        "/users/me/subscriptions",
+        "users/me/subscriptions",
       )) as Record<string, unknown>;
       return data.subscriptions;
     },
@@ -207,7 +201,7 @@ export default function zulip(rl: RunlinePluginAPI) {
         ]),
       };
       if (p.inviteOnly !== undefined) body.invite_only = p.inviteOnly;
-      return apiRequest(getConn(ctx), "POST", "/users/me/subscriptions", body);
+      return apiRequest(ctx, "POST", "users/me/subscriptions", body);
     },
   });
 
@@ -227,7 +221,7 @@ export default function zulip(rl: RunlinePluginAPI) {
         body.description = JSON.stringify(fields.description);
       if (fields.newName) body.new_name = JSON.stringify(fields.newName);
       if (fields.isPrivate !== undefined) body.is_private = fields.isPrivate;
-      return apiRequest(getConn(ctx), "PATCH", `/streams/${streamId}`, body);
+      return apiRequest(ctx, "PATCH", `streams/${seg(streamId)}`, body);
     },
   });
 
@@ -237,9 +231,9 @@ export default function zulip(rl: RunlinePluginAPI) {
     inputSchema: { streamId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/streams/${(input as Record<string, unknown>).streamId}`,
+        `streams/${seg((input as Record<string, unknown>).streamId)}`,
       );
     },
   });
@@ -252,9 +246,9 @@ export default function zulip(rl: RunlinePluginAPI) {
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/users/${(input as Record<string, unknown>).userId}`,
+        `users/${seg((input as Record<string, unknown>).userId)}`,
       );
     },
   });
@@ -264,7 +258,7 @@ export default function zulip(rl: RunlinePluginAPI) {
     description: "List all users",
     inputSchema: {},
     async execute(_input, ctx) {
-      const data = (await apiRequest(getConn(ctx), "GET", "/users")) as Record<
+      const data = (await apiRequest(ctx, "GET", "users")) as Record<
         string,
         unknown
       >;
@@ -283,7 +277,7 @@ export default function zulip(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "/users", {
+      return apiRequest(ctx, "POST", "users", {
         email: p.email,
         password: p.password,
         full_name: p.fullName,
@@ -305,7 +299,7 @@ export default function zulip(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if (fields.fullName) body.full_name = JSON.stringify(fields.fullName);
       if (fields.role !== undefined) body.role = fields.role;
-      return apiRequest(getConn(ctx), "PATCH", `/users/${userId}`, body);
+      return apiRequest(ctx, "PATCH", `users/${seg(userId)}`, body);
     },
   });
 
@@ -315,9 +309,9 @@ export default function zulip(rl: RunlinePluginAPI) {
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/users/${(input as Record<string, unknown>).userId}`,
+        `users/${seg((input as Record<string, unknown>).userId)}`,
       );
     },
   });

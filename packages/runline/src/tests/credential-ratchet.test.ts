@@ -60,12 +60,14 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "coingecko",
     "optional credential: a secret-free config cannot say whether to sign",
   ],
-  ["contentful", "phase 3: not yet migrated"],
   [
     "convertkit",
     "body key: api_secret travels in the JSON body of every write",
   ],
-  ["cortex", "phase 3: not yet migrated"],
+  [
+    "cortex",
+    "deadline: analyzer.execute holds /job/{id}/waitreport for a caller-chosen atMost timeout beyond the transport's 120 s ceiling",
+  ],
   ["currents", "phase 3: not yet migrated"],
   [
     "customerIo",
@@ -74,13 +76,15 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["deepl", "phase 3: not yet migrated"],
   ["demio", "two secrets per request: Api-Key and Api-Secret headers"],
   ["dhl", "phase 3: not yet migrated"],
-  ["discord", "phase 3: not yet migrated"],
   ["discourse", "phase 3: not yet migrated"],
   ["drift", "phase 3: not yet migrated"],
   ["dropcontact", "phase 3: not yet migrated"],
   ["egoi", "phase 3: not yet migrated"],
   ["elasticsearch", "phase 3: not yet migrated"],
-  ["elevenlabs", "phase 3: not yet migrated"],
+  [
+    "elevenlabs",
+    "deadline: audio generation defaults to a 300 s timeout (caller-tunable) and reads up to 100 MiB, past the transport's 120 s and 64 MiB ceilings",
+  ],
   ["emelia", "phase 3: not yet migrated"],
   [
     "erpnext",
@@ -117,12 +121,8 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "plain-http target: ssl defaults to false for LAN hosts, which the HTTPS-only broker refuses",
   ],
   ["hubspot", "phase 3: not yet migrated"],
-  ["humanticAi", "phase 3: not yet migrated"],
-  ["hunter", "phase 3: not yet migrated"],
   ["intercom", "phase 3: not yet migrated"],
   ["iterable", "phase 3: not yet migrated"],
-  ["lemlist", "phase 3: not yet migrated"],
-  ["lingvanex", "phase 3: not yet migrated"],
   ["lonescale", "phase 3: not yet migrated"],
   ["magento", "phase 3: not yet migrated"],
   ["mailcheck", "phase 3: not yet migrated"],
@@ -143,7 +143,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "mocean",
     "body key: mocean-api-key and mocean-api-secret travel in the form body",
   ],
-  ["msg91", "phase 3: not yet migrated"],
   ["nasa", "phase 3: not yet migrated"],
   ["netscalerAdc", "phase 4: not yet migrated"],
   [
@@ -163,14 +162,12 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["paddle", "body key: vendor_auth_code travels in the JSON body"],
   ["pagerduty", "phase 3: not yet migrated"],
   ["parallel", "phase 3: not yet migrated"],
-  ["paypal", "phase 3: not yet migrated"],
   ["peekalink", "phase 3: not yet migrated"],
   ["phantombuster", "phase 3: not yet migrated"],
   ["plivo", "phase 3: not yet migrated"],
   ["posthog", "body key: api_key travels in the JSON body"],
   ["profitwell", "phase 3: not yet migrated"],
   ["pushover", "body key: token travels in the form body"],
-  ["recraft", "phase 3: not yet migrated"],
   [
     "reddit",
     "optional credential: a secret-free config cannot say whether to sign",
@@ -232,7 +229,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["vero", "body key: auth_token travels in the form body"],
   ["vonage", "body key: api_key and api_secret travel in the form body"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
-  ["woocommerce", "phase 3: not yet migrated"],
   ["xai", "phase 3: not yet migrated"],
   ["yourls", "phase 3: not yet migrated"],
   ["zammad", "phase 3: not yet migrated"],
@@ -240,7 +236,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "zendesk",
     "composite secret: the Basic username joins the email config field with a fixed /token suffix",
   ],
-  ["zulip", "phase 3: not yet migrated"],
 ]);
 
 /**
