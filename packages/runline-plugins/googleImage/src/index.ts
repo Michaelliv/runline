@@ -20,7 +20,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import {
   readImageInput,
   type SavedMedia,
@@ -37,7 +37,7 @@ function generateContent(
 ): Promise<GeminiResponse> {
   return credentialJson(ctx, googleImageCredential, "googleImage", {
     target: "api",
-    path: `models/${encodeURIComponent(model)}:generateContent`,
+    path: `models/${pathSegment(model)}:generateContent`,
     method: "POST",
     json: body,
   }) as Promise<GeminiResponse>;
