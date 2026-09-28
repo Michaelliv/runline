@@ -215,7 +215,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "encoded path segment: repo slugs travel %2F-encoded, which the path policy refuses",
   ],
   ["trello", "two secrets per request: key and token query parameters"],
-  ["twake", "phase 3: not yet migrated"],
   ["twilio", "phase 3: not yet migrated"],
   ["typesafe", "phase 3: not yet migrated"],
   ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],

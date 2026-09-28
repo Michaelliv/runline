@@ -190,7 +190,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "together/src/index.ts",
   "travisci/src/index.ts",
   "trello/src/index.ts",
-  "twake/src/index.ts",
   "twilio/src/index.ts",
   "typesafe/src/shared.ts",
   "unleashedSoftware/src/index.ts",
