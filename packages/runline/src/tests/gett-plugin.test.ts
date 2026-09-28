@@ -61,6 +61,7 @@ interface Call {
   url: string;
   method: string;
   auth: string | null;
+  headers: Headers;
   redirect: RequestRedirect | undefined;
   body: Record<string, unknown>;
 }
@@ -76,6 +77,7 @@ function mock(routes: Route[]) {
       url,
       method: init?.method ?? "GET",
       auth: new Headers(init?.headers).get("authorization"),
+      headers: new Headers(init?.headers),
       redirect: init?.redirect,
       body: init?.body ? JSON.parse(String(init.body)) : {},
     });
@@ -361,6 +363,15 @@ describe("gett plugin surface", () => {
     ]);
     assert.equal(grants, 1, "parallel actions must share one refresh");
     assert.equal((await handle.read()).config.refreshToken, "refresh-2");
+    // The grant goes out as the app, with the refresh token as its bearer.
+    const grant = calls.find((c) => c.url.includes("auth/token"));
+    assert.equal(grant?.auth, "Bearer refresh-1");
+    assert.equal(grant?.headers.get("app-version"), "10.48.187");
+    assert.equal(grant?.headers.get("x-device-id"), "device-1");
+    assert.deepEqual(grant?.body, {
+      grant_type: "refresh_token",
+      refresh_token: "refresh-1",
+    });
     for (const call of calls.filter((c) => !c.url.includes("auth/token"))) {
       assert.equal(call.auth, "Bearer fresh");
     }
@@ -392,14 +403,13 @@ describe("gett plugin surface", () => {
     assert.deepEqual(r.missing, ["creditCardId (auto-discovered on login)"]);
   });
 
-  it("keeps a login that succeeded when its optional follow-ups fail", async () => {
+  it("keeps a login that succeeded when its optional follow-up fails", async () => {
     const { ctx, handle } = await context({
       refreshToken: undefined,
       accessToken: undefined,
       pendingTempCode: "temp-1",
     });
-    let grants = 0;
-    mock([
+    const calls = mock([
       [
         "auth/mfa/verify",
         {
@@ -410,13 +420,6 @@ describe("gett plugin surface", () => {
           },
         },
       ],
-      [
-        "auth/token",
-        () => {
-          grants++;
-          return new Response("", { status: 500 });
-        },
-      ],
       ["create_session", new Response("", { status: 503 })],
     ]);
     const r = (await action("account.verifyCard").execute(
@@ -425,11 +428,33 @@ describe("gett plugin surface", () => {
     )) as { connected: boolean; warnings: string[] };
     assert.equal(r.connected, true);
     assert.equal((await handle.read()).config.refreshToken, "r-new");
-    assert.ok(grants > 0);
-    // Both optional steps failed; neither is hidden and neither lost the login.
-    assert.equal(r.warnings.length, 2);
-    assert.match(r.warnings[0], /IL->GL token conversion failed/);
-    assert.match(r.warnings[1], /saved-card discovery failed/);
+    // The session call signs with the token the login just stored.
+    assert.equal(
+      calls.find((c) => c.url.includes("create_session"))?.auth,
+      "Bearer a-new",
+    );
+    assert.equal(r.warnings.length, 1);
+    assert.match(r.warnings[0], /saved-card discovery failed/);
+  });
+
+  it("runs the owner login only locally: under a host that keeps the grant, it refuses", async () => {
+    const { ctx } = await context({ refreshToken: undefined });
+    ctx.credentials = {
+      request: async () => new Response(null),
+      probe: async () => ({ outcome: "unverified" }),
+    };
+    const calls = mock([]);
+    for (const [name, input] of [
+      ["account.requestCode", {}],
+      ["account.verifyCode", { code: "1234" }],
+      ["account.verifyCard", { card: "4242" }],
+      ["account.refresh", {}],
+    ] as const)
+      await assert.rejects(
+        () => action(name).execute(input, ctx) as Promise<unknown>,
+        { code: "unsupported_operation" },
+      );
+    assert.equal(calls.length, 0);
   });
 
   it("previews a ride with a quote and books nothing", async () => {
