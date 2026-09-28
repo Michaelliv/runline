@@ -1,5 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  credentialOk,
+  pathSegment,
+} from "../../_shared/credentials.js";
 import { homeAssistantCredential } from "./credentials.js";
 
 /** One Home Assistant call: every endpoint is a path beneath /api/. */
@@ -234,9 +238,19 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return ha(ctx, "POST", "template", {
-        template: (input as { template: string }).template,
-      });
+      // /api/template answers the rendered value as plain text, not JSON.
+      const res = await credentialOk(
+        ctx,
+        homeAssistantCredential,
+        "homeAssistant",
+        {
+          target: "api",
+          path: "template",
+          method: "POST",
+          json: { template: (input as { template: string }).template },
+        },
+      );
+      return res.text();
     },
   });
 
