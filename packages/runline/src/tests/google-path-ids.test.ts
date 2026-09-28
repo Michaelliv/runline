@@ -1,7 +1,7 @@
 /**
  * Every caller-supplied ID in a Google plugin reaches its request path as
- * exactly one segment: a value that could re-aim the request (a query, a
- * fragment, another segment) is refused before anything is signed.
+ * exactly one segment: a separator is refused before anything is signed,
+ * and a query or fragment character is encoded into the segment.
  */
 
 import assert from "node:assert/strict";
@@ -126,12 +126,25 @@ const cases: Array<[string, PluginFunction, string, Record<string, unknown>]> =
 
 describe("Google path IDs", () => {
   for (const [name, plugin, action, input] of cases) {
-    it(`${name}.${action} refuses an ID that is not one segment`, async () => {
+    const id = Object.values(input).find(
+      (value): value is string =>
+        typeof value === "string" && /[?#/]/.test(value),
+    );
+    assert.ok(id);
+    it(`${name}.${action} keeps ${JSON.stringify(id)} within one segment`, async () => {
       const { result, requests } = run(name, plugin, action, input);
-      await assert.rejects(result, {
-        message: new RegExp(`^${name}: invalid `),
-      });
-      assert.deepEqual(requests, []);
+      if (id.includes("/")) {
+        await assert.rejects(result, { code: "request_not_allowed" });
+        assert.deepEqual(requests, []);
+        return;
+      }
+      await result;
+      assert.ok(requests.length > 0);
+      for (const request of requests)
+        assert.ok(
+          request.path.split("?")[0].includes(encodeURIComponent(id)),
+          request.path,
+        );
     });
   }
 

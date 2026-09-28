@@ -24,6 +24,7 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { renderEmailJsx } from "../../_shared/emailJsx.js";
+import { pathSegment } from "../../_shared/credentials.js";
 import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
@@ -31,7 +32,6 @@ import {
   NonEmptyString,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
-import { seg } from "../../_shared/provider.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -607,7 +607,7 @@ async function replyToMessage(
   const original = (await gmailRequest(
     ctx,
     "GET",
-    `/messages/${seg(messageId, "message ID", "gmail")}`,
+    `/messages/${pathSegment(messageId)}`,
     undefined,
     { format: "metadata", metadataHeaders: REPLY_METADATA_HEADERS },
   )) as GmailMessage;
@@ -965,7 +965,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       const raw = (await gmailRequest(
         ctx,
         "GET",
-        `/messages/${seg(p.id, "message ID", "gmail")}`,
+        `/messages/${pathSegment(p.id)}`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -997,7 +997,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "DELETE", `/messages/${seg(id, "message ID", "gmail")}`);
+      return gmailRequest(ctx, "DELETE", `/messages/${pathSegment(id)}`);
     },
   });
 
@@ -1007,7 +1007,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "POST", `/messages/${seg(id, "message ID", "gmail")}/trash`);
+      return gmailRequest(ctx, "POST", `/messages/${pathSegment(id)}/trash`);
     },
   });
 
@@ -1017,7 +1017,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "POST", `/messages/${seg(id, "message ID", "gmail")}/untrash`);
+      return gmailRequest(ctx, "POST", `/messages/${pathSegment(id)}/untrash`);
     },
   });
 
@@ -1027,7 +1027,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "POST", `/messages/${seg(id, "message ID", "gmail")}/modify`, {
+      return gmailRequest(ctx, "POST", `/messages/${pathSegment(id)}/modify`, {
         removeLabelIds: ["UNREAD"],
       });
     },
@@ -1039,7 +1039,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "POST", `/messages/${seg(id, "message ID", "gmail")}/modify`, {
+      return gmailRequest(ctx, "POST", `/messages/${pathSegment(id)}/modify`, {
         addLabelIds: ["UNREAD"],
       });
     },
@@ -1051,7 +1051,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
     async execute(input, ctx) {
       const { id, labelIds } = input as { id: string; labelIds: string[] };
-      return gmailRequest(ctx, "POST", `/messages/${seg(id, "message ID", "gmail")}/modify`, {
+      return gmailRequest(ctx, "POST", `/messages/${pathSegment(id)}/modify`, {
         addLabelIds: labelIds,
       });
     },
@@ -1063,7 +1063,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
     async execute(input, ctx) {
       const { id, labelIds } = input as { id: string; labelIds: string[] };
-      return gmailRequest(ctx, "POST", `/messages/${seg(id, "message ID", "gmail")}/modify`, {
+      return gmailRequest(ctx, "POST", `/messages/${pathSegment(id)}/modify`, {
         removeLabelIds: labelIds,
       });
     },
@@ -1082,7 +1082,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       return gmailRequest(
         ctx,
         "GET",
-        `/messages/${seg(messageId, "message ID", "gmail")}/attachments/${seg(attachmentId, "attachment ID", "gmail")}`,
+        `/messages/${pathSegment(messageId)}/attachments/${pathSegment(attachmentId)}`,
       );
     },
   });
@@ -1113,7 +1113,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       const raw = (await gmailRequest(
         ctx,
         "GET",
-        `/threads/${seg(p.id, "thread ID", "gmail")}`,
+        `/threads/${pathSegment(p.id)}`,
         undefined,
         qs,
       )) as { messages?: Record<string, unknown>[] };
@@ -1143,7 +1143,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "DELETE", `/threads/${seg(id, "thread ID", "gmail")}`);
+      return gmailRequest(ctx, "DELETE", `/threads/${pathSegment(id)}`);
     },
   });
 
@@ -1153,7 +1153,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "POST", `/threads/${seg(id, "thread ID", "gmail")}/trash`);
+      return gmailRequest(ctx, "POST", `/threads/${pathSegment(id)}/trash`);
     },
   });
 
@@ -1163,7 +1163,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "POST", `/threads/${seg(id, "thread ID", "gmail")}/untrash`);
+      return gmailRequest(ctx, "POST", `/threads/${pathSegment(id)}/untrash`);
     },
   });
 
@@ -1173,7 +1173,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
     async execute(input, ctx) {
       const { id, labelIds } = input as { id: string; labelIds: string[] };
-      return gmailRequest(ctx, "POST", `/threads/${seg(id, "thread ID", "gmail")}/modify`, {
+      return gmailRequest(ctx, "POST", `/threads/${pathSegment(id)}/modify`, {
         addLabelIds: labelIds,
       });
     },
@@ -1185,7 +1185,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
     async execute(input, ctx) {
       const { id, labelIds } = input as { id: string; labelIds: string[] };
-      return gmailRequest(ctx, "POST", `/threads/${seg(id, "thread ID", "gmail")}/modify`, {
+      return gmailRequest(ctx, "POST", `/threads/${pathSegment(id)}/modify`, {
         removeLabelIds: labelIds,
       });
     },
@@ -1201,7 +1201,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       const thread = (await gmailRequest(
         ctx,
         "GET",
-        `/threads/${seg(p.id, "thread ID", "gmail")}`,
+        `/threads/${pathSegment(p.id)}`,
         undefined,
         { format: "minimal" },
       )) as { messages?: Array<{ id: string }> };
@@ -1264,7 +1264,7 @@ export default function gmail(rl: RunlinePluginAPI) {
         const thread = (await gmailRequest(
           ctx,
           "GET",
-          `/threads/${seg(p.threadId, "thread ID", "gmail")}`,
+          `/threads/${pathSegment(p.threadId)}`,
           undefined,
           { format: "metadata", metadataHeaders: ["Message-ID"] },
         )) as { messages?: GmailMessage[] };
@@ -1292,7 +1292,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
-      return gmailRequest(ctx, "GET", `/drafts/${seg(p.id, "draft ID", "gmail")}`, undefined, qs);
+      return gmailRequest(ctx, "GET", `/drafts/${pathSegment(p.id)}`, undefined, qs);
     },
   });
 
@@ -1327,7 +1327,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "DELETE", `/drafts/${seg(id, "draft ID", "gmail")}`);
+      return gmailRequest(ctx, "DELETE", `/drafts/${pathSegment(id)}`);
     },
   });
 
@@ -1373,7 +1373,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "GET", `/labels/${seg(id, "label ID", "gmail")}`);
+      return gmailRequest(ctx, "GET", `/labels/${pathSegment(id)}`);
     },
   });
 
@@ -1395,7 +1395,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: IdInput,
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      return gmailRequest(ctx, "DELETE", `/labels/${seg(id, "label ID", "gmail")}`);
+      return gmailRequest(ctx, "DELETE", `/labels/${pathSegment(id)}`);
     },
   });
 
@@ -1428,7 +1428,7 @@ export default function gmail(rl: RunlinePluginAPI) {
       if (p.messageListVisibility) {
         body.messageListVisibility = p.messageListVisibility;
       }
-      return gmailRequest(ctx, "PATCH", `/labels/${seg(p.id, "label ID", "gmail")}`, body);
+      return gmailRequest(ctx, "PATCH", `/labels/${pathSegment(p.id)}`, body);
     },
   });
 

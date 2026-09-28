@@ -37,6 +37,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "../../_shared/credentials.js";
 import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
@@ -48,7 +49,6 @@ import {
   StringArray,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
-import { seg } from "../../_shared/provider.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -156,12 +156,12 @@ async function sheetsRequest(
  * Sheets doesn't parse something like `ABC` as an A1 range.
  */
 function encodeA1(range: string): string {
-  return seg(range.includes("!") ? range : `'${range}'`, "range", "googleSheets");
+  return pathSegment(range.includes("!") ? range : `'${range}'`);
 }
 
 /** A spreadsheet's API path, its ID one path segment. */
 function spreadsheetPath(spreadsheetId: unknown): string {
-  return `/v4/spreadsheets/${seg(spreadsheetId, "spreadsheet ID", "googleSheets")}`;
+  return `/v4/spreadsheets/${pathSegment(spreadsheetId)}`;
 }
 
 function columnNumberToLetter(n: number): string {
@@ -668,7 +668,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       await sheetsRequest(
         ctx,
         "DELETE",
-        `/drive/v3/files/${seg(p.spreadsheetId, "spreadsheet ID", "googleSheets")}`,
+        `/drive/v3/files/${pathSegment(p.spreadsheetId)}`,
         undefined,
         undefined,
         "https://www.googleapis.com",

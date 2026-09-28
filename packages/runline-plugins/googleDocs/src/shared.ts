@@ -1,8 +1,8 @@
 import type { ActionContext } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "../../_shared/credentials.js";
 import { googleJsonRequest } from "../../_shared/googleAuth.js";
 import { RawGoogleObject } from "../../_shared/googleSchemas.js";
-import { seg } from "../../_shared/provider.js";
 
 export type Ctx = ActionContext;
 
@@ -112,7 +112,7 @@ const DOC_URL_REGEX =
 export function extractDocumentId(input: string): string {
   if (!input) throw new Error("googleDocs: documentId or URL is required");
   const m = input.match(DOC_URL_REGEX);
-  return seg(m ? m[1] : input, "document ID", "googleDocs");
+  return pathSegment(m ? m[1] : input);
 }
 
 export function buildLocation(

@@ -22,13 +22,13 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "../../_shared/credentials.js";
 import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
   Id,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
-import { seg } from "../../_shared/provider.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -195,7 +195,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      return tasksRequest(ctx, "GET", `/users/@me/lists/${seg(p.taskListId, "task list ID", "googleTasks")}`);
+      return tasksRequest(ctx, "GET", `/users/@me/lists/${pathSegment(p.taskListId)}`);
     },
   });
 
@@ -224,7 +224,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      return tasksRequest(ctx, "PATCH", `/users/@me/lists/${seg(p.taskListId, "task list ID", "googleTasks")}`, {
+      return tasksRequest(ctx, "PATCH", `/users/@me/lists/${pathSegment(p.taskListId)}`, {
         title: p.title,
       });
     },
@@ -239,7 +239,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      await tasksRequest(ctx, "DELETE", `/users/@me/lists/${seg(p.taskListId, "task list ID", "googleTasks")}`);
+      await tasksRequest(ctx, "DELETE", `/users/@me/lists/${pathSegment(p.taskListId)}`);
       return { success: true };
     },
   });
@@ -288,7 +288,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       if (p.parent) qs.parent = p.parent;
       if (p.previous) qs.previous = p.previous;
 
-      return tasksRequest(ctx, "POST", `/lists/${seg(p.taskListId, "task list ID", "googleTasks")}/tasks`, body, qs);
+      return tasksRequest(ctx, "POST", `/lists/${pathSegment(p.taskListId)}/tasks`, body, qs);
     },
   });
 
@@ -304,7 +304,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      return tasksRequest(ctx, "GET", `/lists/${seg(p.taskListId, "task list ID", "googleTasks")}/tasks/${seg(p.taskId, "task ID", "googleTasks")}`);
+      return tasksRequest(ctx, "GET", `/lists/${pathSegment(p.taskListId)}/tasks/${pathSegment(p.taskId)}`);
     },
   });
 
@@ -343,7 +343,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
         if (v) qs[k] = v;
       }
       if (p.pageToken) qs.pageToken = p.pageToken;
-      const path = `/lists/${seg(p.taskListId, "task list ID", "googleTasks")}/tasks`;
+      const path = `/lists/${pathSegment(p.taskListId)}/tasks`;
       if (p.returnAll) return paginateAll(ctx, path, qs);
       if (p.maxResults) qs.maxResults = p.maxResults;
       const res = (await tasksRequest(ctx, "GET", path, undefined, qs)) as {
@@ -397,7 +397,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       return tasksRequest(
         ctx,
         "PATCH",
-        `/lists/${seg(p.taskListId, "task list ID", "googleTasks")}/tasks/${seg(p.taskId, "task ID", "googleTasks")}`,
+        `/lists/${pathSegment(p.taskListId)}/tasks/${pathSegment(p.taskId)}`,
         body,
       );
     },
@@ -415,7 +415,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      await tasksRequest(ctx, "DELETE", `/lists/${seg(p.taskListId, "task list ID", "googleTasks")}/tasks/${seg(p.taskId, "task ID", "googleTasks")}`);
+      await tasksRequest(ctx, "DELETE", `/lists/${pathSegment(p.taskListId)}/tasks/${pathSegment(p.taskId)}`);
       return { success: true };
     },
   });
@@ -441,7 +441,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       return tasksRequest(
         ctx,
         "POST",
-        `/lists/${seg(p.taskListId, "task list ID", "googleTasks")}/tasks/${seg(p.taskId, "task ID", "googleTasks")}/move`,
+        `/lists/${pathSegment(p.taskListId)}/tasks/${pathSegment(p.taskId)}/move`,
         undefined,
         qs,
       );
@@ -458,7 +458,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      await tasksRequest(ctx, "POST", `/lists/${seg(p.taskListId, "task list ID", "googleTasks")}/clear`);
+      await tasksRequest(ctx, "POST", `/lists/${pathSegment(p.taskListId)}/clear`);
       return { success: true };
     },
   });

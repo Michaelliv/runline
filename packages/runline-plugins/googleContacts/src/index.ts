@@ -26,6 +26,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "../../_shared/credentials.js";
 import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
@@ -33,7 +34,6 @@ import {
   PositiveInteger,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
-import { seg } from "../../_shared/provider.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -152,14 +152,14 @@ async function paginateAll(
  */
 function normalizeContactResource(input: string): string {
   const id = input.startsWith("people/") ? input.slice("people/".length) : input;
-  return `people/${seg(id, "contact ID", "googleContacts")}`;
+  return `people/${pathSegment(id)}`;
 }
 
 function normalizeGroupResource(input: string): string {
   const id = input.startsWith("contactGroups/")
     ? input.slice("contactGroups/".length)
     : input;
-  return `contactGroups/${seg(id, "group ID", "googleContacts")}`;
+  return `contactGroups/${pathSegment(id)}`;
 }
 
 function contactIdFromResource(resourceName: string | undefined): string | undefined {
