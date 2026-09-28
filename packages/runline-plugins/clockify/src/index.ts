@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { clockifyCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
   ctx: ActionContext,
@@ -82,9 +79,14 @@ export default function clockify(rl: RunlinePluginAPI) {
         workspaceId: string;
         name: string;
       };
-      return apiRequest(ctx, "POST", `workspaces/${seg(workspaceId)}/clients`, {
-        name,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `workspaces/${pathSegment(workspaceId)}/clients`,
+        {
+          name,
+        },
+      );
     },
   });
 
@@ -107,7 +109,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `workspaces/${seg(workspaceId)}/clients/${seg(clientId)}`,
+        `workspaces/${pathSegment(workspaceId)}/clients/${pathSegment(clientId)}`,
       );
     },
   });
@@ -139,7 +141,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       if (archived !== undefined) qs.archived = archived;
       return paginateAll(
         ctx,
-        `workspaces/${seg(workspaceId)}/clients`,
+        `workspaces/${pathSegment(workspaceId)}/clients`,
         qs,
         limit as number | undefined,
       );
@@ -167,7 +169,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `workspaces/${seg(workspaceId)}/clients/${seg(clientId)}`,
+        `workspaces/${pathSegment(workspaceId)}/clients/${pathSegment(clientId)}`,
         body,
       );
     },
@@ -192,7 +194,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `workspaces/${seg(workspaceId)}/clients/${seg(clientId)}`,
+        `workspaces/${pathSegment(workspaceId)}/clients/${pathSegment(clientId)}`,
       );
       return { success: true };
     },
@@ -225,7 +227,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `workspaces/${seg(workspaceId)}/projects`,
+        `workspaces/${pathSegment(workspaceId)}/projects`,
         body,
       );
     },
@@ -250,7 +252,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}`,
+        `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}`,
       );
     },
   });
@@ -282,7 +284,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       if (archived !== undefined) qs.archived = archived;
       return paginateAll(
         ctx,
-        `workspaces/${seg(workspaceId)}/projects`,
+        `workspaces/${pathSegment(workspaceId)}/projects`,
         qs,
         limit as number | undefined,
       );
@@ -315,7 +317,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}`,
+        `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}`,
         body,
       );
     },
@@ -340,7 +342,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}`,
+        `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}`,
       );
       return { success: true };
     },
@@ -364,9 +366,14 @@ export default function clockify(rl: RunlinePluginAPI) {
         workspaceId: string;
         name: string;
       };
-      return apiRequest(ctx, "POST", `workspaces/${seg(workspaceId)}/tags`, {
-        name,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `workspaces/${pathSegment(workspaceId)}/tags`,
+        {
+          name,
+        },
+      );
     },
   });
 
@@ -397,7 +404,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       if (archived !== undefined) qs.archived = archived;
       return paginateAll(
         ctx,
-        `workspaces/${seg(workspaceId)}/tags`,
+        `workspaces/${pathSegment(workspaceId)}/tags`,
         qs,
         limit as number | undefined,
       );
@@ -422,7 +429,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `workspaces/${seg(workspaceId)}/tags/${seg(tagId)}`,
+        `workspaces/${pathSegment(workspaceId)}/tags/${pathSegment(tagId)}`,
         body,
       );
     },
@@ -447,7 +454,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `workspaces/${seg(workspaceId)}/tags/${seg(tagId)}`,
+        `workspaces/${pathSegment(workspaceId)}/tags/${pathSegment(tagId)}`,
       );
       return { success: true };
     },
@@ -494,7 +501,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}/tasks`,
+        `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}/tasks`,
         body,
       );
     },
@@ -520,7 +527,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}/tasks/${seg(taskId)}`,
+        `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}/tasks/${pathSegment(taskId)}`,
       );
     },
   });
@@ -554,14 +561,14 @@ export default function clockify(rl: RunlinePluginAPI) {
         return apiRequest(
           ctx,
           "GET",
-          `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}/tasks`,
+          `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}/tasks`,
           undefined,
           qs,
         );
       }
       return paginateAll(
         ctx,
-        `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}/tasks`,
+        `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}/tasks`,
         qs,
       );
     },
@@ -601,7 +608,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}/tasks/${seg(taskId)}`,
+        `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}/tasks/${pathSegment(taskId)}`,
         body,
       );
     },
@@ -627,7 +634,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `workspaces/${seg(workspaceId)}/projects/${seg(projectId)}/tasks/${seg(taskId)}`,
+        `workspaces/${pathSegment(workspaceId)}/projects/${pathSegment(projectId)}/tasks/${pathSegment(taskId)}`,
       );
       return { success: true };
     },
@@ -669,7 +676,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `workspaces/${seg(workspaceId)}/time-entries`,
+        `workspaces/${pathSegment(workspaceId)}/time-entries`,
         body,
       );
     },
@@ -698,7 +705,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `workspaces/${seg(workspaceId)}/time-entries/${seg(timeEntryId)}`,
+        `workspaces/${pathSegment(workspaceId)}/time-entries/${pathSegment(timeEntryId)}`,
       );
     },
   });
@@ -739,7 +746,7 @@ export default function clockify(rl: RunlinePluginAPI) {
         const current = (await apiRequest(
           ctx,
           "GET",
-          `workspaces/${seg(workspaceId)}/time-entries/${seg(timeEntryId)}`,
+          `workspaces/${pathSegment(workspaceId)}/time-entries/${pathSegment(timeEntryId)}`,
         )) as Record<string, unknown>;
         const interval = current.timeInterval as Record<string, unknown>;
         body.start = interval.start;
@@ -747,7 +754,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `workspaces/${seg(workspaceId)}/time-entries/${seg(timeEntryId)}`,
+        `workspaces/${pathSegment(workspaceId)}/time-entries/${pathSegment(timeEntryId)}`,
         body,
       );
     },
@@ -776,7 +783,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `workspaces/${seg(workspaceId)}/time-entries/${seg(timeEntryId)}`,
+        `workspaces/${pathSegment(workspaceId)}/time-entries/${pathSegment(timeEntryId)}`,
       );
       return { success: true };
     },
@@ -815,7 +822,7 @@ export default function clockify(rl: RunlinePluginAPI) {
       if (status) qs.status = status;
       return paginateAll(
         ctx,
-        `workspaces/${seg(workspaceId)}/users`,
+        `workspaces/${pathSegment(workspaceId)}/users`,
         qs,
         limit as number | undefined,
       );

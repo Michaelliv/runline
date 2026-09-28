@@ -1,11 +1,12 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathWithin } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  pathSegment,
+  pathWithin,
+} from "../../_shared/credentials.js";
 import { asanaCredential } from "./credentials.js";
 
 const BASE_URL = "https://app.asana.com/api/1.0/";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
   ctx: ActionContext,
@@ -137,7 +138,7 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { taskId } = input as { taskId: string };
-      return apiRequest(ctx, "GET", `tasks/${seg(taskId)}`);
+      return apiRequest(ctx, "GET", `tasks/${pathSegment(taskId)}`);
     },
   });
 
@@ -203,7 +204,7 @@ export default function asana(rl: RunlinePluginAPI) {
       const { taskId, dueOn, ...fields } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...fields };
       if (dueOn) body.due_on = dueOn;
-      return apiRequest(ctx, "PUT", `tasks/${seg(taskId)}`, body);
+      return apiRequest(ctx, "PUT", `tasks/${pathSegment(taskId)}`, body);
     },
   });
 
@@ -215,7 +216,7 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { taskId } = input as { taskId: string };
-      await apiRequest(ctx, "DELETE", `tasks/${seg(taskId)}`);
+      await apiRequest(ctx, "DELETE", `tasks/${pathSegment(taskId)}`);
       return { success: true };
     },
   });
@@ -236,9 +237,14 @@ export default function asana(rl: RunlinePluginAPI) {
         taskId: string;
         sectionId: string;
       };
-      await apiRequest(ctx, "POST", `sections/${seg(sectionId)}/addTask`, {
-        task: taskId,
-      });
+      await apiRequest(
+        ctx,
+        "POST",
+        `sections/${pathSegment(sectionId)}/addTask`,
+        {
+          task: taskId,
+        },
+      );
       return { success: true };
     },
   });
@@ -271,7 +277,7 @@ export default function asana(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `workspaces/${seg(workspace)}/tasks/search`,
+        `workspaces/${pathSegment(workspace)}/tasks/search`,
         undefined,
         qs,
       );
@@ -311,7 +317,12 @@ export default function asana(rl: RunlinePluginAPI) {
       const { taskId, dueOn, ...fields } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...fields };
       if (dueOn) body.due_on = dueOn;
-      return apiRequest(ctx, "POST", `tasks/${seg(taskId)}/subtasks`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `tasks/${pathSegment(taskId)}/subtasks`,
+        body,
+      );
     },
   });
 
@@ -335,7 +346,7 @@ export default function asana(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `tasks/${seg(taskId)}/subtasks`,
+        `tasks/${pathSegment(taskId)}/subtasks`,
       )) as unknown[];
       if (limit) return (data as unknown[]).slice(0, limit);
       return data;
@@ -370,7 +381,12 @@ export default function asana(rl: RunlinePluginAPI) {
         ? { html_text: text }
         : { text };
       if (isPinned) body.is_pinned = true;
-      return apiRequest(ctx, "POST", `tasks/${seg(taskId)}/stories`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `tasks/${pathSegment(taskId)}/stories`,
+        body,
+      );
     },
   });
 
@@ -386,7 +402,7 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { commentId } = input as { commentId: string };
-      await apiRequest(ctx, "DELETE", `stories/${seg(commentId)}`);
+      await apiRequest(ctx, "DELETE", `stories/${pathSegment(commentId)}`);
       return { success: true };
     },
   });
@@ -402,7 +418,7 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { taskId, tagId } = input as { taskId: string; tagId: string };
-      await apiRequest(ctx, "POST", `tasks/${seg(taskId)}/addTag`, {
+      await apiRequest(ctx, "POST", `tasks/${pathSegment(taskId)}/addTag`, {
         tag: tagId,
       });
       return { success: true };
@@ -418,7 +434,7 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { taskId, tagId } = input as { taskId: string; tagId: string };
-      await apiRequest(ctx, "POST", `tasks/${seg(taskId)}/removeTag`, {
+      await apiRequest(ctx, "POST", `tasks/${pathSegment(taskId)}/removeTag`, {
         tag: tagId,
       });
       return { success: true };
@@ -443,7 +459,12 @@ export default function asana(rl: RunlinePluginAPI) {
       const { taskId, projectId, section } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { project: projectId };
       if (section) body.section = section;
-      await apiRequest(ctx, "POST", `tasks/${seg(taskId)}/addProject`, body);
+      await apiRequest(
+        ctx,
+        "POST",
+        `tasks/${pathSegment(taskId)}/addProject`,
+        body,
+      );
       return { success: true };
     },
   });
@@ -460,9 +481,14 @@ export default function asana(rl: RunlinePluginAPI) {
         taskId: string;
         projectId: string;
       };
-      await apiRequest(ctx, "POST", `tasks/${seg(taskId)}/removeProject`, {
-        project: projectId,
-      });
+      await apiRequest(
+        ctx,
+        "POST",
+        `tasks/${pathSegment(taskId)}/removeProject`,
+        {
+          project: projectId,
+        },
+      );
       return { success: true };
     },
   });
@@ -481,7 +507,7 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId } = input as { userId: string };
-      return apiRequest(ctx, "GET", `users/${seg(userId)}`);
+      return apiRequest(ctx, "GET", `users/${pathSegment(userId)}`);
     },
   });
 
@@ -497,7 +523,11 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { workspace } = input as { workspace: string };
-      return apiRequest(ctx, "GET", `workspaces/${seg(workspace)}/users`);
+      return apiRequest(
+        ctx,
+        "GET",
+        `workspaces/${pathSegment(workspace)}/users`,
+      );
     },
   });
 
@@ -535,7 +565,12 @@ export default function asana(rl: RunlinePluginAPI) {
       if (notes) body.notes = notes;
       if (color) body.color = color;
       if (dueOn) body.due_on = dueOn;
-      return apiRequest(ctx, "POST", `teams/${seg(team)}/projects`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `teams/${pathSegment(team)}/projects`,
+        body,
+      );
     },
   });
 
@@ -547,7 +582,7 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { projectId } = input as { projectId: string };
-      return apiRequest(ctx, "GET", `projects/${seg(projectId)}`);
+      return apiRequest(ctx, "GET", `projects/${pathSegment(projectId)}`);
     },
   });
 
@@ -615,7 +650,7 @@ export default function asana(rl: RunlinePluginAPI) {
       const { projectId, dueOn, ...fields } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { ...fields };
       if (dueOn) body.due_on = dueOn;
-      return apiRequest(ctx, "PUT", `projects/${seg(projectId)}`, body);
+      return apiRequest(ctx, "PUT", `projects/${pathSegment(projectId)}`, body);
     },
   });
 
@@ -627,7 +662,7 @@ export default function asana(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { projectId } = input as { projectId: string };
-      await apiRequest(ctx, "DELETE", `projects/${seg(projectId)}`);
+      await apiRequest(ctx, "DELETE", `projects/${pathSegment(projectId)}`);
       return { success: true };
     },
   });

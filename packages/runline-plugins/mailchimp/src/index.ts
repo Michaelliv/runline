@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { mailchimpCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** One Mailchimp call: every endpoint is a path beneath the account's /3.0/. */
 function api(
@@ -124,7 +121,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       if (p.ipOpt) body.ip_opt = p.ipOpt;
       if (p.timestampSignup) body.timestamp_signup = p.timestampSignup;
       if (p.timestampOpt) body.timestamp_opt = p.timestampOpt;
-      return api(ctx, "POST", `lists/${seg(p.listId)}/members`, body);
+      return api(ctx, "POST", `lists/${pathSegment(p.listId)}/members`, body);
     },
   });
 
@@ -161,7 +158,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `lists/${seg(listId)}/members/${seg(email)}`,
+        `lists/${pathSegment(listId)}/members/${pathSegment(email)}`,
         undefined,
         qs,
       );
@@ -219,7 +216,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `lists/${seg(p.listId)}/members`,
+        `lists/${pathSegment(p.listId)}/members`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -270,7 +267,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PUT",
-        `lists/${seg(p.listId)}/members/${seg(p.email)}`,
+        `lists/${pathSegment(p.listId)}/members/${pathSegment(p.email)}`,
         body,
         Object.keys(qs).length > 0 ? qs : undefined,
       );
@@ -289,7 +286,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `lists/${seg(listId)}/members/${seg(email)}/actions/delete-permanent`,
+        `lists/${pathSegment(listId)}/members/${pathSegment(email)}/actions/delete-permanent`,
       );
       return { success: true };
     },
@@ -326,7 +323,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `lists/${seg(listId)}/members/${seg(email)}/tags`,
+        `lists/${pathSegment(listId)}/members/${pathSegment(email)}/tags`,
         body,
       );
       return { success: true };
@@ -358,7 +355,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `lists/${seg(listId)}/members/${seg(email)}/tags`,
+        `lists/${pathSegment(listId)}/members/${pathSegment(email)}/tags`,
         body,
       );
       return { success: true };
@@ -386,7 +383,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `lists/${seg(listId)}/interest-categories/${seg(categoryId)}/interests`,
+        `lists/${pathSegment(listId)}/interest-categories/${pathSegment(categoryId)}/interests`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -404,7 +401,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `campaigns/${seg((input as { campaignId: string }).campaignId)}`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}`,
       );
     },
   });
@@ -496,7 +493,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "POST",
-        `campaigns/${seg((input as { campaignId: string }).campaignId)}/actions/send`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}/actions/send`,
       );
       return { success: true };
     },
@@ -510,7 +507,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `campaigns/${seg((input as { campaignId: string }).campaignId)}/actions/replicate`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}/actions/replicate`,
       );
     },
   });
@@ -523,7 +520,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `campaigns/${seg((input as { campaignId: string }).campaignId)}/actions/create-resend`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}/actions/create-resend`,
       );
     },
   });
@@ -536,7 +533,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `campaigns/${seg((input as { campaignId: string }).campaignId)}`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}`,
       );
       return { success: true };
     },

@@ -4,11 +4,8 @@ import {
   type HttpMethod,
   type RunlinePluginAPI,
 } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
 import { sendgridCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** A JSON request whose response headers stay readable (mail.send's x-message-id). */
 async function apiRequest(
@@ -150,7 +147,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
         const { data } = await apiRequest(
           ctx,
           "GET",
-          `marketing/contacts/${seg(p.contactId)}`,
+          `marketing/contacts/${pathSegment(p.contactId)}`,
         );
         return data;
       }
@@ -269,7 +266,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
       const { data } = await apiRequest(
         ctx,
         "GET",
-        `marketing/lists/${seg((input as Record<string, unknown>).listId)}`,
+        `marketing/lists/${pathSegment((input as Record<string, unknown>).listId)}`,
       );
       return data;
     },
@@ -304,7 +301,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
       const { data } = await apiRequest(
         ctx,
         "PATCH",
-        `marketing/lists/${seg(p.listId)}`,
+        `marketing/lists/${pathSegment(p.listId)}`,
         { name: p.name },
       );
       return data;
@@ -327,7 +324,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `marketing/lists/${seg(p.listId)}`,
+        `marketing/lists/${pathSegment(p.listId)}`,
         undefined,
         { delete_contacts: p.deleteContacts ? "true" : "false" },
       );

@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { cockpitCredential } from "./credentials.js";
-
-/** A collection, form, or singleton name as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -63,9 +60,14 @@ export default function cockpit(rl: RunlinePluginAPI) {
         collection: string;
         data: Record<string, unknown>;
       };
-      return apiRequest(ctx, "POST", `collections/save/${seg(collection)}`, {
-        data,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `collections/save/${pathSegment(collection)}`,
+        {
+          data,
+        },
+      );
     },
   });
 
@@ -128,7 +130,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `collections/get/${seg(collection)}`,
+        `collections/get/${pathSegment(collection)}`,
         body,
       );
     },
@@ -152,9 +154,14 @@ export default function cockpit(rl: RunlinePluginAPI) {
         id: string;
         data: Record<string, unknown>;
       };
-      return apiRequest(ctx, "POST", `collections/save/${seg(collection)}`, {
-        data: { _id: id, ...data },
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `collections/save/${pathSegment(collection)}`,
+        {
+          data: { _id: id, ...data },
+        },
+      );
     },
   });
 
@@ -176,7 +183,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
         form: string;
         data: Record<string, unknown>;
       };
-      return apiRequest(ctx, "POST", `forms/submit/${seg(form)}`, {
+      return apiRequest(ctx, "POST", `forms/submit/${pathSegment(form)}`, {
         form: data,
       });
     },
@@ -196,7 +203,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { singleton } = input as { singleton: string };
-      return apiRequest(ctx, "GET", `singletons/get/${seg(singleton)}`);
+      return apiRequest(ctx, "GET", `singletons/get/${pathSegment(singleton)}`);
     },
   });
 }

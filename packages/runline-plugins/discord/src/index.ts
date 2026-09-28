@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { discordCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -27,7 +24,7 @@ function apiRequest(
 }
 
 function guildOf(ctx: ActionContext): string {
-  return seg(ctx.connection.config.guildId);
+  return pathSegment(ctx.connection.config.guildId);
 }
 
 export default function discord(rl: RunlinePluginAPI) {
@@ -129,7 +126,7 @@ export default function discord(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `channels/${seg((input as { channelId: string }).channelId)}`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}`,
       );
     },
   });
@@ -218,7 +215,12 @@ export default function discord(rl: RunlinePluginAPI) {
       if (userLimit !== undefined) body.user_limit = userLimit;
       if (rateLimitPerUser !== undefined)
         body.rate_limit_per_user = rateLimitPerUser;
-      return apiRequest(ctx, "PATCH", `channels/${seg(channelId)}`, body);
+      return apiRequest(
+        ctx,
+        "PATCH",
+        `channels/${pathSegment(channelId)}`,
+        body,
+      );
     },
   });
 
@@ -232,7 +234,7 @@ export default function discord(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `channels/${seg((input as { channelId: string }).channelId)}`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}`,
       );
     },
   });
@@ -281,7 +283,7 @@ export default function discord(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "PUT",
-        `guilds/${guildOf(ctx)}/members/${seg(userId)}/roles/${seg(roleId)}`,
+        `guilds/${guildOf(ctx)}/members/${pathSegment(userId)}/roles/${pathSegment(roleId)}`,
       );
       return { success: true };
     },
@@ -299,7 +301,7 @@ export default function discord(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `guilds/${guildOf(ctx)}/members/${seg(userId)}/roles/${seg(roleId)}`,
+        `guilds/${guildOf(ctx)}/members/${pathSegment(userId)}/roles/${pathSegment(roleId)}`,
       );
       return { success: true };
     },
@@ -341,7 +343,7 @@ export default function discord(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `channels/${seg(channelId)}/messages`,
+        `channels/${pathSegment(channelId)}/messages`,
         body,
       );
     },
@@ -362,7 +364,7 @@ export default function discord(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `channels/${seg(channelId)}/messages/${seg(messageId)}`,
+        `channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}`,
       );
     },
   });
@@ -404,7 +406,7 @@ export default function discord(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `channels/${seg(channelId)}/messages`,
+        `channels/${pathSegment(channelId)}/messages`,
         undefined,
         qs,
       );
@@ -426,7 +428,7 @@ export default function discord(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `channels/${seg(channelId)}/messages/${seg(messageId)}`,
+        `channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}`,
       );
       return { success: true };
     },
@@ -453,7 +455,7 @@ export default function discord(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "PUT",
-        `channels/${seg(channelId)}/messages/${seg(messageId)}/reactions/${seg(emoji)}/@me`,
+        `channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}/reactions/${pathSegment(emoji)}/@me`,
       );
       return { success: true };
     },

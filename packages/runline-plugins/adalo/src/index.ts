@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { adaloCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** A path beneath the connection's app, signed through the credential. */
 function apiRequest(
@@ -13,7 +10,7 @@ function apiRequest(
   body?: Record<string, unknown>,
   query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const appId = seg(ctx.connection.config.appId);
+  const appId = pathSegment(ctx.connection.config.appId);
   return credentialJson(ctx, adaloCredential, "adalo", {
     target: "api",
     path: `${appId}/${path}`,
@@ -36,7 +33,7 @@ async function paginate(
     const data = (await apiRequest(
       ctx,
       "GET",
-      `collections/${seg(collectionId)}`,
+      `collections/${pathSegment(collectionId)}`,
       undefined,
       {
         limit: pageSize,
@@ -98,7 +95,7 @@ export default function adalo(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `collections/${seg(collectionId)}`,
+        `collections/${pathSegment(collectionId)}`,
         fields,
       );
     },
@@ -123,7 +120,7 @@ export default function adalo(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `collections/${seg(collectionId)}/${seg(rowId)}`,
+        `collections/${pathSegment(collectionId)}/${pathSegment(rowId)}`,
       );
     },
   });
@@ -177,7 +174,7 @@ export default function adalo(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `collections/${seg(collectionId)}/${seg(rowId)}`,
+        `collections/${pathSegment(collectionId)}/${pathSegment(rowId)}`,
         fields,
       );
     },
@@ -202,7 +199,7 @@ export default function adalo(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `collections/${seg(collectionId)}/${seg(rowId)}`,
+        `collections/${pathSegment(collectionId)}/${pathSegment(rowId)}`,
       );
     },
   });
