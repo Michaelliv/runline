@@ -1,45 +1,35 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { lemlistCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.lemlist.com/api";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, lemlistCredential, "lemlist", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`:${apiKey}`)}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Lemlist API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginate(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown[]> {
   const all: unknown[] = [];
@@ -47,13 +37,7 @@ async function paginate(
   qs.offset = 0;
   let data: unknown[];
   do {
-    data = (await apiRequest(
-      apiKey,
-      method,
-      endpoint,
-      undefined,
-      qs,
-    )) as unknown[];
+    data = (await apiRequest(ctx, method, path, undefined, qs)) as unknown[];
     all.push(...data);
     (qs.offset as number) += qs.limit as number;
   } while (data.length > 0);
@@ -63,6 +47,7 @@ async function paginate(
 export default function lemlist(rl: RunlinePluginAPI) {
   rl.setName("lemlist");
   rl.setVersion("0.1.0");
+  rl.setCredential(lemlistCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -72,9 +57,6 @@ export default function lemlist(rl: RunlinePluginAPI) {
       env: "LEMLIST_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   // ── Activity ────────────────────────────────────────
 
@@ -107,9 +89,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
       if (p.isFirst !== undefined) qs.isFirst = p.isFirst;
       if (p.limit) {
         qs.limit = p.limit;
-        return apiRequest(key(ctx), "GET", "/activities", undefined, qs);
+        return apiRequest(ctx, "GET", "activities", undefined, qs);
       }
-      return paginate(key(ctx), "GET", "/activities", qs);
+      return paginate(ctx, "GET", "activities", qs);
     },
   });
 
@@ -124,10 +106,10 @@ export default function lemlist(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       if (p.limit)
-        return apiRequest(key(ctx), "GET", "/campaigns", undefined, {
+        return apiRequest(ctx, "GET", "campaigns", undefined, {
           limit: p.limit,
         });
-      return paginate(key(ctx), "GET", "/campaigns");
+      return paginate(ctx, "GET", "campaigns");
     },
   });
 
@@ -158,9 +140,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
         unknown
       >;
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/campaigns/${campaignId}/stats`,
+        `campaigns/${seg(campaignId)}/stats`,
         undefined,
         { startDate, endDate, timezone } as Record<string, unknown>,
       );
@@ -207,9 +189,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (deduplicate !== undefined) qs.deduplicate = deduplicate;
       return apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        `/campaigns/${campaignId}/leads/${encodeURIComponent(email as string)}`,
+        `campaigns/${seg(campaignId)}/leads/${seg(email)}`,
         body,
         Object.keys(qs).length > 0 ? qs : undefined,
       );
@@ -222,9 +204,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
     inputSchema: { email: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/leads/${encodeURIComponent((input as { email: string }).email)}`,
+        `leads/${seg((input as { email: string }).email)}`,
       );
     },
   });
@@ -240,9 +222,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { campaignId, email } = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/campaigns/${campaignId}/leads/${encodeURIComponent(email as string)}`,
+        `campaigns/${seg(campaignId)}/leads/${seg(email)}`,
         undefined,
         { action: "remove" },
       );
@@ -259,9 +241,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { campaignId, email } = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/campaigns/${campaignId}/leads/${encodeURIComponent(email as string)}`,
+        `campaigns/${seg(campaignId)}/leads/${seg(email)}`,
       );
     },
   });
@@ -272,7 +254,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get team information",
     async execute(_input, ctx) {
-      return apiRequest(key(ctx), "GET", "/team");
+      return apiRequest(ctx, "GET", "team");
     },
   });
 
@@ -280,7 +262,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get team credits",
     async execute(_input, ctx) {
-      return apiRequest(key(ctx), "GET", "/team/credits");
+      return apiRequest(ctx, "GET", "team/credits");
     },
   });
 
@@ -292,9 +274,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
     inputSchema: { email: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        `/unsubscribes/${encodeURIComponent((input as { email: string }).email)}`,
+        `unsubscribes/${seg((input as { email: string }).email)}`,
       );
     },
   });
@@ -305,9 +287,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
     inputSchema: { email: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/unsubscribes/${encodeURIComponent((input as { email: string }).email)}`,
+        `unsubscribes/${seg((input as { email: string }).email)}`,
       );
     },
   });
@@ -319,10 +301,10 @@ export default function lemlist(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       if (p.limit)
-        return apiRequest(key(ctx), "GET", "/unsubscribes", undefined, {
+        return apiRequest(ctx, "GET", "unsubscribes", undefined, {
           limit: p.limit,
         });
-      return paginate(key(ctx), "GET", "/unsubscribes");
+      return paginate(ctx, "GET", "unsubscribes");
     },
   });
 
@@ -334,9 +316,9 @@ export default function lemlist(rl: RunlinePluginAPI) {
     inputSchema: { enrichId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/enrich/${(input as { enrichId: string }).enrichId}`,
+        `enrich/${seg((input as { enrichId: string }).enrichId)}`,
       );
     },
   });
@@ -354,7 +336,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { leadId, findEmail, verifyEmail, linkedinEnrichment, findPhone } =
         input as Record<string, unknown>;
-      return apiRequest(key(ctx), "POST", `/leads/${leadId}/enrich/`, {}, {
+      return apiRequest(ctx, "POST", `leads/${seg(leadId)}/enrich/`, {}, {
         findEmail,
         verifyEmail,
         linkedinEnrichment,
@@ -390,7 +372,7 @@ export default function lemlist(rl: RunlinePluginAPI) {
       for (const [k, v] of Object.entries(rest)) {
         if (v !== undefined && v !== null) qs[k] = v;
       }
-      return apiRequest(key(ctx), "POST", "/enrich/", {}, qs);
+      return apiRequest(ctx, "POST", "enrich/", {}, qs);
     },
   });
 }
