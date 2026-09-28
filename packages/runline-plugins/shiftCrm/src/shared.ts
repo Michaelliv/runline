@@ -1,13 +1,10 @@
-import type { ActionContext, HttpMethod } from "runline";
 import * as t from "typebox";
-import { credentialJson } from "../../_shared/credentials.js";
 import {
   cursorSchema,
   enumSchema,
   idSchema,
   timestampSchema,
 } from "../../_shared/shiftCloud.js";
-import { shiftCrmCredential } from "./credentials.js";
 
 export {
   enumSchema,
@@ -19,28 +16,9 @@ export {
   timestampSchema,
   withQuery,
 } from "../../_shared/shiftCloud.js";
+export { request } from "./credentials.js";
 
 export const CRM_BASE = "/v1/crm";
-
-/**
- * Every CRM request, signed through the declared credential. Paths are the
- * absolute /v1/crm/... routes the actions name; the target pins them
- * beneath the CRM base.
- */
-export async function request<T>(
-  ctx: ActionContext,
-  path: string,
-  init: { method?: HttpMethod; body?: string } = {},
-): Promise<T> {
-  return (await credentialJson(ctx, shiftCrmCredential, "shiftCrm", {
-    target: "api",
-    path: path.replace(`${CRM_BASE}/`, ""),
-    method: init.method ?? "GET",
-    ...(init.body !== undefined
-      ? { body: init.body, headers: { "Content-Type": "application/json" } }
-      : {}),
-  })) as T;
-}
 
 export const CRM_ACCESS_ROLE = ["user", "admin"] as const;
 export const CRM_RECORD_TYPE = [

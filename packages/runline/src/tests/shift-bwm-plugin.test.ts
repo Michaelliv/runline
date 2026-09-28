@@ -230,7 +230,7 @@ describe("shiftBwm plugin", () => {
     );
   });
 
-  it("uses the shared Shift transport: redirects refused, deadline set", async () => {
+  it("signs through the declared credential: redirects refused, deadline set", async () => {
     globalThis.fetch = (async (
       _input: RequestInfo | URL,
       init?: RequestInit,
@@ -244,7 +244,7 @@ describe("shiftBwm plugin", () => {
     }) as typeof fetch;
     await assert.rejects(
       getAction(makeShiftBwm(), "objectType.list").execute({}, ctx()),
-      /Refusing a redirect/,
+      { code: "transport_failed" },
     );
   });
 
@@ -259,7 +259,7 @@ describe("shiftBwm plugin", () => {
         {},
         ctx({ apiKey: "" }),
       ),
-      /apiKey is required/,
+      { code: "invalid_credentials" },
     );
     assert.equal(calls, 0);
   });
@@ -388,6 +388,7 @@ describe("shiftBwm plugin", () => {
         assert.ok(err instanceof Error);
         assert.match(err.message, /422 unknown_field/);
         assert.match(err.message, /param: fields\.tier/);
+        assert.doesNotMatch(err.message, /unknown field tier/);
         assert.equal((err as { param?: string }).param, "fields.tier");
         assert.equal((err as { status?: number }).status, 422);
         return true;

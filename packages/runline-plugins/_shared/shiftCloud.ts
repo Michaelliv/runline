@@ -3,10 +3,11 @@ import { authedFetch } from "./authedFetch.js";
 import { readBounded } from "./provider.js";
 
 /**
- * Shared helpers for plugins that talk to the Shift cloud API
- * (shiftWork, shiftPages, shiftTranscription, shiftObjects, shiftCrm,
- * shiftBwm, shiftOcr, shiftAtlas). One base URL, one bearer-auth
- * transport, and the common TypeBox schema builders.
+ * Shared helpers for plugins that talk to the Shift cloud API: one base
+ * URL and the common TypeBox schema builders. Plugins that declare their
+ * credential sign through shiftCredentials.ts; `request` and `shiftFetch`
+ * here carry the key themselves, for shiftOcr and shiftTranscription, whose
+ * long-held requests exceed the credential transport's deadline.
  */
 
 export type Ctx = { connection: { config: Record<string, unknown> } };

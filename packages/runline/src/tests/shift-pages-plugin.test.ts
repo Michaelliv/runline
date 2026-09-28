@@ -178,7 +178,7 @@ describe("shiftPages plugin", () => {
         String(input),
         "https://cloud.shift-labs.ai/v1/pages/page_1",
       );
-      assert.equal(init?.method, undefined);
+      assert.equal(init?.method, "GET");
       return {
         page: { organizationId: "org_from_api", slug: "investor-update" },
       };
@@ -206,7 +206,7 @@ describe("shiftPages plugin", () => {
       const url = new URL(String(input));
       assert.equal(url.pathname, "/v1/pages/vex-artifacts");
       assert.equal(url.searchParams.get("deploymentId"), "deployment_1");
-      assert.equal(init?.method, undefined);
+      assert.equal(init?.method, "GET");
       return { artifacts };
     });
 

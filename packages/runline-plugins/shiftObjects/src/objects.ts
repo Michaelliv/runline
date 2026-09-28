@@ -6,7 +6,6 @@ import {
   enumSchema,
   listParams,
   pathSegment,
-  request,
   STRICT_OBJECT,
   withQuery,
 } from "../../_shared/shiftCloud.js";
@@ -18,6 +17,7 @@ import {
   type SignedUploadGrant,
   statUploadFile,
 } from "../../_shared/shiftUpload.js";
+import { request } from "./credentials.js";
 
 const OBJECTS_BASE = "/v1/services/objects";
 

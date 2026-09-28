@@ -1,23 +1,10 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { shiftClient } from "../../_shared/shiftCredentials.js";
 
 /**
- * A user-subject Shift CRM API key, sent as a bearer and pinned to the
- * /v1/crm surface of the Shift cloud origin.
+ * A user-subject Shift CRM API key, signed like every Shift key. The probe
+ * reads the key's own CRM access: a key without a grant is rejected there.
  */
-export const shiftCrmCredential = staticCredential({
-  id: "shiftCrm",
-  auth: { kind: "bearer" },
-  local: { secret: "apiKey" },
-  targets: {
-    api: {
-      baseUrl: "https://cloud.shift-labs.ai/v1/crm/",
-      methods: ["GET", "POST", "PATCH", "DELETE"],
-    },
-  },
-  probe: {
-    target: "api",
-    path: "access/me",
-    method: "GET",
-    acceptedStatuses: [200],
-  },
-});
+export const { credential: shiftCrmCredential, request } = shiftClient(
+  "shiftCrm",
+  "crm/access/me",
+);

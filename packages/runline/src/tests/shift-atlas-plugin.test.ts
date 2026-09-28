@@ -116,7 +116,7 @@ describe("shiftAtlas plugin", () => {
         String(input),
         "https://cloud.shift-labs.ai/v1/services/operational-graph/summary",
       );
-      assert.equal(init?.method, undefined);
+      assert.equal(init?.method, "GET");
       const headers = new Headers(init?.headers);
       assert.equal(headers.get("authorization"), "Bearer shift_api_key");
       return { summary: { lines: [], rollup: { total: 0 } } };
