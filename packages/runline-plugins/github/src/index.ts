@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { GITHUB_API_VERSION, githubCredential } from "./credentials.js";
-
-/** An owner, repo, or ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /**
  * A file path, ref, or branch name: each of its segments encoded, its
@@ -85,7 +82,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/contents/${filePath(path)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${filePath(path)}`,
         undefined,
         qs,
       );
@@ -132,7 +129,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PUT",
-        `repos/${seg(owner)}/${seg(repo)}/contents/${filePath(path)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${filePath(path)}`,
         body,
       );
     },
@@ -171,7 +168,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "DELETE",
-        `repos/${seg(owner)}/${seg(repo)}/contents/${filePath(path)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${filePath(path)}`,
         body,
       );
     },
@@ -210,7 +207,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/contents/${filePath(path)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${filePath(path)}`,
         undefined,
         qs,
       );
@@ -262,7 +259,12 @@ export default function github(rl: RunlinePluginAPI) {
       if (labels) b.labels = labels;
       if (assignees) b.assignees = assignees;
       if (milestone) b.milestone = milestone;
-      return gh(ctx, "POST", `repos/${seg(owner)}/${seg(repo)}/issues`, b);
+      return gh(
+        ctx,
+        "POST",
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/issues`,
+        b,
+      );
     },
   });
 
@@ -287,7 +289,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/issues/${seg(issueNumber)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/issues/${pathSegment(issueNumber)}`,
       );
     },
   });
@@ -321,7 +323,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PATCH",
-        `repos/${seg(owner)}/${seg(repo)}/issues/${seg(issueNumber)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/issues/${pathSegment(issueNumber)}`,
         fields,
       );
     },
@@ -358,7 +360,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "POST",
-        `repos/${seg(owner)}/${seg(repo)}/issues/${seg(issueNumber)}/comments`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/issues/${pathSegment(issueNumber)}/comments`,
         { body: commentBody },
       );
     },
@@ -395,7 +397,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "PUT",
-        `repos/${seg(owner)}/${seg(repo)}/issues/${seg(issueNumber)}/lock`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/issues/${pathSegment(issueNumber)}/lock`,
         body,
       );
       return { success: true };
@@ -454,7 +456,12 @@ export default function github(rl: RunlinePluginAPI) {
       if (draft !== undefined) b.draft = draft;
       if (prerelease !== undefined) b.prerelease = prerelease;
       if (targetCommitish) b.target_commitish = targetCommitish;
-      return gh(ctx, "POST", `repos/${seg(owner)}/${seg(repo)}/releases`, b);
+      return gh(
+        ctx,
+        "POST",
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/releases`,
+        b,
+      );
     },
   });
 
@@ -475,7 +482,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/releases/${seg(releaseId)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/releases/${pathSegment(releaseId)}`,
       );
     },
   });
@@ -508,7 +515,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/releases`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/releases`,
         undefined,
         qs,
       );
@@ -560,7 +567,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PATCH",
-        `repos/${seg(owner)}/${seg(repo)}/releases/${seg(releaseId)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/releases/${pathSegment(releaseId)}`,
         b,
       );
     },
@@ -583,7 +590,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "DELETE",
-        `repos/${seg(owner)}/${seg(repo)}/releases/${seg(releaseId)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/releases/${pathSegment(releaseId)}`,
       );
       return { success: true };
     },
@@ -648,7 +655,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/commits`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/commits`,
         undefined,
         qs,
       );
@@ -676,7 +683,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/commits/${filePath(ref)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/commits/${filePath(ref)}`,
       );
     },
   });
@@ -698,7 +705,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/branches/${filePath(branch)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/branches/${filePath(branch)}`,
       );
     },
   });
@@ -716,7 +723,7 @@ export default function github(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { owner, repo } = input as { owner: string; repo: string };
-      return gh(ctx, "GET", `repos/${seg(owner)}/${seg(repo)}`);
+      return gh(ctx, "GET", `repos/${pathSegment(owner)}/${pathSegment(repo)}`);
     },
   });
 
@@ -733,7 +740,11 @@ export default function github(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { owner, repo } = input as { owner: string; repo: string };
-      return gh(ctx, "GET", `repos/${seg(owner)}/${seg(repo)}/license`);
+      return gh(
+        ctx,
+        "GET",
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/license`,
+      );
     },
   });
 
@@ -787,7 +798,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/issues`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/issues`,
         undefined,
         qs,
       );
@@ -838,7 +849,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/pulls`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/pulls`,
         undefined,
         qs,
       );
@@ -861,7 +872,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/traffic/popular/paths`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/traffic/popular/paths`,
       );
     },
   });
@@ -882,7 +893,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/traffic/popular/referrers`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/traffic/popular/referrers`,
       );
     },
   });
@@ -914,7 +925,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/pulls/${seg(pullNumber)}/reviews/${seg(reviewId)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/pulls/${pathSegment(pullNumber)}/reviews/${pathSegment(reviewId)}`,
       );
     },
   });
@@ -940,7 +951,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/pulls/${seg(pullNumber)}/reviews`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/pulls/${pathSegment(pullNumber)}/reviews`,
       );
     },
   });
@@ -980,7 +991,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "POST",
-        `repos/${seg(owner)}/${seg(repo)}/pulls/${seg(pullNumber)}/reviews`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/pulls/${pathSegment(pullNumber)}/reviews`,
         b,
       );
     },
@@ -1019,7 +1030,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PUT",
-        `repos/${seg(owner)}/${seg(repo)}/pulls/${seg(pullNumber)}/reviews/${seg(reviewId)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/pulls/${pathSegment(pullNumber)}/reviews/${pathSegment(reviewId)}`,
         { body: reviewBody },
       );
     },
@@ -1063,7 +1074,9 @@ export default function github(rl: RunlinePluginAPI) {
       if (sort) qs.sort = sort;
       if (perPage) qs.per_page = perPage;
       if (page) qs.page = page;
-      const endpoint = username ? `users/${seg(username)}/repos` : "user/repos";
+      const endpoint = username
+        ? `users/${pathSegment(username)}/repos`
+        : "user/repos";
       return gh(ctx, "GET", endpoint, undefined, qs);
     },
   });
@@ -1129,7 +1142,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PUT",
-        `repos/${seg(owner)}/${seg(repo)}/collaborators/${seg(username)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/collaborators/${pathSegment(username)}`,
         body,
       );
     },
@@ -1169,7 +1182,7 @@ export default function github(rl: RunlinePluginAPI) {
       if (sort) qs.sort = sort;
       if (perPage) qs.per_page = perPage;
       if (page) qs.page = page;
-      return gh(ctx, "GET", `orgs/${seg(org)}/repos`, undefined, qs);
+      return gh(ctx, "GET", `orgs/${pathSegment(org)}/repos`, undefined, qs);
     },
   });
 
@@ -1191,7 +1204,7 @@ export default function github(rl: RunlinePluginAPI) {
       const data = (await gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/actions/workflows`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/actions/workflows`,
       )) as Record<string, unknown>;
       return data.workflows;
     },
@@ -1218,7 +1231,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/actions/workflows/${pathSegment(workflowId)}`,
       );
     },
   });
@@ -1259,7 +1272,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "POST",
-        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}/dispatches`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/actions/workflows/${pathSegment(workflowId)}/dispatches`,
         body,
       );
       return { success: true };
@@ -1287,7 +1300,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "PUT",
-        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}/enable`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/actions/workflows/${pathSegment(workflowId)}/enable`,
       );
       return { success: true };
     },
@@ -1314,7 +1327,7 @@ export default function github(rl: RunlinePluginAPI) {
       await gh(
         ctx,
         "PUT",
-        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}/disable`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/actions/workflows/${pathSegment(workflowId)}/disable`,
       );
       return { success: true };
     },
@@ -1341,7 +1354,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${seg(owner)}/${seg(repo)}/actions/workflows/${seg(workflowId)}/timing`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/actions/workflows/${pathSegment(workflowId)}/timing`,
       );
     },
   });

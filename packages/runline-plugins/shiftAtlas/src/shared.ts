@@ -1,4 +1,3 @@
-import type { ActionContext } from "runline";
 import { shiftClient } from "../../_shared/shiftCredentials.js";
 
 export {
@@ -11,8 +10,6 @@ export {
   STRICT_UPDATE_OBJECT,
   withQuery,
 } from "../../_shared/shiftCloud.js";
-
-export type Ctx = ActionContext;
 
 export const { credential: shiftAtlasCredential, request } =
   shiftClient("shiftAtlas");

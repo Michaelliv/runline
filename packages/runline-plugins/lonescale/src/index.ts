@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { lonescaleCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -121,7 +118,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
       if (linkedinUrl) body.linkedin_url = linkedinUrl;
       if (location) body.location = location;
       if (contactId) body.contact_id = contactId;
-      return apiRequest(ctx, "POST", `lists/${seg(listId)}/item`, body);
+      return apiRequest(ctx, "POST", `lists/${pathSegment(listId)}/item`, body);
     },
   });
 
@@ -153,7 +150,7 @@ export default function lonescale(rl: RunlinePluginAPI) {
       if (domain) body.domain = domain;
       if (location) body.location = location;
       if (contactId) body.contact_id = contactId;
-      return apiRequest(ctx, "POST", `lists/${seg(listId)}/item`, body);
+      return apiRequest(ctx, "POST", `lists/${pathSegment(listId)}/item`, body);
     },
   });
 }

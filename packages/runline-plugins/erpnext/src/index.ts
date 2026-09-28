@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { erpnextCredential } from "./credentials.js";
 
 /** One ERPNext call: every endpoint is a path beneath the instance's /api/. */
@@ -73,7 +73,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
+        `resource/${pathSegment(docType)}/${pathSegment(documentName)}`,
       )) as Record<string, unknown>;
       return data.data;
     },
@@ -118,7 +118,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `resource/${encodeURIComponent(docType as string)}`,
+        `resource/${pathSegment(docType as string)}`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -145,7 +145,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        `resource/${encodeURIComponent(docType)}`,
+        `resource/${pathSegment(docType)}`,
         properties,
       )) as Record<string, unknown>;
       return data.data;
@@ -177,7 +177,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
+        `resource/${pathSegment(docType)}/${pathSegment(documentName)}`,
         properties,
       )) as Record<string, unknown>;
       return data.data;
@@ -203,7 +203,7 @@ export default function erpnext(rl: RunlinePluginAPI) {
       await req(
         ctx,
         "DELETE",
-        `resource/${encodeURIComponent(docType)}/${encodeURIComponent(documentName)}`,
+        `resource/${pathSegment(docType)}/${pathSegment(documentName)}`,
       );
       return { success: true };
     },

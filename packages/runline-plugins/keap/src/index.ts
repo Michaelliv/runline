@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { keapCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -217,7 +214,7 @@ export default function keap(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `contacts/${seg(contactId)}`,
+        `contacts/${pathSegment(contactId)}`,
         undefined,
         qs,
       );
@@ -271,7 +268,7 @@ export default function keap(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `contacts/${seg((input as { contactId: number }).contactId)}`,
+        `contacts/${pathSegment((input as { contactId: number }).contactId)}`,
       );
       return { success: true };
     },
@@ -323,7 +320,7 @@ export default function keap(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `notes/${seg((input as { noteId: number }).noteId)}`,
+        `notes/${pathSegment((input as { noteId: number }).noteId)}`,
       );
     },
   });
@@ -376,7 +373,7 @@ export default function keap(rl: RunlinePluginAPI) {
       if (b) bd.body = b;
       if (title) bd.title = title;
       if (type) bd.type = type;
-      return apiRequest(ctx, "PATCH", `notes/${seg(noteId)}`, bd);
+      return apiRequest(ctx, "PATCH", `notes/${pathSegment(noteId)}`, bd);
     },
   });
 
@@ -388,7 +385,7 @@ export default function keap(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `notes/${seg((input as { noteId: number }).noteId)}`,
+        `notes/${pathSegment((input as { noteId: number }).noteId)}`,
       );
       return { success: true };
     },
@@ -408,9 +405,14 @@ export default function keap(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId, tagIds } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `contacts/${seg(contactId)}/tags`, {
-        tagIds,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `contacts/${pathSegment(contactId)}/tags`,
+        {
+          tagIds,
+        },
+      );
     },
   });
 
@@ -430,7 +432,7 @@ export default function keap(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `contacts/${seg(contactId)}/tags`,
+        `contacts/${pathSegment(contactId)}/tags`,
         undefined,
         { ids: tagIds as string },
       );
@@ -452,7 +454,7 @@ export default function keap(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `contacts/${seg(contactId)}/tags`,
+        `contacts/${pathSegment(contactId)}/tags`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -518,7 +520,7 @@ export default function keap(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `orders/${seg((input as { orderId: number }).orderId)}`,
+        `orders/${pathSegment((input as { orderId: number }).orderId)}`,
       );
     },
   });
@@ -558,7 +560,7 @@ export default function keap(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `orders/${seg((input as { orderId: number }).orderId)}`,
+        `orders/${pathSegment((input as { orderId: number }).orderId)}`,
       );
       return { success: true };
     },
@@ -595,7 +597,7 @@ export default function keap(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `products/${seg((input as { productId: number }).productId)}`,
+        `products/${pathSegment((input as { productId: number }).productId)}`,
       );
     },
   });
@@ -627,7 +629,7 @@ export default function keap(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `products/${seg((input as { productId: number }).productId)}`,
+        `products/${pathSegment((input as { productId: number }).productId)}`,
       );
       return { success: true };
     },
@@ -667,7 +669,7 @@ export default function keap(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `emails/${seg((input as { emailRecordId: number }).emailRecordId)}`,
+        `emails/${pathSegment((input as { emailRecordId: number }).emailRecordId)}`,
       );
       return { success: true };
     },
@@ -754,7 +756,7 @@ export default function keap(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `files/${seg((input as { fileId: number }).fileId)}`,
+        `files/${pathSegment((input as { fileId: number }).fileId)}`,
       );
       return { success: true };
     },

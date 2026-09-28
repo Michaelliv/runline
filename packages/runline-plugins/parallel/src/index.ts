@@ -12,14 +12,11 @@
  *   await parallel.search({ objective: "latest Israel construction permit reform" })
  *   await parallel.search({ search_queries: ["tel aviv office vacancy rate 2026"], processor: "pro" })
  */
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import type { RunlinePluginAPI } from "runline";
 import { credentialJson } from "../../_shared/credentials.js";
-import { parallelCredential } from "./credentials.js";
+import { DEFAULT_BASE, parallelCredential } from "./credentials.js";
 
 const NAME = "parallel";
-const DEFAULT_BASE = "https://api.parallel.ai";
-
-type Ctx = ActionContext;
 
 export default function parallel(rl: RunlinePluginAPI): void {
   rl.setName(NAME);
@@ -78,31 +75,26 @@ export default function parallel(rl: RunlinePluginAPI): void {
         description: "Optional cap on extracted characters per result.",
       },
     },
-    async execute(input: any, ctx: Ctx) {
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
       const objective =
-        typeof input.objective === "string" ? input.objective.trim() : "";
-      const queries = Array.isArray(input.search_queries)
-        ? input.search_queries
-            .map((q: unknown) => String(q))
-            .filter((q: string) => q.trim())
+        typeof p.objective === "string" ? p.objective.trim() : "";
+      const queries = Array.isArray(p.search_queries)
+        ? p.search_queries.map((q) => String(q)).filter((q) => q.trim())
         : [];
       if (!objective && !queries.length) {
         throw new Error("Provide objective and/or search_queries");
       }
 
       const body: Record<string, unknown> = {
-        processor: String(input.processor || "base"),
+        processor: String(p.processor || "base"),
         max_results:
-          Number(input.max_results) > 0
-            ? Math.floor(Number(input.max_results))
-            : 5,
+          Number(p.max_results) > 0 ? Math.floor(Number(p.max_results)) : 5,
       };
       if (objective) body.objective = objective;
       if (queries.length) body.search_queries = queries;
-      if (Number(input.max_chars_per_result) > 0) {
-        body.max_chars_per_result = Math.floor(
-          Number(input.max_chars_per_result),
-        );
+      if (Number(p.max_chars_per_result) > 0) {
+        body.max_chars_per_result = Math.floor(Number(p.max_chars_per_result));
       }
 
       const data = await credentialJson(ctx, parallelCredential, NAME, {
@@ -111,7 +103,9 @@ export default function parallel(rl: RunlinePluginAPI): void {
         method: "POST",
         json: body,
       });
-      const results = (data.results ?? []).map((r: any) => ({
+      const results = (
+        (data.results ?? []) as Array<Record<string, unknown>>
+      ).map((r) => ({
         url: r.url,
         title: r.title,
         excerpts: r.excerpts ?? [],

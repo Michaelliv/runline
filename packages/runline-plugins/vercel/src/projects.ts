@@ -1,6 +1,12 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { LIST_INPUT_SCHEMA, TEAM_INPUT_SCHEMA, api, bindGetAction } from "./shared.js";
+import { pathSegment } from "../../_shared/credentials.js";
+import {
+  LIST_INPUT_SCHEMA,
+  TEAM_INPUT_SCHEMA,
+  api,
+  bindGetAction,
+} from "./shared.js";
 
 export function registerProjectActions(rl: RunlinePluginAPI) {
   const getAction = bindGetAction(rl);
@@ -18,7 +24,11 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     },
   });
 
-  getAction("project.get", "Get a Vercel project by ID or name.", (id) => `/v9/projects/${encodeURIComponent(id)}`);
+  getAction(
+    "project.get",
+    "Get a Vercel project by ID or name.",
+    (id) => `/v9/projects/${pathSegment(id)}`,
+  );
 
   rl.registerAction("project.domains", {
     access: "read",
@@ -30,7 +40,9 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const { projectIdOrName, ...query } = input as Record<string, unknown>;
-      return api(ctx, `/v9/projects/${encodeURIComponent(String(projectIdOrName))}/domains`, { query });
+      return api(ctx, `/v9/projects/${pathSegment(projectIdOrName)}/domains`, {
+        query,
+      });
     },
   });
 }

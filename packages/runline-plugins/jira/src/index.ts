@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { jiraCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function jr(
   ctx: ActionContext,
@@ -151,7 +148,13 @@ export default function jira(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
       if (expand) qs.expand = expand;
-      return jr(ctx, "GET", `api/2/issue/${seg(issueKey)}`, undefined, qs);
+      return jr(
+        ctx,
+        "GET",
+        `api/2/issue/${pathSegment(issueKey)}`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -189,16 +192,15 @@ export default function jira(rl: RunlinePluginAPI) {
         input as Record<string, unknown>;
       const body: Record<string, unknown> = {
         jql,
-        // The new endpoint returns only id+key by default; preserve the old
-        // "all navigable fields" behavior unless the caller specifies.
+        // The endpoint returns only id+key by default; ask for all fields
+        // unless the caller narrows the list.
         fields: Array.isArray(fields) ? fields : ["*all"],
       };
       if (maxResults) body.maxResults = maxResults;
       if (nextPageToken) body.nextPageToken = nextPageToken;
       if (expand) body.expand = expand;
-      // Atlassian removed POST /rest/api/2|3/search (CHANGE-2046).
-      // The replacement endpoint is POST /rest/api/3/search/jql with
-      // cursor-based pagination.
+      // POST api/3/search/jql is Atlassian's JQL search endpoint
+      // (CHANGE-2046), with cursor-based pagination.
       return jr(ctx, "POST", "api/3/search/jql", body);
     },
   });
@@ -229,7 +231,7 @@ export default function jira(rl: RunlinePluginAPI) {
       if (fields) body.fields = fields;
       if (update) body.update = update;
       if (transition) body.transition = transition;
-      return jr(ctx, "PUT", `api/2/issue/${seg(issueKey)}`, body);
+      return jr(ctx, "PUT", `api/2/issue/${pathSegment(issueKey)}`, body);
     },
   });
 
@@ -243,7 +245,7 @@ export default function jira(rl: RunlinePluginAPI) {
       await jr(
         ctx,
         "DELETE",
-        `api/2/issue/${seg((input as { issueKey: string }).issueKey)}`,
+        `api/2/issue/${pathSegment((input as { issueKey: string }).issueKey)}`,
       );
       return { success: true };
     },
@@ -274,7 +276,12 @@ export default function jira(rl: RunlinePluginAPI) {
         transition: { id: transitionId },
       };
       if (comment) body.update = { comment: [{ add: { body: comment } }] };
-      return jr(ctx, "POST", `api/2/issue/${seg(issueKey)}/transitions`, body);
+      return jr(
+        ctx,
+        "POST",
+        `api/2/issue/${pathSegment(issueKey)}/transitions`,
+        body,
+      );
     },
   });
 
@@ -288,7 +295,7 @@ export default function jira(rl: RunlinePluginAPI) {
       return jr(
         ctx,
         "GET",
-        `api/2/issue/${seg((input as { issueKey: string }).issueKey)}/transitions`,
+        `api/2/issue/${pathSegment((input as { issueKey: string }).issueKey)}/transitions`,
       );
     },
   });
@@ -303,7 +310,7 @@ export default function jira(rl: RunlinePluginAPI) {
       return jr(
         ctx,
         "GET",
-        `api/2/issue/${seg((input as { issueKey: string }).issueKey)}/changelog`,
+        `api/2/issue/${pathSegment((input as { issueKey: string }).issueKey)}/changelog`,
       );
     },
   });
@@ -326,7 +333,7 @@ export default function jira(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      return jr(ctx, "POST", `api/2/issue/${seg(issueKey)}/notify`, {
+      return jr(ctx, "POST", `api/2/issue/${pathSegment(issueKey)}/notify`, {
         subject,
         htmlBody,
         to,
@@ -345,7 +352,7 @@ export default function jira(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { issueKey, body: commentBody } = input as Record<string, unknown>;
-      return jr(ctx, "POST", `api/2/issue/${seg(issueKey)}/comment`, {
+      return jr(ctx, "POST", `api/2/issue/${pathSegment(issueKey)}/comment`, {
         body: commentBody,
       });
     },
@@ -363,7 +370,7 @@ export default function jira(rl: RunlinePluginAPI) {
       return jr(
         ctx,
         "GET",
-        `api/2/issue/${seg(issueKey)}/comment/${seg(commentId)}`,
+        `api/2/issue/${pathSegment(issueKey)}/comment/${pathSegment(commentId)}`,
       );
     },
   });
@@ -378,7 +385,7 @@ export default function jira(rl: RunlinePluginAPI) {
       return jr(
         ctx,
         "GET",
-        `api/2/issue/${seg((input as { issueKey: string }).issueKey)}/comment`,
+        `api/2/issue/${pathSegment((input as { issueKey: string }).issueKey)}/comment`,
       );
     },
   });
@@ -396,7 +403,7 @@ export default function jira(rl: RunlinePluginAPI) {
       return jr(
         ctx,
         "PUT",
-        `api/2/issue/${seg(issueKey)}/comment/${seg(commentId)}`,
+        `api/2/issue/${pathSegment(issueKey)}/comment/${pathSegment(commentId)}`,
         {
           body: b,
         },
@@ -416,7 +423,7 @@ export default function jira(rl: RunlinePluginAPI) {
       await jr(
         ctx,
         "DELETE",
-        `api/2/issue/${seg(issueKey)}/comment/${seg(commentId)}`,
+        `api/2/issue/${pathSegment(issueKey)}/comment/${pathSegment(commentId)}`,
       );
       return { success: true };
     },

@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { paypalCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -99,7 +96,7 @@ export default function paypal(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `payments/payouts/${seg(p.payoutBatchId)}`,
+        `payments/payouts/${pathSegment(p.payoutBatchId)}`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -116,7 +113,7 @@ export default function paypal(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `payments/payouts-item/${seg(payoutItemId)}`,
+        `payments/payouts-item/${pathSegment(payoutItemId)}`,
       );
     },
   });
@@ -130,7 +127,7 @@ export default function paypal(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `payments/payouts-item/${seg(payoutItemId)}/cancel`,
+        `payments/payouts-item/${pathSegment(payoutItemId)}/cancel`,
       );
     },
   });
