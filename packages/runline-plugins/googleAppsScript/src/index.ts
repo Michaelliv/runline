@@ -18,6 +18,7 @@ import {
   PositiveInteger,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
+import { seg } from "../../_shared/provider.js";
 
 const SCRIPT_API = "https://script.googleapis.com/v1";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -120,7 +121,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       { additionalProperties: false },
     ),
     async execute(input: any, ctx: ActionContext) {
-      const res = await call(ctx, "GET", `${SCRIPT_API}/projects/${input.scriptId}/content`);
+      const res = await call(ctx, "GET", `${SCRIPT_API}/projects/${seg(input.scriptId, "script ID", "googleAppsScript")}/content`);
       return { scriptId: input.scriptId, files: res.files ?? [] };
     },
   });
@@ -139,7 +140,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       { additionalProperties: false },
     ),
     async execute(input: any, ctx: ActionContext) {
-      const res = await call(ctx, "GET", `${SCRIPT_API}/projects/${input.scriptId}/content`);
+      const res = await call(ctx, "GET", `${SCRIPT_API}/projects/${seg(input.scriptId, "script ID", "googleAppsScript")}/content`);
       const file = (res.files ?? []).find((f: any) => f.name === input.name);
       if (!file) throw new Error(`No file "${input.name}". Available: ${(res.files ?? []).map((f: any) => f.name).join(", ")}`);
       return { name: file.name, type: file.type, source: file.source };
@@ -161,14 +162,14 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       { additionalProperties: false },
     ),
     async execute(input: any, ctx: ActionContext) {
-      const cur = await call(ctx, "GET", `${SCRIPT_API}/projects/${input.scriptId}/content`);
+      const cur = await call(ctx, "GET", `${SCRIPT_API}/projects/${seg(input.scriptId, "script ID", "googleAppsScript")}/content`);
       const files = cur.files ?? [];
       const idx = files.findIndex((f: any) => f.name === input.name);
       const type = input.type || (input.name === "appsscript" ? "JSON" : files[idx]?.type || "SERVER_JS");
       const entry = { name: input.name, type, source: input.source };
       if (idx >= 0) files[idx] = entry;
       else files.push(entry);
-      await call(ctx, "PUT", `${SCRIPT_API}/projects/${input.scriptId}/content`, { files });
+      await call(ctx, "PUT", `${SCRIPT_API}/projects/${seg(input.scriptId, "script ID", "googleAppsScript")}/content`, { files });
       return { scriptId: input.scriptId, updated: input.name, fileCount: files.length };
     },
   });
@@ -191,7 +192,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       { additionalProperties: false },
     ),
     async execute(input: any, ctx: ActionContext) {
-      const res = await call(ctx, "PUT", `${SCRIPT_API}/projects/${input.scriptId}/content`, { files: input.files });
+      const res = await call(ctx, "PUT", `${SCRIPT_API}/projects/${seg(input.scriptId, "script ID", "googleAppsScript")}/content`, { files: input.files });
       return { scriptId: input.scriptId, fileCount: (res.files ?? []).length };
     },
   });
@@ -230,7 +231,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       { additionalProperties: false },
     ),
     async execute(input: any, ctx: ActionContext) {
-      const res = await call(ctx, "POST", `${SCRIPT_API}/projects/${input.scriptId}/versions`, { description: input.description || "" });
+      const res = await call(ctx, "POST", `${SCRIPT_API}/projects/${seg(input.scriptId, "script ID", "googleAppsScript")}/versions`, { description: input.description || "" });
       return { scriptId: input.scriptId, versionNumber: res.versionNumber, description: res.description };
     },
   });
@@ -250,7 +251,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       { additionalProperties: false },
     ),
     async execute(input: any, ctx: ActionContext) {
-      const res = await call(ctx, "POST", `${SCRIPT_API}/projects/${input.scriptId}/deployments`, {
+      const res = await call(ctx, "POST", `${SCRIPT_API}/projects/${seg(input.scriptId, "script ID", "googleAppsScript")}/deployments`, {
         versionNumber: input.versionNumber,
         manifestFileName: input.manifestFileName || "appsscript",
         description: input.description || "",
@@ -276,7 +277,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       { additionalProperties: false },
     ),
     async execute(input: any, ctx: ActionContext) {
-      const res = await call(ctx, "POST", `${SCRIPT_API}/scripts/${input.scriptId}:run`, {
+      const res = await call(ctx, "POST", `${SCRIPT_API}/scripts/${seg(input.scriptId, "script ID", "googleAppsScript")}:run`, {
         function: input.functionName,
         parameters: input.parameters ?? [],
         devMode: input.devMode === undefined ? true : input.devMode,
