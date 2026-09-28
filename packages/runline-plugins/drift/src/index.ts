@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { driftCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
   ctx: ActionContext,
@@ -65,7 +62,7 @@ export default function drift(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `contacts/${seg((input as { contactId: string }).contactId)}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       )) as Record<string, unknown>;
       return data.data;
     },
@@ -92,7 +89,7 @@ export default function drift(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PATCH",
-        `contacts/${seg(contactId)}`,
+        `contacts/${pathSegment(contactId)}`,
         { attributes: attrs },
       )) as Record<string, unknown>;
       return data.data;
@@ -109,7 +106,7 @@ export default function drift(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `contacts/${seg((input as { contactId: string }).contactId)}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       );
       return { success: true };
     },
