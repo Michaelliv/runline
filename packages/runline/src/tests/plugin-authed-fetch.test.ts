@@ -156,7 +156,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "openai/src/index.ts",
   "paddle/src/index.ts",
   "pagerduty/src/index.ts",
-  "parallel/src/index.ts",
   "paypal/src/index.ts",
   "peekalink/src/index.ts",
   "phantombuster/src/index.ts",
