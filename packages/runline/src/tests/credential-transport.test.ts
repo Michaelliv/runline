@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { describe, it } from "node:test";
 import * as t from "typebox";
 import { AuthError } from "../auth/errors.js";
@@ -670,6 +671,131 @@ describe("constrained credential transport", () => {
       );
     assert.equal(reads, 0);
     assert.equal(calls, 0);
+  });
+
+  it("signs a short-lived HS256 JWT from a key id and hex secret, per request", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["adminKey"],
+      [
+        {
+          in: "jwt",
+          part: "adminKey",
+          name: "Authorization",
+          prefix: "Ghost ",
+          audience: "/admin/",
+        },
+      ],
+    );
+    const tokens: string[] = [];
+    const h = await harness(
+      mock((_url, init) => {
+        tokens.push(new Headers(init.headers).get("authorization") ?? "");
+        return Response.json({});
+      }),
+      { key: { adminKey: "kid123:00ff10" } },
+      def,
+    );
+    const before = Math.floor(Date.now() / 1000);
+    await h.transport.request(h.binding, request);
+    assert.match(tokens[0], /^Ghost [\w-]+\.[\w-]+\.[\w-]+$/);
+    const [head, body, signature] = tokens[0].slice("Ghost ".length).split(".");
+    const decode = (part: string) =>
+      JSON.parse(Buffer.from(part, "base64url").toString());
+    assert.deepEqual(decode(head), { alg: "HS256", typ: "JWT", kid: "kid123" });
+    const claims = decode(body);
+    assert.equal(claims.aud, "/admin/");
+    assert.ok(claims.iat >= before && claims.iat <= before + 5);
+    assert.equal(claims.exp, claims.iat + 300);
+    assert.equal(
+      signature,
+      createHmac("sha256", Buffer.from("00ff10", "hex"))
+        .update(`${head}.${body}`)
+        .digest("base64url"),
+    );
+  });
+
+  it("refuses a JWT key that is not a key id and hex secret, before any IO", async () => {
+    for (const adminKey of [
+      "nocolon",
+      "kid:nothex",
+      "kid:abc",
+      ":00ff",
+      "kid:",
+    ]) {
+      const def = definition("bearer");
+      placed(
+        def,
+        ["adminKey"],
+        [
+          {
+            in: "jwt",
+            part: "adminKey",
+            name: "Authorization",
+            audience: "/a/",
+          },
+        ],
+      );
+      let calls = 0;
+      const h = await harness(
+        mock(() => {
+          calls++;
+          return Response.json({});
+        }),
+        { key: { adminKey } },
+        def,
+      );
+      await assert.rejects(
+        h.transport.request(h.binding, request),
+        errorCode("invalid_credentials"),
+      );
+      assert.equal(calls, 0);
+    }
+  });
+
+  it("signs the query as sent, after every other placement, with an HMAC in a header", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["apiId", "apiKey", "extra"],
+      [
+        { in: "header", part: "apiId", name: "api-auth-id" },
+        { in: "querySignature", part: "apiKey", name: "api-auth-signature" },
+        { in: "query", part: "extra", name: "extra" },
+      ],
+    );
+    const seen: Array<{ url: string; id: string | null; sig: string | null }> =
+      [];
+    const h = await harness(
+      mock((url, init) => {
+        const headers = new Headers(init.headers);
+        seen.push({
+          url,
+          id: headers.get("api-auth-id"),
+          sig: headers.get("api-auth-signature"),
+        });
+        return Response.json({});
+      }),
+      { key: { apiId: "id1", apiKey: "k1", extra: "x" } },
+      def,
+    );
+    await h.transport.request(h.binding, { ...request, path: "items?b=2&a=1" });
+    await h.transport.request(h.binding, { ...request, path: "items" });
+    const hmac = (query: string) =>
+      createHmac("sha256", "k1").update(query).digest("base64");
+    assert.deepEqual(seen, [
+      {
+        url: "https://api.example/v1/items?b=2&a=1&extra=x",
+        id: "id1",
+        sig: hmac("b=2&a=1&extra=x"),
+      },
+      {
+        url: "https://api.example/v1/items?extra=x",
+        id: "id1",
+        sig: hmac("extra=x"),
+      },
+    ]);
   });
 
   it("places a part only on the targets it is scoped to, so two parts may share a header across targets", async () => {

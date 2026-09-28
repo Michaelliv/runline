@@ -404,6 +404,36 @@ describe("credential registry", () => {
         const a = d.methods.delegated.authentication;
         if (a.kind === "oauth2") a.renewal = "clientCredentials";
       },
+      // A signed placement names a real header and a plain audience, and
+      // its header is reserved like any other.
+      ...["", "aud ience", "x".repeat(65), 7].map(
+        (audience) => (d: CredentialType) => {
+          d.methods.apiKey.authentication = placed(
+            ["secret"],
+            [
+              {
+                in: "jwt",
+                part: "secret",
+                name: "Authorization",
+                audience: audience as string,
+              },
+            ],
+          );
+        },
+      ),
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [{ in: "querySignature", part: "secret", name: "Host" }],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [{ in: "querySignature", part: "secret", name: "X-Sig" }],
+        );
+        d.methods.apiKey.targets.api.allowedHeaders = ["X-Sig"];
+      },
       // The transport alone sets Destination; a destination gets no path
       // part, so COPY and MOVE cannot share a target with one.
       (d) => {
@@ -428,6 +458,29 @@ describe("credential registry", () => {
       edit(def);
       assert.throws(() => new CredentialRegistry().register(def));
     }
+  });
+
+  it("registers the signed placements", () => {
+    const def = definition();
+    def.methods.apiKey.schema = t.Object(
+      { key: staticSecretSchema(["id", "adminKey", "apiKey"]) },
+      { additionalProperties: false },
+    );
+    def.methods.apiKey.authentication = placed(
+      ["id", "adminKey", "apiKey"],
+      [
+        { in: "header", part: "id", name: "api-auth-id" },
+        {
+          in: "jwt",
+          part: "adminKey",
+          name: "Authorization",
+          prefix: "Ghost ",
+          audience: "/admin/",
+        },
+        { in: "querySignature", part: "apiKey", name: "api-auth-signature" },
+      ],
+    );
+    new CredentialRegistry().register(def);
   });
 
   it("registers the WebDAV methods a target declares", () => {
