@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { hubspotCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -79,7 +76,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
         return apiRequest(
           ctx,
           "GET",
-          `crm/v3/objects/${objectType}/${seg(id)}`,
+          `crm/v3/objects/${objectType}/${pathSegment(id)}`,
           undefined,
           qs,
         );
@@ -143,7 +140,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
         return apiRequest(
           ctx,
           "PATCH",
-          `crm/v3/objects/${objectType}/${seg(id)}`,
+          `crm/v3/objects/${objectType}/${pathSegment(id)}`,
           { properties },
         );
       },
@@ -158,7 +155,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
         await apiRequest(
           ctx,
           "DELETE",
-          `crm/v3/objects/${objectType}/${seg((input as { id: string }).id)}`,
+          `crm/v3/objects/${objectType}/${pathSegment((input as { id: string }).id)}`,
         );
         return { success: true };
       },
@@ -223,9 +220,14 @@ export default function hubspot(rl: RunlinePluginAPI) {
         listId: string;
         contactIds: number[];
       };
-      return apiRequest(ctx, "POST", `contacts/v1/lists/${seg(listId)}/add`, {
-        vids: contactIds,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `contacts/v1/lists/${pathSegment(listId)}/add`,
+        {
+          vids: contactIds,
+        },
+      );
     },
   });
 
@@ -248,7 +250,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `contacts/v1/lists/${seg(listId)}/remove`,
+        `contacts/v1/lists/${pathSegment(listId)}/remove`,
         { vids: contactIds },
       );
     },
@@ -303,7 +305,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `engagements/v1/engagements/${seg((input as { engagementId: string }).engagementId)}`,
+        `engagements/v1/engagements/${pathSegment((input as { engagementId: string }).engagementId)}`,
       );
     },
   });
@@ -344,7 +346,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `engagements/v1/engagements/${seg((input as { engagementId: string }).engagementId)}`,
+        `engagements/v1/engagements/${pathSegment((input as { engagementId: string }).engagementId)}`,
       );
       return { success: true };
     },
@@ -383,7 +385,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `submissions/v3/integration/secure/submit/${seg(portalId)}/${seg(formId)}`,
+        `submissions/v3/integration/secure/submit/${pathSegment(portalId)}/${pathSegment(formId)}`,
         body,
       );
     },
@@ -399,7 +401,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `forms/v2/fields/${seg((input as { formId: string }).formId)}`,
+        `forms/v2/fields/${pathSegment((input as { formId: string }).formId)}`,
       );
     },
   });
