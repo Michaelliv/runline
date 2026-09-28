@@ -209,7 +209,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["tapfiliate", "phase 3: not yet migrated"],
   ["telegram", "path token: the bot token is a URL path segment"],
   ["thehive", "phase 3: not yet migrated"],
-  ["thehiveProject", "phase 3: not yet migrated"],
   ["together", "phase 3: not yet migrated"],
   [
     "travisci",
