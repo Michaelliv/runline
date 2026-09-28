@@ -103,6 +103,57 @@ describe("staticCredential", () => {
     new CredentialRegistry().register(basic.type);
   });
 
+  it("the general form places several named parts, each read locally from its own field", () => {
+    const selection = staticCredential({
+      id: "trello",
+      auth: {
+        kind: "static",
+        parts: ["key", "token"],
+        placements: [
+          { in: "query", part: "key", name: "key" },
+          { in: "query", part: "token", name: "token" },
+        ],
+      },
+      local: { key: "apiKey", token: "token" },
+      targets: {
+        api: { baseUrl: "https://api.trello.com/1/", methods: ["GET"] },
+      },
+    })({});
+    assert.equal(selection.method, "static");
+    assert.deepEqual(selection.localSecret, {
+      key: { field: "apiKey" },
+      token: { field: "token" },
+    });
+    new CredentialRegistry().register(selection.type);
+  });
+
+  it("refuses a local source for a part the credential does not have, or a part with none", () => {
+    const targets = {
+      api: { baseUrl: "https://api.example/", methods: ["GET" as const] },
+    };
+    for (const local of [
+      { key: "apiKey" },
+      { key: "a", token: "t", extra: "x" },
+    ])
+      assert.throws(
+        () =>
+          staticCredential({
+            id: "x",
+            auth: {
+              kind: "static",
+              parts: ["key", "token"],
+              placements: [
+                { in: "query", part: "key", name: "key" },
+                { in: "query", part: "token", name: "token" },
+              ],
+            },
+            local,
+            targets,
+          }),
+        { code: "invalid_definition" },
+      );
+  });
+
   it("bearer and query-key shorthands place one secret part", () => {
     const targets = {
       api: { baseUrl: "https://api.example/", methods: ["GET" as const] },
