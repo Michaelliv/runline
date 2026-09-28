@@ -75,7 +75,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "convertkit",
     "body key: api_secret travels in the JSON body of every write",
   ],
-  ["copper", "phase 2: not yet migrated"],
   ["cortex", "phase 3: not yet migrated"],
   ["currents", "phase 3: not yet migrated"],
   [

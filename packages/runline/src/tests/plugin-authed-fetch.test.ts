@@ -113,7 +113,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "coingecko/src/index.ts",
   "contentful/src/index.ts",
   "convertkit/src/index.ts",
-  "copper/src/index.ts",
   "cortex/src/index.ts",
   "currents/src/index.ts",
   "customerIo/src/index.ts",
