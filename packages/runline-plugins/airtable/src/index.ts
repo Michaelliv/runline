@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { airtableCredential } from "./credentials.js";
 
 function apiRequest(
@@ -150,7 +147,7 @@ export default function airtable(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { baseId } = input as { baseId: string };
-      return apiRequest(ctx, "GET", `meta/bases/${seg(baseId)}/tables`);
+      return apiRequest(ctx, "GET", `meta/bases/${pathSegment(baseId)}/tables`);
     },
   });
 
@@ -186,7 +183,12 @@ export default function airtable(rl: RunlinePluginAPI) {
       };
       const body: Record<string, unknown> = { fields };
       if (typecast) body.typecast = true;
-      return apiRequest(ctx, "POST", `${seg(baseId)}/${seg(tableId)}`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
+        body,
+      );
     },
   });
 
@@ -223,7 +225,7 @@ export default function airtable(rl: RunlinePluginAPI) {
       return batchWrite(
         ctx,
         "POST",
-        `${seg(baseId)}/${seg(tableId)}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
         records,
         extra,
       );
@@ -255,7 +257,7 @@ export default function airtable(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `${seg(baseId)}/${seg(tableId)}/${seg(recordId)}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}/${pathSegment(recordId)}`,
       );
     },
   });
@@ -311,7 +313,12 @@ export default function airtable(rl: RunlinePluginAPI) {
       if (view) qs.view = view;
       if (limit && !filterByFormula) qs.maxRecords = limit;
 
-      return paginateRecords(ctx, `${seg(baseId)}/${seg(tableId)}`, qs, limit);
+      return paginateRecords(
+        ctx,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
+        qs,
+        limit,
+      );
     },
   });
 
@@ -351,7 +358,7 @@ export default function airtable(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PATCH",
-        `${seg(baseId)}/${seg(tableId)}/${seg(recordId)}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}/${pathSegment(recordId)}`,
         body,
       );
     },
@@ -390,7 +397,7 @@ export default function airtable(rl: RunlinePluginAPI) {
       return batchWrite(
         ctx,
         "PATCH",
-        `${seg(baseId)}/${seg(tableId)}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
         records,
         extra,
       );
@@ -433,7 +440,12 @@ export default function airtable(rl: RunlinePluginAPI) {
         performUpsert: { fieldsToMergeOn },
       };
       if (typecast) body.typecast = true;
-      return apiRequest(ctx, "PATCH", `${seg(baseId)}/${seg(tableId)}`, body);
+      return apiRequest(
+        ctx,
+        "PATCH",
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
+        body,
+      );
     },
   });
 
@@ -458,7 +470,7 @@ export default function airtable(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `${seg(baseId)}/${seg(tableId)}/${seg(recordId)}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}/${pathSegment(recordId)}`,
       );
     },
   });

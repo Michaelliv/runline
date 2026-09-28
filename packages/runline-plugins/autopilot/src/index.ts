@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { autopilotCredential } from "./credentials.js";
 
 function apiRequest(
@@ -45,7 +42,7 @@ async function paginateAll(
 
     const bookmark = data.bookmark as string | undefined;
     if (!bookmark) break;
-    currentPath = `${path}/${seg(bookmark)}`;
+    currentPath = `${path}/${pathSegment(bookmark)}`;
   }
 
   return results;
@@ -121,7 +118,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      return apiRequest(ctx, "GET", `contact/${seg(contactId)}`);
+      return apiRequest(ctx, "GET", `contact/${pathSegment(contactId)}`);
     },
   });
 
@@ -149,7 +146,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      await apiRequest(ctx, "DELETE", `contact/${seg(contactId)}`);
+      await apiRequest(ctx, "DELETE", `contact/${pathSegment(contactId)}`);
       return { success: true };
     },
   });
@@ -175,7 +172,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "POST",
-        `trigger/${seg(triggerId)}/contact/${seg(contactId)}`,
+        `trigger/${pathSegment(triggerId)}/contact/${pathSegment(contactId)}`,
       );
       return { success: true };
     },
@@ -198,7 +195,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "POST",
-        `list/${seg(listId)}/contact/${seg(contactId)}`,
+        `list/${pathSegment(listId)}/contact/${pathSegment(contactId)}`,
       );
       return { success: true };
     },
@@ -219,7 +216,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `list/${seg(listId)}/contact/${seg(contactId)}`,
+        `list/${pathSegment(listId)}/contact/${pathSegment(contactId)}`,
       );
       return { success: true };
     },
@@ -241,7 +238,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
         await apiRequest(
           ctx,
           "GET",
-          `list/${seg(listId)}/contact/${seg(contactId)}`,
+          `list/${pathSegment(listId)}/contact/${pathSegment(contactId)}`,
         );
         return { exists: true };
       } catch {
@@ -265,7 +262,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
       const { listId, limit } = input as { listId: string; limit?: number };
       return paginateAll(
         ctx,
-        `list/${seg(listId)}/contacts`,
+        `list/${pathSegment(listId)}/contacts`,
         "contacts",
         limit,
       );

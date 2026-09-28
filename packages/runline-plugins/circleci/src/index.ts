@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { circleciCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -46,7 +43,7 @@ async function paginateAll(
 
 /** An org/repo slug as literal path segments, each part one encoded, non-empty segment. */
 function encodeSlug(slug: string): string {
-  return slug.split("/").map(seg).join("/");
+  return slug.split("/").map(pathSegment).join("/");
 }
 
 export default function circleci(rl: RunlinePluginAPI) {
@@ -92,7 +89,7 @@ export default function circleci(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `project/${seg(vcs)}/${encodeSlug(projectSlug)}/pipeline/${seg(pipelineNumber)}`,
+        `project/${pathSegment(vcs)}/${encodeSlug(projectSlug)}/pipeline/${pathSegment(pipelineNumber)}`,
       );
     },
   });
@@ -127,7 +124,7 @@ export default function circleci(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const endpoint = `project/${seg(vcs)}/${encodeSlug(projectSlug as string)}/pipeline`;
+      const endpoint = `project/${pathSegment(vcs)}/${encodeSlug(projectSlug as string)}/pipeline`;
       const qs: Record<string, unknown> = {};
       if (branch) qs.branch = branch;
 
@@ -178,7 +175,7 @@ export default function circleci(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `project/${seg(vcs)}/${encodeSlug(projectSlug as string)}/pipeline`,
+        `project/${pathSegment(vcs)}/${encodeSlug(projectSlug as string)}/pipeline`,
         body,
       );
     },

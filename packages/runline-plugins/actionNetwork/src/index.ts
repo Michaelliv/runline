@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { actionNetworkCredential } from "./credentials.js";
 
 /** Public API base, used only for the resource links Action Network expects in bodies. */
@@ -91,7 +88,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `events/${seg(eventId)}/attendances`,
+        `events/${pathSegment(eventId)}/attendances`,
         body,
       );
     },
@@ -116,7 +113,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `events/${seg(eventId)}/attendances/${seg(attendanceId)}`,
+        `events/${pathSegment(eventId)}/attendances/${pathSegment(attendanceId)}`,
       );
     },
   });
@@ -136,7 +133,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       const { eventId, limit } = input as { eventId: string; limit?: number };
       return paginate(
         ctx,
-        `events/${seg(eventId)}/attendances`,
+        `events/${pathSegment(eventId)}/attendances`,
         "osdi:attendances",
         limit,
       );
@@ -184,7 +181,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { eventId } = input as { eventId: string };
-      return apiRequest(ctx, "GET", `events/${seg(eventId)}`);
+      return apiRequest(ctx, "GET", `events/${pathSegment(eventId)}`);
     },
   });
 
@@ -241,7 +238,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { personId } = input as { personId: string };
-      return apiRequest(ctx, "GET", `people/${seg(personId)}`);
+      return apiRequest(ctx, "GET", `people/${pathSegment(personId)}`);
     },
   });
 
@@ -277,7 +274,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { ...rest };
       if (givenName !== undefined) body.given_name = givenName;
       if (familyName !== undefined) body.family_name = familyName;
-      return apiRequest(ctx, "PUT", `people/${seg(personId)}`, body);
+      return apiRequest(ctx, "PUT", `people/${pathSegment(personId)}`, body);
     },
   });
 
@@ -330,7 +327,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { petitionId } = input as { petitionId: string };
-      return apiRequest(ctx, "GET", `petitions/${seg(petitionId)}`);
+      return apiRequest(ctx, "GET", `petitions/${pathSegment(petitionId)}`);
     },
   });
 
@@ -374,7 +371,12 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
           .split(",")
           .map((t) => ({ name: t.trim() }));
       }
-      return apiRequest(ctx, "PUT", `petitions/${seg(petitionId)}`, body);
+      return apiRequest(
+        ctx,
+        "PUT",
+        `petitions/${pathSegment(petitionId)}`,
+        body,
+      );
     },
   });
 
@@ -404,7 +406,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `petitions/${seg(petitionId)}/signatures`,
+        `petitions/${pathSegment(petitionId)}/signatures`,
         body,
       );
     },
@@ -433,7 +435,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `petitions/${seg(petitionId)}/signatures/${seg(signatureId)}`,
+        `petitions/${pathSegment(petitionId)}/signatures/${pathSegment(signatureId)}`,
       );
     },
   });
@@ -460,7 +462,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       };
       return paginate(
         ctx,
-        `petitions/${seg(petitionId)}/signatures`,
+        `petitions/${pathSegment(petitionId)}/signatures`,
         "osdi:signatures",
         limit,
       );
@@ -490,7 +492,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `petitions/${seg(petitionId)}/signatures/${seg(signatureId)}`,
+        `petitions/${pathSegment(petitionId)}/signatures/${pathSegment(signatureId)}`,
         rest,
       );
     },
@@ -518,7 +520,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tagId } = input as { tagId: string };
-      return apiRequest(ctx, "GET", `tags/${seg(tagId)}`);
+      return apiRequest(ctx, "GET", `tags/${pathSegment(tagId)}`);
     },
   });
 
@@ -554,7 +556,12 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
           "osdi:person": { href: `${BASE_URL}/people/${personId}` },
         },
       };
-      return apiRequest(ctx, "POST", `tags/${seg(tagId)}/taggings`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `tags/${pathSegment(tagId)}/taggings`,
+        body,
+      );
     },
   });
 
@@ -573,7 +580,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `tags/${seg(tagId)}/taggings/${seg(taggingId)}`,
+        `tags/${pathSegment(tagId)}/taggings/${pathSegment(taggingId)}`,
       );
     },
   });

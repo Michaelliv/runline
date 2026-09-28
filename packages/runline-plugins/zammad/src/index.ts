@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { zammadCredential } from "./credentials.js";
 
 async function api(
@@ -47,7 +44,7 @@ function registerCrud(
       return api(
         ctx,
         "GET",
-        `${plural}/${seg((input as Record<string, unknown>).id)}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -75,7 +72,7 @@ function registerCrud(
       return api(
         ctx,
         "PUT",
-        `${plural}/${seg(p.id)}`,
+        `${plural}/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -89,7 +86,7 @@ function registerCrud(
       await api(
         ctx,
         "DELETE",
-        `${plural}/${seg((input as Record<string, unknown>).id)}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -164,14 +161,15 @@ export default function zammad(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const id = (input as Record<string, unknown>).id;
-      const ticket = (await api(ctx, "GET", `tickets/${seg(id)}`)) as Record<
-        string,
-        unknown
-      >;
+      const ticket = (await api(
+        ctx,
+        "GET",
+        `tickets/${pathSegment(id)}`,
+      )) as Record<string, unknown>;
       ticket.articles = await api(
         ctx,
         "GET",
-        `ticket_articles/by_ticket/${seg(id)}`,
+        `ticket_articles/by_ticket/${pathSegment(id)}`,
       );
       return ticket;
     },
@@ -201,7 +199,7 @@ export default function zammad(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PUT",
-        `tickets/${seg(p.id)}`,
+        `tickets/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -215,7 +213,7 @@ export default function zammad(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `tickets/${seg((input as Record<string, unknown>).id)}`,
+        `tickets/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },

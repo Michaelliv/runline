@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { baserowCredential } from "./credentials.js";
 
 /** A path beneath the host's /api/ base, signed through the credential. */
@@ -91,7 +88,7 @@ export default function baserow(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `database/rows/table/${seg(tableId)}/`,
+        `database/rows/table/${pathSegment(tableId)}/`,
         fields,
       );
     },
@@ -109,7 +106,7 @@ export default function baserow(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `database/rows/table/${seg(tableId)}/${seg(rowId)}/`,
+        `database/rows/table/${pathSegment(tableId)}/${pathSegment(rowId)}/`,
       );
     },
   });
@@ -142,7 +139,7 @@ export default function baserow(rl: RunlinePluginAPI) {
       if (orderBy) qs.order_by = orderBy;
       return paginateAll(
         ctx,
-        `database/rows/table/${seg(tableId)}/`,
+        `database/rows/table/${pathSegment(tableId)}/`,
         qs,
         limit as number | undefined,
       );
@@ -170,7 +167,7 @@ export default function baserow(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PATCH",
-        `database/rows/table/${seg(tableId)}/${seg(rowId)}/`,
+        `database/rows/table/${pathSegment(tableId)}/${pathSegment(rowId)}/`,
         fields,
       );
     },
@@ -188,7 +185,7 @@ export default function baserow(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `database/rows/table/${seg(tableId)}/${seg(rowId)}/`,
+        `database/rows/table/${pathSegment(tableId)}/${pathSegment(rowId)}/`,
       );
       return { success: true };
     },
@@ -210,7 +207,7 @@ export default function baserow(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `database/rows/table/${seg(tableId)}/batch/`,
+        `database/rows/table/${pathSegment(tableId)}/batch/`,
         {
           items,
         },
@@ -234,7 +231,7 @@ export default function baserow(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PATCH",
-        `database/rows/table/${seg(tableId)}/batch/`,
+        `database/rows/table/${pathSegment(tableId)}/batch/`,
         { items },
       );
     },
@@ -259,7 +256,7 @@ export default function baserow(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "POST",
-        `database/rows/table/${seg(tableId)}/batch-delete/`,
+        `database/rows/table/${pathSegment(tableId)}/batch-delete/`,
         {
           items: rowIds,
         },

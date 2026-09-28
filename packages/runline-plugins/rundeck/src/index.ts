@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { rundeckCredential } from "./credentials.js";
 
 function apiRequest(
@@ -73,7 +70,7 @@ export default function rundeck(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `14/job/${seg(p.jobId)}/run`,
+        `14/job/${pathSegment(p.jobId)}/run`,
         { argString: argString.trim() },
         qs,
       );
@@ -86,7 +83,7 @@ export default function rundeck(rl: RunlinePluginAPI) {
     inputSchema: { jobId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { jobId } = input as Record<string, unknown>;
-      return apiRequest(ctx, "GET", `18/job/${seg(jobId)}/info`);
+      return apiRequest(ctx, "GET", `18/job/${pathSegment(jobId)}/info`);
     },
   });
 }

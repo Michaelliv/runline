@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { copperCredential } from "./credentials.js";
 
 function apiRequest(
@@ -97,7 +94,7 @@ function registerCrud(
       return apiRequest(
         ctx,
         "GET",
-        `${endpoint}/${seg((input as Record<string, string>)[idParam])}`,
+        `${endpoint}/${pathSegment((input as Record<string, string>)[idParam])}`,
       );
     },
   });
@@ -126,7 +123,7 @@ function registerCrud(
     },
     async execute(input, ctx) {
       const { [idParam]: id, ...body } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `${endpoint}/${seg(id)}`, body);
+      return apiRequest(ctx, "PUT", `${endpoint}/${pathSegment(id)}`, body);
     },
   });
 
@@ -144,7 +141,7 @@ function registerCrud(
       return apiRequest(
         ctx,
         "DELETE",
-        `${endpoint}/${seg((input as Record<string, string>)[idParam])}`,
+        `${endpoint}/${pathSegment((input as Record<string, string>)[idParam])}`,
       );
     },
   });

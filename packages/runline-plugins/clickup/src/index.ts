@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { clickupCredential } from "./credentials.js";
 
 function apiRequest(
@@ -78,7 +75,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `task/${seg(taskId)}/checklist`,
+        `task/${pathSegment(taskId)}/checklist`,
         { name },
       )) as Record<string, unknown>;
       return data.checklist;
@@ -102,7 +99,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `checklist/${seg(checklistId)}`,
+        `checklist/${pathSegment(checklistId)}`,
         body,
       )) as Record<string, unknown>;
       return data.checklist;
@@ -121,7 +118,7 @@ export default function clickup(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { checklistId } = input as { checklistId: string };
-      await apiRequest(ctx, "DELETE", `checklist/${seg(checklistId)}`);
+      await apiRequest(ctx, "DELETE", `checklist/${pathSegment(checklistId)}`);
       return { success: true };
     },
   });
@@ -151,7 +148,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `checklist/${seg(checklistId)}/checklist_item`,
+        `checklist/${pathSegment(checklistId)}/checklist_item`,
         body,
       )) as Record<string, unknown>;
       return data.checklist;
@@ -189,7 +186,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `checklist/${seg(checklistId)}/checklist_item/${seg(checklistItemId)}`,
+        `checklist/${pathSegment(checklistId)}/checklist_item/${pathSegment(checklistItemId)}`,
         body,
       )) as Record<string, unknown>;
       return data.checklist;
@@ -219,7 +216,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `checklist/${seg(checklistId)}/checklist_item/${seg(checklistItemId)}`,
+        `checklist/${pathSegment(checklistId)}/checklist_item/${pathSegment(checklistItemId)}`,
       );
       return { success: true };
     },
@@ -262,7 +259,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `${seg(commentOn)}/${seg(id)}/comment`,
+        `${pathSegment(commentOn)}/${pathSegment(id)}/comment`,
         body,
       );
     },
@@ -285,7 +282,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `${seg(commentsOn)}/${seg(id)}/comment`,
+        `${pathSegment(commentsOn)}/${pathSegment(id)}/comment`,
       )) as Record<string, unknown>;
       const comments = (data.comments as unknown[]) ?? [];
       if (limit) return comments.slice(0, limit as number);
@@ -311,7 +308,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       if (commentText) body.comment_text = commentText;
       if (assignee) body.assignee = assignee;
       if (resolved !== undefined) body.resolved = resolved;
-      await apiRequest(ctx, "PUT", `comment/${seg(commentId)}`, body);
+      await apiRequest(ctx, "PUT", `comment/${pathSegment(commentId)}`, body);
       return { success: true };
     },
   });
@@ -324,7 +321,7 @@ export default function clickup(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { commentId } = input as { commentId: string };
-      await apiRequest(ctx, "DELETE", `comment/${seg(commentId)}`);
+      await apiRequest(ctx, "DELETE", `comment/${pathSegment(commentId)}`);
       return { success: true };
     },
   });
@@ -340,7 +337,7 @@ export default function clickup(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { spaceId, name } = input as { spaceId: string; name: string };
-      return apiRequest(ctx, "POST", `space/${seg(spaceId)}/folder`, {
+      return apiRequest(ctx, "POST", `space/${pathSegment(spaceId)}/folder`, {
         name,
       });
     },
@@ -356,7 +353,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `folder/${seg((input as { folderId: string }).folderId)}`,
+        `folder/${pathSegment((input as { folderId: string }).folderId)}`,
       );
     },
   });
@@ -383,7 +380,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `space/${seg(spaceId)}/folder`,
+        `space/${pathSegment(spaceId)}/folder`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -402,7 +399,7 @@ export default function clickup(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { folderId, ...body } = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `folder/${seg(folderId)}`, body);
+      return apiRequest(ctx, "PUT", `folder/${pathSegment(folderId)}`, body);
     },
   });
 
@@ -416,7 +413,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `folder/${seg((input as { folderId: string }).folderId)}`,
+        `folder/${pathSegment((input as { folderId: string }).folderId)}`,
       );
       return { success: true };
     },
@@ -471,7 +468,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `team/${seg(teamId)}/goal`,
+        `team/${pathSegment(teamId)}/goal`,
         body,
       )) as Record<string, unknown>;
       return data.goal;
@@ -488,7 +485,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `goal/${seg((input as { goalId: string }).goalId)}`,
+        `goal/${pathSegment((input as { goalId: string }).goalId)}`,
       )) as Record<string, unknown>;
       return data.goal;
     },
@@ -506,7 +503,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `team/${seg(teamId)}/goal`,
+        `team/${pathSegment(teamId)}/goal`,
       )) as Record<string, unknown>;
       const goals = (data.goals as unknown[]) ?? [];
       if (limit) return goals.slice(0, limit);
@@ -549,7 +546,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `goal/${seg(goalId)}`,
+        `goal/${pathSegment(goalId)}`,
         body,
       )) as Record<string, unknown>;
       return data.goal;
@@ -566,7 +563,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `goal/${seg((input as { goalId: string }).goalId)}`,
+        `goal/${pathSegment((input as { goalId: string }).goalId)}`,
       );
       return { success: true };
     },
@@ -620,7 +617,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `goal/${seg(goalId)}/key_result`,
+        `goal/${pathSegment(goalId)}/key_result`,
         body,
       )) as Record<string, unknown>;
       return data.key_result;
@@ -662,7 +659,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `key_result/${seg(keyResultId)}`,
+        `key_result/${pathSegment(keyResultId)}`,
         body,
       )) as Record<string, unknown>;
       return data.key_result;
@@ -683,7 +680,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `key_result/${seg((input as { keyResultId: string }).keyResultId)}`,
+        `key_result/${pathSegment((input as { keyResultId: string }).keyResultId)}`,
       );
       return { success: true };
     },
@@ -730,7 +727,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `team/${seg(teamId)}/guest`,
+        `team/${pathSegment(teamId)}/guest`,
         body,
       )) as Record<string, unknown>;
       return data.team;
@@ -749,7 +746,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `team/${seg(teamId)}/guest/${seg(guestId)}`,
+        `team/${pathSegment(teamId)}/guest/${pathSegment(guestId)}`,
       )) as Record<string, unknown>;
       return data.team;
     },
@@ -783,7 +780,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `team/${seg(teamId)}/guest/${seg(guestId)}`,
+        `team/${pathSegment(teamId)}/guest/${pathSegment(guestId)}`,
         body,
       )) as Record<string, unknown>;
       return data.team;
@@ -802,7 +799,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `team/${seg(teamId)}/guest/${seg(guestId)}`,
+        `team/${pathSegment(teamId)}/guest/${pathSegment(guestId)}`,
       );
       return { success: true };
     },
@@ -891,7 +888,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       }
       if (parentId) body.parent = parentId;
       if (customFields) body.custom_fields = customFields;
-      return apiRequest(ctx, "POST", `list/${seg(listId)}/task`, body);
+      return apiRequest(ctx, "POST", `list/${pathSegment(listId)}/task`, body);
     },
   });
 
@@ -913,7 +910,13 @@ export default function clickup(rl: RunlinePluginAPI) {
       };
       const qs: Record<string, unknown> = {};
       if (includeSubtasks) qs.include_subtasks = true;
-      return apiRequest(ctx, "GET", `task/${seg(taskId)}`, undefined, qs);
+      return apiRequest(
+        ctx,
+        "GET",
+        `task/${pathSegment(taskId)}`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -974,7 +977,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       if (filters.tags) qs.tags = filters.tags;
       return paginateAll(
         ctx,
-        `list/${seg(listId)}/task`,
+        `list/${pathSegment(listId)}/task`,
         "tasks",
         qs,
         limit as number | undefined,
@@ -1025,7 +1028,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       if (startDate) body.start_date = new Date(startDate as string).getTime();
       if (timeEstimate) body.time_estimate = (timeEstimate as number) * 60000;
       body.assignees = { add: addAssignees ?? [], rem: removeAssignees ?? [] };
-      return apiRequest(ctx, "PUT", `task/${seg(taskId)}`, body);
+      return apiRequest(ctx, "PUT", `task/${pathSegment(taskId)}`, body);
     },
   });
 
@@ -1039,7 +1042,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `task/${seg((input as { taskId: string }).taskId)}`,
+        `task/${pathSegment((input as { taskId: string }).taskId)}`,
       );
       return { success: true };
     },
@@ -1057,7 +1060,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `task/${seg(taskId)}/member`,
+        `task/${pathSegment(taskId)}/member`,
       )) as Record<string, unknown>;
       const members = (data.members as unknown[]) ?? [];
       if (limit) return members.slice(0, limit);
@@ -1090,7 +1093,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `task/${seg(taskId)}/field/${seg(fieldId)}`,
+        `task/${pathSegment(taskId)}/field/${pathSegment(fieldId)}`,
         { value },
       );
     },
@@ -1107,7 +1110,11 @@ export default function clickup(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { taskId, tagName } = input as { taskId: string; tagName: string };
-      await apiRequest(ctx, "POST", `task/${seg(taskId)}/tag/${seg(tagName)}`);
+      await apiRequest(
+        ctx,
+        "POST",
+        `task/${pathSegment(taskId)}/tag/${pathSegment(tagName)}`,
+      );
       return { success: true };
     },
   });
@@ -1124,7 +1131,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `task/${seg(taskId)}/tag/${seg(tagName)}`,
+        `task/${pathSegment(taskId)}/tag/${pathSegment(tagName)}`,
       );
       return { success: true };
     },
@@ -1141,7 +1148,11 @@ export default function clickup(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { taskId, listId } = input as { taskId: string; listId: string };
-      await apiRequest(ctx, "POST", `list/${seg(listId)}/task/${seg(taskId)}`);
+      await apiRequest(
+        ctx,
+        "POST",
+        `list/${pathSegment(listId)}/task/${pathSegment(taskId)}`,
+      );
       return { success: true };
     },
   });
@@ -1158,7 +1169,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `list/${seg(listId)}/task/${seg(taskId)}`,
+        `list/${pathSegment(listId)}/task/${pathSegment(taskId)}`,
       );
       return { success: true };
     },
@@ -1182,7 +1193,7 @@ export default function clickup(rl: RunlinePluginAPI) {
         taskId: string;
         dependsOnTaskId: string;
       };
-      await apiRequest(ctx, "POST", `task/${seg(taskId)}/dependency`, {
+      await apiRequest(ctx, "POST", `task/${pathSegment(taskId)}/dependency`, {
         depends_on: dependsOnTaskId,
       });
       return { success: true };
@@ -1208,7 +1219,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `task/${seg(taskId)}/dependency`,
+        `task/${pathSegment(taskId)}/dependency`,
         undefined,
         { depends_on: dependsOnTaskId },
       );
@@ -1238,7 +1249,7 @@ export default function clickup(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { spaceId, name, foregroundColor, backgroundColor } =
         input as Record<string, string>;
-      await apiRequest(ctx, "POST", `space/${seg(spaceId)}/tag`, {
+      await apiRequest(ctx, "POST", `space/${pathSegment(spaceId)}/tag`, {
         tag: { name, tag_fg: foregroundColor, tag_bg: backgroundColor },
       });
       return { success: true };
@@ -1257,7 +1268,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `space/${seg(spaceId)}/tag`,
+        `space/${pathSegment(spaceId)}/tag`,
       )) as Record<string, unknown>;
       const tags = (data.tags as unknown[]) ?? [];
       if (limit) return tags.slice(0, limit);
@@ -1293,7 +1304,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "PUT",
-        `space/${seg(spaceId)}/tag/${seg(tagName)}`,
+        `space/${pathSegment(spaceId)}/tag/${pathSegment(tagName)}`,
         {
           tag: {
             name: newName,
@@ -1321,7 +1332,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `space/${seg(spaceId)}/tag/${seg(tagName)}`,
+        `space/${pathSegment(spaceId)}/tag/${pathSegment(tagName)}`,
       );
       return { success: true };
     },
@@ -1364,8 +1375,8 @@ export default function clickup(rl: RunlinePluginAPI) {
       delete body.folderId;
       if (dueDate) body.due_date = new Date(dueDate as string).getTime();
       const endpoint = folderId
-        ? `folder/${seg(folderId)}/list`
-        : `space/${seg(spaceId)}/list`;
+        ? `folder/${pathSegment(folderId)}/list`
+        : `space/${pathSegment(spaceId)}/list`;
       return apiRequest(ctx, "POST", endpoint, body);
     },
   });
@@ -1380,7 +1391,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `list/${seg((input as { listId: string }).listId)}`,
+        `list/${pathSegment((input as { listId: string }).listId)}`,
       );
     },
   });
@@ -1410,8 +1421,8 @@ export default function clickup(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (archived) qs.archived = archived;
       const endpoint = folderId
-        ? `folder/${seg(folderId)}/list`
-        : `space/${seg(spaceId)}/list`;
+        ? `folder/${pathSegment(folderId)}/list`
+        : `space/${pathSegment(spaceId)}/list`;
       const data = (await apiRequest(
         ctx,
         "GET",
@@ -1446,7 +1457,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { ...rest };
       delete body.listId;
       if (dueDate) body.due_date = new Date(dueDate as string).getTime();
-      return apiRequest(ctx, "PUT", `list/${seg(listId)}`, body);
+      return apiRequest(ctx, "PUT", `list/${pathSegment(listId)}`, body);
     },
   });
 
@@ -1460,7 +1471,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `list/${seg((input as { listId: string }).listId)}`,
+        `list/${pathSegment((input as { listId: string }).listId)}`,
       );
       return { success: true };
     },
@@ -1478,7 +1489,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `list/${seg(listId)}/member`,
+        `list/${pathSegment(listId)}/member`,
       )) as Record<string, unknown>;
       const members = (data.members as unknown[]) ?? [];
       if (limit) return members.slice(0, limit);
@@ -1496,7 +1507,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `list/${seg((input as { listId: string }).listId)}/field`,
+        `list/${pathSegment((input as { listId: string }).listId)}/field`,
       )) as Record<string, unknown>;
       return data.fields;
     },
@@ -1542,7 +1553,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `team/${seg(teamId)}/time_entries`,
+        `team/${pathSegment(teamId)}/time_entries`,
         body,
       )) as Record<string, unknown>;
       return data.data;
@@ -1566,8 +1577,8 @@ export default function clickup(rl: RunlinePluginAPI) {
         timeEntryId?: string;
       };
       const endpoint = timeEntryId
-        ? `team/${seg(teamId)}/time_entries/${seg(timeEntryId)}`
-        : `team/${seg(teamId)}/time_entries/current`;
+        ? `team/${pathSegment(teamId)}/time_entries/${pathSegment(timeEntryId)}`
+        : `team/${pathSegment(teamId)}/time_entries/current`;
       const data = (await apiRequest(ctx, "GET", endpoint)) as Record<
         string,
         unknown
@@ -1608,7 +1619,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `team/${seg(teamId)}/time_entries`,
+        `team/${pathSegment(teamId)}/time_entries`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -1652,7 +1663,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `team/${seg(teamId)}/time_entries/${seg(timeEntryId)}`,
+        `team/${pathSegment(teamId)}/time_entries/${pathSegment(timeEntryId)}`,
         body,
       )) as Record<string, unknown>;
       return data.data;
@@ -1678,7 +1689,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `team/${seg(teamId)}/time_entries/start`,
+        `team/${pathSegment(teamId)}/time_entries/start`,
         body,
       )) as Record<string, unknown>;
       return data.data;
@@ -1696,7 +1707,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `team/${seg(teamId)}/time_entries/stop`,
+        `team/${pathSegment(teamId)}/time_entries/stop`,
       )) as Record<string, unknown>;
       return data.data;
     },
@@ -1721,7 +1732,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "DELETE",
-        `team/${seg(teamId)}/time_entries/${seg(timeEntryId)}`,
+        `team/${pathSegment(teamId)}/time_entries/${pathSegment(timeEntryId)}`,
       )) as Record<string, unknown>;
       return data.data;
     },
@@ -1747,10 +1758,15 @@ export default function clickup(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { teamId, timeEntryIds, tags } = input as Record<string, unknown>;
-      await apiRequest(ctx, "POST", `team/${seg(teamId)}/time_entries/tags`, {
-        time_entry_ids: timeEntryIds,
-        tags,
-      });
+      await apiRequest(
+        ctx,
+        "POST",
+        `team/${pathSegment(teamId)}/time_entries/tags`,
+        {
+          time_entry_ids: timeEntryIds,
+          tags,
+        },
+      );
       return { success: true };
     },
   });
@@ -1767,7 +1783,7 @@ export default function clickup(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `team/${seg(teamId)}/time_entries/tags`,
+        `team/${pathSegment(teamId)}/time_entries/tags`,
       )) as Record<string, unknown>;
       const tags = (data.data as unknown[]) ?? [];
       if (limit) return tags.slice(0, limit);
@@ -1796,10 +1812,15 @@ export default function clickup(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      await apiRequest(ctx, "DELETE", `team/${seg(teamId)}/time_entries/tags`, {
-        time_entry_ids: timeEntryIds,
-        tags: tagNames,
-      });
+      await apiRequest(
+        ctx,
+        "DELETE",
+        `team/${pathSegment(teamId)}/time_entries/tags`,
+        {
+          time_entry_ids: timeEntryIds,
+          tags: tagNames,
+        },
+      );
       return { success: true };
     },
   });

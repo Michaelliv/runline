@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { gristCredential } from "./credentials.js";
 
 function apiRequest(
@@ -69,7 +66,7 @@ export default function grist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `docs/${seg(docId)}/tables/${seg(tableId)}/records`,
+        `docs/${pathSegment(docId)}/tables/${pathSegment(tableId)}/records`,
         { records },
       );
     },
@@ -105,7 +102,7 @@ export default function grist(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `docs/${seg(docId)}/tables/${seg(tableId)}/records`,
+        `docs/${pathSegment(docId)}/tables/${pathSegment(tableId)}/records`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -130,7 +127,7 @@ export default function grist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PATCH",
-        `docs/${seg(docId)}/tables/${seg(tableId)}/records`,
+        `docs/${pathSegment(docId)}/tables/${pathSegment(tableId)}/records`,
         { records },
       );
     },
@@ -153,7 +150,7 @@ export default function grist(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `docs/${seg(docId)}/tables/${seg(tableId)}/data/delete`,
+        `docs/${pathSegment(docId)}/tables/${pathSegment(tableId)}/data/delete`,
         rowIds,
       );
     },

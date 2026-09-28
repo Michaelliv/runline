@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { spotifyCredential } from "./credentials.js";
 
 function api(
@@ -156,7 +153,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `albums/${seg(stripUri((input as Record<string, unknown>).id as string, "spotify:album:"))}`,
+        `albums/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:album:"))}`,
       );
     },
   });
@@ -175,7 +172,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `albums/${seg(stripUri(p.id as string, "spotify:album:"))}/tracks`,
+        `albums/${pathSegment(stripUri(p.id as string, "spotify:album:"))}/tracks`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -236,7 +233,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `artists/${seg(stripUri((input as Record<string, unknown>).id as string, "spotify:artist:"))}`,
+        `artists/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:artist:"))}`,
       );
     },
   });
@@ -255,7 +252,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `artists/${seg(stripUri(p.id as string, "spotify:artist:"))}/albums`,
+        `artists/${pathSegment(stripUri(p.id as string, "spotify:artist:"))}/albums`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -271,7 +268,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `artists/${seg(stripUri((input as Record<string, unknown>).id as string, "spotify:artist:"))}/related-artists`,
+        `artists/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:artist:"))}/related-artists`,
       )) as Record<string, unknown>;
       return data.artists;
     },
@@ -289,7 +286,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `artists/${seg(stripUri(p.id as string, "spotify:artist:"))}/top-tracks`,
+        `artists/${pathSegment(stripUri(p.id as string, "spotify:artist:"))}/top-tracks`,
         undefined,
         { country: p.country },
       )) as Record<string, unknown>;
@@ -329,7 +326,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `playlists/${seg(stripUri((input as Record<string, unknown>).id as string, "spotify:playlist:"))}`,
+        `playlists/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:playlist:"))}`,
       );
     },
   });
@@ -348,7 +345,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `playlists/${seg(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
+        `playlists/${pathSegment(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -384,7 +381,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `playlists/${seg(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
+        `playlists/${pathSegment(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
         {},
         qs,
       );
@@ -403,7 +400,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `playlists/${seg(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
+        `playlists/${pathSegment(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
         { tracks: [{ uri: p.trackUri }] },
       );
     },
@@ -460,7 +457,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `tracks/${seg(stripUri((input as Record<string, unknown>).id as string, "spotify:track:"))}`,
+        `tracks/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:track:"))}`,
       );
     },
   });
@@ -473,7 +470,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `audio-features/${seg(stripUri((input as Record<string, unknown>).id as string, "spotify:track:"))}`,
+        `audio-features/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:track:"))}`,
       );
     },
   });

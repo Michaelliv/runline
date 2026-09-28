@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { affinityCredential } from "./credentials.js";
 
 function apiRequest(
@@ -75,7 +72,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { listId } = input as { listId: string };
-      return apiRequest(ctx, "GET", `lists/${seg(listId)}`);
+      return apiRequest(ctx, "GET", `lists/${pathSegment(listId)}`);
     },
   });
 
@@ -112,10 +109,15 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { listId, entityId, ...rest } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `lists/${seg(listId)}/list-entries`, {
-        entity_id: entityId,
-        ...rest,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `lists/${pathSegment(listId)}/list-entries`,
+        {
+          entity_id: entityId,
+          ...rest,
+        },
+      );
     },
   });
 
@@ -138,7 +140,7 @@ export default function affinity(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `lists/${seg(listId)}/list-entries/${seg(listEntryId)}`,
+        `lists/${pathSegment(listId)}/list-entries/${pathSegment(listEntryId)}`,
       );
     },
   });
@@ -158,7 +160,7 @@ export default function affinity(rl: RunlinePluginAPI) {
       const { listId, limit } = input as { listId: string; limit?: number };
       return paginateAll(
         ctx,
-        `lists/${seg(listId)}/list-entries`,
+        `lists/${pathSegment(listId)}/list-entries`,
         "list_entries",
         limit,
       );
@@ -184,7 +186,7 @@ export default function affinity(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "DELETE",
-        `lists/${seg(listId)}/list-entries/${seg(listEntryId)}`,
+        `lists/${pathSegment(listId)}/list-entries/${pathSegment(listEntryId)}`,
       );
     },
   });
@@ -231,7 +233,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { personId } = input as { personId: string };
-      return apiRequest(ctx, "GET", `persons/${seg(personId)}`);
+      return apiRequest(ctx, "GET", `persons/${pathSegment(personId)}`);
     },
   });
 
@@ -284,7 +286,7 @@ export default function affinity(rl: RunlinePluginAPI) {
       if (firstName) body.first_name = firstName;
       if (lastName) body.last_name = lastName;
       if (organizationIds) body.organization_ids = organizationIds;
-      return apiRequest(ctx, "PUT", `persons/${seg(personId)}`, body);
+      return apiRequest(ctx, "PUT", `persons/${pathSegment(personId)}`, body);
     },
   });
 
@@ -296,7 +298,7 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { personId } = input as { personId: string };
-      return apiRequest(ctx, "DELETE", `persons/${seg(personId)}`);
+      return apiRequest(ctx, "DELETE", `persons/${pathSegment(personId)}`);
     },
   });
 
@@ -342,7 +344,11 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { organizationId } = input as { organizationId: string };
-      return apiRequest(ctx, "GET", `organizations/${seg(organizationId)}`);
+      return apiRequest(
+        ctx,
+        "GET",
+        `organizations/${pathSegment(organizationId)}`,
+      );
     },
   });
 
@@ -407,7 +413,7 @@ export default function affinity(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `organizations/${seg(organizationId)}`,
+        `organizations/${pathSegment(organizationId)}`,
         body,
       );
     },
@@ -425,7 +431,11 @@ export default function affinity(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { organizationId } = input as { organizationId: string };
-      return apiRequest(ctx, "DELETE", `organizations/${seg(organizationId)}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `organizations/${pathSegment(organizationId)}`,
+      );
     },
   });
 }

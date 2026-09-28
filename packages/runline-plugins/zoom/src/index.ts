@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { zoomCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -86,7 +83,7 @@ export default function zoom(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `meetings/${seg((input as Record<string, unknown>).meetingId)}`,
+        `meetings/${pathSegment((input as Record<string, unknown>).meetingId)}`,
       );
     },
   });
@@ -141,7 +138,12 @@ export default function zoom(rl: RunlinePluginAPI) {
       if (fields.password) body.password = fields.password;
       if (fields.agenda) body.agenda = fields.agenda;
       if (fields.settings) body.settings = fields.settings;
-      await apiRequest(ctx, "PATCH", `meetings/${seg(meetingId)}`, body);
+      await apiRequest(
+        ctx,
+        "PATCH",
+        `meetings/${pathSegment(meetingId)}`,
+        body,
+      );
       return { success: true };
     },
   });
@@ -154,7 +156,7 @@ export default function zoom(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `meetings/${seg((input as Record<string, unknown>).meetingId)}`,
+        `meetings/${pathSegment((input as Record<string, unknown>).meetingId)}`,
       );
       return { success: true };
     },

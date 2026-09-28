@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialOk, pathSegment as seg } from "../../_shared/credentials.js";
+import { credentialOk, pathSegment } from "../../_shared/credentials.js";
 import { bambooHrCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -134,9 +134,15 @@ export default function bambooHr(rl: RunlinePluginAPI) {
         const dirFields = (dir.fields as Array<{ id: string }>) ?? [];
         fieldList = dirFields.map((f) => f.id).join(",");
       }
-      return apiRequest(ctx, "GET", `employees/${seg(employeeId)}`, undefined, {
-        fields: fieldList,
-      });
+      return apiRequest(
+        ctx,
+        "GET",
+        `employees/${pathSegment(employeeId)}`,
+        undefined,
+        {
+          fields: fieldList,
+        },
+      );
     },
   });
 
@@ -195,7 +201,12 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { employeeId, ...fields } = input as Record<string, unknown>;
-      await apiRequest(ctx, "POST", `employees/${seg(employeeId)}`, fields);
+      await apiRequest(
+        ctx,
+        "POST",
+        `employees/${pathSegment(employeeId)}`,
+        fields,
+      );
       return { success: true };
     },
   });
@@ -225,7 +236,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `employees/${seg(employeeId)}/files/view/`,
+        `employees/${pathSegment(employeeId)}/files/view/`,
       )) as Record<string, unknown>;
       const categories =
         (data.categories as Array<Record<string, unknown>>) ?? [];
@@ -259,7 +270,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `employees/${seg(employeeId)}/files/${seg(fileId)}`,
+        `employees/${pathSegment(employeeId)}/files/${pathSegment(fileId)}`,
       );
       return { success: true };
     },
@@ -291,7 +302,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "POST",
-        `employees/${seg(employeeId)}/files/${seg(fileId)}`,
+        `employees/${pathSegment(employeeId)}/files/${pathSegment(fileId)}`,
         body,
       );
       return { success: true };
@@ -336,7 +347,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileId } = input as { fileId: string };
-      await apiRequest(ctx, "DELETE", `files/${seg(fileId)}`);
+      await apiRequest(ctx, "DELETE", `files/${pathSegment(fileId)}`);
       return { success: true };
     },
   });
@@ -354,7 +365,7 @@ export default function bambooHr(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileId, shareWithEmployee } = input as Record<string, unknown>;
-      await apiRequest(ctx, "POST", `files/${seg(fileId)}`, {
+      await apiRequest(ctx, "POST", `files/${pathSegment(fileId)}`, {
         shareWithEmployee: shareWithEmployee ? "yes" : "no",
       });
       return { success: true };
@@ -379,11 +390,17 @@ export default function bambooHr(rl: RunlinePluginAPI) {
         reportId: string;
         format?: string;
       };
-      return apiRequest(ctx, "GET", `reports/${seg(reportId)}/`, undefined, {
-        format,
-        fd: "true",
-        onlyCurrent: "true",
-      });
+      return apiRequest(
+        ctx,
+        "GET",
+        `reports/${pathSegment(reportId)}/`,
+        undefined,
+        {
+          format,
+          fd: "true",
+          onlyCurrent: "true",
+        },
+      );
     },
   });
 }

@@ -1,8 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import {
-  credentialJson,
-  pathSegment as seg,
-} from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { wordpressCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -52,7 +49,7 @@ function registerContentCrud(
       return apiRequest(
         ctx,
         "GET",
-        `${plural}/${seg((input as Record<string, unknown>).id)}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -89,7 +86,7 @@ function registerContentCrud(
     },
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `${plural}/${seg(id)}`, fields);
+      return apiRequest(ctx, "POST", `${plural}/${pathSegment(id)}`, fields);
     },
   });
 
@@ -104,7 +101,13 @@ function registerContentCrud(
       const p = input as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (p.force) qs.force = "true";
-      return apiRequest(ctx, "DELETE", `${plural}/${seg(p.id)}`, undefined, qs);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `${plural}/${pathSegment(p.id)}`,
+        undefined,
+        qs,
+      );
     },
   });
 }
@@ -161,7 +164,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `users/${seg((input as Record<string, unknown>).id)}`,
+        `users/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -193,7 +196,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
-      return apiRequest(ctx, "POST", `users/${seg(id)}`, fields);
+      return apiRequest(ctx, "POST", `users/${pathSegment(id)}`, fields);
     },
   });
 
