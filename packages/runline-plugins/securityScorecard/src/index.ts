@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { securityScorecardCredential } from "./credentials.js";
-
-/** A domain, ID, or report type as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -45,7 +42,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `companies/${seg((input as Record<string, unknown>).domain)}`,
+        `companies/${pathSegment((input as Record<string, unknown>).domain)}`,
       );
     },
   });
@@ -62,7 +59,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `companies/${seg(p.domain)}/factors`,
+        `companies/${pathSegment(p.domain)}/factors`,
       )) as Record<string, unknown>;
       let entries = (data.entries ?? []) as unknown[];
       if (p.limit) entries = entries.slice(0, p.limit as number);
@@ -95,7 +92,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `companies/${seg(p.domain)}/history/factors/score`,
+        `companies/${pathSegment(p.domain)}/history/factors/score`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -117,7 +114,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `companies/${seg(p.domain)}/score-plans/by-target/${seg(p.targetScore)}`,
+        `companies/${pathSegment(p.domain)}/score-plans/by-target/${pathSegment(p.targetScore)}`,
       )) as Record<string, unknown>;
       return data.entries;
     },
@@ -133,7 +130,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `industries/${seg((input as Record<string, unknown>).industry)}/score`,
+        `industries/${pathSegment((input as Record<string, unknown>).industry)}/score`,
       );
     },
   });
@@ -189,7 +186,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `portfolios/${seg((input as Record<string, unknown>).portfolioId)}`,
+        `portfolios/${pathSegment((input as Record<string, unknown>).portfolioId)}`,
       );
       return { success: true };
     },
@@ -207,7 +204,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `portfolios/${seg(p.portfolioId)}/companies/${seg(p.domain)}`,
+        `portfolios/${pathSegment(p.portfolioId)}/companies/${pathSegment(p.domain)}`,
       );
     },
   });
@@ -224,7 +221,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `portfolios/${seg(p.portfolioId)}/companies/${seg(p.domain)}`,
+        `portfolios/${pathSegment(p.portfolioId)}/companies/${pathSegment(p.domain)}`,
       );
       return { success: true };
     },
@@ -242,7 +239,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `portfolios/${seg(p.portfolioId)}/companies`,
+        `portfolios/${pathSegment(p.portfolioId)}/companies`,
       )) as Record<string, unknown>;
       let entries = (data.entries ?? []) as unknown[];
       if (p.limit) entries = entries.slice(0, p.limit as number);
@@ -309,7 +306,12 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       else body.portfolio_id = p.portfolioId;
       if (p.format) body.format = p.format;
       if (p.branding) body.branding = p.branding;
-      return apiRequest(ctx, "POST", `reports/${seg(p.reportType)}`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `reports/${pathSegment(p.reportType)}`,
+        body,
+      );
     },
   });
 
