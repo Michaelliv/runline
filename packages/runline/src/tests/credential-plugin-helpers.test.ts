@@ -15,6 +15,7 @@ import {
   httpsBase,
   multipartBody,
   pathSegment,
+  pathSegments,
   pathWithin,
   staticCredential,
 } from "../../../runline-plugins/_shared/credentials.js";
@@ -240,6 +241,21 @@ describe("pathSegment", () => {
   it("refuses a value that is not one segment: empty, dot segments, separators", () => {
     for (const value of ["", undefined, null, ".", "..", "a/b", "a\\b"])
       assert.throws(() => pathSegment(value), { code: "request_not_allowed" });
+  });
+});
+
+describe("pathSegments", () => {
+  it("encodes a slash-separated name segment by segment, keeping its slashes", () => {
+    assert.equal(pathSegments("owner/model v2"), "owner/model%20v2");
+    assert.equal(pathSegments("a?b/c#d"), "a%3Fb/c%23d");
+    assert.equal(pathSegments("single"), "single");
+  });
+
+  it("refuses empty and dot segments, as pathSegment does for each", () => {
+    for (const value of ["", "/a", "a/", "a//b", "a/../b", "./a", "a\\b"])
+      assert.throws(() => pathSegments(value), {
+        code: "request_not_allowed",
+      });
   });
 });
 
