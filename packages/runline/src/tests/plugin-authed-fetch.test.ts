@@ -157,7 +157,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "hunter/src/index.ts",
   "intercom/src/index.ts",
   "iterable/src/index.ts",
-  "jenkins/src/index.ts",
   "jira/src/index.ts",
   "keap/src/index.ts",
   "kobotoolbox/src/index.ts",

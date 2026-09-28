@@ -133,7 +133,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["hunter", "phase 3: not yet migrated"],
   ["intercom", "phase 3: not yet migrated"],
   ["iterable", "phase 3: not yet migrated"],
-  ["jenkins", "phase 2: not yet migrated"],
   ["jira", "phase 2: not yet migrated"],
   ["keap", "phase 2: not yet migrated"],
   ["kobotoolbox", "phase 2: not yet migrated"],
