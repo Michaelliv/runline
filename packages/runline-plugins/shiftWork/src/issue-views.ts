@@ -74,7 +74,7 @@ export function registerIssueViewActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ views: ShiftIssueView[] }>(
         ctx,
-        `/v1/issue-views`,
+        "/v1/issue-views",
         { query: input },
       );
       return body.views;
@@ -88,7 +88,7 @@ export function registerIssueViewActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ views: ShiftIssueView[]; nextCursor?: string }>(
         ctx,
-        `/v1/issue-views`,
+        "/v1/issue-views",
         { query: input },
       );
     },

@@ -30,7 +30,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ projects: ShiftProject[] }>(
         ctx,
-        `/v1/projects`,
+        "/v1/projects",
         { query: input },
       );
       return body.projects;
@@ -44,7 +44,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ projects: ShiftProject[]; nextCursor?: string }>(
         ctx,
-        `/v1/projects`,
+        "/v1/projects",
         { query: input },
       );
     },

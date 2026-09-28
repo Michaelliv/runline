@@ -87,7 +87,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       "List the first page of Shift Labs Issues for the API key's organization.",
     inputSchema: t.Object(issueListFields, STRICT_OBJECT),
     async execute(input, ctx) {
-      const body = await request<{ issues: ShiftIssue[] }>(ctx, `/v1/issues`, {
+      const body = await request<{ issues: ShiftIssue[] }>(ctx, "/v1/issues", {
         query: input,
       });
       return body.issues;
@@ -101,7 +101,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ issues: ShiftIssue[]; nextCursor?: string }>(
         ctx,
-        `/v1/issues`,
+        "/v1/issues",
         { query: input },
       );
     },
