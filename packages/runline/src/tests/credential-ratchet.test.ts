@@ -109,7 +109,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["gett", "login: phone OTP login and a rotating, device-bound refresh grant"],
   ["ghost", "signature: a JWT is minted per request from the admin key"],
   ["github", "phase 2: not yet migrated"],
-  ["gitlab", "phase 2: not yet migrated"],
+  [
+    "gitlab",
+    "path encoding: %2F-encoded project and file paths, which the transport's segment rules refuse",
+  ],
   ["gong", "phase 3: not yet migrated"],
   ["googleImage", "phase 3: not yet migrated"],
   [
