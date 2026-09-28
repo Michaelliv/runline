@@ -124,7 +124,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "hackernews/src/index.ts",
   "halopsa/src/index.ts",
   "helpscout/src/index.ts",
-  "highlevel/src/index.ts",
   "homeAssistant/src/index.ts",
   "hubspot/src/index.ts",
   "humanticAi/src/index.ts",

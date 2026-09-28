@@ -109,7 +109,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ],
   ["halopsa", "phase 3: not yet migrated"],
   ["helpscout", "phase 3: not yet migrated"],
-  ["highlevel", "phase 3: not yet migrated"],
   [
     "homeAssistant",
     "plain-http target: ssl defaults to false for LAN hosts, which the HTTPS-only broker refuses",
