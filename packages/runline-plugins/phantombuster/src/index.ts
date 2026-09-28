@@ -1,38 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { phantombusterCredential } from "./credentials.js";
 
-const BASE = "https://api.phantombuster.com/api/v2";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, phantombusterCredential, "phantombuster", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "X-Phantombuster-Key": apiKey,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Phantombuster error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function phantombuster(rl: RunlinePluginAPI) {
   rl.setName("phantombuster");
   rl.setVersion("0.1.0");
+  rl.setCredential(phantombusterCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -43,16 +32,13 @@ export default function phantombuster(rl: RunlinePluginAPI) {
     },
   });
 
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
-
   rl.registerAction("agent.delete", {
     access: "write",
     description: "Delete an agent",
     inputSchema: { agentId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { agentId } = input as Record<string, unknown>;
-      await apiRequest(key(ctx), "POST", "/agents/delete", { id: agentId });
+      await api(ctx, "POST", "agents/delete", { id: agentId });
       return { success: true };
     },
   });
@@ -63,9 +49,7 @@ export default function phantombuster(rl: RunlinePluginAPI) {
     inputSchema: { agentId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { agentId } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "GET", "/agents/fetch", undefined, {
-        id: agentId,
-      });
+      return api(ctx, "GET", "agents/fetch", undefined, { id: agentId });
     },
   });
 
@@ -82,18 +66,14 @@ export default function phantombuster(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await apiRequest(
-        key(ctx),
-        "GET",
-        "/agents/fetch-output",
-        undefined,
-        { id: p.agentId },
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "agents/fetch-output", undefined, {
+        id: p.agentId,
+      })) as Record<string, unknown>;
       if (p.resolveData) {
-        const result = (await apiRequest(
-          key(ctx),
+        const result = (await api(
+          ctx,
           "GET",
-          "/containers/fetch-result-object",
+          "containers/fetch-result-object",
           undefined,
           { id: data.containerId },
         )) as Record<string, unknown>;
@@ -109,11 +89,7 @@ export default function phantombuster(rl: RunlinePluginAPI) {
     description: "List all agents",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const agents = (await apiRequest(
-        key(ctx),
-        "GET",
-        "/agents/fetch-all",
-      )) as unknown[];
+      const agents = (await api(ctx, "GET", "agents/fetch-all")) as unknown[];
       const limit = (input as Record<string, unknown>)?.limit;
       if (limit) return agents.slice(0, limit as number);
       return agents;
@@ -146,14 +122,12 @@ export default function phantombuster(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { id: p.agentId };
       if (p.arguments) body.arguments = p.arguments;
       if (p.bonusArgument) body.bonusArgument = p.bonusArgument;
-      const data = (await apiRequest(
-        key(ctx),
-        "POST",
-        "/agents/launch",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "POST", "agents/launch", body)) as Record<
+        string,
+        unknown
+      >;
       if (p.resolveData) {
-        return apiRequest(key(ctx), "GET", "/containers/fetch", undefined, {
+        return api(ctx, "GET", "containers/fetch", undefined, {
           id: data.containerId,
         });
       }
