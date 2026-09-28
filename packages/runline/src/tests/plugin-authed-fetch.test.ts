@@ -59,7 +59,6 @@ const CREDENTIAL_FREE_FETCH = new Map<string, string>([
 
 /** Credential-backlog files that sign their own requests with bare fetch. */
 const UNBROKERED_FETCH = new Set([
-  "customerIo/src/index.ts",
   "facebookGraph/src/index.ts",
   "ghost/src/index.ts",
   "graphql/src/index.ts",

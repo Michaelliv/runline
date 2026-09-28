@@ -41,10 +41,6 @@ const NO_CREDENTIAL = new Map<string, string>([
 /** Plugins that carry a credential but do not declare it yet, and why. */
 const UNDECLARED_BACKLOG = new Map<string, string>([
   [
-    "customerIo",
-    "two credentials in one connection: tracking and app keys, used by different actions",
-  ],
-  [
     "facebookGraph",
     "agent-selected host: hostUrl is a per-call action input, not config",
   ],

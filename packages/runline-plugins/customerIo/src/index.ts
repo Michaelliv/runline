@@ -1,81 +1,41 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialOk,
+  jsonAnswer,
+  pathSegment,
+} from "../../_shared/credentials.js";
+import { customerIoCredential } from "./credentials.js";
 
+/** A Customer.io call on the Track or App API; a non-JSON acknowledgement is `{ success: true }`. */
 async function apiRequest(
-  siteId: string,
-  apiKey: string,
-  method: string,
-  url: string,
+  ctx: ActionContext,
+  target: "track" | "app",
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  const res = await credentialOk(ctx, customerIoCredential, "customerIo", {
+    target,
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Basic ${btoa(`${siteId}:${apiKey}`)}`,
-    },
-  };
-  if (
-    body &&
+    query,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url, opts);
-  if (!res.ok)
-    throw new Error(`Customer.io API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204 || res.headers.get("content-length") === "0")
-    return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  const region = (cfg.region as string) ?? "track.customer.io";
-  const isEu = region.includes("-eu");
-  return {
-    siteId: cfg.siteId as string,
-    trackingApiKey: cfg.trackingApiKey as string,
-    appApiKey: cfg.appApiKey as string,
-    trackingBase: `https://${region}/api/v1`,
-    appBase: isEu
-      ? "https://api-eu.customer.io/v1"
-      : "https://api.customer.io/v1",
-  };
-}
-
-function tracking(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-) {
-  const { siteId, trackingApiKey, trackingBase } = getConn(ctx);
-  return apiRequest(
-    siteId,
-    trackingApiKey,
-    method,
-    `${trackingBase}${endpoint}`,
-    body,
-  );
-}
-
-function app(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-) {
-  const { siteId, appApiKey, appBase } = getConn(ctx);
-  return apiRequest(siteId, appApiKey, method, `${appBase}${endpoint}`, body);
+      ? { json: body }
+      : {}),
+  });
+  return (res.headers.get("content-type") ?? "").includes("application/json")
+    ? jsonAnswer(res)
+    : { success: true };
 }
 
 export default function customerIo(rl: RunlinePluginAPI) {
   rl.setName("customerIo");
   rl.setVersion("0.1.0");
+  rl.setCredential(customerIoCredential);
 
   rl.setConnectionSchema({
     siteId: {
@@ -119,10 +79,11 @@ export default function customerIo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { campaignId } = input as { campaignId: number };
-      const data = (await app(
+      const data = (await apiRequest(
         ctx,
+        "app",
         "GET",
-        `/campaigns/${campaignId}`,
+        `campaigns/${pathSegment(campaignId)}`,
       )) as Record<string, unknown>;
       return data.campaign;
     },
@@ -132,7 +93,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
     access: "read",
     description: "List all campaigns",
     async execute(_input, ctx) {
-      const data = (await app(ctx, "GET", "/campaigns")) as Record<
+      const data = (await apiRequest(ctx, "app", "GET", "campaigns")) as Record<
         string,
         unknown
       >;
@@ -170,15 +131,18 @@ export default function customerIo(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      let endpoint = `/campaigns/${campaignId}/metrics`;
-      if (period && period !== "days") endpoint += `?period=${period}`;
-      const body: Record<string, unknown> = {};
-      if (steps) body.steps = steps;
-      if (type) body.type = type === "urbanAirship" ? "urban_airship" : type;
-      const data = (await app(ctx, "GET", endpoint, body)) as Record<
-        string,
-        unknown
-      >;
+      const query: Record<string, unknown> = {};
+      if (period && period !== "days") query.period = period;
+      if (steps) query.steps = steps;
+      if (type) query.type = type === "urbanAirship" ? "urban_airship" : type;
+      const data = (await apiRequest(
+        ctx,
+        "app",
+        "GET",
+        `campaigns/${pathSegment(campaignId)}/metrics`,
+        undefined,
+        query,
+      )) as Record<string, unknown>;
       return data.metric;
     },
   });
@@ -218,7 +182,13 @@ export default function customerIo(rl: RunlinePluginAPI) {
           new Date(createdAt as string).getTime() / 1000,
         );
       if (attributes) body.data = attributes;
-      await tracking(ctx, "PUT", `/customers/${id}`, body);
+      await apiRequest(
+        ctx,
+        "track",
+        "PUT",
+        `customers/${pathSegment(id)}`,
+        body,
+      );
       return { id, ...body };
     },
   });
@@ -231,7 +201,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id } = input as { id: string };
-      await tracking(ctx, "DELETE", `/customers/${id}`);
+      await apiRequest(ctx, "track", "DELETE", `customers/${pathSegment(id)}`);
       return { success: true };
     },
   });
@@ -269,7 +239,13 @@ export default function customerIo(rl: RunlinePluginAPI) {
       if (type) eventData.type = type;
       if (data) Object.assign(eventData, data);
       if (Object.keys(eventData).length > 0) body.data = eventData;
-      await tracking(ctx, "POST", `/customers/${customerId}/events`, body);
+      await apiRequest(
+        ctx,
+        "track",
+        "POST",
+        `customers/${pathSegment(customerId)}/events`,
+        body,
+      );
       return { success: true };
     },
   });
@@ -289,7 +265,7 @@ export default function customerIo(rl: RunlinePluginAPI) {
       const { eventName, data } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { name: eventName };
       if (data) body.data = data;
-      await tracking(ctx, "POST", "/events", body);
+      await apiRequest(ctx, "track", "POST", "events", body);
       return { success: true };
     },
   });
@@ -312,9 +288,15 @@ export default function customerIo(rl: RunlinePluginAPI) {
         segmentId: number;
         customerIds: string[];
       };
-      await tracking(ctx, "POST", `/segments/${segmentId}/add_customers`, {
-        ids: customerIds,
-      });
+      await apiRequest(
+        ctx,
+        "track",
+        "POST",
+        `segments/${pathSegment(segmentId)}/add_customers`,
+        {
+          ids: customerIds,
+        },
+      );
       return { success: true };
     },
   });
@@ -335,9 +317,15 @@ export default function customerIo(rl: RunlinePluginAPI) {
         segmentId: number;
         customerIds: string[];
       };
-      await tracking(ctx, "POST", `/segments/${segmentId}/remove_customers`, {
-        ids: customerIds,
-      });
+      await apiRequest(
+        ctx,
+        "track",
+        "POST",
+        `segments/${pathSegment(segmentId)}/remove_customers`,
+        {
+          ids: customerIds,
+        },
+      );
       return { success: true };
     },
   });
