@@ -175,7 +175,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "medium/src/index.ts",
   "messagebird/src/index.ts",
   "metabase/src/index.ts",
-  "misp/src/index.ts",
   "mocean/src/index.ts",
   "monday/src/index.ts",
   "monicaCrm/src/index.ts",
