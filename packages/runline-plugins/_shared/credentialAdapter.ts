@@ -139,8 +139,11 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
   };
   const registry = new CredentialRegistry();
   registry.register(definition);
+  // The transport's ceilings: a CLI call to a slow endpoint (image
+  // generation, long exports) is bounded, not cut short at the default.
   const transport = new CredentialTransport(registry, {
     fetch: globalThis.fetch,
+    timeoutMs: 120_000,
     maxRequestBytes: 64 * 1024 * 1024,
     maxResponseBytes: 64 * 1024 * 1024,
   });
