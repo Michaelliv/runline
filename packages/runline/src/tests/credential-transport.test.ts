@@ -953,6 +953,83 @@ describe("constrained credential transport", () => {
     assert.equal(calls, 0);
   });
 
+  it("signs a socket target's URL with its query placement, and sends nothing itself", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.cdp = {
+      baseUrl: "wss://connect.example/",
+      methods: ["GET"],
+      socket: true,
+    };
+    placed(
+      def,
+      ["key"],
+      [
+        { in: "header", part: "key", name: "x-api-key", targets: ["api"] },
+        { in: "query", part: "key", name: "apiKey", targets: ["cdp"] },
+      ],
+    );
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { key: "k&1" } },
+      def,
+    );
+    assert.equal(
+      await h.transport.socketUrl(h.binding, {
+        target: "cdp",
+        path: "?sessionId=s1",
+      }),
+      "wss://connect.example/?sessionId=s1&apiKey=k%261",
+    );
+    assert.equal(calls, 0);
+  });
+
+  it("refuses a socket URL for an HTTPS target, an HTTP request to a socket target, and a caller copy of the key", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.cdp = {
+      baseUrl: "wss://connect.example/",
+      methods: ["GET"],
+      socket: true,
+    };
+    placed(
+      def,
+      ["key"],
+      [
+        { in: "header", part: "key", name: "x-api-key", targets: ["api"] },
+        { in: "query", part: "key", name: "apiKey", targets: ["cdp"] },
+      ],
+    );
+    let reads = 0;
+    const h = await harness(
+      mock(() => Response.json({})),
+      { key: { key: "k" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    await assert.rejects(
+      h.transport.socketUrl(h.binding, { target: "api", path: "x" }),
+      errorCode("request_not_allowed"),
+    );
+    await assert.rejects(
+      h.transport.socketUrl(h.binding, {
+        target: "cdp",
+        path: "?apiKey=evil",
+      }),
+      errorCode("request_not_allowed"),
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, { target: "cdp", path: "x" }),
+      errorCode("request_not_allowed"),
+    );
+    assert.equal(reads, 0);
+  });
+
   it("places a part only on the targets it is scoped to, so two parts may share a header across targets", async () => {
     const def = definition("bearer");
     def.methods.selected.targets.client = {

@@ -12,6 +12,7 @@ import {
   credentialJson,
   credentialOk,
   credentialRequest,
+  credentialSocketUrl,
   graphqlFailed,
   hostLabel,
   httpsBase,
@@ -343,6 +344,32 @@ describe("credentialRequest and credentialJson", () => {
     });
     assert.equal(requests[0].method, "MOVE");
     assert.equal(requests[0].destination, "b.txt");
+  });
+
+  it("asks the broker for a socket URL, and refuses when the broker has none", async () => {
+    const { ctx } = brokered(null);
+    await assert.rejects(
+      credentialSocketUrl(ctx, example, { target: "cdp", path: "" }),
+      { code: "unsupported_operation" },
+    );
+    const asked: unknown[] = [];
+    ctx.credentials = {
+      request: async () => new Response(null),
+      probe: async () => ({ outcome: "unverified" }),
+      socketUrl: async (input) => {
+        asked.push(input);
+        return "wss://relay.host/abc";
+      },
+    };
+    assert.equal(
+      await credentialSocketUrl(ctx, example, {
+        target: "cdp",
+        path: "",
+        query: { sessionId: "s 1" },
+      }),
+      "wss://relay.host/abc",
+    );
+    assert.deepEqual(asked, [{ target: "cdp", path: "?sessionId=s+1" }]);
   });
 
   it("appends to a query already in the path", async () => {

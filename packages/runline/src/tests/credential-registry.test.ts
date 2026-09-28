@@ -449,6 +449,36 @@ describe("credential registry", () => {
         );
         d.methods.apiKey.targets.api.allowedHeaders = ["X-Sig"];
       },
+      // A socket target is wss://, signed only by query placements, and
+      // only a wss:// base is a socket.
+      (d) => {
+        d.methods.apiKey.targets.cdp = {
+          baseUrl: "https://connect.example/",
+          methods: ["GET"],
+          socket: true,
+        };
+        d.methods.apiKey.authentication = placed(
+          ["secret"],
+          [{ in: "query", part: "secret", name: "apiKey" }],
+        );
+      },
+      (d) => {
+        d.methods.apiKey.targets.cdp = {
+          baseUrl: "wss://connect.example/",
+          methods: ["GET"],
+          socket: true,
+        };
+      },
+      (d) => {
+        d.methods.apiKey.targets.api.baseUrl = "wss://api.example/v1/";
+      },
+      (d) => {
+        d.methods.delegated.targets.cdp = {
+          baseUrl: "wss://connect.example/",
+          methods: ["GET"],
+          socket: true,
+        };
+      },
       // A JSON pointer is plain segments beneath the root, one per target.
       ...["", "/", "params", "/a//b", "/a~1b", "/a b", 7].map(
         (pointer) => (d: CredentialType) => {
@@ -495,6 +525,23 @@ describe("credential registry", () => {
       edit(def);
       assert.throws(() => new CredentialRegistry().register(def));
     }
+  });
+
+  it("registers a socket target signed by a query placement", () => {
+    const def = definition();
+    def.methods.apiKey.targets.cdp = {
+      baseUrl: "wss://connect.example/",
+      methods: ["GET"],
+      socket: true,
+    };
+    def.methods.apiKey.authentication = placed(
+      ["secret"],
+      [
+        { in: "header", part: "secret", name: "X-Api-Key", targets: ["api"] },
+        { in: "query", part: "secret", name: "apiKey", targets: ["cdp"] },
+      ],
+    );
+    new CredentialRegistry().register(def);
   });
 
   it("registers a JSON pointer placement", () => {
