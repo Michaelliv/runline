@@ -107,7 +107,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "deepl/src/index.ts",
   "demio/src/index.ts",
   "discord/src/index.ts",
-  "discourse/src/index.ts",
   "drift/src/index.ts",
   "dropcontact/src/index.ts",
   "egoi/src/index.ts",
