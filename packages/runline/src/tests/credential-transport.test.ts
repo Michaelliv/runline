@@ -798,6 +798,96 @@ describe("constrained credential transport", () => {
     ]);
   });
 
+  it("fills a JSON body's null slot at a pointer with a part", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["password"],
+      [{ in: "jsonPointer", part: "password", pointer: "/params/args/2" }],
+    );
+    const bodies: unknown[] = [];
+    const h = await harness(
+      mock((_url, init) => {
+        bodies.push(
+          JSON.parse(Buffer.from(init.body as Uint8Array).toString()),
+        );
+        return Response.json({});
+      }),
+      { key: { password: "pw" } },
+      def,
+    );
+    await h.transport.request(h.binding, {
+      ...request,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "call",
+        params: { args: ["db", 7, null, "res.partner"] },
+      }),
+    });
+    assert.deepEqual(bodies, [
+      { method: "call", params: { args: ["db", 7, "pw", "res.partner"] } },
+    ]);
+  });
+
+  it("refuses a pointer slot the caller filled, one that does not resolve, or a request with no JSON body, before reading credentials", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["password"],
+      [{ in: "jsonPointer", part: "password", pointer: "/params/args/2" }],
+    );
+    let reads = 0;
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { password: "pw" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    const json = { "Content-Type": "application/json" };
+    for (const input of [
+      { ...request },
+      { ...request, method: "POST" as const, headers: json, body: "not json" },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: JSON.stringify({ params: { args: ["db", 7, "evil"] } }),
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: JSON.stringify({ params: { args: ["db", 7] } }),
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: JSON.stringify({ params: {} }),
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "params=1",
+      },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
   it("places a part only on the targets it is scoped to, so two parts may share a header across targets", async () => {
     const def = definition("bearer");
     def.methods.selected.targets.client = {

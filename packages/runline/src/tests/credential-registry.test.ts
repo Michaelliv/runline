@@ -434,6 +434,28 @@ describe("credential registry", () => {
         );
         d.methods.apiKey.targets.api.allowedHeaders = ["X-Sig"];
       },
+      // A JSON pointer is plain segments beneath the root, one per target.
+      ...["", "/", "params", "/a//b", "/a~1b", "/a b", 7].map(
+        (pointer) => (d: CredentialType) => {
+          d.methods.apiKey.authentication = placed(
+            ["secret"],
+            [{ in: "jsonPointer", part: "secret", pointer: pointer as string }],
+          );
+        },
+      ),
+      (d) => {
+        d.methods.apiKey.schema = t.Object(
+          { key: staticSecretSchema(["a", "b"]) },
+          { additionalProperties: false },
+        );
+        d.methods.apiKey.authentication = placed(
+          ["a", "b"],
+          [
+            { in: "jsonPointer", part: "a", pointer: "/x/0" },
+            { in: "jsonPointer", part: "b", pointer: "/x/0" },
+          ],
+        );
+      },
       // The transport alone sets Destination; a destination gets no path
       // part, so COPY and MOVE cannot share a target with one.
       (d) => {
@@ -458,6 +480,15 @@ describe("credential registry", () => {
       edit(def);
       assert.throws(() => new CredentialRegistry().register(def));
     }
+  });
+
+  it("registers a JSON pointer placement", () => {
+    const def = definition();
+    def.methods.apiKey.authentication = placed(
+      ["secret"],
+      [{ in: "jsonPointer", part: "secret", pointer: "/params/args/2" }],
+    );
+    new CredentialRegistry().register(def);
   });
 
   it("registers the signed placements", () => {
