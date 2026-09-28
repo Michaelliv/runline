@@ -1,52 +1,35 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { cloudflareCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.cloudflare.com/client/v4";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, cloudflareCredential, "cloudflare", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Cloudflare API error ${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-function getToken(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiToken as string;
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function cloudflare(rl: RunlinePluginAPI) {
   rl.setName("cloudflare");
   rl.setVersion("0.1.0");
+  rl.setCredential(cloudflareCredential);
 
   rl.setConnectionSchema({
     apiToken: {
@@ -74,9 +57,9 @@ export default function cloudflare(rl: RunlinePluginAPI) {
         certificateId: string;
       };
       const data = (await apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `/zones/${zoneId}/origin_tls_client_auth/${certificateId}`,
+        `zones/${seg(zoneId)}/origin_tls_client_auth/${seg(certificateId)}`,
       )) as Record<string, unknown>;
       return data.result;
     },
@@ -94,9 +77,9 @@ export default function cloudflare(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (limit) qs.per_page = limit;
       const data = (await apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `/zones/${zoneId}/origin_tls_client_auth`,
+        `zones/${seg(zoneId)}/origin_tls_client_auth`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -126,9 +109,9 @@ export default function cloudflare(rl: RunlinePluginAPI) {
         string
       >;
       const data = (await apiRequest(
-        getToken(ctx),
+        ctx,
         "POST",
-        `/zones/${zoneId}/origin_tls_client_auth`,
+        `zones/${seg(zoneId)}/origin_tls_client_auth`,
         {
           certificate,
           private_key: privateKey,
@@ -155,9 +138,9 @@ export default function cloudflare(rl: RunlinePluginAPI) {
         certificateId: string;
       };
       const data = (await apiRequest(
-        getToken(ctx),
+        ctx,
         "DELETE",
-        `/zones/${zoneId}/origin_tls_client_auth/${certificateId}`,
+        `zones/${seg(zoneId)}/origin_tls_client_auth/${seg(certificateId)}`,
       )) as Record<string, unknown>;
       return data.result;
     },
