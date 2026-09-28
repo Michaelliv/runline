@@ -185,7 +185,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "stripe/src/index.ts",
   "supabase/src/index.ts",
   "syncromsp/src/index.ts",
-  "tapfiliate/src/index.ts",
   "telegram/src/index.ts",
   "thehive/src/index.ts",
   "thehiveProject/src/index.ts",
