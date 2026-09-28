@@ -500,6 +500,12 @@ describe("native Plaud plugin", () => {
         message: "Invalid provider response",
       });
     }
+    for (const status of [200, 204]) {
+      mock(() => new Response(null, { status }));
+      await assert.rejects(execute("recording.get", { id: "id" }), {
+        code: "invalid_response",
+      });
+    }
   });
 
   it("pins destinations, rejects hostile recording IDs and uses the fixed probe", async () => {
