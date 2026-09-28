@@ -474,7 +474,7 @@ console.log(result.result);  // [{ hex: "#635BFF", type: "accent", brightness: 1
 
 ### Host-signed requests
 
-A host that keeps credentials outside the process running actions — a server signing for a sandboxed worker — passes `credentialBroker`. The engine calls it once per action call of a plugin that declares its credential (`setCredential`), with `{ plugin, action, context }` (`context` is whatever that `execute()` passed) and hands the result to the action as `ctx.credentials`. The registry-backed built-ins (Google, Microsoft, Plaud) then send every request and probe through it and sign nothing themselves, so their connection config carries public settings only.
+A host that keeps credentials outside the process running actions — a server signing for a sandboxed worker — passes `credentialBroker`. The engine calls it once per action call of a plugin that declares its credential (`setCredential`), with `{ plugin, action, context }` (`context` is whatever that `execute()` passed) and hands the result to the action as `ctx.credentials`. Every built-in that declares its credential then sends every request and probe through it and signs nothing itself, so its connection config carries public settings only.
 
 ```typescript
 const rl = Runline.create({
@@ -487,6 +487,18 @@ const rl = Runline.create({
 ```
 
 The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application and JWT identity — never with anything the plugin's process sends.
+
+Each method's `authentication.field` names the one config field a host stores the secret in, in its kind's shape:
+
+| kind | stored shape | sent as |
+|---|---|---|
+| `bearer` | `{ secret }` (`SecretSchema`) | `Authorization: Bearer <secret>` |
+| `apiKey` | `{ secret }` (`SecretSchema`) | `<header>: <prefix><secret>` |
+| `queryKey` | `{ secret }` (`SecretSchema`) | `?<param>=<secret>`; callers may never supply `<param>` |
+| `basic` | `{ username, password }` (`BasicSecretSchema`) | `Authorization: Basic base64(username:password)` |
+| `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection |
+
+Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
 
 ## CLI Reference
 
