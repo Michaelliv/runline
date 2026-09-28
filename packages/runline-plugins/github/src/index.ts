@@ -22,10 +22,8 @@ function gh(
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": GITHUB_API_VERSION,
     },
-    ...(body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
+    // DELETE carries a body where GitHub needs one (a file's sha and message).
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
       ? { json: body }
       : {}),
   });
