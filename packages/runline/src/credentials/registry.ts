@@ -312,6 +312,21 @@ function validateMethod(method: CredentialMethod): void {
       if (injected.includes(header) || TRANSPORT_HEADERS.includes(header))
         throw new AuthError("invalid_definition");
     }
+    // A socket URL carries only query parameters: no header, body or
+    // bearer can sign it, and nothing is sent through it by the transport.
+    if (
+      target.socket !== undefined &&
+      (target.socket !== true ||
+        auth.kind === "oauth2" ||
+        target.allowedHeaders !== undefined ||
+        target.idempotency !== undefined ||
+        target.resumableUpload !== undefined ||
+        (auth.kind === "static" &&
+          placementsFor(auth, name).some(
+            (placement) => placement.in !== "query",
+          )))
+    )
+      throw new AuthError("invalid_definition");
     // A path part is inserted into the request URL alone; a Destination on
     // the same target would name a resource outside the signed position.
     if (

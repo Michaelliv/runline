@@ -26,6 +26,7 @@ export function credentialBroker(
   return {
     request: (input) => transport.request(binding, input),
     probe: () => transport.probe(binding),
+    socketUrl: (input) => transport.socketUrl(binding, input),
   };
 }
 

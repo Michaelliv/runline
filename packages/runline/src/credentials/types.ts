@@ -22,8 +22,17 @@ export type HttpMethod =
 
 /** Host-approved resource boundary. No wildcards, templates, or agent-selected origins. */
 export interface CredentialTarget {
-  /** HTTPS URL ending in /. Requests stay beneath this exact origin and path. */
+  /**
+   * HTTPS URL ending in /, or wss:// for a socket target. Requests stay
+   * beneath this exact origin and path.
+   */
   baseUrl: string;
+  /**
+   * A WebSocket endpoint (a browser's CDP socket): the transport signs its
+   * URL with the method's query placements for the plugin to open, and
+   * sends no request to it.
+   */
+  socket?: boolean;
   methods: HttpMethod[];
   /** Additional caller-set headers beyond Accept and Content-Type. Auth is reserved. */
   allowedHeaders?: string[];

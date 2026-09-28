@@ -70,7 +70,7 @@ export function targetBase(target: CredentialTarget): URL {
   try {
     const url = new URL(target.baseUrl);
     if (
-      url.protocol !== "https:" ||
+      url.protocol !== (target.socket === true ? "wss:" : "https:") ||
       url.username ||
       url.password ||
       url.search ||

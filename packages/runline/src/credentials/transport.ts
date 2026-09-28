@@ -61,6 +61,12 @@ export interface AuthenticatedRequest {
   retry?: "never";
 }
 
+/** A socket target, and the path and query beneath it to connect to. */
+export interface SocketRequest {
+  target: string;
+  path: string;
+}
+
 /**
  * Authenticated requests and probes for one connection, on behalf of one
  * action call, signed by whoever holds its credentials. A host that keeps
@@ -70,6 +76,12 @@ export interface AuthenticatedRequest {
 export interface CredentialBroker {
   request(input: AuthenticatedRequest): Promise<Response>;
   probe(): Promise<CredentialProbeResult>;
+  /**
+   * A URL the plugin may open for a socket target. The local signer
+   * returns the signed URL itself; a host keeping the credential returns
+   * a relay it controls. A broker without it serves no sockets.
+   */
+  socketUrl?(input: SocketRequest): Promise<string>;
 }
 
 /** The action call a host builds a broker for. `context` is the per-run
@@ -461,7 +473,7 @@ export class CredentialTransport {
     const target = Object.hasOwn(method.targets, input.target)
       ? method.targets[input.target]
       : undefined;
-    if (!target) throw new AuthError("request_not_allowed");
+    if (!target || target.socket) throw new AuthError("request_not_allowed");
     const url = resourceUrl(target, input.path);
     const verb = input.method ?? "GET";
     if (
@@ -591,6 +603,35 @@ export class CredentialTransport {
     // Exactly one replay, only after durable renewal (or a newer committed revision).
     grant = await this.renew(binding, method, grant.revision, true);
     return send(bearer(secret(grant.tokens.accessToken)));
+  }
+
+  /**
+   * A socket target's URL, signed by its query placements, for a host's
+   * relay or the local signer to open. Nothing is sent.
+   */
+  async socketUrl(
+    selection: CredentialBinding,
+    input: SocketRequest,
+  ): Promise<string> {
+    const binding = pinBinding(selection);
+    const method = this.registry.select(binding.type, binding.method);
+    const target = Object.hasOwn(method.targets, input.target)
+      ? method.targets[input.target]
+      : undefined;
+    if (!target?.socket) throw new AuthError("request_not_allowed");
+    const url = resourceUrl(target, input.path);
+    refuseCredentialParams(
+      url,
+      injectedParams(method.authentication, input.target),
+    );
+    const { sign } = await this.authorize(binding, method, input.target);
+    const outgoing: Outgoing = {
+      headers: new Headers(),
+      url,
+      base: targetBase(target).pathname,
+    };
+    sign(outgoing);
+    return outgoing.url.toString();
   }
 
   /** Only a declared read-only probe runs. Results never contain provider text or secrets. */

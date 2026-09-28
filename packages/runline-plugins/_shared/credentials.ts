@@ -346,6 +346,24 @@ export function credentialRequest(
 }
 
 /**
+ * A socket target's URL for this connection, from the broker: signed by
+ * the local signer, or a relay the host controls. A broker that serves no
+ * sockets refuses as unsupported_operation.
+ */
+export async function credentialSocketUrl(
+  ctx: ActionContext,
+  declaration: CredentialDeclaration,
+  call: { target: string; path: string; query?: Record<string, unknown> },
+): Promise<string> {
+  const broker = credentialBroker(ctx, declaration);
+  if (!broker.socketUrl) throw new AuthError("unsupported_operation");
+  return broker.socketUrl({
+    target: call.target,
+    path: withQuery(call.path, call.query),
+  });
+}
+
+/**
  * A provider error identifier worth handing back — an error code, a field
  * path — as a plain name. Anything else is not a name and is dropped, so
  * the code and field slots of a failure never carry free text.

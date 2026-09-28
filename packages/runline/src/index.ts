@@ -77,6 +77,7 @@ export type {
   CredentialBroker,
   CredentialBrokerCall,
   CredentialTransportOptions,
+  SocketRequest,
 } from "./credentials/transport.js";
 export { CredentialTransport } from "./credentials/transport.js";
 export type {
