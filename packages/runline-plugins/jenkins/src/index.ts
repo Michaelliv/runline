@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialOk } from "../../_shared/credentials.js";
 import { jenkinsCredential } from "./credentials.js";
 
 async function jk(
@@ -10,7 +10,7 @@ async function jk(
   contentType?: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await credentialRequest(ctx, jenkinsCredential, {
+  const res = await credentialOk(ctx, jenkinsCredential, "jenkins", {
     target: "api",
     path: endpoint.replace(/^\//, ""),
     method,
@@ -22,7 +22,6 @@ async function jk(
         : { json: body }
       : {}),
   });
-  if (!res.ok) throw new Error(`jenkins: request failed (HTTP ${res.status})`);
   const ct = res.headers.get("content-type") ?? "";
   if (ct.includes("json")) return res.json();
   return { success: true };
