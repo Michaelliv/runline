@@ -888,6 +888,71 @@ describe("constrained credential transport", () => {
     assert.equal(calls, 0);
   });
 
+  it("logs in with the resource owner's password, and again once after a rejection", async () => {
+    const def = definition();
+    const auth = def.methods.selected.authentication;
+    if (auth.kind !== "oauth2") throw new Error();
+    auth.renewal = "password";
+    auth.definition.password = {
+      url: "https://auth.example/login",
+      clientAuthentication: "none",
+      encoding: "json",
+      grantType: null,
+      fields: { username: "identifier" },
+      response: { accessToken: "jwt" },
+    };
+    const seen: string[] = [];
+    let logins = 0;
+    const h = await harness(
+      mock((url, init) => {
+        if (url === "https://auth.example/login") {
+          logins++;
+          assert.deepEqual(JSON.parse(String(init.body)), {
+            identifier: "me",
+            password: "pw",
+          });
+          return Response.json({ jwt: `jwt${logins}` });
+        }
+        const token = new Headers(init.headers).get("authorization") ?? "";
+        seen.push(token);
+        return new Response(null, {
+          status: token === "Bearer jwt1" ? 401 : 200,
+        });
+      }),
+      {},
+      def,
+    );
+    h.binding.resourceOwner = { username: "me", password: "pw" };
+    assert.equal((await h.transport.request(h.binding, request)).status, 200);
+    assert.deepEqual(seen, ["Bearer jwt1", "Bearer jwt2"]);
+    assert.equal(logins, 2);
+  });
+
+  it("refuses a password renewal with no resource owner, before any request", async () => {
+    const def = definition();
+    const auth = def.methods.selected.authentication;
+    if (auth.kind !== "oauth2") throw new Error();
+    auth.renewal = "password";
+    auth.definition.password = {
+      url: "https://auth.example/login",
+      clientAuthentication: "none",
+    };
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      {},
+      def,
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, request),
+      errorCode("invalid_credentials"),
+    );
+    assert.equal(calls, 0);
+  });
+
   it("places a part only on the targets it is scoped to, so two parts may share a header across targets", async () => {
     const def = definition("bearer");
     def.methods.selected.targets.client = {

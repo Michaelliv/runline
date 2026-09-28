@@ -404,6 +404,21 @@ describe("credential registry", () => {
         const a = d.methods.delegated.authentication;
         if (a.kind === "oauth2") a.renewal = "clientCredentials";
       },
+      // A password renewal needs its endpoint, and plain field names.
+      (d) => {
+        const a = d.methods.delegated.authentication;
+        if (a.kind === "oauth2") a.renewal = "password";
+      },
+      (d) => {
+        const a = d.methods.delegated.authentication;
+        if (a.kind !== "oauth2") return;
+        a.renewal = "password";
+        a.definition.password = {
+          url: "https://auth.example/login",
+          clientAuthentication: "none",
+          fields: { username: "user name" },
+        };
+      },
       // A signed placement names a real header and a plain audience, and
       // its header is reserved like any other.
       ...["", "aud ience", "x".repeat(65), 7].map(

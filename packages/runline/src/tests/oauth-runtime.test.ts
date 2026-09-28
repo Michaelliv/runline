@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import { AuthError } from "../auth/errors.js";
 import {
   acquireOAuth2ClientToken,
+  acquireOAuth2PasswordToken,
   buildOAuth2AuthorizationUrl,
   exchangeOAuth2Code,
   refreshOAuth2Token,
@@ -290,6 +291,60 @@ describe("OAuth2 definitions and protocol runtime", () => {
       },
     );
     assert.deepEqual(tokens, { accessToken: "app" });
+  });
+
+  it("exchanges a resource owner's username and password for a token", async () => {
+    const def = definition();
+    def.password = {
+      url: "https://auth.example/token",
+      clientAuthentication: "none",
+    };
+    const tokens = await acquireOAuth2PasswordToken(
+      def,
+      { owner: { username: "me@x.io", password: "pw" } },
+      {
+        fetch: mock((_url, init) => {
+          assert.deepEqual(
+            Object.fromEntries(new URLSearchParams(String(init.body))),
+            { grant_type: "password", username: "me@x.io", password: "pw" },
+          );
+          return Response.json({ access_token: "a" });
+        }),
+      },
+    );
+    assert.deepEqual(tokens, { accessToken: "a" });
+  });
+
+  it("sends the owner's credentials under the provider's own field names", async () => {
+    const def = definition();
+    def.password = {
+      url: "https://cms.example/api/auth/local",
+      clientAuthentication: "none",
+      encoding: "json",
+      grantType: null,
+      fields: { username: "identifier" },
+      response: { accessToken: "jwt" },
+    };
+    const tokens = await acquireOAuth2PasswordToken(
+      def,
+      { owner: { username: "me@x.io", password: "pw" } },
+      {
+        fetch: mock((_url, init) => {
+          assert.deepEqual(JSON.parse(String(init.body)), {
+            identifier: "me@x.io",
+            password: "pw",
+          });
+          return Response.json({ jwt: "j", user: { id: 1 } });
+        }),
+      },
+    );
+    assert.deepEqual(tokens, { accessToken: "j" });
+    await assert.rejects(
+      acquireOAuth2PasswordToken(def, {
+        owner: { username: "", password: "pw" },
+      }),
+      errorCode("invalid_credentials"),
+    );
   });
 
   it("fails unsupported operations without a network request", async () => {
