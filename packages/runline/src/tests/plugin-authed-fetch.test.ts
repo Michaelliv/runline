@@ -211,7 +211,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "pushbullet/src/index.ts",
   "pushcut/src/index.ts",
   "pushover/src/index.ts",
-  "quickbase/src/index.ts",
   "quickbooks/src/index.ts",
   "raindrop/src/index.ts",
   "recraft/src/index.ts",

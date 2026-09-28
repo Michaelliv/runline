@@ -1,48 +1,33 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { quickbaseCredential } from "./credentials.js";
 
-const BASE = "https://api.quickbase.com/v1";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
-  return { hostname: c.hostname as string, userToken: c.userToken as string };
-}
-
-async function apiRequest(
-  conn: { hostname: string; userToken: string },
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, quickbaseCredential, "quickbase", {
+    target: "api",
+    path: endpoint,
     method,
+    query: qs,
     headers: {
-      "QB-Realm-Hostname": conn.hostname,
-      Authorization: `QB-USER-TOKEN ${conn.userToken}`,
-      "Content-Type": "application/json",
+      "QB-Realm-Hostname": String(ctx.connection.config.hostname ?? ""),
     },
-  };
-  if (body !== undefined) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`QuickBase error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    ...(body !== undefined ? { json: body } : {}),
+  });
 }
 
 export default function quickbase(rl: RunlinePluginAPI) {
   rl.setName("quickbase");
   rl.setVersion("0.1.0");
+  rl.setCredential(quickbaseCredential);
 
   rl.setConnectionSchema({
     hostname: {
@@ -68,13 +53,9 @@ export default function quickbase(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await apiRequest(
-        getConn(ctx),
-        "GET",
-        "/fields",
-        undefined,
-        { tableId: p.tableId },
-      )) as unknown[];
+      const data = (await apiRequest(ctx, "GET", "fields", undefined, {
+        tableId: p.tableId,
+      })) as unknown[];
       if (p.limit) return data.slice(0, p.limit as number);
       return data;
     },
@@ -95,9 +76,9 @@ export default function quickbase(rl: RunlinePluginAPI) {
         unknown
       >;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/files/${tableId}/${recordId}/${fieldId}/${versionNumber}`,
+        `files/${seg(tableId)}/${seg(recordId)}/${seg(fieldId)}/${seg(versionNumber)}`,
       );
     },
   });
@@ -123,7 +104,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { to: p.tableId, data: p.data };
       body.fieldsToReturn = (p.fieldsToReturn as number[]) ?? [3];
-      return apiRequest(getConn(ctx), "POST", "/records", body);
+      return apiRequest(ctx, "POST", "records", body);
     },
   });
 
@@ -140,7 +121,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, where } = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "DELETE", "/records", {
+      return apiRequest(ctx, "DELETE", "records", {
         from: tableId,
         where,
       });
@@ -176,7 +157,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
       if (p.select) body.select = p.select;
       if (p.sortBy) body.sortBy = p.sortBy;
       if (p.limit) body.options = { top: p.limit };
-      return apiRequest(getConn(ctx), "POST", "/records/query", body);
+      return apiRequest(ctx, "POST", "records/query", body);
     },
   });
 
@@ -209,7 +190,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
         mergeFieldId: p.mergeFieldId,
       };
       body.fieldsToReturn = (p.fieldsToReturn as number[]) ?? [3];
-      return apiRequest(getConn(ctx), "POST", "/records", body);
+      return apiRequest(ctx, "POST", "records", body);
     },
   });
 
@@ -222,13 +203,9 @@ export default function quickbase(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, reportId } = input as Record<string, unknown>;
-      return apiRequest(
-        getConn(ctx),
-        "GET",
-        `/reports/${reportId}`,
-        undefined,
-        { tableId },
-      );
+      return apiRequest(ctx, "GET", `reports/${seg(reportId)}`, undefined, {
+        tableId,
+      });
     },
   });
 
@@ -244,13 +221,7 @@ export default function quickbase(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { tableId: p.tableId };
       if (p.limit) qs.top = p.limit;
-      return apiRequest(
-        getConn(ctx),
-        "POST",
-        `/reports/${p.reportId}/run`,
-        {},
-        qs,
-      );
+      return apiRequest(ctx, "POST", `reports/${seg(p.reportId)}/run`, {}, qs);
     },
   });
 }
