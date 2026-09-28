@@ -175,7 +175,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "shiftTranscription/src/transcription.ts",
   "shopify/src/index.ts",
   "signl4/src/index.ts",
-  "sms77/src/index.ts",
   "steel/src/shared.ts",
   "storyblok/src/index.ts",
   "strapi/src/index.ts",

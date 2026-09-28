@@ -192,7 +192,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["shiftWork", "phase 3: not yet migrated"],
   ["shopify", "phase 3: not yet migrated"],
   ["signl4", "path token: the team secret is the URL path"],
-  ["sms77", "phase 3: not yet migrated"],
   [
     "steel",
     "WebSocket: the key rides in a wss:// CDP URL the transport cannot carry",
