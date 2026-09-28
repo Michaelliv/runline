@@ -1,5 +1,5 @@
 import type { CredentialDeclaration } from "runline";
-import { staticCredential } from "../../_shared/credentials.js";
+import { configChoice, staticCredential } from "../../_shared/credentials.js";
 
 const delivery = staticCredential({
   id: "contentful",
@@ -25,4 +25,7 @@ const preview = staticCredential({
  * Contentful host. One connection signs one way.
  */
 export const contentfulCredential: CredentialDeclaration = (config) =>
-  (config.source === "preview" ? preview : delivery)(config);
+  (configChoice(config.source, ["delivery", "preview"], "delivery") ===
+    "preview"
+    ? preview
+    : delivery)(config);

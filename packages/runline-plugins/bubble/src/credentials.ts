@@ -1,4 +1,5 @@
 import {
+  configChoice,
   hostLabel,
   httpsBase,
   staticCredential,
@@ -17,11 +18,16 @@ export const bubbleCredential = staticCredential({
   local: { secret: "apiToken" },
   targets: (config) => {
     const path =
-      config.environment === "development"
+      configChoice(config.environment, ["live", "development"], "live") ===
+      "development"
         ? "version-test/api/1.1/"
         : "api/1.1/";
     const baseUrl =
-      config.hosting === "selfHosted"
+      configChoice(
+        config.hosting,
+        ["bubbleHosted", "selfHosted"],
+        "bubbleHosted",
+      ) === "selfHosted"
         ? httpsBase(config.domain, path)
         : `https://${hostLabel(config.appName)}.bubbleapps.io/${path}`;
     return {

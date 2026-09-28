@@ -1,8 +1,7 @@
-import { AuthError } from "runline";
-import { staticCredential } from "../../_shared/credentials.js";
+import { configChoice, staticCredential } from "../../_shared/credentials.js";
 
 /** The Track and App API bases of each region, keyed by its Track host. */
-const REGIONS: Record<string, { track: string; app: string }> = {
+const REGIONS = {
   "track.customer.io": {
     track: "https://track.customer.io/api/v1/",
     app: "https://api.customer.io/v1/",
@@ -11,7 +10,7 @@ const REGIONS: Record<string, { track: string; app: string }> = {
     track: "https://track-eu.customer.io/api/v1/",
     app: "https://api-eu.customer.io/v1/",
   },
-};
+} as const;
 
 /**
  * The site ID and tracking key, sent as HTTP Basic to the Track API, and
@@ -46,10 +45,14 @@ export const customerIoCredential = staticCredential({
     appKey: "appApiKey",
   },
   targets: (config) => {
-    const region = String(config.region ?? "track.customer.io");
-    if (!Object.hasOwn(REGIONS, region))
-      throw new AuthError("invalid_credentials");
-    const bases = REGIONS[region];
+    const bases =
+      REGIONS[
+        configChoice(
+          config.region,
+          ["track.customer.io", "track-eu.customer.io"],
+          "track.customer.io",
+        )
+      ];
     return {
       track: { baseUrl: bases.track, methods: ["POST", "PUT", "DELETE"] },
       app: { baseUrl: bases.app, methods: ["GET"] },

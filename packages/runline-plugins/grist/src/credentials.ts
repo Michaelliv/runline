@@ -1,4 +1,5 @@
 import {
+  configChoice,
   hostLabel,
   httpsBase,
   staticCredential,
@@ -13,7 +14,11 @@ export const gristCredential = staticCredential({
   auth: { kind: "bearer" },
   local: { secret: "apiKey" },
   targets: (config) => {
-    const planType = config.planType ?? "free";
+    const planType = configChoice(
+      config.planType,
+      ["free", "paid", "selfHosted"],
+      "free",
+    );
     const baseUrl =
       planType === "selfHosted"
         ? httpsBase(config.selfHostedUrl, "api/")

@@ -5,7 +5,7 @@ import {
   OAuthGrantSchema,
 } from "runline";
 import * as t from "typebox";
-import { httpsBase } from "../../_shared/credentials.js";
+import { configChoice, httpsBase } from "../../_shared/credentials.js";
 
 /**
  * A client-credentials OAuth grant: the token comes from the configured
@@ -15,7 +15,8 @@ import { httpsBase } from "../../_shared/credentials.js";
  */
 export const halopsaCredential: CredentialDeclaration = (config) => {
   let tokenUrl =
-    config.hostingType === "on-premise"
+    configChoice(config.hostingType, ["cloud", "on-premise"], "cloud") ===
+    "on-premise"
       ? httpsBase(config.appUrl, "auth/token")
       : httpsBase(config.authUrl, "token");
   if (config.tenant !== undefined) {

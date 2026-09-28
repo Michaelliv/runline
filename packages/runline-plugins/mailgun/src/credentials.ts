@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { configChoice, staticCredential } from "../../_shared/credentials.js";
 
 /**
  * An API key as the Basic password with the fixed username "api", to
@@ -18,11 +18,12 @@ export const mailgunCredential = staticCredential({
 /** The target the connection's apiDomain names. */
 export function mailgunRegion(
   config: Readonly<Record<string, unknown>>,
-): string {
-  const domain = (config.apiDomain as string) ?? "api.mailgun.net";
-  if (domain === "api.mailgun.net") return "us";
-  if (domain === "api.eu.mailgun.net") return "eu";
-  throw new Error(
-    "mailgun: apiDomain must be api.mailgun.net or api.eu.mailgun.net",
-  );
+): "us" | "eu" {
+  return configChoice(
+    config.apiDomain,
+    ["api.mailgun.net", "api.eu.mailgun.net"],
+    "api.mailgun.net",
+  ) === "api.eu.mailgun.net"
+    ? "eu"
+    : "us";
 }

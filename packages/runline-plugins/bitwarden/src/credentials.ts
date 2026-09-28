@@ -4,7 +4,7 @@ import {
   OAuthGrantSchema,
 } from "runline";
 import * as t from "typebox";
-import { httpsBase } from "../../_shared/credentials.js";
+import { configChoice, httpsBase } from "../../_shared/credentials.js";
 
 /**
  * An organization API key (client id and secret), exchanged for a bearer
@@ -16,7 +16,12 @@ import { httpsBase } from "../../_shared/credentials.js";
  * endpoint requires.
  */
 export const bitwardenCredential: CredentialDeclaration = (config) => {
-  const selfHosted = config.environment === "selfHosted";
+  const selfHosted =
+    configChoice(
+      config.environment,
+      ["cloudHosted", "selfHosted"],
+      "cloudHosted",
+    ) === "selfHosted";
   const api: CredentialTarget = {
     baseUrl: selfHosted
       ? httpsBase(config.domain, "api/public/")

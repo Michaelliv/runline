@@ -1,14 +1,15 @@
 import { type CredentialDeclaration, OAuthGrantSchema } from "runline";
 import * as t from "typebox";
+import { configChoice } from "../../_shared/credentials.js";
 
 /**
  * A client-credentials OAuth grant against the environment's own token
- * endpoint. The env config field picks live or sandbox; both the token
- * request and every API call stay on that one host.
+ * endpoint. The env config field picks live or sandbox (the default);
+ * both the token request and every API call stay on that one host.
  */
 export const paypalCredential: CredentialDeclaration = (config) => {
   const base =
-    config.env === "live"
+    configChoice(config.env, ["live", "sandbox"], "sandbox") === "live"
       ? "https://api-m.paypal.com"
       : "https://api-m.sandbox.paypal.com";
   return {

@@ -211,6 +211,26 @@ export function hostLabel(value: unknown): string {
 }
 
 /**
+ * One of a config field's documented values — a region, an environment,
+ * a hosting mode — or `fallback` when the field is absent. Anything else
+ * is invalid_credentials, never mapped to a default: a mistyped value
+ * would otherwise send the credential to another host.
+ */
+export function configChoice<const C extends string>(
+  value: unknown,
+  choices: readonly C[],
+  fallback: C,
+): C {
+  if (value === undefined || value === null) return fallback;
+  if (
+    typeof value !== "string" ||
+    !(choices as readonly string[]).includes(value)
+  )
+    throw new AuthError("invalid_credentials");
+  return value as C;
+}
+
+/**
  * An ID or name as exactly one path segment, the one encoder every plugin
  * uses. A value that is not one segment is refused rather than encoded: an
  * empty value would address the parent collection (`items/`), a dot segment
