@@ -52,7 +52,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["chargebee", "phase 3: not yet migrated"],
   ["clearbit", "phase 3: not yet migrated"],
   ["cloudflare", "phase 3: not yet migrated"],
-  ["cockpit", "phase 3: not yet migrated"],
   [
     "coingecko",
     "optional credential: a secret-free config cannot say whether to sign",

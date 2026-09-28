@@ -96,7 +96,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "chargebee/src/index.ts",
   "clearbit/src/index.ts",
   "cloudflare/src/index.ts",
-  "cockpit/src/index.ts",
   "coingecko/src/index.ts",
   "contentful/src/index.ts",
   "convertkit/src/index.ts",
