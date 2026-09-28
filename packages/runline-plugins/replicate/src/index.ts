@@ -32,7 +32,7 @@ import {
   writeMediaFile,
 } from "../../_shared/mediaFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
-import { REPLICATE_BASE, replicateCredential } from "./credentials.js";
+import { replicateCredential } from "./credentials.js";
 
 const POLL_INTERVAL_MS = 2_000;
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -121,7 +121,7 @@ async function runPrediction(opts: {
     prediction = (await credentialJson(ctx, replicateCredential, "replicate", {
       target: "api",
       // The API-returned poll URL, refused unless it stays on the target.
-      path: pathWithin(REPLICATE_BASE, prediction.urls.get),
+      path: pathWithin(ctx, replicateCredential, "api", prediction.urls.get),
     })) as Prediction;
   }
 

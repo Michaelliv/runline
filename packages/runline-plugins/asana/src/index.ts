@@ -6,8 +6,6 @@ import {
 } from "../../_shared/credentials.js";
 import { asanaCredential } from "./credentials.js";
 
-const BASE_URL = "https://app.asana.com/api/1.0/";
-
 async function apiRequest(
   ctx: ActionContext,
   method: HttpMethod,
@@ -55,7 +53,7 @@ async function paginateAll(
     // A next-page URL the API returned, kept beneath the declared target.
     const nextPage = json.next_page as { uri?: string } | null;
     if (!nextPage?.uri) break;
-    page = { path: pathWithin(BASE_URL, nextPage.uri) };
+    page = { path: pathWithin(ctx, asanaCredential, "api", nextPage.uri) };
   }
 
   return results;

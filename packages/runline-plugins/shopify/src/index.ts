@@ -5,7 +5,7 @@ import {
   pathSegment,
   pathWithin,
 } from "../../_shared/credentials.js";
-import { shopifyBase, shopifyCredential } from "./credentials.js";
+import { shopifyCredential } from "./credentials.js";
 
 function apiRequest(
   ctx: ActionContext,
@@ -29,7 +29,6 @@ async function paginate(
   path: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown[]> {
-  const base = shopifyBase(ctx.connection.config);
   const all: unknown[] = [];
   let nextPath: string | undefined;
   do {
@@ -45,7 +44,7 @@ async function paginate(
     if (link.includes('rel="next"')) {
       const match = link.match(/<([^>]+)>;\s*rel="next"/);
       // A next page only beneath the store's own Admin API base.
-      if (match) nextPath = pathWithin(base, match[1]);
+      if (match) nextPath = pathWithin(ctx, shopifyCredential, "api", match[1]);
     }
   } while (nextPath);
   return all;

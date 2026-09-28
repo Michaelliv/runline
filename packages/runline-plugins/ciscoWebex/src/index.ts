@@ -7,8 +7,6 @@ import {
 } from "../../_shared/credentials.js";
 import { ciscoWebexCredential } from "./credentials.js";
 
-const BASE_URL = "https://webexapis.com/v1/";
-
 function apiRequest(
   ctx: ActionContext,
   method: HttpMethod,
@@ -56,7 +54,9 @@ async function paginateAll(
       const match = link.match(/<([^>]+)>/);
       if (!match?.[1]) break;
       // The next-page URL is followed only beneath the declared target.
-      next = { path: pathWithin(BASE_URL, match[1]) };
+      next = {
+        path: pathWithin(ctx, ciscoWebexCredential, "api", match[1]),
+      };
     } else {
       break;
     }

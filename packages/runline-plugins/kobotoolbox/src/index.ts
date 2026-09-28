@@ -1,7 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
-  httpsBase,
   pathSegment,
   pathWithin,
 } from "../../_shared/credentials.js";
@@ -47,7 +46,7 @@ async function paginate(
       const next = data.next as string | null | undefined;
       // A next-page link stays beneath the connection's own API base.
       path = next
-        ? pathWithin(httpsBase(ctx.connection.config.url, "api/v2/"), next)
+        ? pathWithin(ctx, kobotoolboxCredential, "api", next)
         : undefined;
     } else {
       // Non-paginated response

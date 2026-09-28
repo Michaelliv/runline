@@ -269,13 +269,22 @@ export async function credentialJson<T = unknown>(
 }
 
 /**
- * A next-page URL the API returned, as a path beneath the target. Anything
- * outside the target's exact origin and path prefix is refused rather than
- * followed with the credential attached.
+ * A next-page URL the API returned, as a path beneath the declared target
+ * it will be signed for. Anything outside that target's exact origin and
+ * path prefix is refused rather than followed with the credential attached.
  */
-export function pathWithin(baseUrl: string, value: string): string {
+export function pathWithin(
+  ctx: ActionContext,
+  declaration: CredentialDeclaration,
+  target: string,
+  value: string,
+): string {
+  const { type, method } = declaration(ctx.connection.config);
+  const targets = type.methods[method]?.targets ?? {};
+  if (!Object.hasOwn(targets, target))
+    throw new AuthError("request_not_allowed");
   try {
-    const base = new URL(baseUrl);
+    const base = new URL(targets[target].baseUrl);
     const url = new URL(value);
     if (
       url.origin !== base.origin ||
