@@ -151,7 +151,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "optional credential: a secret-free config cannot say whether to sign",
   ],
   ["odoo", "login: the password rides in every JSON-RPC argument list"],
-  ["oneSimpleApi", "phase 3: not yet migrated"],
   ["onfleet", "phase 3: not yet migrated"],
   ["openai", "phase 3: not yet migrated"],
   ["openweathermap", "phase 3: not yet migrated"],
