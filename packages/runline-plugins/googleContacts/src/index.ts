@@ -19,8 +19,9 @@
  *
  * The People API uses `resourceName` ("people/c1234…") as the
  * canonical identifier; we accept either the full `resourceName` or
- * the bare ID and normalize. The response always includes a
- * convenience `contactId` field stripped from `resourceName`.
+ * the bare ID and normalize, and either way the ID is one path
+ * segment. The response always includes a convenience `contactId`
+ * field stripped from `resourceName`.
  */
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
@@ -32,6 +33,7 @@ import {
   PositiveInteger,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
+import { seg } from "../../_shared/provider.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -149,13 +151,15 @@ async function paginateAll(
  * Accepts either the raw ID (`c1234…`) or the full prefixed form.
  */
 function normalizeContactResource(input: string): string {
-  if (!input) throw new Error("googleContacts: contact ID is required");
-  return input.startsWith("people/") ? input : `people/${input}`;
+  const id = input.startsWith("people/") ? input.slice("people/".length) : input;
+  return `people/${seg(id, "contact ID", "googleContacts")}`;
 }
 
 function normalizeGroupResource(input: string): string {
-  if (!input) throw new Error("googleContacts: group ID is required");
-  return input.startsWith("contactGroups/") ? input : `contactGroups/${input}`;
+  const id = input.startsWith("contactGroups/")
+    ? input.slice("contactGroups/".length)
+    : input;
+  return `contactGroups/${seg(id, "group ID", "googleContacts")}`;
 }
 
 function contactIdFromResource(resourceName: string | undefined): string | undefined {
