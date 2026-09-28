@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { typesafeCredential } from "./credentials.js";
 import { GUIDE, GUIDE_TOPICS, type GuideTopic } from "./guide.js";
 import {
   choiceRubric,
@@ -10,7 +11,6 @@ import {
   toWireQuestion,
   toWireQuestions,
 } from "./questions.js";
-import { typesafeCredential } from "./credentials.js";
 import {
   DEFAULT_BASE,
   DEFAULT_MODEL,
