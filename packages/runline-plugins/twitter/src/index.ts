@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { twitterCredential } from "./credentials.js";
-
-/** An ID or username as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function api(
   ctx: ActionContext,
@@ -106,7 +103,7 @@ export default function twitter(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `tweets/${seg((input as Record<string, unknown>).id)}`,
+        `tweets/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -120,7 +117,7 @@ export default function twitter(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      return api(ctx, "POST", `users/${seg(user.id)}/likes`, {
+      return api(ctx, "POST", `users/${pathSegment(user.id)}/likes`, {
         tweet_id: (input as Record<string, unknown>).tweetId,
       });
     },
@@ -135,7 +132,7 @@ export default function twitter(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      return api(ctx, "POST", `users/${seg(user.id)}/retweets`, {
+      return api(ctx, "POST", `users/${pathSegment(user.id)}/retweets`, {
         tweet_id: (input as Record<string, unknown>).tweetId,
       });
     },
@@ -207,9 +204,9 @@ export default function twitter(rl: RunlinePluginAPI) {
       if (p.me) return api(ctx, "GET", "users/me");
       if (p.username) {
         const name = (p.username as string).replace(/^@/, "");
-        return api(ctx, "GET", `users/by/username/${seg(name)}`);
+        return api(ctx, "GET", `users/by/username/${pathSegment(name)}`);
       }
-      if (p.id) return api(ctx, "GET", `users/${seg(p.id)}`);
+      if (p.id) return api(ctx, "GET", `users/${pathSegment(p.id)}`);
       throw new Error("Provide username, id, or set me=true");
     },
   });
@@ -225,7 +222,7 @@ export default function twitter(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `lists/${seg(p.listId)}/members`, {
+      return api(ctx, "POST", `lists/${pathSegment(p.listId)}/members`, {
         user_id: p.userId,
       });
     },
@@ -252,7 +249,7 @@ export default function twitter(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "POST",
-        `dm_conversations/with/${seg(p.userId)}/messages`,
+        `dm_conversations/with/${pathSegment(p.userId)}/messages`,
         body,
       );
     },
