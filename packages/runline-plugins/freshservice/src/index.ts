@@ -1,59 +1,26 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { freshserviceCredential } from "./credentials.js";
 
-async function apiRequest(
-  domain: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function req(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`https://${domain}.freshservice.com/api/v2${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, freshserviceCredential, "freshservice", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${apiKey}:X`)}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(
-      `Freshservice API error ${res.status}: ${await res.text()}`,
-    );
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    domain: ctx.connection.config.domain as string,
-    apiKey: ctx.connection.config.apiKey as string,
-  };
-}
-
-function req(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { domain, apiKey } = getConn(ctx);
-  return apiRequest(domain, apiKey, method, endpoint, body, qs);
+      ? { json: body }
+      : {}),
+  });
 }
 
 function unwrap(data: unknown): unknown {
@@ -103,7 +70,11 @@ function registerCrud(
     },
     async execute(input, ctx) {
       return unwrap(
-        await req(ctx, "GET", `${apiPath}/${(input as { id: number }).id}`),
+        await req(
+          ctx,
+          "GET",
+          `${apiPath}/${encodeURIComponent((input as { id: number }).id)}`,
+        ),
       );
     },
   });
@@ -140,7 +111,14 @@ function registerCrud(
         id: number;
         properties: Record<string, unknown>;
       };
-      return unwrap(await req(ctx, "PUT", `${apiPath}/${id}`, properties));
+      return unwrap(
+        await req(
+          ctx,
+          "PUT",
+          `${apiPath}/${encodeURIComponent(id)}`,
+          properties,
+        ),
+      );
     },
   });
 
@@ -152,7 +130,11 @@ function registerCrud(
         id: { type: "number", required: true, description: `${resource} ID` },
       },
       async execute(input, ctx) {
-        await req(ctx, "DELETE", `${apiPath}/${(input as { id: number }).id}`);
+        await req(
+          ctx,
+          "DELETE",
+          `${apiPath}/${encodeURIComponent((input as { id: number }).id)}`,
+        );
         return { success: true };
       },
     });
@@ -162,6 +144,7 @@ function registerCrud(
 export default function freshservice(rl: RunlinePluginAPI) {
   rl.setName("freshservice");
   rl.setVersion("0.1.0");
+  rl.setCredential(freshserviceCredential);
 
   rl.setConnectionSchema({
     domain: {
@@ -179,21 +162,21 @@ export default function freshservice(rl: RunlinePluginAPI) {
   });
 
   // 16 resources, all CRUD
-  registerCrud(rl, "agent", "/agents", "agent");
-  registerCrud(rl, "agentGroup", "/groups", "group");
-  registerCrud(rl, "announcement", "/announcements", "announcement");
-  registerCrud(rl, "asset", "/assets", "asset");
-  registerCrud(rl, "assetType", "/asset_types", "asset_type");
-  registerCrud(rl, "change", "/changes", "change");
-  registerCrud(rl, "department", "/departments", "department");
-  registerCrud(rl, "location", "/locations", "location");
-  registerCrud(rl, "problem", "/problems", "problem");
-  registerCrud(rl, "product", "/products", "product");
-  registerCrud(rl, "release", "/releases", "release");
-  registerCrud(rl, "requester", "/requesters", "requester");
-  registerCrud(rl, "requesterGroup", "/requester_groups", "requester_group");
-  registerCrud(rl, "software", "/applications", "application");
-  registerCrud(rl, "ticket", "/tickets", "ticket");
+  registerCrud(rl, "agent", "agents", "agent");
+  registerCrud(rl, "agentGroup", "groups", "group");
+  registerCrud(rl, "announcement", "announcements", "announcement");
+  registerCrud(rl, "asset", "assets", "asset");
+  registerCrud(rl, "assetType", "asset_types", "asset_type");
+  registerCrud(rl, "change", "changes", "change");
+  registerCrud(rl, "department", "departments", "department");
+  registerCrud(rl, "location", "locations", "location");
+  registerCrud(rl, "problem", "problems", "problem");
+  registerCrud(rl, "product", "products", "product");
+  registerCrud(rl, "release", "releases", "release");
+  registerCrud(rl, "requester", "requesters", "requester");
+  registerCrud(rl, "requesterGroup", "requester_groups", "requester_group");
+  registerCrud(rl, "software", "applications", "application");
+  registerCrud(rl, "ticket", "tickets", "ticket");
 
   // agentRole is read-only (get + list only)
   rl.registerAction("agentRole.get", {
@@ -204,7 +187,11 @@ export default function freshservice(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return unwrap(
-        await req(ctx, "GET", `/roles/${(input as { id: number }).id}`),
+        await req(
+          ctx,
+          "GET",
+          `roles/${encodeURIComponent((input as { id: number }).id)}`,
+        ),
       );
     },
   });
@@ -221,7 +208,7 @@ export default function freshservice(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (limit) qs.per_page = limit;
       if (page) qs.page = page;
-      return unwrap(await req(ctx, "GET", "/roles", undefined, qs));
+      return unwrap(await req(ctx, "GET", "roles", undefined, qs));
     },
   });
 }
