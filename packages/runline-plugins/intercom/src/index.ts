@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { intercomCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -83,7 +80,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `contacts/${seg((input as { contactId: string }).contactId)}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       );
     },
   });
@@ -130,7 +127,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       if (name) body.name = name;
       if (phone) body.phone = phone;
       if (customAttributes) body.custom_attributes = customAttributes;
-      return api(ctx, "PUT", `contacts/${seg(contactId)}`, body);
+      return api(ctx, "PUT", `contacts/${pathSegment(contactId)}`, body);
     },
   });
 
@@ -144,7 +141,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "DELETE",
-        `contacts/${seg((input as { contactId: string }).contactId)}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       );
     },
   });
@@ -218,7 +215,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `companies/${seg((input as { companyId: string }).companyId)}`,
+        `companies/${pathSegment((input as { companyId: string }).companyId)}`,
       );
     },
   });
@@ -249,7 +246,7 @@ export default function intercom(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `companies/${seg((input as { companyId: string }).companyId)}/contacts`,
+        `companies/${pathSegment((input as { companyId: string }).companyId)}/contacts`,
       );
     },
   });
