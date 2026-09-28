@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
+import { credentialOk, pathSegment } from "../../_shared/credentials.js";
 import { helpscoutCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -9,7 +9,7 @@ async function apiRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await credentialRequest(ctx, helpscoutCredential, {
+  const res = await credentialOk(ctx, helpscoutCredential, "helpscout", {
     target: "api",
     path: endpoint,
     method,
@@ -18,9 +18,6 @@ async function apiRequest(
       ? { json: body }
       : {}),
   });
-  // Failures are reported by status alone: provider text can echo request data.
-  if (!res.ok)
-    throw new Error(`helpscout: request failed (HTTP ${res.status})`);
   if (res.status === 201 || res.status === 204)
     return { success: true, location: res.headers.get("Location") };
   return res.json();
