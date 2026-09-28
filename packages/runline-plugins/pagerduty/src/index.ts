@@ -1,11 +1,8 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { pagerdutyCredential } from "./credentials.js";
 
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
-
-async function apiRequest(
+function apiRequest(
   ctx: ActionContext,
   method: HttpMethod,
   path: string,
@@ -13,8 +10,7 @@ async function apiRequest(
   qs?: Record<string, unknown>,
   extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
-  const json = body && Object.keys(body).length > 0 ? body : undefined;
-  const res = await credentialRequest(ctx, pagerdutyCredential, {
+  return credentialJson(ctx, pagerdutyCredential, "pagerduty", {
     target: "api",
     path,
     method,
@@ -23,12 +19,8 @@ async function apiRequest(
       Accept: "application/vnd.pagerduty+json;version=2",
       ...extraHeaders,
     },
-    ...(json !== undefined ? { json } : {}),
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
   });
-  if (!res.ok)
-    throw new Error(`pagerduty: request failed (HTTP ${res.status})`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
 }
 
 async function paginate(
@@ -130,7 +122,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `incidents/${seg(incidentId)}`,
+        `incidents/${pathSegment(incidentId)}`,
       )) as Record<string, unknown>;
       return data.incident;
     },
@@ -208,7 +200,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "PUT",
-        `incidents/${seg(p.incidentId)}`,
+        `incidents/${pathSegment(p.incidentId)}`,
         { incident },
         undefined,
         { From: p.from as string },
@@ -236,7 +228,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `incidents/${seg(incidentId)}/notes`,
+        `incidents/${pathSegment(incidentId)}/notes`,
         { note: { content } },
         undefined,
         { From: from as string },
@@ -258,7 +250,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `incidents/${seg(p.incidentId)}/notes`,
+        `incidents/${pathSegment(p.incidentId)}/notes`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -277,7 +269,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `log_entries/${seg(logEntryId)}`,
+        `log_entries/${pathSegment(logEntryId)}`,
       )) as Record<string, unknown>;
       return data.log_entry;
     },
@@ -310,7 +302,7 @@ export default function pagerduty(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "GET",
-        `users/${seg(userId)}`,
+        `users/${pathSegment(userId)}`,
       )) as Record<string, unknown>;
       return data.user;
     },
