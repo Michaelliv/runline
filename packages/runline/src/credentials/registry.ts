@@ -30,7 +30,7 @@ export const OAuthTokensSchema = t.Object(
   { additionalProperties: false },
 );
 
-/** Stored shape of a bearer or API-key secret. */
+/** Stored shape of a bearer, API-key or query-key secret. */
 export const SecretSchema = t.Object(
   { secret: t.String({ minLength: 1 }) },
   { additionalProperties: false },
@@ -160,8 +160,8 @@ function validateMethod(method: CredentialMethod): void {
         !bounded(target.maxResponseBytes, TARGET_RESPONSE_LIMIT_BYTES))
     )
       throw new AuthError("invalid_definition");
-    for (const name of target.allowedHeaders ?? []) {
-      const header = headerName(name);
+    for (const allowed of target.allowedHeaders ?? []) {
+      const header = headerName(allowed);
       if (header === injected || header === "authorization")
         throw new AuthError("invalid_definition");
     }

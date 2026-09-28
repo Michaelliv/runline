@@ -193,10 +193,14 @@ export function credentialRequest(
 }
 
 /**
- * A request that must succeed, for callers that read the Response itself
- * (headers, text, bytes). Failure is reported by status alone: provider
- * error text can echo request data back and is not returned to the caller.
+ * A failed request, reported by status alone: provider error text can echo
+ * request data back and is not returned to the caller.
  */
+export function requestFailed(plugin: string, status: number): Error {
+  return new Error(`${plugin}: request failed (HTTP ${status})`);
+}
+
+/** A request that must succeed, for callers that read the Response itself (headers, text, bytes). */
 export async function credentialOk(
   ctx: ActionContext,
   declaration: CredentialDeclaration,
@@ -204,27 +208,21 @@ export async function credentialOk(
   call: CredentialCall,
 ): Promise<Response> {
   const response = await credentialRequest(ctx, declaration, call);
-  if (!response.ok)
-    throw new Error(`${plugin}: request failed (HTTP ${response.status})`);
+  if (!response.ok) throw requestFailed(plugin, response.status);
   return response;
 }
 
-/** What `credentialJson` answers for an empty (or 204) response. */
+/** What a JSON request answers for an empty (or 204) response. */
 export type EmptyAnswer = { success: true };
 
 /**
- * A JSON request that must succeed. `T` is the caller's statement of the
- * answer's shape, unchecked, as for any parsed JSON; without one the answer
- * is `unknown`. An empty answer is `EmptyAnswer`, so a caller whose endpoint
- * can answer empty includes it in `T`.
+ * A successful response's JSON. `T` is the caller's statement of the
+ * answer's shape, unchecked, as for any parsed JSON; without one it is
+ * `unknown`. An empty answer is `EmptyAnswer`, so a caller whose endpoint
+ * can answer empty includes it in `T`. Every JSON request path reads its
+ * answer here, so they cannot disagree about empty or malformed bodies.
  */
-export async function credentialJson<T = unknown>(
-  ctx: ActionContext,
-  declaration: CredentialDeclaration,
-  plugin: string,
-  call: CredentialCall,
-): Promise<T> {
-  const response = await credentialOk(ctx, declaration, plugin, call);
+export async function jsonAnswer<T = unknown>(response: Response): Promise<T> {
   const empty: EmptyAnswer = { success: true };
   if (response.status === 204) return empty as T;
   const text = await response.text();
@@ -234,6 +232,16 @@ export async function credentialJson<T = unknown>(
   } catch {
     throw new AuthError("invalid_response");
   }
+}
+
+/** A JSON request that must succeed; its answer is read by `jsonAnswer`. */
+export async function credentialJson<T = unknown>(
+  ctx: ActionContext,
+  declaration: CredentialDeclaration,
+  plugin: string,
+  call: CredentialCall,
+): Promise<T> {
+  return jsonAnswer<T>(await credentialOk(ctx, declaration, plugin, call));
 }
 
 /**

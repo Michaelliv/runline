@@ -5,6 +5,7 @@ import {
   type HttpMethod,
 } from "runline";
 import { credentialBroker } from "./credentialAdapter.js";
+import { jsonAnswer, requestFailed } from "./credentials.js";
 import {
   microsoftCredential,
   microsoftUserBase,
@@ -53,9 +54,9 @@ export async function graphResponse(
 }
 
 /**
- * JSON and binary requests share the same destination, renewal and replay
- * policy. `T` is the caller's statement of the answer's shape, unchecked;
- * without one the answer is `unknown`. An empty answer is `{ success: true }`.
+ * A Graph JSON request that must succeed; its answer is read by
+ * `jsonAnswer`. JSON and binary requests share the same destination,
+ * renewal and replay policy through `graphResponse`.
  */
 export async function graphRequest<T = unknown>(
   ctx: ActionContext,
@@ -74,16 +75,8 @@ export async function graphRequest<T = unknown>(
     body === undefined ? undefined : JSON.stringify(body),
     body === undefined ? undefined : "application/json",
   );
-  if (!res.ok)
-    throw new Error(`${plugin}: Graph request failed (HTTP ${res.status})`);
-  const empty = { success: true } as T;
-  if (res.status === 204) return empty;
-  const text = await res.text();
-  try {
-    return text ? (JSON.parse(text) as T) : empty;
-  } catch {
-    throw new Error(`${plugin}: invalid Graph response`);
-  }
+  if (!res.ok) throw requestFailed(plugin, res.status);
+  return jsonAnswer<T>(res);
 }
 
 /** Graph-issued signed download URLs carry their own authority, never a bearer header. */

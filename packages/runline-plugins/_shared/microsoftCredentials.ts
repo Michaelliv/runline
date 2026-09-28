@@ -7,6 +7,7 @@ import {
   type CredentialType,
 } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "./credentials.js";
 
 export type MicrosoftAuthConfig = {
   authMethod?: "delegated" | "appOnly";
@@ -38,12 +39,12 @@ export function microsoftMethod(
 export function microsoftUserBase(cfg: MicrosoftAuthConfig): string {
   if (microsoftMethod(cfg) === "delegated") return "/me";
   if (!cfg.userUpn) throw new AuthError("invalid_credentials");
-  return `/users/${encodeURIComponent(cfg.userUpn)}`;
+  return `/users/${pathSegment(cfg.userUpn)}`;
 }
 
 export function microsoftDriveBase(cfg: MicrosoftAuthConfig): string {
-  if (cfg.driveId) return `/drives/${encodeURIComponent(cfg.driveId)}`;
-  if (cfg.siteId) return `/sites/${encodeURIComponent(cfg.siteId)}/drive`;
+  if (cfg.driveId) return `/drives/${pathSegment(cfg.driveId)}`;
+  if (cfg.siteId) return `/sites/${pathSegment(cfg.siteId)}/drive`;
   return `${microsoftUserBase(cfg)}/drive`;
 }
 

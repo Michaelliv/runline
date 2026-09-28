@@ -5,6 +5,7 @@ import {
   type HttpMethod,
 } from "runline";
 import { credentialBroker } from "./credentialAdapter.js";
+import { jsonAnswer, requestFailed } from "./credentials.js";
 import { googleCredential, googleResources } from "./googleCredentials.js";
 
 export type { GoogleAuthConfig } from "./googleCredentials.js";
@@ -52,11 +53,7 @@ export async function googleResponse(
   });
 }
 
-/**
- * A Google JSON request. `T` is the caller's statement of the answer's
- * shape, unchecked; without one the answer is `unknown`. An empty answer is
- * `{ success: true }`.
- */
+/** A Google JSON request that must succeed; its answer is read by `jsonAnswer`. */
 export async function googleJsonRequest<T = unknown>(
   ctx: ActionContext,
   plugin: string,
@@ -81,16 +78,8 @@ export async function googleJsonRequest<T = unknown>(
     },
     query,
   );
-  if (!response.ok)
-    throw new Error(`${plugin}: request failed (HTTP ${response.status})`);
-  const empty = { success: true } as T;
-  if (response.status === 204) return empty;
-  const text = await response.text();
-  try {
-    return text ? (JSON.parse(text) as T) : empty;
-  } catch {
-    throw new AuthError("invalid_response");
-  }
+  if (!response.ok) throw requestFailed(plugin, response.status);
+  return jsonAnswer<T>(response);
 }
 
 export async function googleProbe(
