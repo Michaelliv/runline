@@ -1,12 +1,12 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialOk,
-  jsonAnswer,
+  jsonOrAcknowledged,
   pathSegment,
 } from "../../_shared/credentials.js";
 import { customerIoCredential } from "./credentials.js";
 
-/** A Customer.io call on the Track or App API; a non-JSON acknowledgement is `{ success: true }`. */
+/** A Customer.io call on the Track or App API. */
 async function apiRequest(
   ctx: ActionContext,
   target: "track" | "app",
@@ -27,9 +27,7 @@ async function apiRequest(
       ? { json: body }
       : {}),
   });
-  return (res.headers.get("content-type") ?? "").includes("application/json")
-    ? jsonAnswer(res)
-    : { success: true };
+  return jsonOrAcknowledged(res);
 }
 
 export default function customerIo(rl: RunlinePluginAPI) {

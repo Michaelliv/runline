@@ -375,6 +375,21 @@ export async function jsonAnswer<T = unknown>(response: Response): Promise<T> {
   }
 }
 
+/**
+ * A successful response's JSON when its Content-Type says JSON; any other
+ * body — a text "OK", nothing at all — is an acknowledgement,
+ * `EmptyAnswer`. For APIs whose writes answer without JSON.
+ */
+export async function jsonOrAcknowledged<T = unknown>(
+  response: Response,
+): Promise<T | EmptyAnswer> {
+  return (response.headers.get("content-type") ?? "").includes(
+    "application/json",
+  )
+    ? jsonAnswer<T>(response)
+    : { success: true };
+}
+
 /** A JSON request that must succeed; its answer is read by `jsonAnswer`. */
 export async function credentialJson<T = unknown>(
   ctx: ActionContext,

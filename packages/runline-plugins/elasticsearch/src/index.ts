@@ -1,12 +1,11 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialOk,
-  jsonAnswer,
+  jsonOrAcknowledged,
   pathSegment,
 } from "../../_shared/credentials.js";
 import { elasticsearchCredential } from "./credentials.js";
 
-/** An Elasticsearch call; a non-JSON acknowledgement is `{ success: true }`. */
 async function req(
   ctx: ActionContext,
   method: HttpMethod,
@@ -31,9 +30,7 @@ async function req(
         : {}),
     },
   );
-  return (res.headers.get("content-type") ?? "").includes("application/json")
-    ? jsonAnswer(res)
-    : { success: true };
+  return jsonOrAcknowledged(res);
 }
 
 export default function elasticsearch(rl: RunlinePluginAPI) {
@@ -210,12 +207,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if (settings) body.settings = settings;
       if (mappings) body.mappings = mappings;
-      return req(
-        ctx,
-        "PUT",
-        pathSegment(index),
-        Object.keys(body).length > 0 ? body : undefined,
-      );
+      return req(ctx, "PUT", pathSegment(index), body);
     },
   });
 

@@ -2,6 +2,7 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialOk,
   jsonAnswer,
+  jsonOrAcknowledged,
   pathSegment,
 } from "../../_shared/credentials.js";
 import { bambooHrCredential } from "./credentials.js";
@@ -25,11 +26,7 @@ async function apiRequest(
       ? { json: body }
       : {}),
   });
-  // Some endpoints acknowledge with an empty or non-JSON body.
-  const contentType = res.headers.get("content-type") ?? "";
-  return contentType.includes("application/json")
-    ? jsonAnswer(res)
-    : { success: true };
+  return jsonOrAcknowledged(res);
 }
 
 export default function bambooHr(rl: RunlinePluginAPI) {
