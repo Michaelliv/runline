@@ -116,7 +116,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "ghost/src/index.ts",
   "gitlab/src/index.ts",
   "gong/src/index.ts",
-  "googleImage/src/index.ts",
   "gotify/src/index.ts",
   "grafana/src/index.ts",
   "graphql/src/index.ts",
