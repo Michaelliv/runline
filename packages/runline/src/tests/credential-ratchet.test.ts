@@ -75,7 +75,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["discourse", "phase 3: not yet migrated"],
   ["drift", "phase 3: not yet migrated"],
   ["dropcontact", "phase 3: not yet migrated"],
-  ["elasticsearch", "phase 3: not yet migrated"],
+  [
+    "elasticsearch",
+    "optional credential: username and password are optional, and the empty Basic pair sent today is one the transport refuses",
+  ],
   ["elevenlabs", "phase 3: not yet migrated"],
   ["emelia", "phase 3: not yet migrated"],
   [
