@@ -1,32 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
-
-const BASE_URL = "https://api.dropcontact.io";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { dropcontactCredential } from "./credentials.js";
 
 async function apiRequest(
-  apiKey: string,
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, dropcontactCredential, "dropcontact", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Access-Token": apiKey,
-    },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET") {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok)
-    throw new Error(`Dropcontact API error ${res.status}: ${await res.text()}`);
-  return res.json();
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function dropcontact(rl: RunlinePluginAPI) {
   rl.setName("dropcontact");
   rl.setVersion("0.1.0");
+  rl.setCredential(dropcontactCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -36,9 +31,6 @@ export default function dropcontact(rl: RunlinePluginAPI) {
       env: "DROPCONTACT_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("contact.enrich", {
     access: "write",
@@ -66,7 +58,7 @@ export default function dropcontact(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { data: contacts };
       if (siren) body.siren = true;
       if (language) body.language = language;
-      return apiRequest(key(ctx), "POST", "/batch", body);
+      return apiRequest(ctx, "POST", "batch", body);
     },
   });
 
@@ -83,9 +75,9 @@ export default function dropcontact(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { requestId } = input as { requestId: string };
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/batch/${requestId}`,
+        `batch/${encodeURIComponent(requestId)}`,
       )) as Record<string, unknown>;
       if (!data.success)
         throw new Error(
