@@ -1,5 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialOk } from "../../_shared/credentials.js";
 import { msg91Credential } from "./credentials.js";
 
 export default function msg91(rl: RunlinePluginAPI) {
@@ -31,7 +31,7 @@ export default function msg91(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { from, to, message } = input as Record<string, unknown>;
       // The response body is a bare request ID, not JSON.
-      const res = await credentialRequest(ctx, msg91Credential, {
+      const res = await credentialOk(ctx, msg91Credential, "msg91", {
         target: "api",
         path: "sendhttp.php",
         query: {
@@ -42,8 +42,6 @@ export default function msg91(rl: RunlinePluginAPI) {
           message,
         },
       });
-      if (!res.ok)
-        throw new Error(`msg91: request failed (HTTP ${res.status})`);
       const text = await res.text();
       return { requestId: text };
     },
