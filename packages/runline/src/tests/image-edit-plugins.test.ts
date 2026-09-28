@@ -57,6 +57,18 @@ function ctx(config: Record<string, unknown>): ActionContext {
 
 const B64_RESULT = PNG_1X1.toString("base64");
 
+/** openai's edit upload travels as buffered multipart bytes; parse them back. */
+async function multipartForm(init?: RequestInit): Promise<FormData> {
+  const contentType = new Headers(init?.headers).get("content-type") ?? "";
+  assert.ok(
+    contentType.startsWith("multipart/form-data"),
+    `expected a multipart body, got ${contentType}`,
+  );
+  return new Response(init?.body as BodyInit, {
+    headers: { "content-type": contentType },
+  }).formData();
+}
+
 describe("image.edit is registered on every image plugin", () => {
   const plugins: Array<[string, (api: RunlinePluginAPI) => void]> = [
     ["openai", openai],
@@ -78,12 +90,12 @@ describe("image.edit is registered on every image plugin", () => {
 describe("openai image.edit", () => {
   it("POSTs multipart form to /v1/images/edits with image file and prompt", async () => {
     const action = getAction(makePlugin("openai", openai), "image.edit");
-    let seen: { url: string; form?: FormData } = { url: "" };
+    let seen: { url: string; init?: RequestInit } = { url: "" };
     globalThis.fetch = (async (
       input: RequestInfo | URL,
       init?: RequestInit,
     ) => {
-      seen = { url: String(input), form: init?.body as FormData };
+      seen = { url: String(input), init };
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -99,22 +111,22 @@ describe("openai image.edit", () => {
     )) as { images: Array<{ path: string }> };
 
     assert.equal(seen.url, "https://api.openai.com/v1/images/edits");
-    assert.ok(seen.form instanceof FormData);
-    assert.equal(seen.form?.get("prompt"), "make the sky red");
-    assert.equal(seen.form?.get("model"), "gpt-image-2.5-flare");
-    const file = seen.form?.get("image[]");
+    const form = await multipartForm(seen.init);
+    assert.equal(form.get("prompt"), "make the sky red");
+    assert.equal(form.get("model"), "gpt-image-2.5-flare");
+    const file = form.get("image[]");
     assert.ok(file instanceof Blob, "image[] should be a file part");
     assert.equal(result.images.length, 1);
   });
 
   it("prefers the per-call model, then the connection default", async () => {
     const action = getAction(makePlugin("openai", openai), "image.edit");
-    const seen: string[] = [];
+    const seen: RequestInit[] = [];
     globalThis.fetch = (async (
       _input: RequestInfo | URL,
       init?: RequestInit,
     ) => {
-      seen.push(String((init?.body as FormData).get("model")));
+      seen.push(init ?? {});
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -134,17 +146,20 @@ describe("openai image.edit", () => {
       ctx({ apiKey: "sk-test", defaultModel: "gpt-image-2" }),
     );
 
-    assert.deepEqual(seen, ["gpt-image-2.5-sunburst", "gpt-image-2"]);
+    const models: string[] = [];
+    for (const init of seen)
+      models.push(String((await multipartForm(init)).get("model")));
+    assert.deepEqual(models, ["gpt-image-2.5-sunburst", "gpt-image-2"]);
   });
 
   it("forwards the 2.5-only quality and size values untouched", async () => {
     const action = getAction(makePlugin("openai", openai), "image.edit");
-    let form: FormData | undefined;
+    let captured: RequestInit | undefined;
     globalThis.fetch = (async (
       _input: RequestInfo | URL,
       init?: RequestInit,
     ) => {
-      form = init?.body as FormData;
+      captured = init;
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -166,9 +181,10 @@ describe("openai image.edit", () => {
       ctx({ apiKey: "sk-test" }),
     );
 
-    assert.equal(form?.get("model"), "gpt-image-2.5-sunburst");
-    assert.equal(form?.get("quality"), "max");
-    assert.equal(form?.get("size"), "1536x864");
+    const form = await multipartForm(captured);
+    assert.equal(form.get("model"), "gpt-image-2.5-sunburst");
+    assert.equal(form.get("quality"), "max");
+    assert.equal(form.get("size"), "1536x864");
   });
 
   it("rejects when neither imagePath nor imagePaths is given", async () => {

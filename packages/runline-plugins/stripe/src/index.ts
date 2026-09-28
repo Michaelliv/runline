@@ -1,24 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  type CredentialCall,
+  credentialJson,
+} from "../../_shared/credentials.js";
+import { stripeCredential } from "./credentials.js";
 
-const BASE = "https://api.stripe.com/v1";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  secretKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
-    method,
-    headers: { Authorization: `Bearer ${secretKey}` },
-  };
+  const call: CredentialCall = { target: "api", path, method, query: qs };
   if (body && Object.keys(body).length > 0) {
     const form = new URLSearchParams();
     function flatten(obj: Record<string, unknown>, prefix = "") {
@@ -37,19 +34,16 @@ async function apiRequest(
       }
     }
     flatten(body);
-    init.body = form;
-    (init.headers as Record<string, string>)["Content-Type"] =
-      "application/x-www-form-urlencoded";
+    call.body = form.toString();
+    call.headers = { "Content-Type": "application/x-www-form-urlencoded" };
   }
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Stripe error ${res.status}: ${await res.text()}`);
-  return res.json();
+  return credentialJson(ctx, stripeCredential, "stripe", call);
 }
 
 export default function stripe(rl: RunlinePluginAPI) {
   rl.setName("stripe");
   rl.setVersion("0.1.0");
+  rl.setCredential(stripeCredential);
   rl.setConnectionSchema({
     secretKey: {
       type: "string",
@@ -58,9 +52,6 @@ export default function stripe(rl: RunlinePluginAPI) {
       env: "STRIPE_SECRET_KEY",
     },
   });
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.secretKey as string;
-
   // ── Balance ─────────────────────────────────────────
 
   rl.registerAction("balance.get", {
@@ -68,7 +59,7 @@ export default function stripe(rl: RunlinePluginAPI) {
     description: "Get current balance",
     inputSchema: {},
     async execute(_input, ctx) {
-      return apiRequest(key(ctx), "GET", "/balance");
+      return apiRequest(ctx, "GET", "balance");
     },
   });
 
@@ -85,9 +76,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        "/customers",
+        "customers",
         input as Record<string, unknown>,
       );
     },
@@ -99,9 +90,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     inputSchema: { customerId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/customers/${(input as Record<string, unknown>).customerId}`,
+        `customers/${seg((input as Record<string, unknown>).customerId)}`,
       );
     },
   });
@@ -119,9 +110,9 @@ export default function stripe(rl: RunlinePluginAPI) {
       if (p.limit) qs.limit = p.limit;
       if (p.email) qs.email = p.email;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        "/customers",
+        "customers",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -141,7 +132,7 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { customerId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "POST", `/customers/${customerId}`, fields);
+      return apiRequest(ctx, "POST", `customers/${seg(customerId)}`, fields);
     },
   });
 
@@ -151,9 +142,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     inputSchema: { customerId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/customers/${(input as Record<string, unknown>).customerId}`,
+        `customers/${seg((input as Record<string, unknown>).customerId)}`,
       );
     },
   });
@@ -180,9 +171,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        "/charges",
+        "charges",
         input as Record<string, unknown>,
       );
     },
@@ -194,9 +185,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     inputSchema: { chargeId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/charges/${(input as Record<string, unknown>).chargeId}`,
+        `charges/${seg((input as Record<string, unknown>).chargeId)}`,
       );
     },
   });
@@ -210,9 +201,9 @@ export default function stripe(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        "/charges",
+        "charges",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -229,7 +220,7 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { chargeId, ...fields } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "POST", `/charges/${chargeId}`, fields);
+      return apiRequest(ctx, "POST", `charges/${seg(chargeId)}`, fields);
     },
   });
 
@@ -258,7 +249,7 @@ export default function stripe(rl: RunlinePluginAPI) {
       if (p.percentOff) body.percent_off = p.percentOff;
       if (p.amountOff) body.amount_off = p.amountOff;
       if (p.currency) body.currency = p.currency;
-      return apiRequest(key(ctx), "POST", "/coupons", body);
+      return apiRequest(ctx, "POST", "coupons", body);
     },
   });
 
@@ -271,9 +262,9 @@ export default function stripe(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        "/coupons",
+        "coupons",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -296,12 +287,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(
-        key(ctx),
-        "POST",
-        `/customers/${p.customerId}/sources`,
-        { source: p.token },
-      );
+      return apiRequest(ctx, "POST", `customers/${seg(p.customerId)}/sources`, {
+        source: p.token,
+      });
     },
   });
 
@@ -315,9 +303,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/customers/${p.customerId}/sources/${p.sourceId}`,
+        `customers/${seg(p.customerId)}/sources/${seg(p.sourceId)}`,
       );
     },
   });
@@ -332,9 +320,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/customers/${p.customerId}/sources/${p.cardId}`,
+        `customers/${seg(p.customerId)}/sources/${seg(p.cardId)}`,
       );
     },
   });
@@ -352,12 +340,12 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const source = (await apiRequest(key(ctx), "POST", "/sources", {
+      const source = (await apiRequest(ctx, "POST", "sources", {
         type: p.type,
         amount: p.amount,
         currency: p.currency,
       })) as Record<string, unknown>;
-      await apiRequest(key(ctx), "POST", `/customers/${p.customerId}/sources`, {
+      await apiRequest(ctx, "POST", `customers/${seg(p.customerId)}/sources`, {
         source: source.id,
       });
       return source;
@@ -370,9 +358,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     inputSchema: { sourceId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/sources/${(input as Record<string, unknown>).sourceId}`,
+        `sources/${seg((input as Record<string, unknown>).sourceId)}`,
       );
     },
   });
@@ -387,9 +375,9 @@ export default function stripe(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/customers/${p.customerId}/sources/${p.sourceId}`,
+        `customers/${seg(p.customerId)}/sources/${seg(p.sourceId)}`,
       );
     },
   });
@@ -407,7 +395,7 @@ export default function stripe(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "POST", "/tokens", {
+      return apiRequest(ctx, "POST", "tokens", {
         card: {
           number: p.number,
           exp_month: p.expMonth,
@@ -445,7 +433,7 @@ export default function stripe(rl: RunlinePluginAPI) {
         body.timestamp = Math.floor(
           new Date(p.timestamp as string).getTime() / 1000,
         );
-      return apiRequest(key(ctx), "POST", "/billing/meter_events", body);
+      return apiRequest(ctx, "POST", "billing/meter_events", body);
     },
   });
 }

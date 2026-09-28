@@ -1,30 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { brandfetchCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.brandfetch.io/v2";
-
-async function apiRequest(
-  apiKey: string,
+function apiRequest(
+  ctx: ActionContext,
   domain: string,
 ): Promise<Record<string, unknown>> {
-  const res = await fetch(`${BASE_URL}/brands/${domain}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Brandfetch API error ${res.status}: ${text}`);
-  }
-  return res.json() as Promise<Record<string, unknown>>;
-}
-
-function getKey(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
+  return credentialJson(ctx, brandfetchCredential, "brandfetch", {
+    target: "api",
+    path: `brands/${encodeURIComponent(domain)}`,
+  }) as Promise<Record<string, unknown>>;
 }
 
 export default function brandfetch(rl: RunlinePluginAPI) {
   rl.setName("brandfetch");
   rl.setVersion("0.1.0");
+  rl.setCredential(brandfetchCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -47,7 +38,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { domain } = input as { domain: string };
-      const data = await apiRequest(getKey(ctx), domain);
+      const data = await apiRequest(ctx, domain);
       return data.logos;
     },
   });
@@ -60,7 +51,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { domain } = input as { domain: string };
-      const data = await apiRequest(getKey(ctx), domain);
+      const data = await apiRequest(ctx, domain);
       return data.colors;
     },
   });
@@ -73,7 +64,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { domain } = input as { domain: string };
-      const data = await apiRequest(getKey(ctx), domain);
+      const data = await apiRequest(ctx, domain);
       return data.fonts;
     },
   });
@@ -86,7 +77,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { domain } = input as { domain: string };
-      const data = await apiRequest(getKey(ctx), domain);
+      const data = await apiRequest(ctx, domain);
       return data.company;
     },
   });
@@ -99,7 +90,7 @@ export default function brandfetch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { domain } = input as { domain: string };
-      return apiRequest(getKey(ctx), domain);
+      return apiRequest(ctx, domain);
     },
   });
 }

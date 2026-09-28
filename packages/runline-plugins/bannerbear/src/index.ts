@@ -1,42 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { bannerbearCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.bannerbear.com/v2";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  const json =
+    body && Object.keys(body).length > 0 && method !== "GET" ? body : undefined;
+  return credentialJson(ctx, bannerbearCredential, "bannerbear", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET") {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Bannerbear API error ${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-function getKey(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
+    ...(json !== undefined ? { json } : {}),
+  });
 }
 
 export default function bannerbear(rl: RunlinePluginAPI) {
   rl.setName("bannerbear");
   rl.setVersion("0.1.0");
+  rl.setCredential(bannerbearCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -95,28 +83,25 @@ export default function bannerbear(rl: RunlinePluginAPI) {
         waitForImage,
         maxTries = 3,
       } = (input ?? {}) as Record<string, unknown>;
-      const apiKey = getKey(ctx);
 
       const body: Record<string, unknown> = { template: templateId };
       if (modifications) body.modifications = modifications;
       if (webhookUrl) body.webhook_url = webhookUrl;
       if (metadata) body.metadata = metadata;
 
-      let result = (await apiRequest(
-        apiKey,
-        "POST",
-        "/images",
-        body,
-      )) as Record<string, unknown>;
+      let result = (await apiRequest(ctx, "POST", "images", body)) as Record<
+        string,
+        unknown
+      >;
 
       if (waitForImage && result.status !== "completed") {
         let tries = maxTries as number;
         while (tries > 0) {
           await new Promise((r) => setTimeout(r, 2000));
           result = (await apiRequest(
-            apiKey,
+            ctx,
             "GET",
-            `/images/${result.uid}`,
+            `images/${seg(result.uid)}`,
           )) as Record<string, unknown>;
           if (result.status === "completed") break;
           tries--;
@@ -140,7 +125,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { imageId } = input as { imageId: string };
-      return apiRequest(getKey(ctx), "GET", `/images/${imageId}`);
+      return apiRequest(ctx, "GET", `images/${seg(imageId)}`);
     },
   });
 
@@ -158,7 +143,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { templateId } = input as { templateId: string };
-      return apiRequest(getKey(ctx), "GET", `/templates/${templateId}`);
+      return apiRequest(ctx, "GET", `templates/${seg(templateId)}`);
     },
   });
 
@@ -166,7 +151,7 @@ export default function bannerbear(rl: RunlinePluginAPI) {
     access: "read",
     description: "List all templates",
     async execute(_input, ctx) {
-      return apiRequest(getKey(ctx), "GET", "/templates");
+      return apiRequest(ctx, "GET", "templates");
     },
   });
 }
