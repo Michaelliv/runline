@@ -89,7 +89,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "adalo/src/index.ts",
   "affinity/src/index.ts",
   "agileCrm/src/index.ts",
-  "airtable/src/index.ts",
   "airtop/src/index.ts",
   "apiTemplateIo/src/index.ts",
   "asana/src/index.ts",

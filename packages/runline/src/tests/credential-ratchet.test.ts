@@ -45,7 +45,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["adalo", "phase 3: not yet migrated"],
   ["affinity", "phase 2: not yet migrated"],
   ["agileCrm", "phase 2: not yet migrated"],
-  ["airtable", "phase 2: not yet migrated"],
   ["airtop", "phase 3: not yet migrated"],
   ["apiTemplateIo", "phase 3: not yet migrated"],
   ["asana", "phase 2: not yet migrated"],
