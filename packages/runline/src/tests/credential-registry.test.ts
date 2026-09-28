@@ -404,6 +404,12 @@ describe("credential registry", () => {
         const a = d.methods.delegated.authentication;
         if (a.kind === "oauth2") a.renewal = "clientCredentials";
       },
+      // A token endpoint's provider headers cannot claim a protocol header.
+      (d) => {
+        const a = d.methods.delegated.authentication;
+        if (a.kind === "oauth2" && a.definition.refresh)
+          a.definition.refresh.headers = { Authorization: "x" };
+      },
       // A password renewal needs its endpoint, and plain field names.
       (d) => {
         const a = d.methods.delegated.authentication;

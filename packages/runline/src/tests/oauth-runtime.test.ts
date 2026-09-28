@@ -347,6 +347,52 @@ describe("OAuth2 definitions and protocol runtime", () => {
     );
   });
 
+  it("sends an endpoint's fixed provider headers, and the refresh token as bearer when it asks", async () => {
+    const def = definition();
+    if (!def.refresh) throw new Error("fixture");
+    def.refresh.headers = { "user-agent": "App/1.0", "x-device-id": "d1" };
+    def.refresh.refreshTokenBearer = true;
+    await refreshOAuth2Token(
+      def,
+      { tokens: { accessToken: "old", refreshToken: "r1" } },
+      {
+        fetch: mock((_url, init) => {
+          const headers = new Headers(init.headers);
+          assert.equal(headers.get("user-agent"), "App/1.0");
+          assert.equal(headers.get("x-device-id"), "d1");
+          assert.equal(headers.get("authorization"), "Bearer r1");
+          assert.equal(headers.get("content-type"), "application/json");
+          return Response.json({ access_token: "new" });
+        }),
+      },
+    );
+  });
+
+  it("refuses provider headers that claim a protocol header, and a refresh bearer beside Basic client auth", async () => {
+    for (const headers of [
+      { Authorization: "x" },
+      { "content-type": "text/plain" },
+      { Accept: "text/html" },
+      { Host: "evil" },
+      { "bad name": "x" },
+    ]) {
+      const def = definition();
+      if (!def.refresh) throw new Error("fixture");
+      def.refresh.headers = headers;
+      await assert.rejects(
+        refreshOAuth2Token(def, { tokens: { refreshToken: "r1" } }),
+        errorCode("invalid_definition"),
+      );
+    }
+    const def = definition();
+    if (!def.exchange) throw new Error("fixture");
+    def.exchange.refreshTokenBearer = true;
+    await assert.rejects(
+      exchangeOAuth2Code(def, code),
+      errorCode("invalid_definition"),
+    );
+  });
+
   it("fails unsupported operations without a network request", async () => {
     await assert.rejects(
       exchangeOAuth2Code({ id: "none", provider: "none" }, code),
