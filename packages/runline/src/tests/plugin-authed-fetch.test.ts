@@ -107,7 +107,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "circleci/src/index.ts",
   "ciscoWebex/src/index.ts",
   "clearbit/src/index.ts",
-  "clickup/src/index.ts",
   "clockify/src/index.ts",
   "cloudflare/src/index.ts",
   "cockpit/src/index.ts",
