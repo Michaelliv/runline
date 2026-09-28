@@ -52,15 +52,19 @@ export async function graphResponse(
   });
 }
 
-/** JSON and binary requests share the same destination, renewal and replay policy. */
-export async function graphRequest(
+/**
+ * JSON and binary requests share the same destination, renewal and replay
+ * policy. `T` is the caller's statement of the answer's shape, unchecked;
+ * without one the answer is `unknown`. An empty answer is `{ success: true }`.
+ */
+export async function graphRequest<T = unknown>(
   ctx: ActionContext,
   plugin: string,
   scopes: string[],
   method: string,
   path: string,
   body?: unknown,
-): Promise<any> {
+): Promise<T> {
   const res = await graphResponse(
     ctx,
     plugin,
@@ -72,10 +76,11 @@ export async function graphRequest(
   );
   if (!res.ok)
     throw new Error(`${plugin}: Graph request failed (HTTP ${res.status})`);
-  if (res.status === 204) return { success: true };
+  const empty = { success: true } as T;
+  if (res.status === 204) return empty;
   const text = await res.text();
   try {
-    return text ? JSON.parse(text) : { success: true };
+    return text ? (JSON.parse(text) as T) : empty;
   } catch {
     throw new Error(`${plugin}: invalid Graph response`);
   }

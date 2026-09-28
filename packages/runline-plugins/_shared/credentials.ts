@@ -209,19 +209,28 @@ export async function credentialOk(
   return response;
 }
 
-/** A JSON request that must succeed; an empty answer is `{ success: true }`. */
-export async function credentialJson(
+/** What `credentialJson` answers for an empty (or 204) response. */
+export type EmptyAnswer = { success: true };
+
+/**
+ * A JSON request that must succeed. `T` is the caller's statement of the
+ * answer's shape, unchecked, as for any parsed JSON; without one the answer
+ * is `unknown`. An empty answer is `EmptyAnswer`, so a caller whose endpoint
+ * can answer empty includes it in `T`.
+ */
+export async function credentialJson<T = unknown>(
   ctx: ActionContext,
   declaration: CredentialDeclaration,
   plugin: string,
   call: CredentialCall,
-): Promise<any> {
+): Promise<T> {
   const response = await credentialOk(ctx, declaration, plugin, call);
-  if (response.status === 204) return { success: true };
+  const empty: EmptyAnswer = { success: true };
+  if (response.status === 204) return empty as T;
   const text = await response.text();
-  if (!text) return { success: true };
+  if (!text) return empty as T;
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as T;
   } catch {
     throw new AuthError("invalid_response");
   }
