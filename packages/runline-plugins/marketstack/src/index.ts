@@ -1,9 +1,6 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { marketstackCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -106,7 +103,7 @@ export default function marketstack(rl: RunlinePluginAPI) {
       if (p.latest) {
         endpoint = "eod/latest";
       } else if (p.specificDate) {
-        endpoint = `eod/${seg((p.specificDate as string).split("T")[0])}`;
+        endpoint = `eod/${pathSegment((p.specificDate as string).split("T")[0])}`;
       } else if (p.dateFrom && p.dateTo) {
         endpoint = "eod";
         qs.date_from = (p.dateFrom as string).split("T")[0];
@@ -136,7 +133,7 @@ export default function marketstack(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return api(
         ctx,
-        `exchanges/${seg((input as { exchange: string }).exchange)}`,
+        `exchanges/${pathSegment((input as { exchange: string }).exchange)}`,
       );
     },
   });
@@ -154,7 +151,10 @@ export default function marketstack(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return api(ctx, `tickers/${seg((input as { symbol: string }).symbol)}`);
+      return api(
+        ctx,
+        `tickers/${pathSegment((input as { symbol: string }).symbol)}`,
+      );
     },
   });
 }
