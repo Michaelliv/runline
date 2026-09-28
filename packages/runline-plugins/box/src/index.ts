@@ -1,53 +1,31 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { boxCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.box.com/2.0";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, boxCredential, "box", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Box API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204) return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 async function paginateAll(
-  token: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   property: string,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
   limit?: number,
 ): Promise<unknown[]> {
   const results: unknown[] = [];
@@ -55,8 +33,8 @@ async function paginateAll(
   const size = 100;
 
   while (true) {
-    const data = (await apiRequest(token, "GET", endpoint, undefined, {
-      ...qs,
+    const data = (await apiRequest(ctx, "GET", path, undefined, {
+      ...query,
       limit: size,
       offset,
     })) as Record<string, unknown>;
@@ -69,15 +47,10 @@ async function paginateAll(
   return results;
 }
 
-function getToken(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.accessToken as string;
-}
-
 export default function box(rl: RunlinePluginAPI) {
   rl.setName("box");
   rl.setVersion("0.1.0");
+  rl.setCredential(boxCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -126,13 +99,7 @@ export default function box(rl: RunlinePluginAPI) {
       if (version) body.version = version;
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
-      return apiRequest(
-        getToken(ctx),
-        "POST",
-        `/files/${fileId}/copy`,
-        body,
-        qs,
-      );
+      return apiRequest(ctx, "POST", `files/${seg(fileId)}/copy`, body, qs);
     },
   });
 
@@ -144,7 +111,7 @@ export default function box(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileId } = input as { fileId: string };
-      await apiRequest(getToken(ctx), "DELETE", `/files/${fileId}`);
+      await apiRequest(ctx, "DELETE", `files/${seg(fileId)}`);
       return { success: true };
     },
   });
@@ -164,13 +131,7 @@ export default function box(rl: RunlinePluginAPI) {
       const { fileId, fields } = input as { fileId: string; fields?: string };
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
-      return apiRequest(
-        getToken(ctx),
-        "GET",
-        `/files/${fileId}`,
-        undefined,
-        qs,
-      );
+      return apiRequest(ctx, "GET", `files/${seg(fileId)}`, undefined, qs);
     },
   });
 
@@ -217,8 +178,8 @@ export default function box(rl: RunlinePluginAPI) {
       if (updatedAtRange) qs.updated_at_range = updatedAtRange;
       if (ancestorFolderIds) qs.ancestor_folder_ids = ancestorFolderIds;
       return paginateAll(
-        getToken(ctx),
-        "/search",
+        ctx,
+        "search",
         "entries",
         qs,
         limit as number | undefined,
@@ -292,7 +253,7 @@ export default function box(rl: RunlinePluginAPI) {
       if (expiresAt) body.expires_at = expiresAt;
       const qs: Record<string, unknown> = {};
       if (notify !== undefined) qs.notify = notify;
-      return apiRequest(getToken(ctx), "POST", "/collaborations", body, qs);
+      return apiRequest(ctx, "POST", "collaborations", body, qs);
     },
   });
 
@@ -322,7 +283,7 @@ export default function box(rl: RunlinePluginAPI) {
       };
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
-      return apiRequest(getToken(ctx), "POST", "/folders", body, qs);
+      return apiRequest(ctx, "POST", "folders", body, qs);
     },
   });
 
@@ -342,15 +303,9 @@ export default function box(rl: RunlinePluginAPI) {
         folderId: string;
         recursive?: boolean;
       };
-      await apiRequest(
-        getToken(ctx),
-        "DELETE",
-        `/folders/${folderId}`,
-        undefined,
-        {
-          recursive: recursive ?? false,
-        },
-      );
+      await apiRequest(ctx, "DELETE", `folders/${seg(folderId)}`, undefined, {
+        recursive: recursive ?? false,
+      });
       return { success: true };
     },
   });
@@ -363,7 +318,7 @@ export default function box(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { folderId } = input as { folderId: string };
-      return apiRequest(getToken(ctx), "GET", `/folders/${folderId}`);
+      return apiRequest(ctx, "GET", `folders/${seg(folderId)}`);
     },
   });
 
@@ -397,8 +352,8 @@ export default function box(rl: RunlinePluginAPI) {
       if (createdAtRange) qs.created_at_range = createdAtRange;
       if (updatedAtRange) qs.updated_at_range = updatedAtRange;
       return paginateAll(
-        getToken(ctx),
-        "/search",
+        ctx,
+        "search",
         "entries",
         qs,
         limit as number | undefined,
@@ -472,7 +427,7 @@ export default function box(rl: RunlinePluginAPI) {
       if (expiresAt) body.expires_at = expiresAt;
       const qs: Record<string, unknown> = {};
       if (notify !== undefined) qs.notify = notify;
-      return apiRequest(getToken(ctx), "POST", "/collaborations", body, qs);
+      return apiRequest(ctx, "POST", "collaborations", body, qs);
     },
   });
 
@@ -513,7 +468,7 @@ export default function box(rl: RunlinePluginAPI) {
       if (tags) body.tags = (tags as string).split(",").map((t) => t.trim());
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
-      return apiRequest(getToken(ctx), "PUT", `/folders/${folderId}`, body, qs);
+      return apiRequest(ctx, "PUT", `folders/${seg(folderId)}`, body, qs);
     },
   });
 }

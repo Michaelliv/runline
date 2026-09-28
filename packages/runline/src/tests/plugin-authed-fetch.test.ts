@@ -98,7 +98,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "bannerbear/src/index.ts",
   "baserow/src/index.ts",
   "bitwarden/src/index.ts",
-  "box/src/index.ts",
   "brandfetch/src/index.ts",
   "brevo/src/index.ts",
   "bubble/src/index.ts",
