@@ -3,6 +3,7 @@ import type {
   OAuth2Definition,
   OAuthApplication,
   OAuthJwtIdentity,
+  OAuthResourceOwner,
   OAuthTokens,
 } from "../auth/types.js";
 import type { ConnectionHandle } from "../connections/types.js";
@@ -136,7 +137,7 @@ export type CredentialAuthentication =
       field: string;
       definition: OAuth2Definition;
       /** Explicit renewal strategy, never inferred from available secrets. */
-      renewal: "refresh" | "clientCredentials" | "jwtBearer";
+      renewal: "refresh" | "clientCredentials" | "jwtBearer" | "password";
       scopes?: string[];
       /** Defaults to 401. A 403 must be explicitly documented by the provider. */
       rejectionStatus?: 401 | 403;
@@ -167,14 +168,15 @@ export interface CredentialType {
 
 /**
  * What a connection signs with: the credential type and method, and the
- * OAuth application and JWT identity its config supplies. Derived from
- * the connection's config alone — never from action input.
+ * OAuth application, JWT identity and resource owner its config supplies.
+ * Derived from the connection's config alone — never from action input.
  */
 export interface CredentialSelection {
   type: CredentialType;
   method: string;
   application?: OAuthApplication;
   jwtIdentity?: OAuthJwtIdentity;
+  resourceOwner?: OAuthResourceOwner;
   /**
    * How a process signing with its own flat connection config (the CLI)
    * assembles a static secret: each of its parts, from a named config
@@ -208,6 +210,7 @@ export interface CredentialBinding {
   identity: { name: string; plugin: string };
   application?: OAuthApplication;
   jwtIdentity?: OAuthJwtIdentity;
+  resourceOwner?: OAuthResourceOwner;
 }
 
 /** Revision changes on every issuance, even when the provider repeats the token value. */

@@ -125,6 +125,9 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
     identity,
     application: selection.application,
     ...(selection.jwtIdentity ? { jwtIdentity: selection.jwtIdentity } : {}),
+    ...(selection.resourceOwner
+      ? { resourceOwner: selection.resourceOwner }
+      : {}),
     connection: {
       async read() {
         return snapshot();

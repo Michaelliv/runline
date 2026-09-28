@@ -229,7 +229,9 @@ function validateMethod(method: CredentialMethod): void {
     identifier(auth.definition.provider);
     validateOAuth2ExchangePolicy(auth.definition.exchange);
     if (
-      !["refresh", "clientCredentials", "jwtBearer"].includes(auth.renewal) ||
+      !["refresh", "clientCredentials", "jwtBearer", "password"].includes(
+        auth.renewal,
+      ) ||
       !auth.definition[auth.renewal]
     )
       throw new AuthError("invalid_definition");
@@ -255,11 +257,14 @@ function validateMethod(method: CredentialMethod): void {
       oauthEndpoint(auth.definition.authorization.url);
       providerParameters(auth.definition.authorization.parameters);
     }
+    for (const name of Object.values(auth.definition.password?.fields ?? {}))
+      identifier(name);
     for (const operation of [
       "exchange",
       "refresh",
       "clientCredentials",
       "jwtBearer",
+      "password",
     ] as const) {
       const endpoint = auth.definition[operation];
       if (!endpoint) continue;

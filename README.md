@@ -494,7 +494,7 @@ Each method's `authentication.field` names the one config field a host stores th
 |---|---|---|
 | `none` | nothing | unsigned, still held to the method's targets: the method of a connection without an optional credential |
 | `static` | its named `parts`, each a string, `optionalParts` allowed to be absent (`staticSecretSchema(parts, optionalParts)`) | each part through its `placements` |
-| `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection |
+| `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection by its declared `renewal`: a refresh token, client credentials, a JWT bearer assertion (`jwtIdentity`), or the resource owner's username and password (`resourceOwner`, under the endpoint's own `fields` names) |
 
 A static placement is one of:
 

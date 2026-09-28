@@ -4,9 +4,10 @@ import { AuthError } from "../auth/errors.js";
 import {
   acquireOAuth2ClientToken,
   acquireOAuth2JwtToken,
+  acquireOAuth2PasswordToken,
   refreshOAuth2Token,
 } from "../auth/oauth2.js";
-import type { OAuthRuntimeOptions } from "../auth/types.js";
+import type { OAuthRuntimeOptions, OAuthTokens } from "../auth/types.js";
 import type { ConnectionConfig } from "../plugin/types.js";
 import { sendResource } from "./http.js";
 import {
@@ -133,6 +134,7 @@ function pinBinding(selection: CredentialBinding): CredentialBinding {
     identity: { ...selection.identity },
     application: structuredClone(selection.application),
     jwtIdentity: structuredClone(selection.jwtIdentity),
+    resourceOwner: structuredClone(selection.resourceOwner),
     connection: {
       read: selection.connection.read.bind(selection.connection),
       update: selection.connection.update.bind(selection.connection),
@@ -385,41 +387,7 @@ export class CredentialTransport {
                 previous.tokens.expiresAt > Date.now()))
           )
             return;
-          const options: OAuthRuntimeOptions = {
-            fetch: this.options.fetch,
-            timeoutMs: this.options.timeoutMs,
-          };
-          const jwtIdentity = binding.jwtIdentity;
-          if (auth.renewal === "jwtBearer" && !jwtIdentity)
-            throw new AuthError("invalid_credentials");
-          const tokens =
-            auth.renewal === "refresh"
-              ? await refreshOAuth2Token(
-                  auth.definition,
-                  {
-                    application: binding.application,
-                    tokens: previous?.tokens ?? {},
-                    scopes: auth.scopes,
-                  },
-                  options,
-                )
-              : auth.renewal === "jwtBearer" && jwtIdentity
-                ? await acquireOAuth2JwtToken(
-                    auth.definition,
-                    {
-                      identity: jwtIdentity,
-                      scopes: auth.scopes ?? [],
-                    },
-                    options,
-                  )
-                : await acquireOAuth2ClientToken(
-                    auth.definition,
-                    {
-                      application: binding.application ?? { clientId: "" },
-                      scopes: auth.scopes,
-                    },
-                    options,
-                  );
+          const tokens = await this.issue(auth, binding, previous);
           const patch = {
             [auth.field]: { tokens, revision: randomUUID() },
           };
@@ -440,6 +408,47 @@ export class CredentialTransport {
     const grant = grantFrom(method, boundSnapshot(binding, method, committed));
     if (!grant) throw new AuthError("invalid_credentials");
     return grant;
+  }
+
+  /** New tokens by the method's declared renewal, from what the binding supplies. */
+  private issue(
+    auth: Extract<CredentialAuthentication, { kind: "oauth2" }>,
+    binding: CredentialBinding,
+    previous: OAuthGrant | undefined,
+  ): Promise<OAuthTokens> {
+    const options: OAuthRuntimeOptions = {
+      fetch: this.options.fetch,
+      timeoutMs: this.options.timeoutMs,
+    };
+    const { definition, scopes } = auth;
+    const { application, jwtIdentity, resourceOwner } = binding;
+    if (auth.renewal === "refresh")
+      return refreshOAuth2Token(
+        definition,
+        { application, tokens: previous?.tokens ?? {}, scopes },
+        options,
+      );
+    if (auth.renewal === "jwtBearer") {
+      if (!jwtIdentity) throw new AuthError("invalid_credentials");
+      return acquireOAuth2JwtToken(
+        definition,
+        { identity: jwtIdentity, scopes: scopes ?? [] },
+        options,
+      );
+    }
+    if (auth.renewal === "password") {
+      if (!resourceOwner) throw new AuthError("invalid_credentials");
+      return acquireOAuth2PasswordToken(
+        definition,
+        { owner: resourceOwner, application, scopes },
+        options,
+      );
+    }
+    return acquireOAuth2ClientToken(
+      definition,
+      { application: application ?? { clientId: "" }, scopes },
+      options,
+    );
   }
 
   async request(

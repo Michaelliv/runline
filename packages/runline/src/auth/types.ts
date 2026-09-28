@@ -14,6 +14,11 @@ export interface OAuth2Definition {
   refresh?: OAuth2TokenEndpoint;
   clientCredentials?: OAuth2TokenEndpoint;
   jwtBearer?: OAuth2TokenEndpoint;
+  /** Resource-owner password grant (RFC 6749 §4.3). */
+  password?: OAuth2TokenEndpoint & {
+    /** The provider's names for the owner's fields; `username` and `password` when absent. */
+    fields?: { username?: string; password?: string };
+  };
 }
 
 /** Each operation can use a different endpoint, encoding, and client authentication. */
@@ -61,6 +66,12 @@ export interface OAuthTokens {
   metadata?: Record<string, string>;
 }
 
+/** Host-selected resource owner for a password grant. Never accepted from resource/action input. */
+export interface OAuthResourceOwner {
+  username: string;
+  password: string;
+}
+
 /** Host-selected signing identity. Never accepted from resource/action input. */
 export interface OAuthJwtIdentity {
   issuer: string;
@@ -72,7 +83,8 @@ export type OAuthOperation =
   | "exchange"
   | "refresh"
   | "clientCredentials"
-  | "jwtBearer";
+  | "jwtBearer"
+  | "password";
 
 /** Protocol events report issuance, never durability. They contain no credential data. */
 export interface OAuthEvent {
