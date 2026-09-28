@@ -119,7 +119,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "gotify",
     "two credentials in one connection: app and client tokens, used by different actions",
   ],
-  ["gotowebinar", "phase 2: not yet migrated"],
   ["grafana", "phase 3: not yet migrated"],
   [
     "graphql",

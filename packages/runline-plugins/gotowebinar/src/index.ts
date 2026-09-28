@@ -1,43 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { gotowebinarCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.getgo.com/G2W/rest/v2";
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
 
-async function apiRequest(
-  accessToken: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, gotowebinarCredential, "gotowebinar", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  };
-  if (body !== undefined && method !== "GET" && method !== "DELETE") {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`GoToWebinar API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("json")) return res.json();
-  return { success: true };
+    query: qs,
+    ...(body !== undefined && method !== "GET" && method !== "DELETE"
+      ? { json: body }
+      : {}),
+  });
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
+function getConn(ctx: ActionContext) {
   return {
-    accessToken: ctx.connection.config.accessToken as string,
     organizerKey: ctx.connection.config.organizerKey as string,
   };
 }
@@ -45,6 +32,7 @@ function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
 export default function gotowebinar(rl: RunlinePluginAPI) {
   rl.setName("gotowebinar");
   rl.setVersion("0.1.0");
+  rl.setCredential(gotowebinarCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -103,7 +91,7 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
         type,
         isPasswordProtected,
       } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       const body: Record<string, unknown> = { subject, times };
       if (desc) body.description = desc;
       if (timeZone) body.timeZone = timeZone;
@@ -111,9 +99,9 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       if (isPasswordProtected !== undefined)
         body.isPasswordProtected = isPasswordProtected;
       return apiRequest(
-        accessToken,
+        ctx,
         "POST",
-        `organizers/${organizerKey}/webinars`,
+        `organizers/${seg(organizerKey)}/webinars`,
         body,
       );
     },
@@ -130,11 +118,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${(input as { webinarKey: string }).webinarKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}`,
       );
     },
   });
@@ -146,11 +134,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       limit: { type: "number", required: false, description: "Max results" },
     },
     async execute(input, ctx) {
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       const data = (await apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars`,
+        `organizers/${seg(organizerKey)}/webinars`,
       )) as Record<string, unknown>;
       const list =
         (data._embedded as Record<string, unknown>)?.webinars ?? data;
@@ -190,16 +178,16 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
         times,
         timeZone,
       } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       const body: Record<string, unknown> = {};
       if (subject) body.subject = subject;
       if (desc) body.description = desc;
       if (times) body.times = times;
       if (timeZone) body.timeZone = timeZone;
       return apiRequest(
-        accessToken,
+        ctx,
         "PUT",
-        `organizers/${organizerKey}/webinars/${webinarKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}`,
         body,
       );
     },
@@ -225,14 +213,14 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (sendCancellationEmails !== undefined)
         qs.sendCancellationEmails = sendCancellationEmails;
       await apiRequest(
-        accessToken,
+        ctx,
         "DELETE",
-        `organizers/${organizerKey}/webinars/${webinarKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}`,
         undefined,
         qs,
       );
@@ -260,11 +248,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "POST",
-        `organizers/${organizerKey}/webinars/${webinarKey}/registrants`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/registrants`,
         { firstName, lastName, email },
       );
     },
@@ -287,11 +275,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { webinarKey, registrantKey } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${webinarKey}/registrants/${registrantKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/registrants/${seg(registrantKey)}`,
       );
     },
   });
@@ -307,11 +295,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${(input as { webinarKey: string }).webinarKey}/registrants`,
+        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}/registrants`,
       );
     },
   });
@@ -333,11 +321,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { webinarKey, registrantKey } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       await apiRequest(
-        accessToken,
+        ctx,
         "DELETE",
-        `organizers/${organizerKey}/webinars/${webinarKey}/registrants/${registrantKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/registrants/${seg(registrantKey)}`,
       );
       return { success: true };
     },
@@ -362,11 +350,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { webinarKey, sessionKey } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${webinarKey}/sessions/${sessionKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/sessions/${seg(sessionKey)}`,
       );
     },
   });
@@ -382,11 +370,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${(input as { webinarKey: string }).webinarKey}/sessions`,
+        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}/sessions`,
       );
     },
   });
@@ -408,11 +396,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { webinarKey, sessionKey } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${webinarKey}/sessions/${sessionKey}/performance`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/sessions/${seg(sessionKey)}/performance`,
       );
     },
   });
@@ -444,11 +432,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${webinarKey}/sessions/${sessionKey}/attendees/${registrantKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/sessions/${seg(sessionKey)}/attendees/${seg(registrantKey)}`,
       );
     },
   });
@@ -470,11 +458,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { webinarKey, sessionKey } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${webinarKey}/sessions/${sessionKey}/attendees`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/sessions/${seg(sessionKey)}/attendees`,
       );
     },
   });
@@ -519,15 +507,15 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
         givenName,
         email,
       } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       const body: Record<string, unknown> = { external };
       if (coorgKey) body.organizerKey = coorgKey;
       if (givenName) body.givenName = givenName;
       if (email) body.email = email;
       return apiRequest(
-        accessToken,
+        ctx,
         "POST",
-        `organizers/${organizerKey}/webinars/${webinarKey}/coorganizers`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/coorganizers`,
         [body],
       );
     },
@@ -544,11 +532,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${(input as { webinarKey: string }).webinarKey}/coorganizers`,
+        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}/coorganizers`,
       );
     },
   });
@@ -578,13 +566,13 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (external !== undefined) qs.external = external;
       await apiRequest(
-        accessToken,
+        ctx,
         "DELETE",
-        `organizers/${organizerKey}/webinars/${webinarKey}/coorganizers/${coorganizerKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/coorganizers/${seg(coorganizerKey)}`,
         undefined,
         qs,
       );
@@ -608,11 +596,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { webinarKey, name, email } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "POST",
-        `organizers/${organizerKey}/webinars/${webinarKey}/panelists`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/panelists`,
         [{ name, email }],
       );
     },
@@ -629,11 +617,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       return apiRequest(
-        accessToken,
+        ctx,
         "GET",
-        `organizers/${organizerKey}/webinars/${(input as { webinarKey: string }).webinarKey}/panelists`,
+        `organizers/${seg(organizerKey)}/webinars/${seg((input as { webinarKey: string }).webinarKey)}/panelists`,
       );
     },
   });
@@ -655,11 +643,11 @@ export default function gotowebinar(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { webinarKey, panelistKey } = input as Record<string, unknown>;
-      const { accessToken, organizerKey } = getConn(ctx);
+      const { organizerKey } = getConn(ctx);
       await apiRequest(
-        accessToken,
+        ctx,
         "DELETE",
-        `organizers/${organizerKey}/webinars/${webinarKey}/panelists/${panelistKey}`,
+        `organizers/${seg(organizerKey)}/webinars/${seg(webinarKey)}/panelists/${seg(panelistKey)}`,
       );
       return { success: true };
     },
