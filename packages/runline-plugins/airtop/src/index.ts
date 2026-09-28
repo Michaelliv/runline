@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { airtopCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -149,7 +146,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       // Poll until running
       await pollUntil(
         ctx,
-        `sessions/${seg(sessionId)}`,
+        `sessions/${pathSegment(sessionId)}`,
         "status",
         ["running"],
         5 * 60 * 1000,
@@ -159,7 +156,7 @@ export default function airtop(rl: RunlinePluginAPI) {
         await apiRequest(
           ctx,
           "PUT",
-          `sessions/${seg(sessionId)}/save-profile-on-termination/${seg(profileName)}`,
+          `sessions/${pathSegment(sessionId)}/save-profile-on-termination/${pathSegment(profileName)}`,
         );
       }
 
@@ -175,7 +172,7 @@ export default function airtop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { sessionId } = input as { sessionId: string };
-      await apiRequest(ctx, "DELETE", `sessions/${seg(sessionId)}`);
+      await apiRequest(ctx, "DELETE", `sessions/${pathSegment(sessionId)}`);
       return { success: true };
     },
   });
@@ -199,7 +196,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       const response = await apiRequest(
         ctx,
         "PUT",
-        `sessions/${seg(sessionId)}/save-profile-on-termination/${seg(profileName)}`,
+        `sessions/${pathSegment(sessionId)}/save-profile-on-termination/${pathSegment(profileName)}`,
       );
       return {
         sessionId,
@@ -275,7 +272,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       const response = (await apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows`,
+        `sessions/${pathSegment(sessionId)}/windows`,
         body,
       )) as Record<string, unknown>;
       const windowId = (response.data as Record<string, unknown>)
@@ -299,7 +296,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       const response = await apiRequest(
         ctx,
         "DELETE",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}`,
       );
       return { sessionId, windowId, ...(response as Record<string, unknown>) };
     },
@@ -332,7 +329,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}`,
         body,
       );
     },
@@ -346,7 +343,11 @@ export default function airtop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { sessionId } = input as { sessionId: string };
-      return apiRequest(ctx, "GET", `sessions/${seg(sessionId)}/windows`);
+      return apiRequest(
+        ctx,
+        "GET",
+        `sessions/${pathSegment(sessionId)}/windows`,
+      );
     },
   });
 
@@ -387,7 +388,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}`,
         undefined,
         qs,
       );
@@ -409,7 +410,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/screenshot`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/screenshot`,
       );
     },
   });
@@ -460,7 +461,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/page-query`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/page-query`,
         body,
       );
     },
@@ -481,7 +482,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/scrape-content`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/scrape-content`,
         {},
       );
     },
@@ -530,7 +531,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/paginated-extraction`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/paginated-extraction`,
         { prompt, configuration },
       );
     },
@@ -565,7 +566,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/click`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/click`,
         {
           elementDescription,
           configuration: { clickType },
@@ -594,7 +595,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/hover`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/hover`,
         {
           elementDescription,
         },
@@ -630,7 +631,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/type`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/type`,
         body,
       );
     },
@@ -659,7 +660,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       const asyncResponse = (await apiRequest(
         ctx,
         "POST",
-        `async/sessions/${seg(sessionId)}/windows/${seg(windowId)}/execute-automation`,
+        `async/sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/execute-automation`,
         { automationId: "auto", parameters: { customData: formData } },
       )) as Record<string, unknown>;
 
@@ -669,7 +670,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       // Poll until completed
       const result = await pollUntil(
         ctx,
-        `requests/${seg(reqId)}/status`,
+        `requests/${pathSegment(reqId)}/status`,
         "status",
         ["completed", "error"],
         5 * 60 * 1000,
@@ -723,7 +724,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/scroll`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/scroll`,
         body,
       );
     },
@@ -764,7 +765,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       const agentDetails = (await apiRequest(
         ctx,
         "GET",
-        `agents/${seg(agentId)}`,
+        `agents/${pathSegment(agentId)}`,
       )) as Record<string, unknown>;
       const data = agentDetails.data as Record<string, unknown>;
       const webhookId = data?.webhookId as string;
@@ -774,7 +775,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       const invocation = (await apiRequest(
         ctx,
         "POST",
-        `agents/${seg(agentId)}/webhooks/${seg(webhookId)}`,
+        `agents/${pathSegment(agentId)}/webhooks/${pathSegment(webhookId)}`,
         (parameters ?? {}) as Record<string, unknown>,
         undefined,
         "hooks",
@@ -792,7 +793,7 @@ export default function airtop(rl: RunlinePluginAPI) {
         const status = (await apiRequest(
           ctx,
           "GET",
-          `agents/${seg(agentId)}/invocations/${seg(invocationId)}`,
+          `agents/${pathSegment(agentId)}/invocations/${pathSegment(invocationId)}`,
         )) as Record<string, unknown>;
         const invData = status.data as Record<string, unknown> | undefined;
         const s = (invData?.status ?? status.status) as string;
@@ -818,7 +819,7 @@ export default function airtop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileId } = input as { fileId: string };
-      return apiRequest(ctx, "GET", `files/${seg(fileId)}`);
+      return apiRequest(ctx, "GET", `files/${pathSegment(fileId)}`);
     },
   });
 
@@ -857,7 +858,7 @@ export default function airtop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileId } = input as { fileId: string };
-      await apiRequest(ctx, "DELETE", `files/${seg(fileId)}`);
+      await apiRequest(ctx, "DELETE", `files/${pathSegment(fileId)}`);
       return { success: true };
     },
   });
@@ -923,9 +924,14 @@ export default function airtop(rl: RunlinePluginAPI) {
         ?.id as string;
 
       // Push to session
-      await apiRequest(ctx, "POST", `sessions/${seg(sessionId)}/files`, {
-        fileId,
-      });
+      await apiRequest(
+        ctx,
+        "POST",
+        `sessions/${pathSegment(sessionId)}/files`,
+        {
+          fileId,
+        },
+      );
 
       // Trigger file input if needed
       if (triggerInput) {
@@ -934,7 +940,7 @@ export default function airtop(rl: RunlinePluginAPI) {
         await apiRequest(
           ctx,
           "POST",
-          `sessions/${seg(sessionId)}/windows/${seg(windowId)}/trigger-file-input`,
+          `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/trigger-file-input`,
           body,
         );
       }
@@ -965,9 +971,14 @@ export default function airtop(rl: RunlinePluginAPI) {
         input as Record<string, unknown>;
 
       // Push to session
-      await apiRequest(ctx, "POST", `sessions/${seg(sessionId)}/files`, {
-        fileId,
-      });
+      await apiRequest(
+        ctx,
+        "POST",
+        `sessions/${pathSegment(sessionId)}/files`,
+        {
+          fileId,
+        },
+      );
 
       // Trigger file input
       const body: Record<string, unknown> = { fileId };
@@ -975,7 +986,7 @@ export default function airtop(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "POST",
-        `sessions/${seg(sessionId)}/windows/${seg(windowId)}/trigger-file-input`,
+        `sessions/${pathSegment(sessionId)}/windows/${pathSegment(windowId)}/trigger-file-input`,
         body,
       );
 
