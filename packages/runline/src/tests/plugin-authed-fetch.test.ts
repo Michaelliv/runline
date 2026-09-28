@@ -60,7 +60,6 @@ const CREDENTIAL_FREE_FETCH = new Map<string, string>([
 /** Credential-backlog files that sign their own requests with bare fetch. */
 const UNBROKERED_FETCH = new Set([
   "coingecko/src/index.ts",
-  "convertkit/src/index.ts",
   "customerIo/src/index.ts",
   "elasticsearch/src/index.ts",
   "facebookGraph/src/index.ts",

@@ -45,10 +45,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "optional credential: a secret-free config cannot say whether to sign",
   ],
   [
-    "convertkit",
-    "body key: api_secret travels in the JSON body of every write",
-  ],
-  [
     "customerIo",
     "two credentials in one connection: tracking and app keys, used by different actions",
   ],
