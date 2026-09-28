@@ -1,8 +1,17 @@
-import type { RunlinePluginAPI } from "runline";
+import { AuthError, type HttpMethod, type RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { facebookGraphCredential } from "./credentials.js";
+
+/** Meta's hosts, by the target each is declared as. */
+const HOSTS: Record<string, "graph" | "video"> = {
+  "graph.facebook.com": "graph",
+  "graph-video.facebook.com": "video",
+};
 
 export default function facebookGraph(rl: RunlinePluginAPI) {
   rl.setName("facebookGraph");
   rl.setVersion("0.1.0");
+  rl.setCredential(facebookGraphCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -73,57 +82,39 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
         body,
       } = input as Record<string, unknown>;
 
-      const versionPrefix = graphApiVersion ? `${graphApiVersion}/` : "";
-      let uri = `https://${hostUrl}/${versionPrefix}${node}`;
-      if (edge) uri = `${uri}/${edge}`;
-
-      const url = new URL(uri);
-      url.searchParams.set(
-        "access_token",
-        ctx.connection.config.accessToken as string,
-      );
-
-      if (fields && Array.isArray(fields) && fields.length > 0) {
-        url.searchParams.set("fields", fields.join(","));
-      }
-
-      if (queryParameters && typeof queryParameters === "object") {
-        for (const [k, v] of Object.entries(
-          queryParameters as Record<string, unknown>,
-        )) {
-          if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-        }
-      }
-
-      const httpMethod = (method as string).toUpperCase();
-      const opts: RequestInit = {
-        method: httpMethod,
-        headers: { Accept: "application/json,text/*;q=0.99" },
-      };
-
+      const target = Object.hasOwn(HOSTS, String(hostUrl))
+        ? HOSTS[String(hostUrl)]
+        : undefined;
       if (
+        !target ||
+        (graphApiVersion && !/^v\d+\.\d+$/.test(String(graphApiVersion)))
+      )
+        throw new AuthError("request_not_allowed");
+      const httpMethod = String(method).toUpperCase() as HttpMethod;
+      const path = [
+        graphApiVersion,
+        pathSegment(node),
+        edge ? pathSegment(edge) : "",
+      ]
+        .filter(Boolean)
+        .join("/");
+      return credentialJson(ctx, facebookGraphCredential, "facebookGraph", {
+        target,
+        path,
+        method: httpMethod,
+        query: {
+          ...(queryParameters as Record<string, unknown> | undefined),
+          ...(Array.isArray(fields) && fields.length
+            ? { fields: fields.join(",") }
+            : {}),
+        },
+        ...(httpMethod === "POST" &&
         body &&
         typeof body === "object" &&
-        Object.keys(body as object).length > 0 &&
-        httpMethod === "POST"
-      ) {
-        (opts.headers as Record<string, string>)["Content-Type"] =
-          "application/json";
-        opts.body = JSON.stringify(body);
-      }
-
-      const res = await fetch(url.toString(), opts);
-      if (!res.ok)
-        throw new Error(
-          `Facebook Graph API error ${res.status}: ${await res.text()}`,
-        );
-
-      const text = await res.text();
-      try {
-        return JSON.parse(text);
-      } catch {
-        return { message: text };
-      }
+        Object.keys(body).length
+          ? { json: body }
+          : {}),
+      });
     },
   });
 }

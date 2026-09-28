@@ -11,17 +11,11 @@ const PLUGINS = join(here, "..", "..", "..", "runline-plugins");
  * Every `fetch(` in a plugin is accounted for. A request carrying a
  * credential signs through the plugin's declared credential, whose transport
  * pins the destination and refuses redirects; a bare fetch never carries one.
- * So a file may call fetch only if it is on one of two written-out lists:
- *
- *   - CREDENTIAL_FREE_FETCH: requests that carry no credential by design
- *     (signed URLs, public CDNs, public APIs), each with its reason;
- *   - UNBROKERED_FETCH: plugins still on the credential backlog
- *     (credential-ratchet.test.ts) that sign their own requests. Each leaves
- *     this list when it declares its credential.
- *
- * The lists are written out rather than computed, because a computed list
- * would compare itself against itself. UNBROKERED_FETCH may shrink and must
- * never grow; neither list may hold a file that no longer calls fetch.
+ * So a file may call fetch only if it is on CREDENTIAL_FREE_FETCH: requests
+ * that carry no credential by design (signed URLs, public CDNs, public
+ * APIs), each with its reason. The list is written out rather than
+ * computed, because a computed list would compare itself against itself,
+ * and it may not hold a file that no longer calls fetch.
  */
 
 /** Files whose fetch calls carry no credential, and why. */
@@ -55,12 +49,6 @@ const CREDENTIAL_FREE_FETCH = new Map<string, string>([
     "shiftTranscription/src/transcription.ts",
     "downloads the transcript from a signed URL",
   ],
-]);
-
-/** Credential-backlog files that sign their own requests with bare fetch. */
-const UNBROKERED_FETCH = new Set([
-  "facebookGraph/src/index.ts",
-  "graphql/src/index.ts",
 ]);
 
 function pluginSources(): string[] {
@@ -156,9 +144,9 @@ describe("every plugin fetch is accounted for", () => {
     }
   });
 
-  it("accounts for every fetch call on exactly one list", () => {
+  it("accounts for every fetch call", () => {
     const unlisted = filesCallingFetch().filter(
-      (rel) => !CREDENTIAL_FREE_FETCH.has(rel) && !UNBROKERED_FETCH.has(rel),
+      (rel) => !CREDENTIAL_FREE_FETCH.has(rel),
     );
     assert.deepEqual(
       unlisted,
@@ -166,29 +154,16 @@ describe("every plugin fetch is accounted for", () => {
       "a credential signs through the plugin's declared credential (credentialRequest); " +
         "a fetch that carries none belongs on CREDENTIAL_FREE_FETCH with its reason",
     );
-    const both = [...UNBROKERED_FETCH].filter((rel) =>
-      CREDENTIAL_FREE_FETCH.has(rel),
-    );
-    assert.deepEqual(both, []);
   });
 
   it("lists only files that still call fetch", () => {
-    // Without this the lists rot: a brokered file keeps its line, the gate
-    // still passes, and the backlog stops describing the work that is left.
+    // Without this the list rots: a file stops fetching, keeps its line,
+    // and the gate still passes.
     const calling = new Set(filesCallingFetch());
-    const stale = [...CREDENTIAL_FREE_FETCH.keys(), ...UNBROKERED_FETCH].filter(
+    const stale = [...CREDENTIAL_FREE_FETCH.keys()].filter(
       (rel) => !calling.has(rel),
     );
     assert.deepEqual(stale, [], "delete these files' lines");
-  });
-
-  it("keeps unbrokered fetches to plugins that declare no credential", () => {
-    const declaring = declaringPlugins();
-    assert.deepEqual(
-      [...UNBROKERED_FETCH].filter((rel) => declaring.has(rel.split("/")[0])),
-      [],
-      "a plugin that declares its credential signs through it, not through fetch",
-    );
   });
 
   it("never gives a brokered plugin a second signing path", () => {
@@ -199,12 +174,5 @@ describe("every plugin fetch is accounted for", () => {
         IMPORTS_AUTHED_FETCH.test(source(rel)),
     );
     assert.deepEqual(importing, []);
-  });
-
-  it("still has a backlog, so a broken detector cannot look like finished work", () => {
-    assert.ok(
-      UNBROKERED_FETCH.size > 0,
-      "an empty backlog means every plugin is brokered: delete this guard with the last entry",
-    );
   });
 });

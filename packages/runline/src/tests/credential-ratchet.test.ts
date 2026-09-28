@@ -40,15 +40,7 @@ const NO_CREDENTIAL = new Map<string, string>([
 
 /** Plugins that carry a credential but do not declare it yet, and why. */
 const UNDECLARED_BACKLOG = new Map<string, string>([
-  [
-    "facebookGraph",
-    "agent-selected host: hostUrl is a per-call action input, not config",
-  ],
   ["gett", "login: phone OTP login and a rotating, device-bound refresh grant"],
-  [
-    "graphql",
-    "generic client: arbitrary endpoint and caller-composed auth header",
-  ],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 
