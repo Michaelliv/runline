@@ -373,7 +373,6 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
         end: fields.end ?? current.end,
         ...fields,
       };
-      delete body.meetingId;
       return apiRequest(ctx, "PUT", `meetings/${pathSegment(meetingId)}`, body);
     },
   });
