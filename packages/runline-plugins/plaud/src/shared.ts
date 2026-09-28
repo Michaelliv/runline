@@ -5,10 +5,12 @@ import {
   type CredentialType,
   downloadResource,
   type OAuth2Definition,
-  OAuthGrantSchema,
 } from "runline";
-import * as t from "typebox";
-import { credentialOk, pathSegment } from "../../_shared/credentials.js";
+import {
+  credentialOk,
+  grantSchema,
+  pathSegment,
+} from "../../_shared/credentials.js";
 
 const BASE = "https://platform.plaud.ai/developer/api";
 
@@ -40,10 +42,7 @@ export const PLAUD_CREDENTIAL: CredentialType = {
   id: "plaud",
   methods: {
     oauth2: {
-      schema: t.Object(
-        { grant: t.Optional(OAuthGrantSchema) },
-        { additionalProperties: false },
-      ),
+      schema: grantSchema,
       authentication: {
         kind: "oauth2",
         field: "grant",

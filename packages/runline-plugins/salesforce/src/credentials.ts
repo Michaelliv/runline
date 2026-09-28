@@ -2,11 +2,10 @@ import {
   AuthError,
   type CredentialDeclaration,
   type CredentialTarget,
-  OAuthGrantSchema,
 } from "runline";
-import * as t from "typebox";
 import {
   configChoice,
+  grantSchema,
   httpsBase,
   staticCredential,
 } from "../../_shared/credentials.js";
@@ -58,10 +57,7 @@ export const salesforceCredential: CredentialDeclaration = (config) => {
     methods: {
       ...token.type.methods,
       clientCredentials: {
-        schema: t.Object(
-          { grant: t.Optional(OAuthGrantSchema) },
-          { additionalProperties: false },
-        ),
+        schema: grantSchema,
         authentication: {
           kind: "oauth2" as const,
           field: "grant",

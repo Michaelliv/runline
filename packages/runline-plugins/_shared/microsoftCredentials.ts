@@ -1,13 +1,11 @@
 import {
   AuthError,
-  OAuthGrantSchema,
   type CredentialDeclaration,
   type CredentialMethod,
   type CredentialProbe,
   type CredentialType,
 } from "runline";
-import * as t from "typebox";
-import { pathSegment } from "./credentials.js";
+import { grantSchema, pathSegment } from "./credentials.js";
 
 export type MicrosoftAuthConfig = {
   authMethod?: "delegated" | "appOnly";
@@ -90,10 +88,6 @@ export function microsoftCredentialType(
     url: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
     clientAuthentication: "client_secret_post" as const,
   };
-  const schema = t.Object(
-    { grant: t.Optional(OAuthGrantSchema) },
-    { additionalProperties: false },
-  );
   const methods = Object.fromEntries(
     (["delegated", "appOnly"] as const).map(
       (method): [string, CredentialMethod] => {
@@ -123,7 +117,7 @@ export function microsoftCredentialType(
         return [
           method,
           {
-            schema,
+            schema: grantSchema,
             authentication: {
               kind: "oauth2" as const,
               field: "grant",

@@ -1,14 +1,8 @@
 import {
   type CredentialDeclaration,
   type CredentialTarget,
-  OAuthGrantSchema,
 } from "runline";
-import * as t from "typebox";
-import {
-  configChoice,
-  httpsBase,
-  staticCredential,
-} from "../../_shared/credentials.js";
+import { configChoice, grantSchema, httpsBase, staticCredential } from "../../_shared/credentials.js";
 
 /** The Strapi major version the connection names, v4 when absent. */
 export function strapiVersion(
@@ -60,10 +54,7 @@ export const strapiCredential: CredentialDeclaration = (config) => {
     methods: {
       ...token.type.methods,
       password: {
-        schema: t.Object(
-          { grant: t.Optional(OAuthGrantSchema) },
-          { additionalProperties: false },
-        ),
+        schema: grantSchema,
         authentication: {
           kind: "oauth2" as const,
           field: "grant",

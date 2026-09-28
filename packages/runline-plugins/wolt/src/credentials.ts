@@ -1,9 +1,5 @@
-import {
-  type CredentialDeclaration,
-  type CredentialTarget,
-  OAuthGrantSchema,
-} from "runline";
-import * as t from "typebox";
+import type { CredentialDeclaration, CredentialTarget } from "runline";
+import { grantSchema } from "../../_shared/credentials.js";
 
 export const RESTAURANT = "restaurant-api.wolt.com";
 export const CONSUMER = "consumer-api.wolt.com";
@@ -50,10 +46,7 @@ export const woltCredential: CredentialDeclaration = (config) => {
       id: "wolt",
       methods: {
         oauth2: {
-          schema: t.Object(
-            { grant: t.Optional(OAuthGrantSchema) },
-            { additionalProperties: false },
-          ),
+          schema: grantSchema,
           authentication: {
             kind: "oauth2",
             field: "grant",

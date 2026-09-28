@@ -1,6 +1,5 @@
-import { type CredentialDeclaration, OAuthGrantSchema } from "runline";
-import * as t from "typebox";
-import { configChoice } from "../../_shared/credentials.js";
+import { type CredentialDeclaration, } from "runline";
+import { configChoice, grantSchema } from "../../_shared/credentials.js";
 
 /**
  * A client-credentials OAuth grant against the environment's own token
@@ -17,10 +16,7 @@ export const paypalCredential: CredentialDeclaration = (config) => {
       id: "paypal",
       methods: {
         oauth2: {
-          schema: t.Object(
-            { grant: t.Optional(OAuthGrantSchema) },
-            { additionalProperties: false },
-          ),
+          schema: grantSchema,
           authentication: {
             kind: "oauth2",
             field: "grant",

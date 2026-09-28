@@ -6,6 +6,7 @@ import {
   type CredentialTarget,
   type HttpMethod,
   type LocalSecretPart,
+  OAuthGrantSchema,
   type SecretPlacement,
   staticSecretSchema,
 } from "runline";
@@ -18,6 +19,15 @@ import { credentialBroker } from "./credentialAdapter.js";
  * config into an HTTPS target, one request path. OAuth families declare
  * through their own factories (googleCredentials, microsoftCredentials).
  */
+
+/**
+ * The stored shape of an OAuth method: one optional revisioned grant in the
+ * `grant` field, absent until the first issuance.
+ */
+export const grantSchema = t.Object(
+  { grant: t.Optional(OAuthGrantSchema) },
+  { additionalProperties: false },
+);
 
 /**
  * A flat config field, a fixed value such as Freshdesk's "X" password, or

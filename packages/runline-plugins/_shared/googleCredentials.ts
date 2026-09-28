@@ -4,10 +4,9 @@ import {
   type CredentialProbe,
   type CredentialTarget,
   type CredentialType,
-  OAuthGrantSchema,
   type OAuthJwtIdentity,
 } from "runline";
-import * as t from "typebox";
+import { grantSchema } from "./credentials.js";
 
 export type GoogleAuthConfig = {
   authMethod?: "delegated" | "serviceAccount";
@@ -178,16 +177,12 @@ export function googleCredentialType(
   plugin: string,
 ): CredentialType {
   const url = "https://oauth2.googleapis.com/token";
-  const schema = t.Object(
-    { grant: t.Optional(OAuthGrantSchema) },
-    { additionalProperties: false },
-  );
   const { targets, probe } = googleResources(plugin);
   return {
     id: "google.oauth",
     methods: {
       delegated: {
-        schema,
+        schema: grantSchema,
         authentication: {
           kind: "oauth2",
           field: "grant",
@@ -204,7 +199,7 @@ export function googleCredentialType(
       ...(scopes.length
         ? {
             serviceAccount: {
-              schema,
+              schema: grantSchema,
               authentication: {
                 kind: "oauth2",
                 field: "grant",

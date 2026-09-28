@@ -2,10 +2,8 @@ import {
   AuthError,
   type CredentialDeclaration,
   type CredentialType,
-  OAuthGrantSchema,
 } from "runline";
-import * as t from "typebox";
-import { configChoice, httpsBase } from "../../_shared/credentials.js";
+import { configChoice, grantSchema, httpsBase } from "../../_shared/credentials.js";
 
 /**
  * A client-credentials OAuth grant: the token comes from the configured
@@ -30,10 +28,7 @@ export const halopsaCredential: CredentialDeclaration = (config) => {
     id: "halopsa",
     methods: {
       oauth2: {
-        schema: t.Object(
-          { grant: t.Optional(OAuthGrantSchema) },
-          { additionalProperties: false },
-        ),
+        schema: grantSchema,
         authentication: {
           kind: "oauth2",
           field: "grant",

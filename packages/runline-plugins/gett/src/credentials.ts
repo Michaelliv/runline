@@ -1,10 +1,5 @@
-import {
-  AuthError,
-  type CredentialDeclaration,
-  OAuthGrantSchema,
-} from "runline";
-import * as t from "typebox";
-import { pathSegment } from "../../_shared/credentials.js";
+import { AuthError, type CredentialDeclaration } from "runline";
+import { grantSchema, pathSegment } from "../../_shared/credentials.js";
 
 export const HOST = "b2cgateway.gett.com";
 export const APP_VERSION = "10.48.187";
@@ -40,10 +35,7 @@ export const gettCredential: CredentialDeclaration = (config) => {
       id: "gett",
       methods: {
         oauth2: {
-          schema: t.Object(
-            { grant: t.Optional(OAuthGrantSchema) },
-            { additionalProperties: false },
-          ),
+          schema: grantSchema,
           authentication: {
             kind: "oauth2",
             field: "grant",

@@ -1,10 +1,8 @@
 import {
   type CredentialDeclaration,
   type CredentialTarget,
-  OAuthGrantSchema,
 } from "runline";
-import * as t from "typebox";
-import { configChoice, httpsBase } from "../../_shared/credentials.js";
+import { configChoice, grantSchema, httpsBase } from "../../_shared/credentials.js";
 
 /**
  * An organization API key (client id and secret), exchanged for a bearer
@@ -33,10 +31,7 @@ export const bitwardenCredential: CredentialDeclaration = (config) => {
       id: "bitwarden",
       methods: {
         oauth2: {
-          schema: t.Object(
-            { grant: t.Optional(OAuthGrantSchema) },
-            { additionalProperties: false },
-          ),
+          schema: grantSchema,
           authentication: {
             kind: "oauth2",
             field: "grant",
