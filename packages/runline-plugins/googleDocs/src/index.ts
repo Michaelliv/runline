@@ -9,6 +9,7 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
+import { googleCredential } from "../../_shared/googleAuth.js";
 import { registerDocumentsActions } from "./documents.js";
 import { registerFormattingActions } from "./formatting.js";
 import { registerImagesActions } from "./images.js";
@@ -21,6 +22,7 @@ import { registerTextActions } from "./text.js";
 export default function googleDocs(rl: RunlinePluginAPI) {
   rl.setName("googleDocs");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleDocs", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

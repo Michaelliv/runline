@@ -11,6 +11,7 @@ import type { ActionContext, RunlinePluginAPI } from "runline";
 import {
   graphRequest,
   graphResponse,
+  microsoftCredential,
   microsoftDownload,
   microsoftDriveBase,
   microsoftSetupHelp,
@@ -35,6 +36,7 @@ async function binaryFetch(ctx: Ctx, method: string, path: string, body?: Uint8A
 export default function microsoftFiles(rl: RunlinePluginAPI): void {
   rl.setName(NAME);
   rl.setVersion("1.0.0");
+  rl.setCredential(microsoftCredential(NAME, SCOPES));
 
   rl.setConnectionSchema({
     authMethod: { type: "string", required: false, description: "delegated or appOnly; legacy configs infer the method from existing credentials" },

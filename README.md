@@ -486,7 +486,7 @@ const rl = Runline.create({
 });
 ```
 
-The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request.
+The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application and JWT identity — never with anything the plugin's process sends.
 
 ## CLI Reference
 

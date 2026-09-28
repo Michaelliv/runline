@@ -6,14 +6,17 @@ import {
 } from "runline";
 import { credentialBroker, credentialRuntime } from "./credentialAdapter.js";
 import {
-  microsoftCredentialType,
+  microsoftCredential,
   microsoftMethod,
   microsoftUserBase,
   type MicrosoftAuthConfig,
 } from "./microsoftCredentials.js";
 
 export type { MicrosoftAuthConfig } from "./microsoftCredentials.js";
-export { microsoftDriveBase } from "./microsoftCredentials.js";
+export {
+  microsoftCredential,
+  microsoftDriveBase,
+} from "./microsoftCredentials.js";
 
 export function isAppOnly(cfg: MicrosoftAuthConfig): boolean {
   return microsoftMethod(cfg) === "appOnly";
@@ -24,18 +27,9 @@ export function userBase(ctx: ActionContext): string {
 }
 
 function runtime(ctx: ActionContext, plugin: string, scopes: string[]) {
-  const cfg = ctx.connection.config as MicrosoftAuthConfig;
-  const method = microsoftMethod(cfg);
-  if (
-    method === "appOnly" &&
-    (!cfg.tenantId ||
-      ["common", "organizations", "consumers"].includes(cfg.tenantId))
-  )
-    throw new AuthError("invalid_credentials");
   return credentialRuntime(
     ctx,
-    microsoftCredentialType(cfg, plugin, scopes),
-    method,
+    microsoftCredential(plugin, scopes)(ctx.connection.config),
     (current) => {
       const c = current as MicrosoftAuthConfig;
       return [

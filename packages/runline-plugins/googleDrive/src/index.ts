@@ -57,7 +57,11 @@
 import { createReadStream, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleJsonRequest, googleResponse } from "../../_shared/googleAuth.js";
+import {
+  googleCredential,
+  googleJsonRequest,
+  googleResponse,
+} from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -451,6 +455,7 @@ const SCOPES = ["https://www.googleapis.com/auth/drive"];
 export default function googleDrive(rl: RunlinePluginAPI) {
   rl.setName("googleDrive");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleDrive", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

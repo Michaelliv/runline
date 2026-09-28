@@ -37,7 +37,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleJsonRequest } from "../../_shared/googleAuth.js";
+import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
   JsonValue,
@@ -509,6 +509,7 @@ function a1RangeToGridRange(
 export default function googleSheets(rl: RunlinePluginAPI) {
   rl.setName("googleSheets");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleSheets", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

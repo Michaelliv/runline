@@ -1,6 +1,7 @@
 import {
   AuthError,
   OAuthGrantSchema,
+  type CredentialDeclaration,
   type CredentialMethod,
   type CredentialProbe,
   type CredentialType,
@@ -44,6 +45,35 @@ export function microsoftDriveBase(cfg: MicrosoftAuthConfig): string {
   if (cfg.driveId) return `/drives/${encodeURIComponent(cfg.driveId)}`;
   if (cfg.siteId) return `/sites/${encodeURIComponent(cfg.siteId)}/drive`;
   return `${microsoftUserBase(cfg)}/drive`;
+}
+
+/**
+ * A Microsoft plugin's credential declaration. App-only signs for one
+ * tenant's directory, so a multi-tenant authority is refused here, where
+ * every signer reads it.
+ */
+export function microsoftCredential(
+  plugin: string,
+  scopes: string[],
+): CredentialDeclaration {
+  return (config) => {
+    const cfg = config as MicrosoftAuthConfig;
+    const method = microsoftMethod(cfg);
+    if (
+      method === "appOnly" &&
+      (!cfg.tenantId ||
+        ["common", "organizations", "consumers"].includes(cfg.tenantId))
+    )
+      throw new AuthError("invalid_credentials");
+    return {
+      type: microsoftCredentialType(cfg, plugin, scopes),
+      method,
+      application: {
+        clientId: cfg.clientId as string,
+        clientSecret: cfg.clientSecret,
+      },
+    };
+  };
 }
 
 /** Scope-appropriate probes never require User.Read merely to check mail/calendar/files. */

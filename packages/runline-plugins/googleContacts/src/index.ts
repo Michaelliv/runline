@@ -25,7 +25,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleJsonRequest } from "../../_shared/googleAuth.js";
+import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -472,6 +472,7 @@ const groupSchemas = {
 export default function googleContacts(rl: RunlinePluginAPI) {
   rl.setName("googleContacts");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleContacts", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

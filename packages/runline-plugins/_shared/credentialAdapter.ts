@@ -6,7 +6,7 @@ import {
   type ActionContext,
   type CredentialBinding,
   type CredentialBroker,
-  type CredentialType,
+  type CredentialSelection,
   type OAuthGrant,
 } from "runline";
 
@@ -28,13 +28,16 @@ export function credentialBroker(
   };
 }
 
-/** Flat CLI/env storage is a projection, not a second token cache or refresh engine. */
+/**
+ * The local signer for a plugin's declared selection. Flat CLI/env
+ * storage is a projection, not a second token cache or refresh engine.
+ */
 export function credentialRuntime(
   ctx: ActionContext,
-  definition: CredentialType,
-  method: string,
+  selection: CredentialSelection,
   authority: (config: Readonly<Record<string, unknown>>) => unknown,
 ) {
+  const { type: definition, method } = selection;
   const identity = { name: ctx.connection.name, plugin: ctx.connection.plugin };
   const fingerprint = (config: Readonly<Record<string, unknown>>) =>
     createHash("sha256")
@@ -79,10 +82,8 @@ export function credentialRuntime(
     type: definition.id,
     method,
     identity,
-    application: {
-      clientId: ctx.connection.config.clientId as string,
-      clientSecret: ctx.connection.config.clientSecret as string | undefined,
-    },
+    application: selection.application,
+    ...(selection.jwtIdentity ? { jwtIdentity: selection.jwtIdentity } : {}),
     connection: {
       async read() {
         return snapshot();

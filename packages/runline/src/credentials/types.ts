@@ -60,6 +60,29 @@ export interface CredentialType {
   methods: Record<string, CredentialMethod>;
 }
 
+/**
+ * What a connection signs with: the credential type and method, and the
+ * OAuth application and JWT identity its config supplies. Derived from
+ * the connection's config alone — never from action input.
+ */
+export interface CredentialSelection {
+  type: CredentialType;
+  method: string;
+  application?: OAuthApplication;
+  jwtIdentity?: OAuthJwtIdentity;
+}
+
+/**
+ * A plugin's statement of how a connection's config becomes its
+ * selection. Pure: no IO, no action input. Whoever holds the config signs
+ * from it — the plugin's own process, or a host brokering for it, which
+ * reads the declaration from the plugin it loaded itself. Throws
+ * `invalid_credentials` for a config it cannot sign with.
+ */
+export type CredentialDeclaration = (
+  config: Readonly<Record<string, unknown>>,
+) => CredentialSelection;
+
 /** Host-authorized selection. Never derive this binding from action input. */
 export interface CredentialBinding {
   type: string;

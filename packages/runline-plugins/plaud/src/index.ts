@@ -8,6 +8,7 @@ import {
   PLAUD_OAUTH,
   PLAUD_PUBLIC_CLIENT_ID,
   PLAUD_REDIRECT_URI,
+  plaudCredential,
   recording,
   request,
   scan,
@@ -79,6 +80,7 @@ const SummaryInput = t.Object(
 export default function plaud(rl: RunlinePluginAPI) {
   rl.setName("plaud");
   rl.setVersion("0.1.0");
+  rl.setCredential(plaudCredential);
   rl.setOAuth({
     protocol: PLAUD_OAUTH,
     scopes: [],

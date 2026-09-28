@@ -2,6 +2,7 @@ import type { TSchema } from "typebox";
 import type { OAuth2Definition } from "../auth/types.js";
 import type { ConnectionUpdate } from "../connections/types.js";
 import type { CredentialBroker } from "../credentials/transport.js";
+import type { CredentialDeclaration } from "../credentials/types.js";
 
 export interface InputField {
   type: "string" | "number" | "boolean" | "object" | "array";
@@ -152,6 +153,9 @@ export interface PluginDef {
   connectionConfigSchema?: ConnectionSchema;
   /** OAuth2 config for `runline auth <plugin>`. */
   oauth?: OAuthConfig;
+  /** How a connection's config becomes what its requests are signed with;
+   *  present on plugins whose requests go through the credential registry. */
+  credential?: CredentialDeclaration;
   /** @internal */
   initHooks?: Array<(config: Record<string, unknown>) => void>;
 }

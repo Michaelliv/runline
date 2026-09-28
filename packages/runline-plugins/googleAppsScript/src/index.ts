@@ -11,7 +11,7 @@
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleJsonRequest } from "../../_shared/googleAuth.js";
+import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -64,6 +64,7 @@ async function call(ctx: ActionContext, method: string, url: string, payload?: u
 export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.setName("googleAppsScript");
   rl.setVersion("1.0.0");
+  rl.setCredential(googleCredential("googleAppsScript", SCOPES));
 
   rl.setConnectionSchema({
     authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },

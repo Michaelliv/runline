@@ -23,7 +23,11 @@
 import { writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleJsonRequest, googleDownload } from "../../_shared/googleAuth.js";
+import {
+  googleCredential,
+  googleDownload,
+  googleJsonRequest,
+} from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -93,6 +97,7 @@ const SCOPES = ["https://www.googleapis.com/auth/presentations"];
 export default function googleSlides(rl: RunlinePluginAPI) {
   rl.setName("googleSlides");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleSlides", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

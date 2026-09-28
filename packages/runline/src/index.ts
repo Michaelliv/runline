@@ -79,9 +79,11 @@ export { CredentialTransport } from "./credentials/transport.js";
 export type {
   CredentialAuthentication,
   CredentialBinding,
+  CredentialDeclaration,
   CredentialMethod,
   CredentialProbe,
   CredentialProbeResult,
+  CredentialSelection,
   CredentialTarget,
   CredentialType,
   HttpMethod,

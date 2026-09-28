@@ -1,3 +1,4 @@
+import type { CredentialDeclaration } from "../credentials/types.js";
 import type {
   ActionAccess,
   ActionDef,
@@ -25,6 +26,12 @@ export interface RunlinePluginAPI {
    * with refreshable tokens.
    */
   setOAuth(oauth: OAuthConfig): void;
+  /**
+   * Declare how a connection's config becomes what this plugin's requests
+   * are signed with, so a host brokering for it can sign from the plugin
+   * it loaded rather than from anything the plugin's process sends.
+   */
+  setCredential(declaration: CredentialDeclaration): void;
   onInit(fn: (config: Record<string, unknown>) => void): void;
   log: {
     info(msg: string): void;
@@ -44,6 +51,7 @@ export function createPluginAPI(pluginId: string): {
   const actions: ActionDef[] = [];
   let connectionConfigSchema: PluginDef["connectionConfigSchema"];
   let oauth: OAuthConfig | undefined;
+  let credential: CredentialDeclaration | undefined;
   const initHooks: Array<(config: Record<string, unknown>) => void> = [];
 
   const api: RunlinePluginAPI = {
@@ -66,6 +74,9 @@ export function createPluginAPI(pluginId: string): {
     },
     setOAuth(cfg: OAuthConfig) {
       oauth = { ...cfg };
+    },
+    setCredential(declaration: CredentialDeclaration) {
+      credential = declaration;
     },
     onInit(fn) {
       initHooks.push(fn);
@@ -92,6 +103,9 @@ export function createPluginAPI(pluginId: string): {
     };
     if (oauth) {
       plugin.oauth = oauth;
+    }
+    if (credential) {
+      plugin.credential = credential;
     }
     if (initHooks.length > 0) {
       plugin.initHooks = initHooks;

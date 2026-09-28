@@ -6,7 +6,12 @@
  * Graph delegated scopes: Calendars.Read.
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { graphRequest, microsoftSetupHelp, userBase } from "../../_shared/microsoftAuth.js";
+import {
+  graphRequest,
+  microsoftCredential,
+  microsoftSetupHelp,
+  userBase,
+} from "../../_shared/microsoftAuth.js";
 
 const NAME = "microsoftCalendar";
 const SCOPES = ["https://graph.microsoft.com/Calendars.Read"];
@@ -15,6 +20,7 @@ type Ctx = ActionContext;
 export default function microsoftCalendar(rl: RunlinePluginAPI): void {
   rl.setName(NAME);
   rl.setVersion("1.0.0");
+  rl.setCredential(microsoftCredential(NAME, SCOPES));
 
   rl.setConnectionSchema({
     authMethod: { type: "string", required: false, description: "delegated or appOnly; legacy configs infer the method from existing credentials" },

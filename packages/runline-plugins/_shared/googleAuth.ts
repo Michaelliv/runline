@@ -7,13 +7,14 @@ import {
 import { credentialBroker, credentialRuntime } from "./credentialAdapter.js";
 import {
   type GoogleAuthConfig,
-  googleCredentialType,
+  googleCredential,
   googleIdentity,
   googleMethod,
   googleResources,
 } from "./googleCredentials.js";
 
 export type { GoogleAuthConfig } from "./googleCredentials.js";
+export { googleCredential } from "./googleCredentials.js";
 
 /** Explicit storage adapter: the registry owns token protocols and renewal. */
 export function googleRuntime(
@@ -21,27 +22,18 @@ export function googleRuntime(
   pluginName: string,
   scopes: string[],
 ) {
-  const config = ctx.connection.config as GoogleAuthConfig;
-  const method = googleMethod(config);
-  const runtime = credentialRuntime(
-    ctx,
-    googleCredentialType(scopes, pluginName),
-    method,
-    (current) => {
-      const cfg = current as GoogleAuthConfig;
-      return [
-        pluginName,
-        scopes,
-        googleMethod(cfg),
-        ...(method === "serviceAccount"
-          ? [googleIdentity(cfg)]
-          : [cfg.clientId, cfg.clientSecret]),
-      ];
-    },
-  );
-  if (method === "serviceAccount")
-    runtime.binding.jwtIdentity = googleIdentity(config);
-  return runtime;
+  const selection = googleCredential(pluginName, scopes)(ctx.connection.config);
+  return credentialRuntime(ctx, selection, (current) => {
+    const cfg = current as GoogleAuthConfig;
+    return [
+      pluginName,
+      scopes,
+      googleMethod(cfg),
+      ...(selection.method === "serviceAccount"
+        ? [googleIdentity(cfg)]
+        : [cfg.clientId, cfg.clientSecret]),
+    ];
+  });
 }
 
 /** The local signer's token, for trusted in-process callers only: a brokered

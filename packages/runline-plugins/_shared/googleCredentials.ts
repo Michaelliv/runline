@@ -1,5 +1,6 @@
 import {
   AuthError,
+  type CredentialDeclaration,
   type CredentialProbe,
   type CredentialTarget,
   type CredentialType,
@@ -142,6 +143,32 @@ export function googleResources(plugin: string): {
           },
         }
       : {}),
+  };
+}
+
+/**
+ * A Google plugin's credential declaration: its own targets and the scopes
+ * it signs service-account requests for, the method its config selects,
+ * and — for a service account — the JWT identity, subject included.
+ */
+export function googleCredential(
+  plugin: string,
+  scopes: string[],
+): CredentialDeclaration {
+  return (config) => {
+    const cfg = config as GoogleAuthConfig;
+    const method = googleMethod(cfg);
+    return {
+      type: googleCredentialType(scopes, plugin),
+      method,
+      application: {
+        clientId: cfg.clientId as string,
+        clientSecret: cfg.clientSecret,
+      },
+      ...(method === "serviceAccount"
+        ? { jwtIdentity: googleIdentity(cfg) }
+        : {}),
+    };
   };
 }
 

@@ -1,6 +1,7 @@
 import {
   type ActionContext,
   AuthError,
+  type CredentialDeclaration,
   type CredentialType,
   downloadResource,
   type OAuth2Definition,
@@ -65,10 +66,19 @@ export const PLAUD_CREDENTIAL: CredentialType = {
   },
 };
 
+/** Plaud signs one way: its public client's OAuth grant. */
+export const plaudCredential: CredentialDeclaration = (config) => ({
+  type: PLAUD_CREDENTIAL,
+  method: "oauth2",
+  application: { clientId: config.clientId as string },
+});
+
 export function plaudRuntime(ctx: ActionContext) {
-  return credentialRuntime(ctx, PLAUD_CREDENTIAL, "oauth2", (config) => [
-    config.clientId,
-  ]);
+  return credentialRuntime(
+    ctx,
+    plaudCredential(ctx.connection.config),
+    (config) => [config.clientId],
+  );
 }
 
 function object(value: unknown): Record<string, unknown> {

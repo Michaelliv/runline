@@ -22,7 +22,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleJsonRequest } from "../../_shared/googleAuth.js";
+import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
   Id,
@@ -112,6 +112,7 @@ const pageSizeSchema = t.Integer({ minimum: 1, maximum: 100 });
 export default function googleTasks(rl: RunlinePluginAPI) {
   rl.setName("googleTasks");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleTasks", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

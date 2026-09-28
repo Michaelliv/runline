@@ -24,7 +24,7 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { renderEmailJsx } from "../../_shared/emailJsx.js";
-import { googleJsonRequest } from "../../_shared/googleAuth.js";
+import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
   Id,
@@ -773,6 +773,7 @@ const ListInput = t.Object(ListFields, strict);
 export default function gmail(rl: RunlinePluginAPI) {
   rl.setName("gmail");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("gmail", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
