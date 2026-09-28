@@ -1,4 +1,8 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import {
+  configFlag,
+  httpsBase,
+  staticCredential,
+} from "../../_shared/credentials.js";
 
 /**
  * A long-lived access token, sent as a bearer to the instance's own /api/
@@ -11,8 +15,7 @@ export const homeAssistantCredential = staticCredential({
   auth: { kind: "bearer" },
   local: { secret: "accessToken" },
   targets: (config) => {
-    const ssl = config.ssl === true || config.ssl === "true";
-    const scheme = ssl ? "https" : "http";
+    const scheme = configFlag(config.ssl) ? "https" : "http";
     return {
       api: {
         baseUrl: httpsBase(

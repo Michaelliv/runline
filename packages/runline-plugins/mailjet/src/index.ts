@@ -1,11 +1,40 @@
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { configFlag, credentialJson } from "../../_shared/credentials.js";
 import { mailjetCredential } from "./credentials.js";
+
+/** A comma-separated address list as Send API recipients. */
+function emails(list: unknown): Array<{ Email: string }> {
+  return String(list)
+    .split(",")
+    .map((address) => ({ Email: address.trim() }));
+}
+
+/** The message fields plain and template sends share, from action input. */
+function message(p: Record<string, unknown>): Record<string, unknown> {
+  const fields: Record<string, unknown> = {
+    From: { Email: p.fromEmail, ...(p.fromName ? { Name: p.fromName } : {}) },
+    Subject: p.subject,
+    To: emails(p.toEmail),
+  };
+  if (p.cc) fields.Cc = emails(p.cc);
+  if (p.bcc) fields.Bcc = emails(p.bcc);
+  if (p.replyTo) fields.ReplyTo = { Email: p.replyTo };
+  if (p.variables) fields.Variables = p.variables;
+  if (p.trackOpens) fields.TrackOpens = p.trackOpens;
+  if (p.trackClicks) fields.TrackClicks = p.trackClicks;
+  if (p.templateLanguage !== undefined)
+    fields.TemplateLanguage = p.templateLanguage;
+  if (p.priority) fields.Priority = p.priority;
+  if (p.customCampaign) fields.CustomCampaign = p.customCampaign;
+  if (p.deduplicateCampaign !== undefined)
+    fields.DeduplicateCampaign = p.deduplicateCampaign;
+  return fields;
+}
 
 /** One message through the v3.1 Send API, in sandbox mode when the connection asks. */
 async function sendMessage(
   ctx: ActionContext,
-  message: Record<string, unknown>,
+  body: Record<string, unknown>,
 ): Promise<unknown> {
   const data = await credentialJson<{ Messages?: unknown }>(
     ctx,
@@ -16,10 +45,8 @@ async function sendMessage(
       path: "send",
       method: "POST",
       json: {
-        Messages: [message],
-        SandboxMode:
-          ctx.connection.config.sandboxMode === true ||
-          ctx.connection.config.sandboxMode === "true",
+        Messages: [body],
+        SandboxMode: configFlag(ctx.connection.config.sandboxMode),
       },
     },
   );
@@ -121,36 +148,11 @@ export default function mailjet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const message: Record<string, unknown> = {
-        From: {
-          Email: p.fromEmail,
-          ...(p.fromName ? { Name: p.fromName } : {}),
-        },
-        Subject: p.subject,
-        To: (p.toEmail as string).split(",").map((e) => ({ Email: e.trim() })),
-      };
-      if (p.htmlPart) message.HTMLPart = p.htmlPart;
-      if (p.textPart) message.TextPart = p.textPart;
-      if (p.cc)
-        message.Cc = (p.cc as string)
-          .split(",")
-          .map((e) => ({ Email: e.trim() }));
-      if (p.bcc)
-        message.Bcc = (p.bcc as string)
-          .split(",")
-          .map((e) => ({ Email: e.trim() }));
-      if (p.replyTo) message.ReplyTo = { Email: p.replyTo };
-      if (p.variables) message.Variables = p.variables;
-      if (p.trackOpens) message.TrackOpens = p.trackOpens;
-      if (p.trackClicks) message.TrackClicks = p.trackClicks;
-      if (p.templateLanguage !== undefined)
-        message.TemplateLanguage = p.templateLanguage;
-      if (p.priority) message.Priority = p.priority;
-      if (p.customCampaign) message.CustomCampaign = p.customCampaign;
-      if (p.deduplicateCampaign !== undefined)
-        message.DeduplicateCampaign = p.deduplicateCampaign;
-
-      return sendMessage(ctx, message);
+      return sendMessage(ctx, {
+        ...message(p),
+        ...(p.htmlPart ? { HTMLPart: p.htmlPart } : {}),
+        ...(p.textPart ? { TextPart: p.textPart } : {}),
+      });
     },
   });
 
@@ -188,35 +190,7 @@ export default function mailjet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const message: Record<string, unknown> = {
-        From: {
-          Email: p.fromEmail,
-          ...(p.fromName ? { Name: p.fromName } : {}),
-        },
-        Subject: p.subject,
-        To: (p.toEmail as string).split(",").map((e) => ({ Email: e.trim() })),
-        TemplateID: p.templateId,
-      };
-      if (p.variables) message.Variables = p.variables;
-      if (p.cc)
-        message.Cc = (p.cc as string)
-          .split(",")
-          .map((e) => ({ Email: e.trim() }));
-      if (p.bcc)
-        message.Bcc = (p.bcc as string)
-          .split(",")
-          .map((e) => ({ Email: e.trim() }));
-      if (p.replyTo) message.ReplyTo = { Email: p.replyTo };
-      if (p.trackOpens) message.TrackOpens = p.trackOpens;
-      if (p.trackClicks) message.TrackClicks = p.trackClicks;
-      if (p.templateLanguage !== undefined)
-        message.TemplateLanguage = p.templateLanguage;
-      if (p.priority) message.Priority = p.priority;
-      if (p.customCampaign) message.CustomCampaign = p.customCampaign;
-      if (p.deduplicateCampaign !== undefined)
-        message.DeduplicateCampaign = p.deduplicateCampaign;
-
-      return sendMessage(ctx, message);
+      return sendMessage(ctx, { ...message(p), TemplateID: p.templateId });
     },
   });
 

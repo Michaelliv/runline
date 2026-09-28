@@ -231,6 +231,17 @@ export function configChoice<const C extends string>(
 }
 
 /**
+ * A boolean config field, as a boolean or the string a CLI or environment
+ * variable gives (`"true"`, `"false"`); false when absent. Anything else
+ * is invalid_credentials, as for `configChoice`: a flag that picks a host
+ * must not read a typo as false.
+ */
+export function configFlag(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  return configChoice(value, ["true", "false"], "false") === "true";
+}
+
+/**
  * An ID or name as exactly one path segment, the one encoder every plugin
  * uses. A value that is not one segment is refused rather than encoded: an
  * empty value would address the parent collection (`items/`), a dot segment

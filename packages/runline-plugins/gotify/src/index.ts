@@ -16,7 +16,7 @@ function apiRequest(
     path,
     method,
     query,
-    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+    json: body,
   });
 }
 

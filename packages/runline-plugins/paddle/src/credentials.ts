@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { configFlag, staticCredential } from "../../_shared/credentials.js";
 
 /**
  * The vendor ID and auth code, added by the transport as the vendor_id and
@@ -19,10 +19,9 @@ export const paddleCredential = staticCredential({
   local: { vendorId: "vendorId", authCode: "vendorAuthCode" },
   targets: (config) => ({
     api: {
-      baseUrl:
-        config.sandbox === true || config.sandbox === "true"
-          ? "https://sandbox-vendors.paddle.com/api/"
-          : "https://vendors.paddle.com/api/",
+      baseUrl: configFlag(config.sandbox)
+        ? "https://sandbox-vendors.paddle.com/api/"
+        : "https://vendors.paddle.com/api/",
       methods: ["POST"],
     },
   }),
