@@ -8,11 +8,7 @@ import {
   OAuthGrantSchema,
 } from "runline";
 import * as t from "typebox";
-import {
-  credentialOk,
-  jsonAnswer,
-  pathSegment,
-} from "../../_shared/credentials.js";
+import { credentialOk, pathSegment } from "../../_shared/credentials.js";
 
 const BASE = "https://platform.plaud.ai/developer/api";
 
@@ -80,6 +76,7 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+/** Every Plaud answer is one JSON object; anything else, empty included, is invalid_response. */
 export async function request(
   ctx: ActionContext,
   path: string,
@@ -90,7 +87,11 @@ export async function request(
     path,
     query,
   });
-  return object(await jsonAnswer(response));
+  try {
+    return object(JSON.parse(await response.text()));
+  } catch {
+    throw new AuthError("invalid_response");
+  }
 }
 
 export async function recording(ctx: ActionContext, id: string) {
