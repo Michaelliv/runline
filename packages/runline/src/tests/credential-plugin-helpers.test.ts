@@ -17,6 +17,7 @@ import {
   pathSegment,
   pathSegments,
   pathWithin,
+  slashEncodedSegment,
   staticCredential,
 } from "../../../runline-plugins/_shared/credentials.js";
 import { CredentialRegistry } from "../credentials/registry.js";
@@ -369,6 +370,21 @@ describe("pathSegment", () => {
   it("refuses a value that is not one segment: empty, dot segments, separators", () => {
     for (const value of ["", undefined, null, ".", "..", "a/b", "a\\b"])
       assert.throws(() => pathSegment(value), { code: "request_not_allowed" });
+  });
+});
+
+describe("slashEncodedSegment", () => {
+  it("encodes a slashed name, slashes included, as one segment", () => {
+    assert.equal(slashEncodedSegment("@scope/pkg"), "%40scope%2Fpkg");
+    assert.equal(slashEncodedSegment("group/sub/proj"), "group%2Fsub%2Fproj");
+    assert.equal(slashEncodedSegment("lodash"), "lodash");
+  });
+
+  it("refuses an empty or dot piece, or a backslash", () => {
+    for (const value of ["", "a//b", "a/", "/a", "a/../b", "./a", "a\\b", ".."])
+      assert.throws(() => slashEncodedSegment(value), {
+        code: "request_not_allowed",
+      });
   });
 });
 

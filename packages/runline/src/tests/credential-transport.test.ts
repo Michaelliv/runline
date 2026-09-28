@@ -533,6 +533,46 @@ describe("constrained credential transport", () => {
     );
   });
 
+  it("allows an encoded slash inside a segment only on a target that opts in, and never a dot or empty piece", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.slashed = {
+      baseUrl: "https://api.example/v4/",
+      methods: ["GET"],
+      encodedSlashes: true,
+    };
+    const seen: string[] = [];
+    const h = await harness(
+      mock((url) => {
+        seen.push(url);
+        return Response.json({});
+      }),
+      { key: { secret: "k" } },
+      def,
+    );
+    await h.transport.request(h.binding, {
+      target: "slashed",
+      path: "projects/group%2Fsub%2Fproj/issues",
+    });
+    assert.deepEqual(seen, [
+      "https://api.example/v4/projects/group%2Fsub%2Fproj/issues",
+    ]);
+    for (const input of [
+      { target: "api", path: "projects/group%2Fproj" },
+      { target: "slashed", path: "projects/a%2F..%2Fadmin" },
+      { target: "slashed", path: "projects/..%2Fadmin" },
+      { target: "slashed", path: "projects/a%2F%2Fb" },
+      { target: "slashed", path: "projects/a%2F" },
+      { target: "slashed", path: "projects/a%2F." },
+      { target: "slashed", path: "projects/a%252Fb" },
+      { target: "slashed", path: "projects/a%5Cb" },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(seen.length, 1);
+  });
+
   it("refuses an empty part in a header or query placement, before any IO", async () => {
     const def = definition("bearer");
     placed(
