@@ -49,7 +49,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "graphql",
     "generic client: arbitrary endpoint and caller-composed auth header",
   ],
-  ["odoo", "login: the password rides in every JSON-RPC argument list"],
   [
     "salesforce",
     "dynamic host: the API origin comes from the token response's instance_url",

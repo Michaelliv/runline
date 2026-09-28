@@ -1,80 +1,76 @@
-import type { RunlinePluginAPI } from "runline";
+import { type ActionContext, AuthError, type RunlinePluginAPI } from "runline";
+import { answerFailed, credentialJson } from "../../_shared/credentials.js";
+import { odooCredential } from "./credentials.js";
 
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    db: c.db as string | undefined,
-    username: c.username as string,
-    password: c.password as string,
-  };
-}
-
-function getDBName(db: string | undefined, url: string): string {
-  if (db) return db;
-  try {
-    return new URL(url).hostname.split(".")[0];
-  } catch {
-    return "";
-  }
-}
-
-async function jsonRpc(url: string, params: unknown): Promise<unknown> {
-  const body = {
-    jsonrpc: "2.0",
-    method: "call",
-    params,
-    id: Math.floor(Math.random() * 1000),
-  };
-  const res = await fetch(`${url}/jsonrpc`, {
+/**
+ * One JSON-RPC call. Every Odoo service takes the password as its third
+ * argument, so `args` carries null there for the transport to fill.
+ */
+async function rpc(
+  ctx: ActionContext,
+  service: string,
+  method: string,
+  args: unknown[],
+): Promise<unknown> {
+  const answer = await credentialJson<{
+    result?: unknown;
+    error?: {
+      code?: unknown;
+      message?: unknown;
+      data?: { name?: unknown; message?: unknown };
+    };
+  }>(ctx, odooCredential, "odoo", {
+    target: "rpc",
+    path: "jsonrpc",
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    json: {
+      jsonrpc: "2.0",
+      method: "call",
+      params: { service, method, args },
+      id: 1,
+    },
   });
-  if (!res.ok)
-    throw new Error(`Odoo HTTP error ${res.status}: ${await res.text()}`);
-  const json = (await res.json()) as Record<string, unknown>;
-  if (json.error) {
-    const err = json.error as Record<string, unknown>;
-    const data = (err.data ?? err) as Record<string, unknown>;
-    throw new Error(`Odoo RPC error: ${data.message ?? JSON.stringify(err)}`);
+  if (answer.error)
+    throw answerFailed("odoo", {
+      code: answer.error.data?.name ?? answer.error.code,
+      message: answer.error.data?.message ?? answer.error.message,
+    });
+  return answer.result;
+}
+
+/** The database the connection names, else the instance's first host label. */
+function database(config: Readonly<Record<string, unknown>>): string {
+  if (typeof config.db === "string" && config.db) return config.db;
+  try {
+    return new URL(String(config.url)).hostname.split(".")[0];
+  } catch {
+    throw new AuthError("invalid_credentials");
   }
-  return json.result;
 }
 
-async function login(
-  url: string,
-  db: string,
-  username: string,
-  password: string,
-): Promise<number> {
-  const uid = (await jsonRpc(url, {
-    service: "common",
-    method: "login",
-    args: [db, username, password],
-  })) as number;
-  if (!uid) throw new Error("Odoo login failed — check credentials");
-  return uid;
+/** The database and the logged-in user's ID, which every model call names. */
+async function session(
+  ctx: ActionContext,
+): Promise<{ db: string; uid: number }> {
+  const db = database(ctx.connection.config);
+  const uid = await rpc(ctx, "common", "login", [
+    db,
+    ctx.connection.config.username,
+    null,
+  ]);
+  if (typeof uid !== "number") throw new AuthError("invalid_credentials");
+  return { db, uid };
 }
 
-async function execute(
-  url: string,
-  db: string,
-  uid: number,
-  password: string,
+/** A method on a model, as the logged-in user. */
+async function call(
+  ctx: ActionContext,
   model: string,
   method: string,
   ...args: unknown[]
 ): Promise<unknown> {
-  return jsonRpc(url, {
-    service: "object",
-    method: "execute",
-    args: [db, uid, password, model, method, ...args],
-  });
+  const { db, uid } = await session(ctx);
+  return rpc(ctx, "object", "execute", [db, uid, null, model, method, ...args]);
 }
 
 const MODEL_MAP: Record<string, string> = {
@@ -90,6 +86,7 @@ function resolveModel(resource: string): string {
 export default function odoo(rl: RunlinePluginAPI) {
   rl.setName("odoo");
   rl.setVersion("0.1.0");
+  rl.setCredential(odooCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -118,14 +115,6 @@ export default function odoo(rl: RunlinePluginAPI) {
     },
   });
 
-  // Helper to get authenticated session
-  async function getSession(ctx: { connection: Conn }) {
-    const c = getConn(ctx);
-    const db = getDBName(c.db, c.url);
-    const uid = await login(c.url, db, c.username, c.password);
-    return { url: c.url, db, uid, password: c.password };
-  }
-
   rl.registerAction("record.create", {
     access: "write",
     description:
@@ -145,12 +134,8 @@ export default function odoo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { model, fields } = input as Record<string, unknown>;
-      const s = await getSession(ctx);
-      const id = await execute(
-        s.url,
-        s.db,
-        s.uid,
-        s.password,
+      const id = await call(
+        ctx,
         resolveModel(model as string),
         "create",
         fields,
@@ -177,13 +162,9 @@ export default function odoo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const s = await getSession(ctx);
       const fieldsToRead = (p.fields as string[]) ?? [];
-      return execute(
-        s.url,
-        s.db,
-        s.uid,
-        s.password,
+      return call(
+        ctx,
         resolveModel(p.model as string),
         "read",
         [p.id],
@@ -224,16 +205,12 @@ export default function odoo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const s = await getSession(ctx);
       const filters = (p.filters as unknown[]) ?? [];
       const fields = (p.fields as string[]) ?? [];
       const offset = (p.offset as number) ?? 0;
       const limit = (p.limit as number) ?? 0;
-      return execute(
-        s.url,
-        s.db,
-        s.uid,
-        s.password,
+      return call(
+        ctx,
         resolveModel(p.model as string),
         "search_read",
         filters,
@@ -262,12 +239,8 @@ export default function odoo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const s = await getSession(ctx);
-      await execute(
-        s.url,
-        s.db,
-        s.uid,
-        s.password,
+      await call(
+        ctx,
         resolveModel(p.model as string),
         "write",
         [p.id],
@@ -290,16 +263,7 @@ export default function odoo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const s = await getSession(ctx);
-      await execute(
-        s.url,
-        s.db,
-        s.uid,
-        s.password,
-        resolveModel(p.model as string),
-        "unlink",
-        [p.id],
-      );
+      await call(ctx, resolveModel(p.model as string), "unlink", [p.id]);
       return { success: true };
     },
   });
@@ -316,12 +280,8 @@ export default function odoo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { model } = input as Record<string, unknown>;
-      const s = await getSession(ctx);
-      return execute(
-        s.url,
-        s.db,
-        s.uid,
-        s.password,
+      return call(
+        ctx,
         resolveModel(model as string),
         "fields_get",
         [],
