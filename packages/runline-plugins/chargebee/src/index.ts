@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { chargebeeCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 /** Chargebee takes write parameters as query-string params, never a body. */
 function apiRequest(
@@ -79,11 +76,6 @@ export default function chargebee(rl: RunlinePluginAPI) {
         required: false,
         description: "Max results (default: 10, max: 100)",
       },
-      sortBy: {
-        type: "string",
-        required: false,
-        description: "Sort field (default: date desc)",
-      },
     },
     async execute(input, ctx) {
       const { limit = 10 } = (input ?? {}) as Record<string, unknown>;
@@ -111,7 +103,7 @@ export default function chargebee(rl: RunlinePluginAPI) {
       const data = (await apiRequest(
         ctx,
         "POST",
-        `invoices/${seg(invoiceId.trim())}/pdf`,
+        `invoices/${pathSegment(invoiceId.trim())}/pdf`,
       )) as Record<string, unknown>;
       const download = data.download as Record<string, unknown>;
       return { pdfUrl: download?.download_url };
@@ -146,7 +138,7 @@ export default function chargebee(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `subscriptions/${seg(subscriptionId.trim())}/cancel`,
+        `subscriptions/${pathSegment(subscriptionId.trim())}/cancel`,
         qs,
       );
     },
@@ -167,7 +159,7 @@ export default function chargebee(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `subscriptions/${seg(subscriptionId.trim())}/delete`,
+        `subscriptions/${pathSegment(subscriptionId.trim())}/delete`,
       );
     },
   });
