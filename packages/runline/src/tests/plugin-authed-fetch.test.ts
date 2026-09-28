@@ -92,7 +92,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "airtable/src/index.ts",
   "airtop/src/index.ts",
   "apiTemplateIo/src/index.ts",
-  "asana/src/index.ts",
   "autopilot/src/index.ts",
   "bambooHr/src/index.ts",
   "bannerbear/src/index.ts",
