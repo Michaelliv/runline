@@ -259,7 +259,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "uproc/src/index.ts",
   "uptimerobot/src/index.ts",
   "urlscanio/src/index.ts",
-  "vercel/src/shared.ts",
   "vero/src/index.ts",
   "vonage/src/index.ts",
   "wekan/src/index.ts",
