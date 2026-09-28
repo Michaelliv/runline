@@ -1,5 +1,5 @@
 import type { RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { pushcutCredential } from "./credentials.js";
 
 export default function pushcut(rl: RunlinePluginAPI) {
@@ -55,7 +55,7 @@ export default function pushcut(rl: RunlinePluginAPI) {
       if (p.devices) body.devices = p.devices;
       return credentialJson(ctx, pushcutCredential, "pushcut", {
         target: "api",
-        path: `notifications/${encodeURIComponent(p.notificationName as string)}`,
+        path: `notifications/${pathSegment(p.notificationName)}`,
         method: "POST",
         json: body,
       });
