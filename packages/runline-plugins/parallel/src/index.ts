@@ -18,6 +18,18 @@ import { DEFAULT_BASE, parallelCredential } from "./credentials.js";
 
 const NAME = "parallel";
 
+interface SearchResult {
+  url?: string;
+  title?: string;
+  excerpts?: string[];
+}
+
+interface SearchAnswer {
+  search_id?: string;
+  results?: SearchResult[];
+  warnings?: unknown;
+}
+
 export default function parallel(rl: RunlinePluginAPI): void {
   rl.setName(NAME);
   rl.setVersion("0.1.0");
@@ -97,15 +109,18 @@ export default function parallel(rl: RunlinePluginAPI): void {
         body.max_chars_per_result = Math.floor(Number(p.max_chars_per_result));
       }
 
-      const data = await credentialJson(ctx, parallelCredential, NAME, {
-        target: "api",
-        path: "search",
-        method: "POST",
-        json: body,
-      });
-      const results = (
-        (data.results ?? []) as Array<Record<string, unknown>>
-      ).map((r) => ({
+      const data = await credentialJson<SearchAnswer>(
+        ctx,
+        parallelCredential,
+        NAME,
+        {
+          target: "api",
+          path: "search",
+          method: "POST",
+          json: body,
+        },
+      );
+      const results = (data.results ?? []).map((r) => ({
         url: r.url,
         title: r.title,
         excerpts: r.excerpts ?? [],
