@@ -266,7 +266,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["trello", "two secrets per request: key and token query parameters"],
   ["twake", "phase 3: not yet migrated"],
   ["twilio", "phase 3: not yet migrated"],
-  ["twist", "phase 2: not yet migrated"],
   ["twitter", "phase 2: not yet migrated"],
   ["typesafe", "phase 3: not yet migrated"],
   ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],
