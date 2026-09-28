@@ -188,7 +188,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "telegram/src/index.ts",
   "thehive/src/index.ts",
   "thehiveProject/src/index.ts",
-  "together/src/index.ts",
   "travisci/src/index.ts",
   "trello/src/index.ts",
   "twake/src/index.ts",
