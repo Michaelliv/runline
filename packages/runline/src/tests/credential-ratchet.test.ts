@@ -100,7 +100,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "erpnext",
     "composite secret: Authorization: token {apiKey}:{apiSecret} joins two fields",
   ],
-  ["facebookGraph", "phase 2: not yet migrated"],
+  [
+    "facebookGraph",
+    "agent-selected host: hostUrl is a per-call action input, not config",
+  ],
   ["fal", "phase 3: not yet migrated"],
   ["freshdesk", "phase 2: not yet migrated"],
   ["freshservice", "phase 2: not yet migrated"],
