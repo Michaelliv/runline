@@ -1,9 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  pathSegment as seg,
+} from "../../_shared/credentials.js";
 import { circleciCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 async function apiRequest(
   ctx: ActionContext,
@@ -44,9 +44,9 @@ async function paginateAll(
   return results;
 }
 
-/** An org/repo slug as literal path segments, each part encoded. */
+/** An org/repo slug as literal path segments, each part one encoded, non-empty segment. */
 function encodeSlug(slug: string): string {
-  return slug.split("/").map(encodeURIComponent).join("/");
+  return slug.split("/").map(seg).join("/");
 }
 
 export default function circleci(rl: RunlinePluginAPI) {
