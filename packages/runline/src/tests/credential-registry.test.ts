@@ -171,6 +171,23 @@ describe("credential registry", () => {
       (d) => {
         d.methods.apiKey.authentication = { kind: "basic", field: "missing" };
       },
+      ...["", "api key", "key&x", "key=", 7].map(
+        (param) => (d: CredentialType) => {
+          d.methods.apiKey.authentication = {
+            kind: "queryKey",
+            field: "key",
+            param: param as string,
+          };
+        },
+      ),
+      (d) => {
+        d.methods.apiKey.authentication = {
+          kind: "queryKey",
+          field: "key",
+          param: "key",
+        };
+        if (d.methods.apiKey.probe) d.methods.apiKey.probe.path = "me?KEY=x";
+      },
       (d) => {
         d.methods.apiKey.authentication = { kind: "basic", field: "key" };
         d.methods.apiKey.targets.api.allowedHeaders = ["Authorization"];

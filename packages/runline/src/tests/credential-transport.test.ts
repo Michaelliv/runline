@@ -218,6 +218,65 @@ describe("constrained credential transport", () => {
     }
   });
 
+  it("adds a declared query key itself, beside the caller's own parameters, with no auth header", async () => {
+    const def = definition("bearer");
+    def.methods.selected.authentication = {
+      kind: "queryKey",
+      field: "key",
+      param: "api_key",
+    };
+    const seen: string[] = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push(url);
+        assert.equal(new Headers(init.headers).has("authorization"), false);
+        return Response.json({});
+      }),
+      { key: { secret: "pri vate&x=1" } },
+      def,
+    );
+    await h.transport.request(h.binding, { ...request, path: "items?q=a" });
+    await h.transport.probe(h.binding);
+    assert.deepEqual(
+      seen.map((url) => Object.fromEntries(new URL(url).searchParams)),
+      [{ q: "a", api_key: "pri vate&x=1" }, { api_key: "pri vate&x=1" }],
+    );
+  });
+
+  it("refuses a caller-supplied copy of the declared query key, in any case, before reading credentials", async () => {
+    const def = definition("bearer");
+    def.methods.selected.authentication = {
+      kind: "queryKey",
+      field: "key",
+      param: "hapikey",
+    };
+    let reads = 0;
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { secret: "private" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    for (const path of [
+      "items?hapikey=evil",
+      "items?HapiKey=evil",
+      "items?api_key=x",
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, { ...request, path }),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
   it("refuses a static secret stored flat instead of in its structured field", async () => {
     let calls = 0;
     const h = await harness(
