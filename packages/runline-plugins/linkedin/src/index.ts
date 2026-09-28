@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest } from "../../_shared/credentials.js";
+import { credentialOk } from "../../_shared/credentials.js";
 import { linkedinCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -8,7 +8,7 @@ async function apiRequest(
   path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await credentialRequest(ctx, linkedinCredential, {
+  const res = await credentialOk(ctx, linkedinCredential, "linkedin", {
     target: "api",
     path,
     method,
@@ -23,7 +23,6 @@ async function apiRequest(
   if (res.status === 201) {
     return { urn: res.headers.get("x-restli-id") };
   }
-  if (!res.ok) throw new Error(`linkedin: request failed (HTTP ${res.status})`);
   if (res.status === 204) return { success: true };
   return res.json();
 }
