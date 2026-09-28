@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import {
   credentialJson,
+  credentialOk,
   credentialRequest,
   hostLabel,
   httpsBase,
@@ -178,6 +179,24 @@ describe("credentialRequest and credentialJson", () => {
       query: { per: 10 },
     });
     assert.equal(requests[0].path, "items?page=2&per=10");
+  });
+
+  it("credentialOk hands back a successful Response, headers and body intact", async () => {
+    const { ctx } = brokered("plain text", 201);
+    const response = await credentialOk(ctx, example, "example", {
+      target: "api",
+      path: "x",
+    });
+    assert.equal(response.status, 201);
+    assert.equal(await response.text(), "plain text");
+    const failed = brokered("private-provider-detail", 404);
+    await assert.rejects(
+      credentialOk(failed.ctx, example, "example", {
+        target: "api",
+        path: "x",
+      }),
+      { message: "example: request failed (HTTP 404)" },
+    );
   });
 
   it("reports a failure by status alone, never with provider text", async () => {
