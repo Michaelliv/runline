@@ -145,6 +145,62 @@ describe("the local signer signs static keys from flat config", () => {
     }
   });
 
+  it("joins fields and fixed values into one part, as in {email}/token", async () => {
+    const cases: Array<
+      [CredentialDeclaration, Record<string, unknown>, string | null]
+    > = [
+      [
+        declaration(
+          { kind: "basic", field: "secret" },
+          {
+            username: { concat: [{ field: "email" }, { value: "/token" }] },
+            password: { field: "apiToken" },
+          },
+        ),
+        { email: "dana@example.com", apiToken: "t" },
+        `Basic ${Buffer.from("dana@example.com/token:t").toString("base64")}`,
+      ],
+      [
+        declaration(
+          {
+            kind: "apiKey",
+            field: "secret",
+            header: "Authorization",
+            prefix: "token ",
+          },
+          {
+            secret: {
+              concat: [
+                { field: "apiKey" },
+                { value: ":" },
+                { field: "apiSecret" },
+              ],
+            },
+          },
+        ),
+        { apiKey: "k", apiSecret: "s" },
+        "token k:s",
+      ],
+    ];
+    for (const [declare, config, authorization] of cases) {
+      const seen = capture();
+      await credentialBroker(context(config), declare).request({
+        target: "api",
+        path: "items",
+      });
+      assert.equal(seen[0].authorization, authorization);
+    }
+    const seen = capture();
+    await assert.rejects(
+      credentialBroker(context({ apiKey: "k" }), cases[1][0]).request({
+        target: "api",
+        path: "items",
+      }),
+      { code: "invalid_credentials" },
+    );
+    assert.deepEqual(seen, []);
+  });
+
   it("a missing or non-string flat field is invalid_credentials before any IO", async () => {
     const declare = declaration(
       { kind: "basic", field: "secret" },
