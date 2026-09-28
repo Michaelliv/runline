@@ -284,7 +284,10 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["xero", "phase 2: not yet migrated"],
   ["yourls", "phase 3: not yet migrated"],
   ["zammad", "phase 3: not yet migrated"],
-  ["zendesk", "phase 2: not yet migrated"],
+  [
+    "zendesk",
+    "composite secret: the Basic username joins the email config field with a fixed /token suffix",
+  ],
   ["zoho", "phase 2: not yet migrated"],
   ["zoom", "phase 2: not yet migrated"],
   ["zulip", "phase 3: not yet migrated"],
