@@ -55,10 +55,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["gett", "login: phone OTP login and a rotating, device-bound refresh grant"],
   ["ghost", "signature: a JWT is minted per request from the admin key"],
   [
-    "gitlab",
-    "encoded path segment: project and file paths travel %2F-encoded, which the path policy refuses",
-  ],
-  [
     "gotify",
     "two credentials in one connection: app and client tokens, used by different actions",
   ],

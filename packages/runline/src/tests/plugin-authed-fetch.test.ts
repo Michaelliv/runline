@@ -63,7 +63,6 @@ const UNBROKERED_FETCH = new Set([
   "elasticsearch/src/index.ts",
   "facebookGraph/src/index.ts",
   "ghost/src/index.ts",
-  "gitlab/src/index.ts",
   "gotify/src/index.ts",
   "graphql/src/index.ts",
   "mailjet/src/index.ts",
