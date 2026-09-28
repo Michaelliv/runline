@@ -1,5 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialOk, pathSegment } from "../../_shared/credentials.js";
+import {
+  credentialOk,
+  jsonAnswer,
+  pathSegment,
+} from "../../_shared/credentials.js";
 import { bambooHrCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -21,11 +25,11 @@ async function apiRequest(
       ? { json: body }
       : {}),
   });
-  if (res.status === 204 || res.headers.get("content-length") === "0")
-    return { success: true };
+  // Some endpoints acknowledge with an empty or non-JSON body.
   const contentType = res.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) return res.json();
-  return { success: true };
+  return contentType.includes("application/json")
+    ? jsonAnswer(res)
+    : { success: true };
 }
 
 export default function bambooHr(rl: RunlinePluginAPI) {

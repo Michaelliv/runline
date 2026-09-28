@@ -2,6 +2,7 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
   credentialOk,
+  jsonAnswer,
   pathSegment,
   pathWithin,
 } from "../../_shared/credentials.js";
@@ -37,7 +38,7 @@ async function paginate(
       path: nextPath ?? path,
       ...(nextPath === undefined ? { query: qs } : {}),
     });
-    const data = (await res.json()) as Record<string, unknown>;
+    const data = (await jsonAnswer(res)) as Record<string, unknown>;
     all.push(...((data[propertyName] ?? []) as unknown[]));
     nextPath = undefined;
     const link = res.headers.get("link") ?? "";

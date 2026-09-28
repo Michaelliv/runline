@@ -2,6 +2,7 @@ import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
   credentialOk,
+  jsonAnswer,
   pathSegment,
 } from "../../_shared/credentials.js";
 import { netlifyCredential } from "./credentials.js";
@@ -37,7 +38,7 @@ async function paginate(
       path,
       query: { page, per_page: perPage, ...query },
     });
-    const items = (await response.json()) as unknown[];
+    const items = (await jsonAnswer(response)) as unknown[];
     all.push(...items);
     const link = response.headers.get("link") ?? "";
     if (!link.includes("next")) break;

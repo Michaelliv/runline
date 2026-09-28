@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialOk } from "../../_shared/credentials.js";
+import { credentialOk, jsonAnswer } from "../../_shared/credentials.js";
 import { jenkinsCredential } from "./credentials.js";
 
 async function jk(
@@ -23,7 +23,7 @@ async function jk(
       : {}),
   });
   const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("json")) return res.json();
+  if (ct.includes("json")) return jsonAnswer(res);
   return { success: true };
 }
 

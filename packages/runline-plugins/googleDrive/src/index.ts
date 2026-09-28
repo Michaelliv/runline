@@ -57,6 +57,7 @@
 import { createReadStream, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { jsonAnswer } from "../../_shared/credentials.js";
 import {
   googleCredential,
   googleJsonRequest,
@@ -1978,7 +1979,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
           `googleDrive: revision restore upload failed (HTTP ${res.status})`,
         );
       }
-      const head = (await res.json()) as Record<string, unknown>;
+      const head = (await jsonAnswer(res)) as Record<string, unknown>;
       return { fileId, restoredFromRevisionId: revisionId, head };
     },
   });

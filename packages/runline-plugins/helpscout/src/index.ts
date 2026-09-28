@@ -1,5 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialOk, pathSegment } from "../../_shared/credentials.js";
+import {
+  credentialOk,
+  jsonAnswer,
+  pathSegment,
+} from "../../_shared/credentials.js";
 import { helpscoutCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -20,7 +24,7 @@ async function apiRequest(
   });
   if (res.status === 201 || res.status === 204)
     return { success: true, location: res.headers.get("Location") };
-  return res.json();
+  return jsonAnswer(res);
 }
 
 function unwrapEmbedded(data: unknown, key: string): unknown {

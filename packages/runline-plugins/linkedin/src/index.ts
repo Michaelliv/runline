@@ -1,5 +1,5 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialOk } from "../../_shared/credentials.js";
+import { credentialOk, jsonAnswer } from "../../_shared/credentials.js";
 import { linkedinCredential } from "./credentials.js";
 
 async function apiRequest(
@@ -24,7 +24,7 @@ async function apiRequest(
     return { urn: res.headers.get("x-restli-id") };
   }
   if (res.status === 204) return { success: true };
-  return res.json();
+  return jsonAnswer(res);
 }
 
 // LinkedIn "little text" format escaping
