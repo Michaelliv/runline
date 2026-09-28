@@ -76,7 +76,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["egoi", "phase 3: not yet migrated"],
   ["elasticsearch", "phase 3: not yet migrated"],
   ["elevenlabs", "phase 3: not yet migrated"],
-  ["emelia", "phase 3: not yet migrated"],
   [
     "erpnext",
     "composite secret: Authorization: token {apiKey}:{apiSecret} joins two fields",

@@ -110,7 +110,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "discourse/src/index.ts",
   "egoi/src/index.ts",
   "elasticsearch/src/index.ts",
-  "emelia/src/index.ts",
   "erpnext/src/index.ts",
   "facebookGraph/src/index.ts",
   "getresponse/src/index.ts",
