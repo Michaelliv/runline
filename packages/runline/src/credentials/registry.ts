@@ -38,9 +38,10 @@ export const OAuthTokensSchema = t.Object(
 );
 
 /**
- * Stored shape of a static secret: exactly its named parts, each a string.
- * A Basic part may be empty (a key as the username with no password, or
- * the reverse); the transport refuses an empty part anywhere else.
+ * Stored shape of a static secret: exactly its named parts, each a string,
+ * the `optional` ones allowed to be absent. A Basic part may be empty (a
+ * key as the username with no password, or the reverse); the transport
+ * refuses an empty part anywhere else.
  */
 export function staticSecretSchema(
   parts: readonly string[],
@@ -83,8 +84,9 @@ function identifier(value: string): void {
  * stored shape and with the method's targets: the stored field holds
  * exactly the declared parts, each a string, required unless optional;
  * every placement names a declared part and only declared targets; every
- * part is placed; and on each target no header or query parameter is
- * claimed twice and at most one part takes the one path position.
+ * part is placed; and on each target at least one placement signs, no
+ * header or query parameter is claimed twice, and at most one part takes
+ * the one path position.
  */
 function validateStatic(
   auth: Extract<CredentialAuthentication, { kind: "static" }>,
@@ -163,15 +165,16 @@ function validateStatic(
   }
   if (used.size !== parts.length) throw new AuthError("invalid_definition");
   for (const target of targets) {
+    const placed = placementsFor(auth, target);
     const headers = injectedHeaders(auth, target);
     const params = injectedParams(auth, target).map((name) =>
       name.toLowerCase(),
     );
     if (
+      !placed.length ||
       new Set(headers).size !== headers.length ||
       new Set(params).size !== params.length ||
-      placementsFor(auth, target).filter((placement) => placement.in === "path")
-        .length > 1
+      placed.filter((placement) => placement.in === "path").length > 1
     )
       throw new AuthError("invalid_definition");
   }
