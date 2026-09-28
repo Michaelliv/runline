@@ -76,7 +76,6 @@ const UNBROKERED_FETCH = new Set([
   "plivo/src/index.ts",
   "reddit/src/index.ts",
   "salesforce/src/shared.ts",
-  "sendy/src/index.ts",
   "signl4/src/index.ts",
   "steel/src/shared.ts",
   "storyblok/src/index.ts",

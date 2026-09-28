@@ -100,7 +100,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "salesforce",
     "dynamic host: the API origin comes from the token response's instance_url",
   ],
-  ["sendy", "body key: api_key travels in the form body"],
   ["signl4", "path token: the team secret is the URL path"],
   [
     "steel",

@@ -1,38 +1,26 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialOk } from "../../_shared/credentials.js";
+import { sendyCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    apiKey: c.apiKey as string,
-  };
-}
-
+/** A Sendy form call; Sendy answers in plain text, `boolean` asking for 1 on success. */
 async function apiRequest(
-  conn: { url: string; apiKey: string },
+  ctx: ActionContext,
   endpoint: string,
   body: Record<string, unknown>,
 ): Promise<string> {
-  body.api_key = conn.apiKey;
-  body.boolean = true;
-  const formBody = Object.entries(body)
-    .map(
-      ([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-    )
-    .join("&");
-  const res = await fetch(`${conn.url}${endpoint}`, {
+  const res = await credentialOk(ctx, sendyCredential, "sendy", {
+    target: "api",
+    path: endpoint,
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: formBody,
+    form: { ...body, boolean: true },
   });
-  if (!res.ok)
-    throw new Error(`Sendy error ${res.status}: ${await res.text()}`);
   return res.text();
 }
 
 export default function sendy(rl: RunlinePluginAPI) {
   rl.setName("sendy");
   rl.setVersion("0.1.0");
+  rl.setCredential(sendyCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -99,11 +87,7 @@ export default function sendy(rl: RunlinePluginAPI) {
       if (p.trackOpens !== undefined) body.track_opens = p.trackOpens ? 1 : 0;
       if (p.trackClicks !== undefined)
         body.track_clicks = p.trackClicks ? 1 : 0;
-      const resp = await apiRequest(
-        getConn(ctx),
-        "/api/campaigns/create.php",
-        body,
-      );
+      const resp = await apiRequest(ctx, "api/campaigns/create.php", body);
       if (resp.includes("Campaign created")) return { message: resp };
       throw new Error(`Sendy campaign error: ${resp}`);
     },
@@ -121,7 +105,7 @@ export default function sendy(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { email: p.email, list: p.listId };
       if (p.name) body.name = p.name;
-      const resp = await apiRequest(getConn(ctx), "/subscribe", body);
+      const resp = await apiRequest(ctx, "subscribe", body);
       if (resp === "1") return { success: true };
       throw new Error(`Sendy subscribe error: ${resp}`);
     },
@@ -134,8 +118,8 @@ export default function sendy(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { listId } = input as Record<string, unknown>;
       const resp = await apiRequest(
-        getConn(ctx),
-        "/api/subscribers/active-subscriber-count.php",
+        ctx,
+        "api/subscribers/active-subscriber-count.php",
         { list_id: listId },
       );
       if (/^\d+$/.test(resp)) return { count: parseInt(resp, 10) };
@@ -152,11 +136,10 @@ export default function sendy(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { email, listId } = input as Record<string, unknown>;
-      const resp = await apiRequest(
-        getConn(ctx),
-        "/api/subscribers/delete.php",
-        { email, list_id: listId },
-      );
+      const resp = await apiRequest(ctx, "api/subscribers/delete.php", {
+        email,
+        list_id: listId,
+      });
       if (resp === "1") return { success: true };
       throw new Error(`Sendy delete error: ${resp}`);
     },
@@ -171,7 +154,7 @@ export default function sendy(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { email, listId } = input as Record<string, unknown>;
-      const resp = await apiRequest(getConn(ctx), "/unsubscribe", {
+      const resp = await apiRequest(ctx, "unsubscribe", {
         email,
         list: listId,
       });
@@ -190,8 +173,8 @@ export default function sendy(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { email, listId } = input as Record<string, unknown>;
       const resp = await apiRequest(
-        getConn(ctx),
-        "/api/subscribers/subscription-status.php",
+        ctx,
+        "api/subscribers/subscription-status.php",
         { email, list_id: listId },
       );
       const valid = [
