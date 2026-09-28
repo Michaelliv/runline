@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { urlscanioCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -70,7 +67,7 @@ export default function urlscanio(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `result/${seg((input as Record<string, unknown>).scanId)}`,
+        `result/${pathSegment((input as Record<string, unknown>).scanId)}`,
       );
     },
   });
