@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { zohoCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -62,7 +59,7 @@ function registerCrmResource(rl: RunlinePluginAPI, resource: string) {
       const data = (await api(
         ctx,
         "GET",
-        `${mod}/${seg((input as Record<string, unknown>).id)}`,
+        `${mod}/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.data;
     },

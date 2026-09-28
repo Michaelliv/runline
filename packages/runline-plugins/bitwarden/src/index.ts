@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { bitwardenCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function authedRequest(
   ctx: ActionContext,
@@ -73,7 +70,11 @@ export default function bitwarden(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { collectionId } = input as { collectionId: string };
-      return authedRequest(ctx, "GET", `collections/${seg(collectionId)}`);
+      return authedRequest(
+        ctx,
+        "GET",
+        `collections/${pathSegment(collectionId)}`,
+      );
     },
   });
 
@@ -129,7 +130,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
       return authedRequest(
         ctx,
         "PUT",
-        `collections/${seg(collectionId)}`,
+        `collections/${pathSegment(collectionId)}`,
         body,
       );
     },
@@ -147,7 +148,11 @@ export default function bitwarden(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { collectionId } = input as { collectionId: string };
-      await authedRequest(ctx, "DELETE", `collections/${seg(collectionId)}`);
+      await authedRequest(
+        ctx,
+        "DELETE",
+        `collections/${pathSegment(collectionId)}`,
+      );
       return { success: true };
     },
   });
@@ -244,7 +249,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { groupId } = input as { groupId: string };
-      return authedRequest(ctx, "GET", `groups/${seg(groupId)}`);
+      return authedRequest(ctx, "GET", `groups/${pathSegment(groupId)}`);
     },
   });
 
@@ -275,7 +280,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
       const memberIds = (await authedRequest(
         ctx,
         "GET",
-        `groups/${seg(groupId)}/member-ids`,
+        `groups/${pathSegment(groupId)}/member-ids`,
       )) as string[];
       return memberIds.map((memberId) => ({ memberId }));
     },
@@ -315,7 +320,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
         const current = (await authedRequest(
           ctx,
           "GET",
-          `groups/${seg(groupId)}`,
+          `groups/${pathSegment(groupId)}`,
         )) as { name: string };
         body.name = current.name;
       }
@@ -328,7 +333,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
         }));
       }
       if (externalId) body.externalId = externalId;
-      return authedRequest(ctx, "PUT", `groups/${seg(groupId)}`, body);
+      return authedRequest(ctx, "PUT", `groups/${pathSegment(groupId)}`, body);
     },
   });
 
@@ -348,9 +353,14 @@ export default function bitwarden(rl: RunlinePluginAPI) {
         groupId: string;
         memberIds: string[];
       };
-      await authedRequest(ctx, "PUT", `groups/${seg(groupId)}/member-ids`, {
-        memberIds,
-      });
+      await authedRequest(
+        ctx,
+        "PUT",
+        `groups/${pathSegment(groupId)}/member-ids`,
+        {
+          memberIds,
+        },
+      );
       return { success: true };
     },
   });
@@ -363,7 +373,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { groupId } = input as { groupId: string };
-      await authedRequest(ctx, "DELETE", `groups/${seg(groupId)}`);
+      await authedRequest(ctx, "DELETE", `groups/${pathSegment(groupId)}`);
       return { success: true };
     },
   });
@@ -423,7 +433,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { memberId } = input as { memberId: string };
-      return authedRequest(ctx, "GET", `members/${seg(memberId)}`);
+      return authedRequest(ctx, "GET", `members/${pathSegment(memberId)}`);
     },
   });
 
@@ -454,7 +464,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
       const groupIds = (await authedRequest(
         ctx,
         "GET",
-        `members/${seg(memberId)}/group-ids`,
+        `members/${pathSegment(memberId)}/group-ids`,
       )) as string[];
       return groupIds.map((groupId) => ({ groupId }));
     },
@@ -499,7 +509,12 @@ export default function bitwarden(rl: RunlinePluginAPI) {
         }));
       }
       if (externalId) body.externalId = externalId;
-      return authedRequest(ctx, "PUT", `members/${seg(memberId)}`, body);
+      return authedRequest(
+        ctx,
+        "PUT",
+        `members/${pathSegment(memberId)}`,
+        body,
+      );
     },
   });
 
@@ -519,9 +534,14 @@ export default function bitwarden(rl: RunlinePluginAPI) {
         memberId: string;
         groupIds: string[];
       };
-      await authedRequest(ctx, "PUT", `members/${seg(memberId)}/group-ids`, {
-        groupIds,
-      });
+      await authedRequest(
+        ctx,
+        "PUT",
+        `members/${pathSegment(memberId)}/group-ids`,
+        {
+          groupIds,
+        },
+      );
       return { success: true };
     },
   });
@@ -534,7 +554,7 @@ export default function bitwarden(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { memberId } = input as { memberId: string };
-      await authedRequest(ctx, "DELETE", `members/${seg(memberId)}`);
+      await authedRequest(ctx, "DELETE", `members/${pathSegment(memberId)}`);
       return { success: true };
     },
   });

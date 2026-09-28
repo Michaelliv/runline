@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { currentsCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -162,7 +159,7 @@ export default function currents(rl: RunlinePluginAPI) {
         await api(
           ctx,
           "GET",
-          `actions/${seg((input as { actionId: string }).actionId)}`,
+          `actions/${pathSegment((input as { actionId: string }).actionId)}`,
         ),
       );
     },
@@ -215,7 +212,7 @@ export default function currents(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { actionId, ...body } = input as Record<string, unknown>;
-      return api(ctx, "PUT", `actions/${seg(actionId)}`, body);
+      return api(ctx, "PUT", `actions/${pathSegment(actionId)}`, body);
     },
   });
 
@@ -229,7 +226,7 @@ export default function currents(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PUT",
-        `actions/${seg((input as { actionId: string }).actionId)}/enable`,
+        `actions/${pathSegment((input as { actionId: string }).actionId)}/enable`,
       );
     },
   });
@@ -244,7 +241,7 @@ export default function currents(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PUT",
-        `actions/${seg((input as { actionId: string }).actionId)}/disable`,
+        `actions/${pathSegment((input as { actionId: string }).actionId)}/disable`,
       );
     },
   });
@@ -259,7 +256,7 @@ export default function currents(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `actions/${seg((input as { actionId: string }).actionId)}`,
+        `actions/${pathSegment((input as { actionId: string }).actionId)}`,
       );
       return { success: true };
     },
@@ -282,7 +279,7 @@ export default function currents(rl: RunlinePluginAPI) {
         await api(
           ctx,
           "GET",
-          `instances/${seg((input as { instanceId: string }).instanceId)}`,
+          `instances/${pathSegment((input as { instanceId: string }).instanceId)}`,
         ),
       );
     },
@@ -300,7 +297,7 @@ export default function currents(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `projects/${seg((input as { projectId: string }).projectId)}`,
+        `projects/${pathSegment((input as { projectId: string }).projectId)}`,
       );
     },
   });
@@ -373,7 +370,7 @@ export default function currents(rl: RunlinePluginAPI) {
         await api(
           ctx,
           "GET",
-          `projects/${seg(projectId)}/insights`,
+          `projects/${pathSegment(projectId)}/insights`,
           undefined,
           qs,
         ),
@@ -394,7 +391,7 @@ export default function currents(rl: RunlinePluginAPI) {
         await api(
           ctx,
           "GET",
-          `runs/${seg((input as { runId: string }).runId)}`,
+          `runs/${pathSegment((input as { runId: string }).runId)}`,
         ),
       );
     },
@@ -463,7 +460,13 @@ export default function currents(rl: RunlinePluginAPI) {
       if (dateStart) qs.date_start = dateStart;
       if (dateEnd) qs.date_end = dateEnd;
       return unwrapData(
-        await api(ctx, "GET", `projects/${seg(projectId)}/runs`, undefined, qs),
+        await api(
+          ctx,
+          "GET",
+          `projects/${pathSegment(projectId)}/runs`,
+          undefined,
+          qs,
+        ),
       );
     },
   });
@@ -508,7 +511,7 @@ export default function currents(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PUT",
-        `runs/${seg((input as { runId: string }).runId)}/cancel`,
+        `runs/${pathSegment((input as { runId: string }).runId)}/cancel`,
       );
     },
   });
@@ -567,7 +570,7 @@ export default function currents(rl: RunlinePluginAPI) {
       >;
       const body: Record<string, unknown> = { machineId: machineIds };
       if (isBatchedOr8n) body.isBatchedOr8n = true;
-      return api(ctx, "PUT", `runs/${seg(runId)}/reset`, body);
+      return api(ctx, "PUT", `runs/${pathSegment(runId)}/reset`, body);
     },
   });
 
@@ -581,7 +584,7 @@ export default function currents(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `runs/${seg((input as { runId: string }).runId)}`,
+        `runs/${pathSegment((input as { runId: string }).runId)}`,
       );
       return { success: true };
     },
@@ -657,7 +660,13 @@ export default function currents(rl: RunlinePluginAPI) {
       if (order) qs.order = order;
       if (dir) qs.dir = dir;
       return unwrapData(
-        await api(ctx, "GET", `spec-files/${seg(projectId)}`, undefined, qs),
+        await api(
+          ctx,
+          "GET",
+          `spec-files/${pathSegment(projectId)}`,
+          undefined,
+          qs,
+        ),
       );
     },
   });
@@ -714,7 +723,7 @@ export default function currents(rl: RunlinePluginAPI) {
       if (title) qs.title = title;
       if (spec) qs.spec = spec;
       return unwrapData(
-        await api(ctx, "GET", `tests/${seg(projectId)}`, undefined, qs),
+        await api(ctx, "GET", `tests/${pathSegment(projectId)}`, undefined, qs),
       );
     },
   });
@@ -767,7 +776,13 @@ export default function currents(rl: RunlinePluginAPI) {
       if (status) qs.status = status;
       if (branches) qs.branches = branches;
       return unwrapData(
-        await api(ctx, "GET", `test-results/${seg(signature)}`, undefined, qs),
+        await api(
+          ctx,
+          "GET",
+          `test-results/${pathSegment(signature)}`,
+          undefined,
+          qs,
+        ),
       );
     },
   });

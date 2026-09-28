@@ -1,20 +1,22 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialRequest, pathWithin } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  credentialRequest,
+  pathSegment,
+  pathWithin,
+} from "../../_shared/credentials.js";
 import { ciscoWebexCredential } from "./credentials.js";
 
 const BASE_URL = "https://webexapis.com/v1/";
 
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
-
-async function apiRequest(
+function apiRequest(
   ctx: ActionContext,
   method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await credentialRequest(ctx, ciscoWebexCredential, {
+  return credentialJson(ctx, ciscoWebexCredential, "ciscoWebex", {
     target: "api",
     path,
     method,
@@ -26,12 +28,6 @@ async function apiRequest(
       ? { json: body }
       : {}),
   });
-  if (!res.ok)
-    throw new Error(`ciscoWebex: request failed (HTTP ${res.status})`);
-  if (res.status === 204) return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
 }
 
 async function paginateAll(
@@ -131,7 +127,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { messageId } = input as { messageId: string };
-      return apiRequest(ctx, "GET", `messages/${seg(messageId)}`);
+      return apiRequest(ctx, "GET", `messages/${pathSegment(messageId)}`);
     },
   });
 
@@ -202,12 +198,12 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
       const original = (await apiRequest(
         ctx,
         "GET",
-        `messages/${seg(messageId)}`,
+        `messages/${pathSegment(messageId)}`,
       )) as Record<string, unknown>;
       const body: Record<string, unknown> = { roomId: original.roomId };
       if (markdown) body.markdown = markdown;
       else if (text) body.text = text;
-      return apiRequest(ctx, "PUT", `messages/${seg(messageId)}`, body);
+      return apiRequest(ctx, "PUT", `messages/${pathSegment(messageId)}`, body);
     },
   });
 
@@ -219,7 +215,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { messageId } = input as { messageId: string };
-      await apiRequest(ctx, "DELETE", `messages/${seg(messageId)}`);
+      await apiRequest(ctx, "DELETE", `messages/${pathSegment(messageId)}`);
       return { success: true };
     },
   });
@@ -281,7 +277,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { meetingId } = input as { meetingId: string };
-      return apiRequest(ctx, "GET", `meetings/${seg(meetingId)}`);
+      return apiRequest(ctx, "GET", `meetings/${pathSegment(meetingId)}`);
     },
   });
 
@@ -370,7 +366,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
       const current = (await apiRequest(
         ctx,
         "GET",
-        `meetings/${seg(meetingId)}`,
+        `meetings/${pathSegment(meetingId)}`,
       )) as Record<string, unknown>;
       const body: Record<string, unknown> = {
         title: fields.title ?? current.title,
@@ -380,7 +376,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
         ...fields,
       };
       delete body.meetingId;
-      return apiRequest(ctx, "PUT", `meetings/${seg(meetingId)}`, body);
+      return apiRequest(ctx, "PUT", `meetings/${pathSegment(meetingId)}`, body);
     },
   });
 
@@ -392,7 +388,7 @@ export default function ciscoWebex(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { meetingId } = input as { meetingId: string };
-      await apiRequest(ctx, "DELETE", `meetings/${seg(meetingId)}`);
+      await apiRequest(ctx, "DELETE", `meetings/${pathSegment(meetingId)}`);
       return { success: true };
     },
   });

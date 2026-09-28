@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { HIGHLEVEL_VERSION, highlevelCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function locationOf(ctx: ActionContext): string {
   return ctx.connection.config.locationId as string;
@@ -15,7 +12,7 @@ function api(
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
-): Promise<any> {
+): Promise<unknown> {
   return credentialJson(ctx, highlevelCredential, "highlevel", {
     target: "api",
     path,
@@ -98,7 +95,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       const res = (await api(
         ctx,
         "GET",
-        `contacts/${seg((input as Record<string, unknown>).id)}/`,
+        `contacts/${pathSegment((input as Record<string, unknown>).id)}/`,
       )) as Record<string, unknown>;
       return res.contact ?? res;
     },
@@ -165,7 +162,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       const res = (await api(
         ctx,
         "PUT",
-        `contacts/${seg(id)}/`,
+        `contacts/${pathSegment(id)}/`,
         body,
       )) as Record<string, unknown>;
       return res.contact ?? res;
@@ -180,7 +177,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `contacts/${seg((input as Record<string, unknown>).id)}/`,
+        `contacts/${pathSegment((input as Record<string, unknown>).id)}/`,
       );
       return { success: true };
     },
@@ -233,7 +230,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `opportunities/${seg((input as Record<string, unknown>).id)}`,
+        `opportunities/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -292,7 +289,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
         body.pipelineStageId = body.stageId;
         delete body.stageId;
       }
-      return api(ctx, "PUT", `opportunities/${seg(id)}`, body);
+      return api(ctx, "PUT", `opportunities/${pathSegment(id)}`, body);
     },
   });
 
@@ -304,7 +301,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `opportunities/${seg((input as Record<string, unknown>).id)}`,
+        `opportunities/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -325,7 +322,12 @@ export default function highlevel(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId, ...body } = input as Record<string, unknown>;
-      return api(ctx, "POST", `contacts/${seg(contactId)}/tasks/`, body);
+      return api(
+        ctx,
+        "POST",
+        `contacts/${pathSegment(contactId)}/tasks/`,
+        body,
+      );
     },
   });
 
@@ -341,7 +343,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `contacts/${seg(p.contactId)}/tasks/${seg(p.taskId)}/`,
+        `contacts/${pathSegment(p.contactId)}/tasks/${pathSegment(p.taskId)}/`,
       );
     },
   });
@@ -354,7 +356,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       const res = (await api(
         ctx,
         "GET",
-        `contacts/${seg((input as Record<string, unknown>).contactId)}/tasks/`,
+        `contacts/${pathSegment((input as Record<string, unknown>).contactId)}/tasks/`,
       )) as Record<string, unknown>;
       return res.tasks ?? res;
     },
@@ -377,7 +379,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "PUT",
-        `contacts/${seg(contactId)}/tasks/${seg(taskId)}/`,
+        `contacts/${pathSegment(contactId)}/tasks/${pathSegment(taskId)}/`,
         body,
       );
     },
@@ -395,7 +397,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `contacts/${seg(p.contactId)}/tasks/${seg(p.taskId)}/`,
+        `contacts/${pathSegment(p.contactId)}/tasks/${pathSegment(p.taskId)}/`,
       );
       return { success: true };
     },
@@ -465,7 +467,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       return api(
         ctx,
         "GET",
-        `calendars/${seg(p.calendarId)}/free-slots`,
+        `calendars/${pathSegment(p.calendarId)}/free-slots`,
         undefined,
         qs,
       );

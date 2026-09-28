@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { xeroCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function api(
   ctx: ActionContext,
@@ -96,7 +93,7 @@ export default function xero(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `Invoices/${seg((input as Record<string, unknown>).invoiceId)}`,
+        `Invoices/${pathSegment((input as Record<string, unknown>).invoiceId)}`,
       )) as Record<string, unknown>;
       return data.Invoices;
     },
@@ -144,7 +141,7 @@ export default function xero(rl: RunlinePluginAPI) {
       const result = (await api(
         ctx,
         "POST",
-        `Invoices/${seg(p.invoiceId)}`,
+        `Invoices/${pathSegment(p.invoiceId)}`,
         p.data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return result.Invoices;
@@ -181,7 +178,7 @@ export default function xero(rl: RunlinePluginAPI) {
       const data = (await api(
         ctx,
         "GET",
-        `Contacts/${seg((input as Record<string, unknown>).contactId)}`,
+        `Contacts/${pathSegment((input as Record<string, unknown>).contactId)}`,
       )) as Record<string, unknown>;
       return data.Contacts;
     },
@@ -226,7 +223,7 @@ export default function xero(rl: RunlinePluginAPI) {
       const result = (await api(
         ctx,
         "POST",
-        `Contacts/${seg(p.contactId)}`,
+        `Contacts/${pathSegment(p.contactId)}`,
         body,
       )) as Record<string, unknown>;
       return result.Contacts;
