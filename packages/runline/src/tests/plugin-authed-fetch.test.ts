@@ -201,7 +201,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "vonage/src/index.ts",
   "woocommerce/src/index.ts",
   "xai/src/index.ts",
-  "yourls/src/index.ts",
   "zammad/src/index.ts",
   "zendesk/src/index.ts",
   "zulip/src/index.ts",
