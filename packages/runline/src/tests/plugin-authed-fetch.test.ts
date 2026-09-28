@@ -65,7 +65,6 @@ const UNBROKERED_FETCH = new Set([
   "salesforce/src/shared.ts",
   "steel/src/shared.ts",
   "strapi/src/index.ts",
-  "unleashedSoftware/src/index.ts",
 ]);
 
 function pluginSources(): string[] {

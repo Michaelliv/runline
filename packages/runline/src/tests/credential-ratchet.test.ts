@@ -62,7 +62,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "strapi",
     "login: password mode mints a JWT; one plugin cannot sign two ways",
   ],
-  ["unleashedSoftware", "signature: HMAC-SHA256 of each query string"],
   ["wolt", "login: hCaptcha login and a rotating, device-bound refresh grant"],
 ]);
 
