@@ -94,7 +94,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "gitlab",
     "path encoding: %2F-encoded project and file paths, which the transport's segment rules refuse",
   ],
-  ["gong", "phase 3: not yet migrated"],
   ["googleImage", "phase 3: not yet migrated"],
   [
     "gotify",
