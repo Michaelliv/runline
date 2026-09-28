@@ -13,6 +13,7 @@ import { headerName, resourceUrl } from "./policy.js";
 import {
   type CredentialRegistry,
   OAuthGrantSchema,
+  SecretSchema,
   validateCredential,
 } from "./registry.js";
 import type {
@@ -84,7 +85,7 @@ function grantFrom(
 ): OAuthGrant | undefined {
   const auth = method.authentication;
   if (auth.kind !== "oauth2") throw new AuthError("invalid_definition");
-  const grant = config[auth.grantField];
+  const grant = config[auth.field];
   if (grant === undefined) return undefined;
   if (!Check(OAuthGrantSchema, grant))
     throw new AuthError("invalid_credentials");
@@ -235,7 +236,7 @@ export class CredentialTransport {
                     options,
                   );
           const patch = {
-            [auth.grantField]: { tokens, revision: randomUUID() },
+            [auth.field]: { tokens, revision: randomUUID() },
           };
           const next = { ...current, ...patch };
           validateCredential(method, next);
@@ -340,7 +341,9 @@ export class CredentialTransport {
       const signed = new Headers(headers);
       signed.set(
         authHeader,
-        auth.kind === "apiKey" ? value : `Bearer ${value}`,
+        auth.kind === "apiKey"
+          ? `${auth.prefix ?? ""}${value}`
+          : `Bearer ${value}`,
       );
       return sendResource(url.toString(), verb, signed, body, {
         ...this.options,
@@ -390,7 +393,12 @@ export class CredentialTransport {
   ): Promise<{ token: string; grant?: OAuthGrant }> {
     const config = await this.read(binding, method);
     const auth = method.authentication;
-    if (auth.kind !== "oauth2") return { token: secret(config[auth.field]) };
+    if (auth.kind !== "oauth2") {
+      const stored = config[auth.field];
+      if (!Check(SecretSchema, stored))
+        throw new AuthError("invalid_credentials");
+      return { token: secret(stored.secret) };
+    }
     let grant = grantFrom(method, config);
     if (!fresh(grant))
       grant = await this.renew(binding, method, grant?.revision);

@@ -67,6 +67,7 @@ export {
   CredentialRegistry,
   OAuthGrantSchema,
   OAuthTokensSchema,
+  SecretSchema,
   validateCredential,
 } from "./credentials/registry.js";
 export type {

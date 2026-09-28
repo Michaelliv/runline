@@ -14,7 +14,10 @@ function definition(): CredentialType {
     id: "example",
     methods: {
       apiKey: {
-        schema: t.Object({ key: SecretSchema }, { additionalProperties: false }),
+        schema: t.Object(
+          { key: SecretSchema },
+          { additionalProperties: false },
+        ),
         authentication: { kind: "apiKey", field: "key", header: "X-Api-Key" },
         targets: {
           api: { baseUrl: "https://api.example/v1/", methods: ["GET", "POST"] },

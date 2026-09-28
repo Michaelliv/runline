@@ -125,7 +125,7 @@ export function microsoftCredentialType(
             schema,
             authentication: {
               kind: "oauth2" as const,
-              grantField: "grant",
+              field: "grant",
               renewal:
                 method === "delegated"
                   ? ("refresh" as const)

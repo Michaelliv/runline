@@ -21,6 +21,12 @@ export const OAuthTokensSchema = t.Object(
   { additionalProperties: false },
 );
 
+/** Stored shape of a bearer or API-key secret. */
+export const SecretSchema = t.Object(
+  { secret: t.String({ minLength: 1 }) },
+  { additionalProperties: false },
+);
+
 export const OAuthGrantSchema = t.Object(
   {
     tokens: t.Partial(OAuthTokensSchema),
@@ -47,13 +53,20 @@ function validateMethod(method: CredentialMethod): void {
   )
     throw new AuthError("invalid_definition");
   const auth = method.authentication;
-  const field = auth.kind === "oauth2" ? auth.grantField : auth.field;
-  identifier(field);
-  if (!Object.hasOwn(schema.properties, field))
+  identifier(auth.field);
+  if (!Object.hasOwn(schema.properties, auth.field))
     throw new AuthError("invalid_definition");
   let injected = "authorization";
-  if (auth.kind === "apiKey") injected = headerName(auth.header);
-  else if (auth.kind === "oauth2") {
+  if (auth.kind === "apiKey") {
+    injected = headerName(auth.header);
+    if (
+      auth.prefix !== undefined &&
+      (typeof auth.prefix !== "string" ||
+        !/^[\x21-\x7e]+ ?$/.test(auth.prefix) ||
+        auth.prefix.length > 32)
+    )
+      throw new AuthError("invalid_definition");
+  } else if (auth.kind === "oauth2") {
     identifier(auth.definition.id);
     identifier(auth.definition.provider);
     validateOAuth2ExchangePolicy(auth.definition.exchange);

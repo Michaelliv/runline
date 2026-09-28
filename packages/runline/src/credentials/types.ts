@@ -22,13 +22,23 @@ export interface CredentialTarget {
   idempotency?: { header: string; methods: HttpMethod[] };
 }
 
+/**
+ * How a request is signed. `field` names the one top-level config field
+ * holding the secret, in the kind's structured shape: `{ secret }` for
+ * bearer and apiKey (SecretSchema), a revisioned OAuthGrant for oauth2.
+ */
 export type CredentialAuthentication =
-  | { kind: "apiKey"; field: string; header: string }
+  | {
+      kind: "apiKey";
+      field: string;
+      header: string;
+      /** Fixed scheme before the secret, e.g. "SSWS " or "Bot ". */
+      prefix?: string;
+    }
   | { kind: "bearer"; field: string }
   | {
       kind: "oauth2";
-      /** Top-level config field containing a revisioned OAuthGrant. */
-      grantField: string;
+      field: string;
       definition: OAuth2Definition;
       /** Explicit renewal strategy, never inferred from available secrets. */
       renewal: "refresh" | "clientCredentials" | "jwtBearer";

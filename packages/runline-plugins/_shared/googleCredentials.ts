@@ -190,7 +190,7 @@ export function googleCredentialType(
         schema,
         authentication: {
           kind: "oauth2",
-          grantField: "grant",
+          field: "grant",
           renewal: "refresh",
           definition: {
             id: "google.oauth",
@@ -207,7 +207,7 @@ export function googleCredentialType(
               schema,
               authentication: {
                 kind: "oauth2",
-                grantField: "grant",
+                field: "grant",
                 renewal: "jwtBearer",
                 scopes,
                 definition: {

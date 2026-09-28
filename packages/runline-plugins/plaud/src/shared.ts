@@ -46,7 +46,7 @@ export const PLAUD_CREDENTIAL: CredentialType = {
       ),
       authentication: {
         kind: "oauth2",
-        grantField: "grant",
+        field: "grant",
         definition: PLAUD_OAUTH,
         renewal: "refresh",
       },
