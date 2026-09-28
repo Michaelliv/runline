@@ -22,7 +22,7 @@ import { Buffer } from "node:buffer";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import {
   credentialJson,
-  pathSegment,
+  pathSegments,
   pathWithin,
 } from "../../_shared/credentials.js";
 import {
@@ -91,18 +91,14 @@ async function runPrediction(opts: {
   const { ctx, model, input, timeoutMs, saveDir } = opts;
   const deadline = Date.now() + timeoutMs;
 
-  // A model id is owner/name: each side is one encoded, non-empty path segment.
-  const modelPath = model.split("/").map(pathSegment).join("/");
   let prediction = (await credentialJson(
     ctx,
     replicateCredential,
     "replicate",
     {
       target: "api",
-      path: `models/${modelPath}/predictions`,
+      path: `models/${pathSegments(model)}/predictions`,
       method: "POST",
-      // `Prefer: wait` lets the server hold the connection open for
-      // fast jobs so we don't have to poll at all on the happy path.
       headers: { Prefer: "wait" },
       json: { input },
     },
@@ -120,7 +116,6 @@ async function runPrediction(opts: {
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     prediction = (await credentialJson(ctx, replicateCredential, "replicate", {
       target: "api",
-      // The API-returned poll URL, refused unless it stays on the target.
       path: pathWithin(ctx, replicateCredential, "api", prediction.urls.get),
     })) as Prediction;
   }

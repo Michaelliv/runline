@@ -1,14 +1,10 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  credentialJson,
+  pathSegment,
+  pathSegments,
+} from "../../_shared/credentials.js";
 import { GITHUB_API_VERSION, githubCredential } from "./credentials.js";
-
-/**
- * A file path, ref, or branch name: each of its segments encoded, its
- * slashes kept. The transport refuses encoded slashes inside one segment;
- * GitHub routes nested names (feature/x) as literal path segments.
- */
-const filePath = (value: unknown) =>
-  String(value).split("/").map(encodeURIComponent).join("/");
 
 function gh(
   ctx: ActionContext,
@@ -82,7 +78,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${filePath(path)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${pathSegments(path)}`,
         undefined,
         qs,
       );
@@ -129,7 +125,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "PUT",
-        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${filePath(path)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${pathSegments(path)}`,
         body,
       );
     },
@@ -168,7 +164,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "DELETE",
-        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${filePath(path)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${pathSegments(path)}`,
         body,
       );
     },
@@ -196,18 +192,16 @@ export default function github(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const {
-        owner,
-        repo,
-        path = "",
-        ref,
-      } = (input ?? {}) as Record<string, unknown>;
+      const { owner, repo, path, ref } = (input ?? {}) as Record<
+        string,
+        unknown
+      >;
       const qs: Record<string, unknown> = {};
       if (ref) qs.ref = ref;
       return gh(
         ctx,
         "GET",
-        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${filePath(path)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/contents/${path ? pathSegments(path) : ""}`,
         undefined,
         qs,
       );
@@ -683,7 +677,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${pathSegment(owner)}/${pathSegment(repo)}/commits/${filePath(ref)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/commits/${pathSegments(ref)}`,
       );
     },
   });
@@ -705,7 +699,7 @@ export default function github(rl: RunlinePluginAPI) {
       return gh(
         ctx,
         "GET",
-        `repos/${pathSegment(owner)}/${pathSegment(repo)}/branches/${filePath(branch)}`,
+        `repos/${pathSegment(owner)}/${pathSegment(repo)}/branches/${pathSegments(branch)}`,
       );
     },
   });

@@ -1,5 +1,9 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialOk, jsonAnswer } from "../../_shared/credentials.js";
+import {
+  credentialOk,
+  jsonAnswer,
+  pathSegments,
+} from "../../_shared/credentials.js";
 import { jenkinsCredential } from "./credentials.js";
 
 async function jk(
@@ -62,7 +66,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
       jobName: {
         type: "string",
         required: true,
-        description: "Job name (URL-encoded if nested)",
+        description: "Job name; a job in a folder as folder/job/name",
       },
       parameters: {
         type: "object",
@@ -80,13 +84,13 @@ export default function jenkins(rl: RunlinePluginAPI) {
         await jk(
           ctx,
           "POST",
-          `/job/${jobName}/buildWithParameters`,
+          `/job/${pathSegments(jobName)}/buildWithParameters`,
           undefined,
           undefined,
           qs,
         );
       } else {
-        await jk(ctx, "POST", `/job/${jobName}/build`);
+        await jk(ctx, "POST", `/job/${pathSegments(jobName)}/build`);
       }
       return { success: true };
     },
@@ -102,7 +106,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
       const data = (await jk(
         ctx,
         "GET",
-        `/job/${(input as { jobName: string }).jobName}/api/json`,
+        `/job/${pathSegments((input as { jobName: string }).jobName)}/api/json`,
         undefined,
         undefined,
         { tree: "actions[parameterDefinitions[*]]" },
@@ -169,7 +173,7 @@ export default function jenkins(rl: RunlinePluginAPI) {
       const data = (await jk(
         ctx,
         "GET",
-        `/job/${jobName}/api/json`,
+        `/job/${pathSegments(jobName)}/api/json`,
         undefined,
         undefined,
         { tree },

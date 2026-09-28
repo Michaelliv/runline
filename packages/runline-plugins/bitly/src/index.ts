@@ -1,13 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { credentialJson, pathSegments } from "../../_shared/credentials.js";
 import { bitlyCredential } from "./credentials.js";
-
-/**
- * A bitlink ID such as "bit.ly/22u3ypK": each of its segments encoded, its
- * slash kept. An empty segment is refused — it would address a collection.
- */
-const bitlinkPath = (value: unknown) =>
-  String(value).split("/").map(pathSegment).join("/");
 
 function apiRequest(
   ctx: ActionContext,
@@ -94,7 +87,7 @@ export default function bitly(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { bitlink } = input as { bitlink: string };
-      return apiRequest(ctx, "GET", `bitlinks/${bitlinkPath(bitlink)}`);
+      return apiRequest(ctx, "GET", `bitlinks/${pathSegments(bitlink)}`);
     },
   });
 
@@ -137,7 +130,12 @@ export default function bitly(rl: RunlinePluginAPI) {
       if (group) body.group = group;
       if (tags) body.tags = tags;
       if (deeplinks) body.deeplinks = deeplinks;
-      return apiRequest(ctx, "PATCH", `bitlinks/${bitlinkPath(bitlink)}`, body);
+      return apiRequest(
+        ctx,
+        "PATCH",
+        `bitlinks/${pathSegments(bitlink)}`,
+        body,
+      );
     },
   });
 }

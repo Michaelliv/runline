@@ -139,6 +139,18 @@ export function pathSegment(value: unknown): string {
   return encodeURIComponent(raw);
 }
 
+/**
+ * A slash-separated name the API addresses as a sub-path — a model's
+ * `owner/name`, a file path, a nested job — each segment by `pathSegment`,
+ * its slashes kept.
+ */
+export function pathSegments(value: unknown): string {
+  return String(value ?? "")
+    .split("/")
+    .map(pathSegment)
+    .join("/");
+}
+
 export interface CredentialCall {
   target: string;
   /** Relative to the target's base URL; may carry its own query. */

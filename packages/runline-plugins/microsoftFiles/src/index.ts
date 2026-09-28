@@ -9,6 +9,12 @@
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import {
+  jsonAnswer,
+  pathSegment,
+  pathSegments,
+  requestFailed,
+} from "../../_shared/credentials.js";
+import {
   graphRequest,
   graphResponse,
   microsoftCredential,
@@ -164,7 +170,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
     async execute(input, ctx: Ctx) {
       const p = input as { folderId?: string; top?: number };
       const where = p.folderId
-        ? `/items/${encodeURIComponent(p.folderId)}/children`
+        ? `/items/${pathSegment(p.folderId)}/children`
         : "/root/children";
       const qs = new URLSearchParams({
         $top: String(p.top ?? 100),
@@ -193,7 +199,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
         NAME,
         SCOPES,
         "GET",
-        `${driveBase(ctx)}/items/${encodeURIComponent(p.id)}`,
+        `${driveBase(ctx)}/items/${pathSegment(p.id)}`,
       );
       const res = await microsoftDownload(meta["@microsoft.graph.downloadUrl"]);
       if (!res.ok)
@@ -229,16 +235,14 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
     async execute(input, ctx: Ctx) {
       const { path, base64 } = input as { path: string; base64: string };
       const bytes = Buffer.from(base64, "base64");
-      const p = path.split("/").map(encodeURIComponent).join("/");
       const res = await binaryFetch(
         ctx,
         "PUT",
-        `${driveBase(ctx)}/root:/${p}:/content`,
+        `${driveBase(ctx)}/root:/${pathSegments(path)}:/content`,
         bytes,
       );
-      if (!res.ok)
-        throw new Error(`${NAME}: upload failed (HTTP ${res.status})`);
-      return JSON.parse(await res.text());
+      if (!res.ok) throw requestFailed(NAME, res.status);
+      return jsonAnswer(res);
     },
   });
 
@@ -257,7 +261,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
     async execute(input, ctx: Ctx) {
       const p = input as { name: string; parentId?: string };
       const where = p.parentId
-        ? `/items/${encodeURIComponent(p.parentId)}/children`
+        ? `/items/${pathSegment(p.parentId)}/children`
         : "/root/children";
       return graphRequest(
         ctx,

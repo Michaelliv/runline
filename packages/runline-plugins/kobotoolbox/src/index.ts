@@ -44,7 +44,6 @@ async function paginate(
     if (!Array.isArray(data) && data.results && Array.isArray(data.results)) {
       all.push(...(data.results as unknown[]));
       const next = data.next as string | null | undefined;
-      // A next-page link stays beneath the connection's own API base.
       path = next
         ? pathWithin(ctx, kobotoolboxCredential, "api", next)
         : undefined;

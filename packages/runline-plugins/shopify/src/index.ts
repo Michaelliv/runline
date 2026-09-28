@@ -44,7 +44,6 @@ async function paginate(
     const link = res.headers.get("link") ?? "";
     if (link.includes('rel="next"')) {
       const match = link.match(/<([^>]+)>;\s*rel="next"/);
-      // A next page only beneath the store's own Admin API base.
       if (match) nextPath = pathWithin(ctx, shopifyCredential, "api", match[1]);
     }
   } while (nextPath);

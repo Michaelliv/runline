@@ -54,7 +54,6 @@ async function paginateAll(
     if (link?.includes('rel="next"')) {
       const match = link.match(/<([^>]+)>/);
       if (!match?.[1]) break;
-      // The next-page URL is followed only beneath the declared target.
       next = {
         path: pathWithin(ctx, ciscoWebexCredential, "api", match[1]),
       };

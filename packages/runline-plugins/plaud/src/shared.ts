@@ -8,7 +8,11 @@ import {
   OAuthGrantSchema,
 } from "runline";
 import * as t from "typebox";
-import { credentialBroker } from "../../_shared/credentialAdapter.js";
+import {
+  credentialOk,
+  jsonAnswer,
+  pathSegment,
+} from "../../_shared/credentials.js";
 
 const BASE = "https://platform.plaud.ai/developer/api";
 
@@ -79,30 +83,25 @@ function object(value: unknown): Record<string, unknown> {
 export async function request(
   ctx: ActionContext,
   path: string,
+  query?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const response = await credentialBroker(ctx, plaudCredential).request({
+  const response = await credentialOk(ctx, plaudCredential, "plaud", {
     target: "api",
     path,
+    query,
   });
-  if (!response.ok)
-    throw new Error(`plaud: request failed (HTTP ${response.status})`);
-  try {
-    return object(await response.json());
-  } catch {
-    throw new AuthError("invalid_response");
-  }
+  return object(await jsonAnswer(response));
 }
 
 export async function recording(ctx: ActionContext, id: string) {
-  // Encoding protects separators/query injection; the transport also rejects traversal.
-  return request(ctx, `files/${encodeURIComponent(id)}`);
+  return request(ctx, `files/${pathSegment(id)}`);
 }
 
 export async function list(ctx: ActionContext, page: number, pageSize: number) {
-  const result = await request(
-    ctx,
-    `files/?${new URLSearchParams({ page: String(page), page_size: String(pageSize) })}`,
-  );
+  const result = await request(ctx, "files/", {
+    page,
+    page_size: pageSize,
+  });
   if (!Array.isArray(result.data) || result.data.length > pageSize)
     throw new AuthError("invalid_response");
   const data = result.data.map(object);

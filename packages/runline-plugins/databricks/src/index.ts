@@ -3,12 +3,9 @@ import {
   credentialJson,
   credentialOk,
   pathSegment,
+  pathSegments,
 } from "../../_shared/credentials.js";
 import { databricksCredential } from "./credentials.js";
-
-/** A caller-supplied path spanning segments, each encoded. */
-const segs = (value: unknown) =>
-  String(value).split("/").map(encodeURIComponent).join("/");
 
 function api(
   ctx: ActionContext,
@@ -176,7 +173,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "PUT",
-        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.directoryPath)}`,
+        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${pathSegments(p.directoryPath)}`,
       );
       return { success: true, directoryPath: p.directoryPath };
     },
@@ -199,7 +196,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.directoryPath)}`,
+        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${pathSegments(p.directoryPath)}`,
       );
       return { success: true };
     },
@@ -222,7 +219,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       await api(
         ctx,
         "DELETE",
-        `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.filePath)}`,
+        `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${pathSegments(p.filePath)}`,
       );
       return { success: true };
     },
@@ -244,7 +241,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
       const res = await credentialOk(ctx, databricksCredential, "databricks", {
         target: "workspace",
-        path: `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${segs(p.filePath)}`,
+        path: `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${pathSegments(p.filePath)}`,
         method: "HEAD",
       });
       return {
@@ -272,7 +269,7 @@ export default function databricks(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
-      const dir = p.directoryPath ? `/${segs(p.directoryPath)}` : "";
+      const dir = p.directoryPath ? `/${pathSegments(p.directoryPath)}` : "";
       const qs: Record<string, string> = {};
       if (p.pageSize) qs.page_size = String(p.pageSize);
       if (p.pageToken) qs.page_token = p.pageToken as string;

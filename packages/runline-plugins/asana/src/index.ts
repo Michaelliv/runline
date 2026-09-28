@@ -50,7 +50,6 @@ async function paginateAll(
 
     if (limit && results.length >= limit) return results.slice(0, limit);
 
-    // A next-page URL the API returned, kept beneath the declared target.
     const nextPage = json.next_page as { uri?: string } | null;
     if (!nextPage?.uri) break;
     page = { path: pathWithin(ctx, asanaCredential, "api", nextPage.uri) };
