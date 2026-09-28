@@ -26,15 +26,28 @@ const SCOPES = [
 ];
 
 type Ctx = ActionContext;
+
+/** The fields mail.send and mail.draft compose a Graph message from. */
+interface MessageInput {
+  to?: string[] | string;
+  cc?: string[] | string;
+  subject: string;
+  body?: string;
+  html?: boolean;
+}
+
 const recipients = (addrs: string[] | string | undefined) =>
   (Array.isArray(addrs) ? addrs : addrs ? [addrs] : []).map((a) => ({
     emailAddress: { address: a },
   }));
 
-function toMessage(input: any) {
+function toMessage(input: MessageInput) {
   return {
     subject: input.subject,
-    body: { contentType: input.html ? "HTML" : "Text", content: input.body ?? "" },
+    body: {
+      contentType: input.html ? "HTML" : "Text",
+      content: input.body ?? "",
+    },
     toRecipients: recipients(input.to),
     ccRecipients: recipients(input.cc),
   };
@@ -46,12 +59,42 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
   rl.setCredential(microsoftCredential(NAME, SCOPES));
 
   rl.setConnectionSchema({
-    authMethod: { type: "string", required: false, description: "delegated or appOnly; legacy configs infer the method from existing credentials" },
-    tenantId: { type: "string", required: false, env: "MS_GRAPH_TENANT_ID", description: "Entra tenant id (app-only) or omit for OAuth /common" },
-    clientId: { type: "string", required: false, env: "MS_GRAPH_CLIENT_ID", description: "App (client) id" },
-    clientSecret: { type: "string", required: false, env: "MS_GRAPH_CLIENT_SECRET", description: "Client secret VALUE" },
-    refreshToken: { type: "string", required: false, env: "MICROSOFTMAIL_REFRESH_TOKEN", description: "OAuth2 refresh token (set by the login flow)" },
-    userUpn: { type: "string", required: false, env: "MS_GRAPH_USER_UPN", description: "App-only only: target mailbox UPN (e.g. agent@contoso.com)" },
+    authMethod: {
+      type: "string",
+      required: false,
+      description:
+        "delegated or appOnly; legacy configs infer the method from existing credentials",
+    },
+    tenantId: {
+      type: "string",
+      required: false,
+      env: "MS_GRAPH_TENANT_ID",
+      description: "Entra tenant id (app-only) or omit for OAuth /common",
+    },
+    clientId: {
+      type: "string",
+      required: false,
+      env: "MS_GRAPH_CLIENT_ID",
+      description: "App (client) id",
+    },
+    clientSecret: {
+      type: "string",
+      required: false,
+      env: "MS_GRAPH_CLIENT_SECRET",
+      description: "Client secret VALUE",
+    },
+    refreshToken: {
+      type: "string",
+      required: false,
+      env: "MICROSOFTMAIL_REFRESH_TOKEN",
+      description: "OAuth2 refresh token (set by the login flow)",
+    },
+    userUpn: {
+      type: "string",
+      required: false,
+      env: "MS_GRAPH_USER_UPN",
+      description: "App-only only: target mailbox UPN (e.g. agent@contoso.com)",
+    },
   });
 
   rl.setOAuth({
@@ -66,17 +109,32 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
     description:
       "Send an email as the connected mailbox. Returns {success}. Get user approval before sending external mail.",
     inputSchema: {
-      to: { type: "array", required: true, description: "Recipient address(es)" },
+      to: {
+        type: "array",
+        required: true,
+        description: "Recipient address(es)",
+      },
       subject: { type: "string", required: true },
       body: { type: "string", required: true },
       cc: { type: "array", required: false },
-      html: { type: "boolean", required: false, description: "Body is HTML (default plain text)" },
+      html: {
+        type: "boolean",
+        required: false,
+        description: "Body is HTML (default plain text)",
+      },
     },
-    async execute(input: any, ctx: Ctx) {
-      await graphRequest(ctx, NAME, SCOPES, "POST", `${userBase(ctx)}/sendMail`, {
-        message: toMessage(input),
-        saveToSentItems: true,
-      });
+    async execute(input, ctx: Ctx) {
+      await graphRequest(
+        ctx,
+        NAME,
+        SCOPES,
+        "POST",
+        `${userBase(ctx)}/sendMail`,
+        {
+          message: toMessage(input as MessageInput),
+          saveToSentItems: true,
+        },
+      );
       return { success: true };
     },
   });
@@ -91,8 +149,15 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
       cc: { type: "array", required: false },
       html: { type: "boolean", required: false },
     },
-    async execute(input: any, ctx: Ctx) {
-      const r = await graphRequest(ctx, NAME, SCOPES, "POST", `${userBase(ctx)}/messages`, toMessage(input));
+    async execute(input, ctx: Ctx) {
+      const r = await graphRequest<{ id: string; webLink: string }>(
+        ctx,
+        NAME,
+        SCOPES,
+        "POST",
+        `${userBase(ctx)}/messages`,
+        toMessage(input as MessageInput),
+      );
       return { id: r.id, webLink: r.webLink };
     },
   });
@@ -102,17 +167,28 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
     description:
       "List recent messages. Optional KQL search. Returns [{id,subject,from,receivedDateTime,bodyPreview,hasAttachments}].",
     inputSchema: {
-      search: { type: "string", required: false, description: "KQL search across the mailbox" },
+      search: {
+        type: "string",
+        required: false,
+        description: "KQL search across the mailbox",
+      },
       top: { type: "number", required: false, default: 20 },
     },
-    async execute(input: any, ctx: Ctx) {
+    async execute(input, ctx: Ctx) {
+      const p = input as { search?: string; top?: number };
       const qs = new URLSearchParams({
-        $top: String(input.top ?? 20),
+        $top: String(p.top ?? 20),
         $select: "id,subject,from,receivedDateTime,bodyPreview,hasAttachments",
         $orderby: "receivedDateTime desc",
       });
-      if (input.search) qs.set("$search", `"${input.search}"`);
-      const r = await graphRequest(ctx, NAME, SCOPES, "GET", `${userBase(ctx)}/messages?${qs}`);
+      if (p.search) qs.set("$search", `"${p.search}"`);
+      const r = await graphRequest<{ value: unknown[] }>(
+        ctx,
+        NAME,
+        SCOPES,
+        "GET",
+        `${userBase(ctx)}/messages?${qs}`,
+      );
       return r.value;
     },
   });
@@ -121,8 +197,15 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
     access: "read",
     description: "Get one message with full body by id.",
     inputSchema: { id: { type: "string", required: true } },
-    async execute(input: any, ctx: Ctx) {
-      return graphRequest(ctx, NAME, SCOPES, "GET", `${userBase(ctx)}/messages/${encodeURIComponent(input.id)}`);
+    async execute(input, ctx: Ctx) {
+      const p = input as { id: string };
+      return graphRequest(
+        ctx,
+        NAME,
+        SCOPES,
+        "GET",
+        `${userBase(ctx)}/messages/${encodeURIComponent(p.id)}`,
+      );
     },
   });
 }
