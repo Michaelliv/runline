@@ -53,7 +53,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["bambooHr", "phase 2: not yet migrated"],
   ["bannerbear", "phase 3: not yet migrated"],
   ["baserow", "phase 3: not yet migrated"],
-  ["bitly", "phase 2: not yet migrated"],
   ["bitwarden", "phase 3: not yet migrated"],
   ["box", "phase 2: not yet migrated"],
   ["brandfetch", "phase 3: not yet migrated"],

@@ -97,7 +97,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "bambooHr/src/index.ts",
   "bannerbear/src/index.ts",
   "baserow/src/index.ts",
-  "bitly/src/index.ts",
   "bitwarden/src/index.ts",
   "box/src/index.ts",
   "brandfetch/src/index.ts",
