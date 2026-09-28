@@ -1,9 +1,6 @@
 import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import { onfleetCredential } from "./credentials.js";
-
-/** An ID as one path segment. */
-const seg = (value: unknown) => encodeURIComponent(String(value));
 
 function apiRequest(
   ctx: ActionContext,
@@ -48,7 +45,7 @@ function registerCrud(
       return apiRequest(
         ctx,
         "GET",
-        `${plural}/${seg((input as Record<string, unknown>).id)}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -73,7 +70,7 @@ function registerCrud(
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `${plural}/${seg(p.id)}`, p.data);
+      return apiRequest(ctx, "PUT", `${plural}/${pathSegment(p.id)}`, p.data);
     },
   });
 
@@ -85,7 +82,7 @@ function registerCrud(
       await apiRequest(
         ctx,
         "DELETE",
-        `${plural}/${seg((input as Record<string, unknown>).id)}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -157,7 +154,9 @@ export default function onfleet(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const id = (input as Record<string, unknown>).id as string;
       const path =
-        id.length <= 8 ? `tasks/shortId/${seg(id)}` : `tasks/${seg(id)}`;
+        id.length <= 8
+          ? `tasks/shortId/${pathSegment(id)}`
+          : `tasks/${pathSegment(id)}`;
       return apiRequest(ctx, "GET", path);
     },
   });
@@ -197,7 +196,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `tasks/${seg(p.id)}`, p.data);
+      return apiRequest(ctx, "PUT", `tasks/${pathSegment(p.id)}`, p.data);
     },
   });
 
@@ -209,7 +208,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       await apiRequest(
         ctx,
         "DELETE",
-        `tasks/${seg((input as Record<string, unknown>).id)}`,
+        `tasks/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -230,7 +229,12 @@ export default function onfleet(rl: RunlinePluginAPI) {
       };
       if (p.notes)
         (body.completionDetails as Record<string, unknown>).notes = p.notes;
-      await apiRequest(ctx, "POST", `tasks/${seg(p.id)}/complete`, body);
+      await apiRequest(
+        ctx,
+        "POST",
+        `tasks/${pathSegment(p.id)}/complete`,
+        body,
+      );
       return { success: true };
     },
   });
@@ -284,7 +288,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `hubs/${seg(p.id)}`, p.data);
+      return apiRequest(ctx, "PUT", `hubs/${pathSegment(p.id)}`, p.data);
     },
   });
 
@@ -327,7 +331,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `recipients/${seg((input as Record<string, unknown>).id)}`,
+        `recipients/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -341,7 +345,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(ctx, "PUT", `recipients/${seg(p.id)}`, p.data);
+      return apiRequest(ctx, "PUT", `recipients/${pathSegment(p.id)}`, p.data);
     },
   });
 
@@ -363,7 +367,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `containers/${seg(p.containerType)}/${seg(p.containerId)}`,
+        `containers/${pathSegment(p.containerType)}/${pathSegment(p.containerId)}`,
       );
     },
   });
@@ -389,7 +393,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "PUT",
-        `containers/${seg(p.containerType)}/${seg(p.containerId)}`,
+        `containers/${pathSegment(p.containerType)}/${pathSegment(p.containerId)}`,
         { tasks: p.tasks },
       );
     },
@@ -413,7 +417,13 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...qs } = input as Record<string, unknown>;
-      return apiRequest(ctx, "GET", `teams/${seg(id)}/estimate`, undefined, qs);
+      return apiRequest(
+        ctx,
+        "GET",
+        `teams/${pathSegment(id)}/estimate`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -429,7 +439,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "POST",
-        `teams/${seg(p.id)}/dispatch`,
+        `teams/${pathSegment(p.id)}/dispatch`,
         p.data ?? {},
       );
     },
@@ -461,7 +471,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       return apiRequest(
         ctx,
         "GET",
-        `destinations/${seg((input as Record<string, unknown>).id)}`,
+        `destinations/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
