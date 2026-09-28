@@ -154,7 +154,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "odoo/src/index.ts",
   "openThesaurus/src/index.ts",
   "openai/src/index.ts",
-  "openweathermap/src/index.ts",
   "paddle/src/index.ts",
   "pagerduty/src/index.ts",
   "parallel/src/index.ts",
