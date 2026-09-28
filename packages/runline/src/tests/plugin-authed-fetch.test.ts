@@ -68,7 +68,6 @@ const UNBROKERED_FETCH = new Set([
   "graphql/src/index.ts",
   "mailjet/src/index.ts",
   "nextcloud/src/index.ts",
-  "npm/src/index.ts",
   "odoo/src/index.ts",
   "reddit/src/index.ts",
   "salesforce/src/shared.ts",

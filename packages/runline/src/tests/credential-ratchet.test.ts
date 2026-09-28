@@ -74,10 +74,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "nextcloud",
     "WebDAV methods (PROPFIND, MKCOL, COPY, MOVE) the transport does not carry",
   ],
-  [
-    "npm",
-    "optional credential: a secret-free config cannot say whether to sign",
-  ],
   ["odoo", "login: the password rides in every JSON-RPC argument list"],
   [
     "reddit",
