@@ -172,7 +172,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "marketstack/src/index.ts",
   "matrix/src/index.ts",
   "mattermost/src/index.ts",
-  "mautic/src/index.ts",
   "medium/src/index.ts",
   "messagebird/src/index.ts",
   "metabase/src/index.ts",
