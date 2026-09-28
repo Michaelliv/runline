@@ -331,6 +331,18 @@ describe("credentialRequest and credentialJson", () => {
     assert.equal(requests[0].body, "a=x+y%26z&n=2");
   });
 
+  it("passes a COPY or MOVE destination through to the broker", async () => {
+    const { ctx, requests } = brokered(null, 201);
+    await credentialRequest(ctx, example, {
+      target: "api",
+      path: "a.txt",
+      method: "MOVE",
+      destination: "b.txt",
+    });
+    assert.equal(requests[0].method, "MOVE");
+    assert.equal(requests[0].destination, "b.txt");
+  });
+
   it("appends to a query already in the path", async () => {
     const { ctx, requests } = brokered("{}");
     await credentialRequest(ctx, example, {
