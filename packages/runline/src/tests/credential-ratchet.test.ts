@@ -127,7 +127,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "host from the secret: the datacenter suffix of the apiKey picks the API origin",
   ],
   ["mailerlite", "phase 3: not yet migrated"],
-  ["mailgun", "phase 3: not yet migrated"],
   [
     "mailjet",
     "two credentials in one connection: basic pair for email, bearer for SMS",
