@@ -241,7 +241,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
     "zendesk",
     "composite secret: the Basic username joins the email config field with a fixed /token suffix",
   ],
-  ["zulip", "phase 3: not yet migrated"],
 ]);
 
 /**

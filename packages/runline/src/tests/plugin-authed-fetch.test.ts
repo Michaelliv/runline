@@ -205,7 +205,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "yourls/src/index.ts",
   "zammad/src/index.ts",
   "zendesk/src/index.ts",
-  "zulip/src/index.ts",
 ]);
 
 describe("plugin requests carrying credentials refuse redirects", () => {
