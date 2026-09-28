@@ -193,7 +193,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "nextcloud/src/index.ts",
   "nocodb/src/index.ts",
   "node/src/index.ts",
-  "notion/src/index.ts",
   "npm/src/index.ts",
   "odoo/src/index.ts",
   "okta/src/index.ts",
