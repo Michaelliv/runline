@@ -84,7 +84,6 @@ function filesCallingBareFetch(): string[] {
  */
 const BARE_FETCH_BACKLOG = new Set([
   "_shared/shiftUpload.ts",
-  "actionNetwork/src/index.ts",
   "activeCampaign/src/index.ts",
   "adalo/src/index.ts",
   "airtop/src/index.ts",

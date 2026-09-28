@@ -40,7 +40,6 @@ const NO_CREDENTIAL = new Map<string, string>([
 
 /** Plugins that carry a credential but do not declare it yet, and why. */
 const UNDECLARED_BACKLOG = new Map<string, string>([
-  ["actionNetwork", "phase 3: not yet migrated"],
   ["activeCampaign", "phase 3: not yet migrated"],
   ["adalo", "phase 3: not yet migrated"],
   ["airtop", "phase 3: not yet migrated"],

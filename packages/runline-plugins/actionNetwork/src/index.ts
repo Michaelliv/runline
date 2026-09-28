@@ -1,34 +1,31 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { actionNetworkCredential } from "./credentials.js";
 
+/** Public API base, used only for the resource links Action Network expects in bodies. */
 const BASE_URL = "https://actionnetwork.org/api/v2";
 
+/** An ID as one path segment. */
+const seg = (value: unknown) => encodeURIComponent(String(value));
+
 async function apiRequest(
-  apiKey: string,
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, actionNetworkCredential, "actionNetwork", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "OSDI-API-Token": apiKey,
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Action Network API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204) return { ok: true };
-  return res.json();
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 async function paginate(
-  apiKey: string,
+  ctx: ActionContext,
   endpoint: string,
   itemsKey: string,
   limit?: number,
@@ -37,11 +34,10 @@ async function paginate(
   let page = 1;
 
   while (true) {
-    const data = (await apiRequest(
-      apiKey,
-      "GET",
-      `${endpoint}?page=${page}&per_page=25`,
-    )) as {
+    const data = (await apiRequest(ctx, "GET", endpoint, undefined, {
+      page,
+      per_page: 25,
+    })) as {
       _embedded?: Record<string, unknown[]>;
       _links?: { next?: { href: string } };
     };
@@ -69,6 +65,7 @@ function extractId(item: { _links?: { self?: { href?: string } } }): string {
 export default function actionNetwork(rl: RunlinePluginAPI) {
   rl.setName("actionNetwork");
   rl.setVersion("0.1.0");
+  rl.setCredential(actionNetworkCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -101,9 +98,9 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
         },
       };
       return apiRequest(
-        ctx.connection.config.apiKey as string,
+        ctx,
         "POST",
-        `/events/${eventId}/attendances`,
+        `events/${seg(eventId)}/attendances`,
         body,
       );
     },
@@ -126,9 +123,9 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
         attendanceId: string;
       };
       return apiRequest(
-        ctx.connection.config.apiKey as string,
+        ctx,
         "GET",
-        `/events/${eventId}/attendances/${attendanceId}`,
+        `events/${seg(eventId)}/attendances/${seg(attendanceId)}`,
       );
     },
   });
@@ -147,8 +144,8 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { eventId, limit } = input as { eventId: string; limit?: number };
       return paginate(
-        ctx.connection.config.apiKey as string,
-        `/events/${eventId}/attendances`,
+        ctx,
+        `events/${seg(eventId)}/attendances`,
         "osdi:attendances",
         limit,
       );
@@ -184,12 +181,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       };
       if (description) body.description = description;
       Object.assign(body, rest);
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "POST",
-        "/events",
-        body,
-      );
+      return apiRequest(ctx, "POST", "events", body);
     },
   });
 
@@ -201,11 +193,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { eventId } = input as { eventId: string };
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "GET",
-        `/events/${eventId}`,
-      );
+      return apiRequest(ctx, "GET", `events/${seg(eventId)}`);
     },
   });
 
@@ -221,12 +209,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      return paginate(
-        ctx.connection.config.apiKey as string,
-        "/events",
-        "osdi:events",
-        limit,
-      );
+      return paginate(ctx, "events", "osdi:events", limit);
     },
   });
 
@@ -255,12 +238,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
           ...rest,
         },
       };
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "POST",
-        "/people",
-        body,
-      );
+      return apiRequest(ctx, "POST", "people", body);
     },
   });
 
@@ -272,11 +250,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { personId } = input as { personId: string };
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "GET",
-        `/people/${personId}`,
-      );
+      return apiRequest(ctx, "GET", `people/${seg(personId)}`);
     },
   });
 
@@ -292,12 +266,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      return paginate(
-        ctx.connection.config.apiKey as string,
-        "/people",
-        "osdi:people",
-        limit,
-      );
+      return paginate(ctx, "people", "osdi:people", limit);
     },
   });
 
@@ -317,12 +286,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { ...rest };
       if (givenName !== undefined) body.given_name = givenName;
       if (familyName !== undefined) body.family_name = familyName;
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "PUT",
-        `/people/${personId}`,
-        body,
-      );
+      return apiRequest(ctx, "PUT", `people/${seg(personId)}`, body);
     },
   });
 
@@ -359,12 +323,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
           .split(",")
           .map((t) => ({ name: t.trim() }));
       }
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "POST",
-        "/petitions",
-        body,
-      );
+      return apiRequest(ctx, "POST", "petitions", body);
     },
   });
 
@@ -380,11 +339,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { petitionId } = input as { petitionId: string };
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "GET",
-        `/petitions/${petitionId}`,
-      );
+      return apiRequest(ctx, "GET", `petitions/${seg(petitionId)}`);
     },
   });
 
@@ -400,12 +355,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      return paginate(
-        ctx.connection.config.apiKey as string,
-        "/petitions",
-        "osdi:petitions",
-        limit,
-      );
+      return paginate(ctx, "petitions", "osdi:petitions", limit);
     },
   });
 
@@ -433,12 +383,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
           .split(",")
           .map((t) => ({ name: t.trim() }));
       }
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "PUT",
-        `/petitions/${petitionId}`,
-        body,
-      );
+      return apiRequest(ctx, "PUT", `petitions/${seg(petitionId)}`, body);
     },
   });
 
@@ -466,9 +411,9 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
         },
       };
       return apiRequest(
-        ctx.connection.config.apiKey as string,
+        ctx,
         "POST",
-        `/petitions/${petitionId}/signatures`,
+        `petitions/${seg(petitionId)}/signatures`,
         body,
       );
     },
@@ -495,9 +440,9 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
         signatureId: string;
       };
       return apiRequest(
-        ctx.connection.config.apiKey as string,
+        ctx,
         "GET",
-        `/petitions/${petitionId}/signatures/${signatureId}`,
+        `petitions/${seg(petitionId)}/signatures/${seg(signatureId)}`,
       );
     },
   });
@@ -523,8 +468,8 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
         limit?: number;
       };
       return paginate(
-        ctx.connection.config.apiKey as string,
-        `/petitions/${petitionId}/signatures`,
+        ctx,
+        `petitions/${seg(petitionId)}/signatures`,
         "osdi:signatures",
         limit,
       );
@@ -552,9 +497,9 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
         unknown
       >;
       return apiRequest(
-        ctx.connection.config.apiKey as string,
+        ctx,
         "PUT",
-        `/petitions/${petitionId}/signatures/${signatureId}`,
+        `petitions/${seg(petitionId)}/signatures/${seg(signatureId)}`,
         rest,
       );
     },
@@ -570,12 +515,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name } = input as { name: string };
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "POST",
-        "/tags",
-        { name },
-      );
+      return apiRequest(ctx, "POST", "tags", { name });
     },
   });
 
@@ -587,11 +527,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tagId } = input as { tagId: string };
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "GET",
-        `/tags/${tagId}`,
-      );
+      return apiRequest(ctx, "GET", `tags/${seg(tagId)}`);
     },
   });
 
@@ -607,12 +543,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      return paginate(
-        ctx.connection.config.apiKey as string,
-        "/tags",
-        "osdi:tags",
-        limit,
-      );
+      return paginate(ctx, "tags", "osdi:tags", limit);
     },
   });
 
@@ -632,12 +563,7 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
           "osdi:person": { href: `${BASE_URL}/people/${personId}` },
         },
       };
-      return apiRequest(
-        ctx.connection.config.apiKey as string,
-        "POST",
-        `/tags/${tagId}/taggings`,
-        body,
-      );
+      return apiRequest(ctx, "POST", `tags/${seg(tagId)}/taggings`, body);
     },
   });
 
@@ -654,9 +580,9 @@ export default function actionNetwork(rl: RunlinePluginAPI) {
         taggingId: string;
       };
       return apiRequest(
-        ctx.connection.config.apiKey as string,
+        ctx,
         "DELETE",
-        `/tags/${tagId}/taggings/${taggingId}`,
+        `tags/${seg(tagId)}/taggings/${seg(taggingId)}`,
       );
     },
   });
