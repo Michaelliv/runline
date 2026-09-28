@@ -88,7 +88,6 @@ const BARE_FETCH_BACKLOG = new Set([
   "activeCampaign/src/index.ts",
   "adalo/src/index.ts",
   "airtop/src/index.ts",
-  "autopilot/src/index.ts",
   "bannerbear/src/index.ts",
   "baserow/src/index.ts",
   "bitwarden/src/index.ts",
