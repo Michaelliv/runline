@@ -138,7 +138,6 @@ const UNDECLARED_BACKLOG = new Map<string, string>([
   ["keap", "phase 2: not yet migrated"],
   ["kobotoolbox", "phase 2: not yet migrated"],
   ["lemlist", "phase 3: not yet migrated"],
-  ["linear", "phase 2: not yet migrated"],
   ["lingvanex", "phase 3: not yet migrated"],
   ["linkedin", "phase 2: not yet migrated"],
   ["lonescale", "phase 3: not yet migrated"],

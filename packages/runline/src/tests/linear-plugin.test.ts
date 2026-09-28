@@ -163,8 +163,9 @@ function mockLinearSequence(
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     assert.equal(String(input), "https://api.linear.app/graphql");
     assert.equal(init?.method, "POST");
+    // The credential transport signs with a Headers instance.
     assert.match(
-      String(init?.headers?.["Authorization" as keyof HeadersInit]),
+      String(new Headers(init?.headers).get("authorization")),
       /^lin_/,
     );
     // Asserted on every request in the suite: the API key travels on all of
@@ -231,13 +232,14 @@ describe("linear plugin action surface", () => {
 // burns a turn learning it was blocked.
 describe("linear scoped-availability notes match behaviour", () => {
   const NOTE = "Unavailable on scoped connections.";
-  const SENTINEL = "linear-test: reached the network";
+  // A fetch failure surfaces as the credential transport's opaque error.
+  const SENTINEL = "Authenticated request failed";
 
   it("carries the note on exactly the actions a scoped connection cannot run", async () => {
     const plugin = makeLinear();
     // Any action that gets past the scope gate hits fetch; stop it there.
     globalThis.fetch = (async () => {
-      throw new Error(SENTINEL);
+      throw new Error("linear-test: reached the network");
     }) as typeof fetch;
 
     const scoped = ctx({

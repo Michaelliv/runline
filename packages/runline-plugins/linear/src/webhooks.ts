@@ -4,7 +4,6 @@ import {
   bindGetAction,
   bindListAction,
   gql,
-  key,
   requireUnscoped,
   WEBHOOK_FIELDS,
   withScopedNote,
@@ -67,7 +66,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "webhooks.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: WebhookCreateInput!) { webhookCreate(input: $input) { success webhook { ${WEBHOOK_FIELDS} } } }`,
         { input: input as Record<string, unknown> },
       );
@@ -105,7 +104,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "webhooks.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: WebhookUpdateInput!) { webhookUpdate(id: $id, input: $input) { success webhook { ${WEBHOOK_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -121,7 +120,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "webhooks.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { webhookDelete(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );
@@ -141,7 +140,7 @@ export function registerWebhookActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "webhooks.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { webhookRotateSecret(id: $id) { success secret } }`,
         { id: (input as { id: string }).id },
       );

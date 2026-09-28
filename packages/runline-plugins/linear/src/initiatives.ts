@@ -5,7 +5,6 @@ import {
   bindListAction,
   gql,
   INITIATIVE_FIELDS,
-  key,
   requireUnscoped,
   withScopedNote,
 } from "./shared.js";
@@ -83,7 +82,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: InitiativeCreateInput!) { initiativeCreate(input: $input) { success initiative { ${INITIATIVE_FIELDS} } } }`,
         { input: input as Record<string, unknown> },
       );
@@ -148,7 +147,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "initiatives.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: InitiativeUpdateInput!) { initiativeUpdate(id: $id, input: $input) { success initiative { ${INITIATIVE_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -166,7 +165,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { initiativeDelete(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );
@@ -199,7 +198,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: InitiativeToProjectCreateInput!) { initiativeToProjectCreate(input: $input) { success initiativeToProject { id initiative { id name projects { nodes { id name } } } project { id name } } } }`,
         { input: input as Record<string, unknown> },
       );
@@ -219,7 +218,7 @@ export function registerInitiativeActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "initiatives.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { initiativeToProjectDelete(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );
