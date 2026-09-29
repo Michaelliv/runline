@@ -1,17 +1,21 @@
+import type { ActionContext } from "runline";
+import { shiftClient } from "../../_shared/shiftCredentials.js";
+
 export {
-  type Ctx,
   cursorSchema,
   enumDescription,
   enumSchema,
   idSchema,
-  listParams,
   pathSegment,
-  request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
-  withQuery,
 } from "../../_shared/shiftCloud.js";
+
+export type Ctx = ActionContext;
+
+export const { credential: shiftWorkCredential, request } =
+  shiftClient("shiftWork");
 
 export type ShiftIssueActorType = "user" | "service" | "agent" | "system";
 

@@ -1,67 +1,46 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  credentialOk,
+  jsonAnswer,
+  pathSegment,
+} from "../../_shared/credentials.js";
+import { netlifyCredential } from "./credentials.js";
 
-const BASE = "https://api.netlify.com/api/v1";
-
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-function getToken(ctx: { connection: Conn }): string {
-  return ctx.connection.config.accessToken as string;
-}
-
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, netlifyCredential, "netlify", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Netlify API error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
+/** Page-numbered listing; the Link header only says whether a next page exists. */
 async function paginate(
-  token: string,
-  endpoint: string,
-  qs: Record<string, unknown> = {},
+  ctx: ActionContext,
+  path: string,
+  query: Record<string, unknown> = {},
 ): Promise<unknown[]> {
   const all: unknown[] = [];
   let page = 0;
   const perPage = 100;
-  // eslint-disable-next-line no-constant-condition
   while (true) {
-    const url = new URL(`${BASE}${endpoint}`);
-    url.searchParams.set("page", String(page));
-    url.searchParams.set("per_page", String(perPage));
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}` },
+    const response = await credentialOk(ctx, netlifyCredential, "netlify", {
+      target: "api",
+      path,
+      query: { page, per_page: perPage, ...query },
     });
-    if (!res.ok)
-      throw new Error(`Netlify API error ${res.status}: ${await res.text()}`);
-    const items = (await res.json()) as unknown[];
+    const items = (await jsonAnswer(response)) as unknown[];
     all.push(...items);
-    const link = res.headers.get("link") ?? "";
+    const link = response.headers.get("link") ?? "";
     if (!link.includes("next")) break;
     page++;
   }
@@ -71,6 +50,7 @@ async function paginate(
 export default function netlify(rl: RunlinePluginAPI) {
   rl.setName("netlify");
   rl.setVersion("0.1.0");
+  rl.setCredential(netlifyCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -91,7 +71,7 @@ export default function netlify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { deployId } = input as Record<string, unknown>;
-      return apiRequest(getToken(ctx), "POST", `/deploys/${deployId}/cancel`);
+      return apiRequest(ctx, "POST", `deploys/${pathSegment(deployId)}/cancel`);
     },
   });
 
@@ -114,9 +94,9 @@ export default function netlify(rl: RunlinePluginAPI) {
       if (branch) body.branch = branch;
       if (title) qs.title = title;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "POST",
-        `/sites/${siteId}/deploys`,
+        `sites/${pathSegment(siteId)}/deploys`,
         body,
         qs,
       );
@@ -133,9 +113,9 @@ export default function netlify(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { siteId, deployId } = input as Record<string, unknown>;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `/sites/${siteId}/deploys/${deployId}`,
+        `sites/${pathSegment(siteId)}/deploys/${pathSegment(deployId)}`,
       );
     },
   });
@@ -153,13 +133,18 @@ export default function netlify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { siteId, limit } = input as Record<string, unknown>;
-      const token = getToken(ctx);
       if (limit) {
-        return apiRequest(token, "GET", `/sites/${siteId}/deploys`, undefined, {
-          per_page: limit,
-        });
+        return apiRequest(
+          ctx,
+          "GET",
+          `sites/${pathSegment(siteId)}/deploys`,
+          undefined,
+          {
+            per_page: limit,
+          },
+        );
       }
-      return paginate(token, `/sites/${siteId}/deploys`);
+      return paginate(ctx, `sites/${pathSegment(siteId)}/deploys`);
     },
   });
 
@@ -173,7 +158,7 @@ export default function netlify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { siteId } = input as Record<string, unknown>;
-      return apiRequest(getToken(ctx), "DELETE", `/sites/${siteId}`);
+      return apiRequest(ctx, "DELETE", `sites/${pathSegment(siteId)}`);
     },
   });
 
@@ -185,7 +170,7 @@ export default function netlify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { siteId } = input as Record<string, unknown>;
-      return apiRequest(getToken(ctx), "GET", `/sites/${siteId}`);
+      return apiRequest(ctx, "GET", `sites/${pathSegment(siteId)}`);
     },
   });
 
@@ -200,15 +185,14 @@ export default function netlify(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const token = getToken(ctx);
       const limit = (input as Record<string, unknown>)?.limit;
       if (limit) {
-        return apiRequest(token, "GET", "/sites", undefined, {
+        return apiRequest(ctx, "GET", "sites", undefined, {
           filter: "all",
           per_page: limit,
         });
       }
-      return paginate(token, "/sites", { filter: "all" });
+      return paginate(ctx, "sites", { filter: "all" });
     },
   });
 }

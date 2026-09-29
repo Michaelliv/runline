@@ -1,46 +1,26 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { netscalerAdcCredential } from "./credentials.js";
 
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
-  const url = (c.url as string).replace(/\/$/, "");
-  return {
-    url,
-    username: c.username as string,
-    password: c.password as string,
-  };
-}
-
-async function apiRequest(
-  conn: { url: string; username: string; password: string },
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   resource: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const init: RequestInit = {
+  return credentialJson(ctx, netscalerAdcCredential, "netscalerAdc", {
+    target: "api",
+    path: resource,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-NITRO-USER": conn.username,
-      "X-NITRO-PASS": conn.password,
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(`${conn.url}/nitro/v1${resource}`, init);
-  if (!res.ok)
-    throw new Error(
-      `Netscaler ADC API error ${res.status}: ${await res.text()}`,
-    );
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    headers: { "X-NITRO-USER": String(ctx.connection.config.username) },
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function netscalerAdc(rl: RunlinePluginAPI) {
   rl.setName("netscalerAdc");
   rl.setVersion("0.1.0");
+  rl.setCredential(netscalerAdcCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -136,7 +116,6 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const conn = getConn(ctx);
       const body: Record<string, unknown> = {
         reqfile: p.certificateRequestFileName,
         certfile: p.certificateFileName,
@@ -156,7 +135,7 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
       if (p.pempassphrase) body.pempassphrase = p.pempassphrase;
       if (p.subjectaltname) body.subjectaltname = p.subjectaltname;
       if (p.days) body.days = p.days;
-      await apiRequest(conn, "POST", "/config/sslcert?action=create", {
+      await apiRequest(ctx, "POST", "config/sslcert?action=create", {
         sslcert: body,
       });
       return { success: true };
@@ -210,7 +189,6 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const conn = getConn(ctx);
       const body: Record<string, unknown> = {
         certkey: p.certificateKeyPairName,
         cert: p.certificateFileName,
@@ -225,7 +203,7 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
         body.expirymonitor = "ENABLED";
         body.notificationperiod = p.notificationPeriod ?? 10;
       }
-      await apiRequest(conn, "POST", "/config/sslcertkey", {
+      await apiRequest(ctx, "POST", "config/sslcertkey", {
         sslcertkey: body,
       });
       return { success: true };
@@ -249,14 +227,13 @@ export default function netscalerAdc(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { fileName, fileLocation } = input as Record<string, unknown>;
-      const conn = getConn(ctx);
-      const loc = encodeURIComponent(
-        (fileLocation as string) ?? "/nsconfig/ssl/",
-      );
+      // Both are values inside the args query parameter, not path segments.
+      const name = encodeURIComponent(String(fileName));
+      const loc = encodeURIComponent(String(fileLocation ?? "/nsconfig/ssl/"));
       await apiRequest(
-        conn,
+        ctx,
         "DELETE",
-        `/config/systemfile?args=filename:${fileName},filelocation:${loc}`,
+        `config/systemfile?args=filename:${name},filelocation:${loc}`,
       );
       return { success: true };
     },

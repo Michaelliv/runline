@@ -1,57 +1,38 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { mattermostCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: unknown,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}/api/v4/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, mattermostCredential, "mattermost", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=utf-8",
-    },
-  };
-  if (body !== undefined && method !== "GET" && method !== "DELETE") {
-    opts.body = typeof body === "string" ? body : JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Mattermost API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query,
+    ...(body !== undefined && method !== "GET" && method !== "DELETE"
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginateAll(
-  baseUrl: string,
-  token: string,
-  endpoint: string,
-  qs: Record<string, unknown> = {},
+  ctx: ActionContext,
+  path: string,
+  query: Record<string, unknown> = {},
 ): Promise<unknown[]> {
   const all: unknown[] = [];
-  qs.page = 0;
-  qs.per_page = 100;
+  query.page = 0;
+  query.per_page = 100;
   let data: unknown[];
   do {
-    data = (await apiRequest(
-      baseUrl,
-      token,
-      "GET",
-      endpoint,
-      undefined,
-      qs,
-    )) as unknown[];
+    data = (await apiRequest(ctx, "GET", path, undefined, query)) as unknown[];
     all.push(...data);
-    (qs.page as number)++;
+    (query.page as number)++;
   } while (data.length > 0);
   return all;
 }
@@ -59,6 +40,7 @@ async function paginateAll(
 export default function mattermost(rl: RunlinePluginAPI) {
   rl.setName("mattermost");
   rl.setVersion("0.1.0");
+  rl.setCredential(mattermostCredential);
 
   rl.setConnectionSchema({
     baseUrl: {
@@ -74,11 +56,6 @@ export default function mattermost(rl: RunlinePluginAPI) {
       description: "Personal access token or bot token",
       env: "MATTERMOST_TOKEN",
     },
-  });
-
-  const conn = (ctx: { connection: { config: Record<string, unknown> } }) => ({
-    baseUrl: (ctx.connection.config.baseUrl as string).replace(/\/$/, ""),
-    token: ctx.connection.config.accessToken as string,
   });
 
   // ── Channel ─────────────────────────────────────────
@@ -109,8 +86,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, token } = conn(ctx);
-      return apiRequest(baseUrl, token, "POST", "channels", {
+      return apiRequest(ctx, "POST", "channels", {
         team_id: teamId,
         display_name: displayName,
         name,
@@ -124,12 +100,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     description: "Delete (archive) a channel",
     inputSchema: { channelId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "DELETE",
-        `channels/${(input as { channelId: string }).channelId}`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}`,
       );
     },
   });
@@ -143,13 +117,13 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { channelId, userId } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "POST",
-        `channels/${channelId}/members`,
-        { user_id: userId },
+        `channels/${pathSegment(channelId)}/members`,
+        {
+          user_id: userId,
+        },
       );
     },
   });
@@ -171,29 +145,26 @@ export default function mattermost(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, token } = conn(ctx);
       let data: unknown[];
       if (limit) {
         data = (await apiRequest(
-          baseUrl,
-          token,
+          ctx,
           "GET",
-          `channels/${channelId}/members`,
+          `channels/${pathSegment(channelId)}/members`,
           undefined,
           { per_page: limit },
         )) as unknown[];
       } else {
         data = await paginateAll(
-          baseUrl,
-          token,
-          `channels/${channelId}/members`,
+          ctx,
+          `channels/${pathSegment(channelId)}/members`,
         );
       }
       if (resolveData && data.length > 0) {
         const userIds = (data as Array<Record<string, unknown>>).map(
           (m) => m.user_id as string,
         );
-        return apiRequest(baseUrl, token, "POST", "users/ids", userIds);
+        return apiRequest(ctx, "POST", "users/ids", userIds);
       }
       return data;
     },
@@ -204,12 +175,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     description: "Restore (unarchive) a channel",
     inputSchema: { channelId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "POST",
-        `channels/${(input as { channelId: string }).channelId}/restore`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}/restore`,
       );
     },
   });
@@ -224,12 +193,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { teamId, term, limit } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       let data = (await apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "POST",
-        `teams/${teamId}/channels/search`,
+        `teams/${pathSegment(teamId)}/channels/search`,
         { term },
       )) as unknown[];
       if (limit) data = data.slice(0, limit as number);
@@ -242,12 +209,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     description: "Get channel statistics",
     inputSchema: { channelId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `channels/${(input as { channelId: string }).channelId}/stats`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}/stats`,
       );
     },
   });
@@ -276,11 +241,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, token } = conn(ctx);
       const body: Record<string, unknown> = { channel_id: channelId, message };
       if (attachments) body.props = { attachments };
       if (rootId) body.root_id = rootId;
-      return apiRequest(baseUrl, token, "POST", "posts", body);
+      return apiRequest(ctx, "POST", "posts", body);
     },
   });
 
@@ -289,12 +253,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     description: "Delete a message (post)",
     inputSchema: { postId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "DELETE",
-        `posts/${(input as { postId: string }).postId}`,
+        `posts/${pathSegment((input as { postId: string }).postId)}`,
       );
     },
   });
@@ -313,8 +275,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { channelId, userId, message } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
-      return apiRequest(baseUrl, token, "POST", "posts/ephemeral", {
+      return apiRequest(ctx, "POST", "posts/ephemeral", {
         user_id: userId,
         post: { channel_id: channelId, message },
       });
@@ -337,8 +298,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId, postId, emojiName } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
-      return apiRequest(baseUrl, token, "POST", "reactions", {
+      return apiRequest(ctx, "POST", "reactions", {
         user_id: userId,
         post_id: postId,
         emoji_name: (emojiName as string).replace(/:/g, ""),
@@ -357,13 +317,11 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userId, postId, emojiName } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       const name = (emojiName as string).replace(/:/g, "");
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "DELETE",
-        `users/${userId}/posts/${postId}/reactions/${name}`,
+        `users/${pathSegment(userId)}/posts/${pathSegment(postId)}/reactions/${pathSegment(name)}`,
       );
     },
   });
@@ -377,12 +335,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { postId, limit } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       let data = (await apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `posts/${postId}/reactions`,
+        `posts/${pathSegment(postId)}/reactions`,
       )) as unknown[];
       if (data === null) return [];
       if (limit) data = data.slice(0, limit as number);
@@ -432,7 +388,6 @@ export default function mattermost(rl: RunlinePluginAPI) {
         authData,
         additionalFields,
       } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       const body: Record<string, unknown> = {
         username,
         auth_service: authService,
@@ -444,7 +399,7 @@ export default function mattermost(rl: RunlinePluginAPI) {
         body.auth_data = authData;
       }
       if (additionalFields) Object.assign(body, additionalFields);
-      return apiRequest(baseUrl, token, "POST", "users", body);
+      return apiRequest(ctx, "POST", "users", body);
     },
   });
 
@@ -453,12 +408,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     description: "Deactivate (delete) a user",
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "DELETE",
-        `users/${(input as { userId: string }).userId}`,
+        `users/${pathSegment((input as { userId: string }).userId)}`,
       );
     },
   });
@@ -488,7 +441,6 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       const qs: Record<string, unknown> = {};
       if (p.inTeam) qs.in_team = p.inTeam;
       if (p.notInTeam) qs.not_in_team = p.notInTeam;
@@ -497,9 +449,9 @@ export default function mattermost(rl: RunlinePluginAPI) {
       if (p.sort && p.sort !== "username") qs.sort = p.sort;
       if (p.limit) {
         qs.per_page = p.limit;
-        return apiRequest(baseUrl, token, "GET", "users", undefined, qs);
+        return apiRequest(ctx, "GET", "users", undefined, qs);
       }
-      return paginateAll(baseUrl, token, "users", qs);
+      return paginateAll(ctx, "users", qs);
     },
   });
 
@@ -508,12 +460,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     description: "Get a user by email",
     inputSchema: { email: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `users/email/${(input as { email: string }).email}`,
+        `users/email/${pathSegment((input as { email: string }).email)}`,
       );
     },
   });
@@ -535,10 +485,9 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { userIds, since } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       const qs: Record<string, unknown> = {};
       if (since) qs.since = new Date(since as string).getTime();
-      return apiRequest(baseUrl, token, "POST", "users/ids", userIds, qs);
+      return apiRequest(ctx, "POST", "users/ids", userIds, qs);
     },
   });
 
@@ -555,12 +504,10 @@ export default function mattermost(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { teamId, emails } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "POST",
-        `teams/${teamId}/invite/email`,
+        `teams/${pathSegment(teamId)}/invite/email`,
         emails,
       );
     },

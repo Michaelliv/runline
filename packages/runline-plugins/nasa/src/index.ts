@@ -1,21 +1,17 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { nasaCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.nasa.gov";
-
-async function apiRequest(
-  apiKey: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  url.searchParams.set("api_key", apiKey);
-  for (const [k, v] of Object.entries(qs)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-  }
-  const res = await fetch(url.toString());
-  if (!res.ok)
-    throw new Error(`NASA API error ${res.status}: ${await res.text()}`);
-  return res.json();
+  return credentialJson(ctx, nasaCredential, "nasa", {
+    target: "api",
+    path,
+    query: qs,
+  });
 }
 
 function today(): string {
@@ -30,6 +26,7 @@ function formatDate(d?: unknown): string | undefined {
 export default function nasa(rl: RunlinePluginAPI) {
   rl.setName("nasa");
   rl.setVersion("0.1.0");
+  rl.setCredential(nasaCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -39,9 +36,6 @@ export default function nasa(rl: RunlinePluginAPI) {
       env: "NASA_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("apod.get", {
     access: "read",
@@ -58,7 +52,7 @@ export default function nasa(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {
         date: formatDate((input as Record<string, unknown>)?.date) ?? today(),
       };
-      return apiRequest(key(ctx), "/planetary/apod", qs);
+      return apiRequest(ctx, "planetary/apod", qs);
     },
   });
 
@@ -84,11 +78,10 @@ export default function nasa(rl: RunlinePluginAPI) {
         start_date: formatDate(p.startDate) ?? today(),
         end_date: formatDate(p.endDate) ?? today(),
       };
-      const data = (await apiRequest(
-        key(ctx),
-        "/neo/rest/v1/feed",
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "neo/rest/v1/feed", qs)) as Record<
+        string,
+        unknown
+      >;
       return data.near_earth_objects;
     },
   });
@@ -110,8 +103,8 @@ export default function nasa(rl: RunlinePluginAPI) {
         unknown
       >;
       const data = (await apiRequest(
-        key(ctx),
-        `/neo/rest/v1/neo/${asteroidId}`,
+        ctx,
+        `neo/rest/v1/neo/${pathSegment(asteroidId)}`,
       )) as Record<string, unknown>;
       if (!includeCloseApproachData) delete data.close_approach_data;
       return data;
@@ -133,8 +126,8 @@ export default function nasa(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.size = (input as Record<string, unknown>).limit;
       const data = (await apiRequest(
-        key(ctx),
-        "/neo/rest/v1/neo/browse",
+        ctx,
+        "neo/rest/v1/neo/browse",
         qs,
       )) as Record<string, unknown>;
       return data.near_earth_objects;
@@ -150,42 +143,42 @@ export default function nasa(rl: RunlinePluginAPI) {
   }> = [
     {
       name: "coronalMassEjection",
-      path: "/DONKI/CME",
+      path: "DONKI/CME",
       description: "DONKI Coronal Mass Ejection data",
     },
     {
       name: "solarFlare",
-      path: "/DONKI/FLR",
+      path: "DONKI/FLR",
       description: "DONKI Solar Flare data",
     },
     {
       name: "solarEnergeticParticle",
-      path: "/DONKI/SEP",
+      path: "DONKI/SEP",
       description: "DONKI Solar Energetic Particle data",
     },
     {
       name: "magnetopauseCrossing",
-      path: "/DONKI/MPC",
+      path: "DONKI/MPC",
       description: "DONKI Magnetopause Crossing data",
     },
     {
       name: "radiationBeltEnhancement",
-      path: "/DONKI/RBE",
+      path: "DONKI/RBE",
       description: "DONKI Radiation Belt Enhancement data",
     },
     {
       name: "highSpeedStream",
-      path: "/DONKI/HSS",
+      path: "DONKI/HSS",
       description: "DONKI High Speed Stream data",
     },
     {
       name: "wsaEnlilSimulation",
-      path: "/DONKI/WSAEnlilSimulations",
+      path: "DONKI/WSAEnlilSimulations",
       description: "DONKI WSA+Enlil Simulation data",
     },
     {
       name: "notifications",
-      path: "/DONKI/notifications",
+      path: "DONKI/notifications",
       description: "DONKI Notifications data",
     },
   ];
@@ -211,7 +204,7 @@ export default function nasa(rl: RunlinePluginAPI) {
         const qs: Record<string, unknown> = {};
         if (p.startDate) qs.startDate = formatDate(p.startDate);
         if (p.endDate) qs.endDate = formatDate(p.endDate);
-        return apiRequest(key(ctx), ep.path, qs);
+        return apiRequest(ctx, ep.path, qs);
       },
     });
   }
@@ -241,7 +234,7 @@ export default function nasa(rl: RunlinePluginAPI) {
       if (p.endDate) qs.endDate = formatDate(p.endDate);
       if (p.location) qs.location = p.location;
       if (p.catalog) qs.catalog = p.catalog;
-      return apiRequest(key(ctx), "/DONKI/IPS", qs);
+      return apiRequest(ctx, "DONKI/IPS", qs);
     },
   });
 
@@ -268,7 +261,7 @@ export default function nasa(rl: RunlinePluginAPI) {
       const { lat, lon, date, dim } = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { lat, lon, dim: dim ?? 0.025 };
       if (date) qs.date = formatDate(date);
-      return apiRequest(key(ctx), "/planetary/earth/assets", qs);
+      return apiRequest(ctx, "planetary/earth/assets", qs);
     },
   });
 }

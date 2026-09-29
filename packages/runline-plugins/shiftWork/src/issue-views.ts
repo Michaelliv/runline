@@ -10,7 +10,6 @@ import {
   ISSUE_VIEW_SORT,
   ISSUE_VIEW_VISIBILITY,
   idSchema,
-  listParams,
   pathSegment,
   request,
   type ShiftIssue,
@@ -18,7 +17,6 @@ import {
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
-  withQuery,
 } from "./shared.js";
 
 const viewFields = {
@@ -76,7 +74,8 @@ export function registerIssueViewActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ views: ShiftIssueView[] }>(
         ctx,
-        `/v1/issue-views?${listParams(input)}`,
+        "/v1/issue-views",
+        { query: input },
       );
       return body.views;
     },
@@ -89,7 +88,8 @@ export function registerIssueViewActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ views: ShiftIssueView[]; nextCursor?: string }>(
         ctx,
-        `/v1/issue-views?${listParams(input)}`,
+        "/v1/issue-views",
+        { query: input },
       );
     },
   });
@@ -125,10 +125,8 @@ export function registerIssueViewActions(rl: RunlinePluginAPI) {
       };
       const body = await request<{ issues: ShiftIssue[] }>(
         ctx,
-        withQuery(
-          `/v1/issue-views/${pathSegment(id)}/issues`,
-          listParams(pagination),
-        ),
+        `/v1/issue-views/${pathSegment(id)}/issues`,
+        { query: pagination },
       );
       return body.issues;
     },
@@ -153,10 +151,8 @@ export function registerIssueViewActions(rl: RunlinePluginAPI) {
       };
       return request<{ issues: ShiftIssue[]; nextCursor?: string }>(
         ctx,
-        withQuery(
-          `/v1/issue-views/${pathSegment(id)}/issues`,
-          listParams(pagination),
-        ),
+        `/v1/issue-views/${pathSegment(id)}/issues`,
+        { query: pagination },
       );
     },
   });

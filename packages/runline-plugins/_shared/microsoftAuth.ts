@@ -4,59 +4,22 @@ import {
   type ActionContext,
   type HttpMethod,
 } from "runline";
-import { credentialRuntime } from "./credentialAdapter.js";
+import { credentialBroker } from "./credentialAdapter.js";
+import { jsonAnswer, requestFailed } from "./credentials.js";
 import {
-  microsoftCredentialType,
-  microsoftMethod,
+  microsoftCredential,
   microsoftUserBase,
   type MicrosoftAuthConfig,
 } from "./microsoftCredentials.js";
 
 export type { MicrosoftAuthConfig } from "./microsoftCredentials.js";
-export { microsoftDriveBase } from "./microsoftCredentials.js";
-
-export function isAppOnly(cfg: MicrosoftAuthConfig): boolean {
-  return microsoftMethod(cfg) === "appOnly";
-}
+export {
+  microsoftCredential,
+  microsoftDriveBase,
+} from "./microsoftCredentials.js";
 
 export function userBase(ctx: ActionContext): string {
   return microsoftUserBase(ctx.connection.config as MicrosoftAuthConfig);
-}
-
-function runtime(ctx: ActionContext, plugin: string, scopes: string[]) {
-  const cfg = ctx.connection.config as MicrosoftAuthConfig;
-  const method = microsoftMethod(cfg);
-  if (
-    method === "appOnly" &&
-    (!cfg.tenantId ||
-      ["common", "organizations", "consumers"].includes(cfg.tenantId))
-  )
-    throw new AuthError("invalid_credentials");
-  return credentialRuntime(
-    ctx,
-    microsoftCredentialType(cfg, plugin, scopes),
-    method,
-    (current) => {
-      const c = current as MicrosoftAuthConfig;
-      return [
-        microsoftMethod(c),
-        c.tenantId,
-        c.clientId,
-        c.clientSecret,
-        scopes,
-      ];
-    },
-  );
-}
-
-/** Compatibility token access uses the same grant runtime as resource requests. */
-export async function microsoftAccessToken(
-  ctx: ActionContext,
-  plugin: string,
-  scopes: string[],
-): Promise<string> {
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.accessToken(binding);
 }
 
 export async function microsoftProbe(
@@ -64,8 +27,7 @@ export async function microsoftProbe(
   plugin: string,
   scopes: string[],
 ) {
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.probe(binding);
+  return credentialBroker(ctx, microsoftCredential(plugin, scopes)).probe();
 }
 
 export async function graphResponse(
@@ -79,8 +41,7 @@ export async function graphResponse(
 ): Promise<Response> {
   if (!path.startsWith("/") || path.startsWith("//"))
     throw new AuthError("request_not_allowed");
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.request(binding, {
+  return credentialBroker(ctx, microsoftCredential(plugin, scopes)).request({
     target: "graph",
     path: path.slice(1),
     method: method as HttpMethod,
@@ -92,15 +53,19 @@ export async function graphResponse(
   });
 }
 
-/** JSON and binary requests share the same destination, renewal and replay policy. */
-export async function graphRequest(
+/**
+ * A Graph JSON request that must succeed; its answer is read by
+ * `jsonAnswer`. JSON and binary requests share the same destination,
+ * renewal and replay policy through `graphResponse`.
+ */
+export async function graphRequest<T = unknown>(
   ctx: ActionContext,
   plugin: string,
   scopes: string[],
   method: string,
   path: string,
   body?: unknown,
-): Promise<any> {
+): Promise<T> {
   const res = await graphResponse(
     ctx,
     plugin,
@@ -110,15 +75,8 @@ export async function graphRequest(
     body === undefined ? undefined : JSON.stringify(body),
     body === undefined ? undefined : "application/json",
   );
-  if (!res.ok)
-    throw new Error(`${plugin}: Graph request failed (HTTP ${res.status})`);
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  try {
-    return text ? JSON.parse(text) : { success: true };
-  } catch {
-    throw new Error(`${plugin}: invalid Graph response`);
-  }
+  if (!res.ok) throw requestFailed(plugin, res.status);
+  return jsonAnswer<T>(res);
 }
 
 /** Graph-issued signed download URLs carry their own authority, never a bearer header. */

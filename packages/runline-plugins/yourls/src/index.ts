@@ -1,34 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    signature: c.signature as string,
-  };
-}
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { answerFailed, credentialJson } from "../../_shared/credentials.js";
+import { yourlsCredential } from "./credentials.js";
 
 async function apiRequest(
-  conn: { url: string; signature: string },
+  ctx: ActionContext,
   qs: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.url}/yourls-api.php`);
-  qs.signature = conn.signature;
-  qs.format = "json";
-  for (const [k, v] of Object.entries(qs)) {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-  }
-  const res = await fetch(url.toString());
-  if (!res.ok)
-    throw new Error(`Yourls error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
-  if (data.status === "fail") throw new Error(`Yourls error: ${data.message}`);
+  const data = (await credentialJson(ctx, yourlsCredential, "yourls", {
+    target: "api",
+    path: "yourls-api.php",
+    query: { ...qs, format: "json" },
+  })) as Record<string, unknown>;
+  if (data.status === "fail")
+    throw answerFailed("yourls", { code: data.code, message: data.message });
   return data;
 }
 
 export default function yourls(rl: RunlinePluginAPI) {
   rl.setName("yourls");
   rl.setVersion("0.1.0");
+  rl.setCredential(yourlsCredential);
   rl.setConnectionSchema({
     url: {
       type: "string",
@@ -61,7 +52,7 @@ export default function yourls(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { action: "shorturl", url: p.url };
       if (p.keyword) qs.keyword = p.keyword;
       if (p.title) qs.title = p.title;
-      return apiRequest(getConn(ctx), qs);
+      return apiRequest(ctx, qs);
     },
   });
 
@@ -70,7 +61,7 @@ export default function yourls(rl: RunlinePluginAPI) {
     description: "Expand a short URL to its original",
     inputSchema: { shortUrl: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(getConn(ctx), {
+      return apiRequest(ctx, {
         action: "expand",
         shorturl: (input as Record<string, unknown>).shortUrl,
       });
@@ -82,7 +73,7 @@ export default function yourls(rl: RunlinePluginAPI) {
     description: "Get stats for a short URL",
     inputSchema: { shortUrl: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(getConn(ctx), {
+      const data = (await apiRequest(ctx, {
         action: "url-stats",
         shorturl: (input as Record<string, unknown>).shortUrl,
       })) as Record<string, unknown>;

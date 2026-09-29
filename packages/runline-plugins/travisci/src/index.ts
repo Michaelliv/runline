@@ -1,40 +1,33 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  pathSegment,
+  slashEncodedSegment,
+} from "../../_shared/credentials.js";
+import { travisciCredential } from "./credentials.js";
 
-const BASE = "https://api.travis-ci.com";
-
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: unknown,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, travisciCredential, "travisci", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `token ${token}`,
-      "Travis-API-Version": "3",
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  };
-  if (body !== undefined)
-    init.body = typeof body === "string" ? body : JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`TravisCI error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query,
+    headers: { "Travis-API-Version": "3" },
+    ...(body !== undefined ? { json: body } : {}),
+  });
 }
 
 export default function travisci(rl: RunlinePluginAPI) {
   rl.setName("travisci");
   rl.setVersion("0.1.0");
+  rl.setCredential(travisciCredential);
+
   rl.setConnectionSchema({
     apiToken: {
       type: "string",
@@ -43,8 +36,6 @@ export default function travisci(rl: RunlinePluginAPI) {
       env: "TRAVISCI_API_TOKEN",
     },
   });
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiToken as string;
 
   rl.registerAction("build.get", {
     access: "read",
@@ -52,9 +43,9 @@ export default function travisci(rl: RunlinePluginAPI) {
     inputSchema: { buildId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/build/${(input as Record<string, unknown>).buildId}`,
+        `build/${pathSegment((input as Record<string, unknown>).buildId)}`,
       );
     },
   });
@@ -72,9 +63,9 @@ export default function travisci(rl: RunlinePluginAPI) {
       if (p.limit) qs.limit = p.limit;
       if (p.sortBy) qs.sort_by = p.sortBy;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        "/builds",
+        "builds",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -88,9 +79,9 @@ export default function travisci(rl: RunlinePluginAPI) {
     inputSchema: { buildId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        `/build/${(input as Record<string, unknown>).buildId}/cancel`,
+        `build/${pathSegment((input as Record<string, unknown>).buildId)}/cancel`,
       );
     },
   });
@@ -101,9 +92,9 @@ export default function travisci(rl: RunlinePluginAPI) {
     inputSchema: { buildId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        `/build/${(input as Record<string, unknown>).buildId}/restart`,
+        `build/${pathSegment((input as Record<string, unknown>).buildId)}/restart`,
       );
     },
   });
@@ -122,12 +113,16 @@ export default function travisci(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const slug = (p.slug as string).replace(/\//g, "%2F");
       const request: Record<string, unknown> = { branch: p.branch };
       if (p.message) request.message = p.message;
-      return apiRequest(key(ctx), "POST", `/repo/${slug}/requests`, {
-        request,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `repo/${slashEncodedSegment(p.slug)}/requests`,
+        {
+          request,
+        },
+      );
     },
   });
 }

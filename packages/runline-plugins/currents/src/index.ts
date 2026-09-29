@@ -1,47 +1,33 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { currentsCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.currents.dev/v1";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) {
-        if (Array.isArray(v)) {
-          for (const item of v) url.searchParams.append(`${k}[]`, String(item));
-        } else {
-          url.searchParams.set(k, String(v));
-        }
-      }
-    }
+  // Currents expects array parameters as repeated `key[]` entries.
+  const query: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(qs ?? {})) {
+    if (v === undefined || v === null) continue;
+    if (Array.isArray(v)) query[`${k}[]`] = v;
+    else query[k] = v;
   }
-  const opts: RequestInit = {
+  return credentialJson(ctx, currentsCredential, "currents", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-  };
-  if (
-    body &&
+    query,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Currents API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 function unwrapData(response: unknown): unknown {
@@ -55,15 +41,10 @@ function unwrapData(response: unknown): unknown {
   return response;
 }
 
-function getKey(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
-}
-
 export default function currents(rl: RunlinePluginAPI) {
   rl.setName("currents");
   rl.setVersion("0.1.0");
+  rl.setCredential(currentsCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -163,7 +144,7 @@ export default function currents(rl: RunlinePluginAPI) {
       if (desc) body.description = desc;
       if (expiresAfter) body.expiresAfter = expiresAfter;
 
-      return apiRequest(getKey(ctx), "POST", "/actions", body, { projectId });
+      return api(ctx, "POST", "actions", body, { projectId });
     },
   });
 
@@ -175,10 +156,10 @@ export default function currents(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
+        await api(
+          ctx,
           "GET",
-          `/actions/${(input as { actionId: string }).actionId}`,
+          `actions/${pathSegment((input as { actionId: string }).actionId)}`,
         ),
       );
     },
@@ -208,9 +189,7 @@ export default function currents(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { projectId };
       if (search) qs.search = search;
       if (status) qs.status = status;
-      return unwrapData(
-        await apiRequest(getKey(ctx), "GET", "/actions", undefined, qs),
-      );
+      return unwrapData(await api(ctx, "GET", "actions", undefined, qs));
     },
   });
 
@@ -233,7 +212,7 @@ export default function currents(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { actionId, ...body } = input as Record<string, unknown>;
-      return apiRequest(getKey(ctx), "PUT", `/actions/${actionId}`, body);
+      return api(ctx, "PUT", `actions/${pathSegment(actionId)}`, body);
     },
   });
 
@@ -244,10 +223,10 @@ export default function currents(rl: RunlinePluginAPI) {
       actionId: { type: "string", required: true, description: "Action ID" },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        getKey(ctx),
+      return api(
+        ctx,
         "PUT",
-        `/actions/${(input as { actionId: string }).actionId}/enable`,
+        `actions/${pathSegment((input as { actionId: string }).actionId)}/enable`,
       );
     },
   });
@@ -259,10 +238,10 @@ export default function currents(rl: RunlinePluginAPI) {
       actionId: { type: "string", required: true, description: "Action ID" },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        getKey(ctx),
+      return api(
+        ctx,
         "PUT",
-        `/actions/${(input as { actionId: string }).actionId}/disable`,
+        `actions/${pathSegment((input as { actionId: string }).actionId)}/disable`,
       );
     },
   });
@@ -274,10 +253,10 @@ export default function currents(rl: RunlinePluginAPI) {
       actionId: { type: "string", required: true, description: "Action ID" },
     },
     async execute(input, ctx) {
-      await apiRequest(
-        getKey(ctx),
+      await api(
+        ctx,
         "DELETE",
-        `/actions/${(input as { actionId: string }).actionId}`,
+        `actions/${pathSegment((input as { actionId: string }).actionId)}`,
       );
       return { success: true };
     },
@@ -297,10 +276,10 @@ export default function currents(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
+        await api(
+          ctx,
           "GET",
-          `/instances/${(input as { instanceId: string }).instanceId}`,
+          `instances/${pathSegment((input as { instanceId: string }).instanceId)}`,
         ),
       );
     },
@@ -315,10 +294,10 @@ export default function currents(rl: RunlinePluginAPI) {
       projectId: { type: "string", required: true, description: "Project ID" },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        getKey(ctx),
+      return api(
+        ctx,
         "GET",
-        `/projects/${(input as { projectId: string }).projectId}`,
+        `projects/${pathSegment((input as { projectId: string }).projectId)}`,
       );
     },
   });
@@ -333,9 +312,7 @@ export default function currents(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       const { limit } = (input ?? {}) as { limit?: number };
       if (limit) qs.limit = limit;
-      return unwrapData(
-        await apiRequest(getKey(ctx), "GET", "/projects", undefined, qs),
-      );
+      return unwrapData(await api(ctx, "GET", "projects", undefined, qs));
     },
   });
 
@@ -390,10 +367,10 @@ export default function currents(rl: RunlinePluginAPI) {
       if (authors) qs.authors = authors;
       if (tags) qs.tags = tags;
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
+        await api(
+          ctx,
           "GET",
-          `/projects/${projectId}/insights`,
+          `projects/${pathSegment(projectId)}/insights`,
           undefined,
           qs,
         ),
@@ -411,10 +388,10 @@ export default function currents(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
+        await api(
+          ctx,
           "GET",
-          `/runs/${(input as { runId: string }).runId}`,
+          `runs/${pathSegment((input as { runId: string }).runId)}`,
         ),
       );
     },
@@ -483,10 +460,10 @@ export default function currents(rl: RunlinePluginAPI) {
       if (dateStart) qs.date_start = dateStart;
       if (dateEnd) qs.date_end = dateEnd;
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
+        await api(
+          ctx,
           "GET",
-          `/projects/${projectId}/runs`,
+          `projects/${pathSegment(projectId)}/runs`,
           undefined,
           qs,
         ),
@@ -520,9 +497,7 @@ export default function currents(rl: RunlinePluginAPI) {
       if (branch) qs.branch = branch;
       if (ciBuildId) qs.ciBuildId = ciBuildId;
       if (tags) qs.tags = tags;
-      return unwrapData(
-        await apiRequest(getKey(ctx), "GET", "/runs/find", undefined, qs),
-      );
+      return unwrapData(await api(ctx, "GET", "runs/find", undefined, qs));
     },
   });
 
@@ -533,10 +508,10 @@ export default function currents(rl: RunlinePluginAPI) {
       runId: { type: "string", required: true, description: "Run ID" },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        getKey(ctx),
+      return api(
+        ctx,
         "PUT",
-        `/runs/${(input as { runId: string }).runId}/cancel`,
+        `runs/${pathSegment((input as { runId: string }).runId)}/cancel`,
       );
     },
   });
@@ -568,7 +543,7 @@ export default function currents(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const body = input as Record<string, unknown>;
-      return apiRequest(getKey(ctx), "PUT", "/runs/cancel-ci/github", body);
+      return api(ctx, "PUT", "runs/cancel-ci/github", body);
     },
   });
 
@@ -595,7 +570,7 @@ export default function currents(rl: RunlinePluginAPI) {
       >;
       const body: Record<string, unknown> = { machineId: machineIds };
       if (isBatchedOr8n) body.isBatchedOr8n = true;
-      return apiRequest(getKey(ctx), "PUT", `/runs/${runId}/reset`, body);
+      return api(ctx, "PUT", `runs/${pathSegment(runId)}/reset`, body);
     },
   });
 
@@ -606,10 +581,10 @@ export default function currents(rl: RunlinePluginAPI) {
       runId: { type: "string", required: true, description: "Run ID" },
     },
     async execute(input, ctx) {
-      await apiRequest(
-        getKey(ctx),
+      await api(
+        ctx,
         "DELETE",
-        `/runs/${(input as { runId: string }).runId}`,
+        `runs/${pathSegment((input as { runId: string }).runId)}`,
       );
       return { success: true };
     },
@@ -635,10 +610,10 @@ export default function currents(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
+        await api(
+          ctx,
           "POST",
-          "/signature/test",
+          "signature/test",
           input as Record<string, unknown>,
         ),
       );
@@ -685,10 +660,10 @@ export default function currents(rl: RunlinePluginAPI) {
       if (order) qs.order = order;
       if (dir) qs.dir = dir;
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
+        await api(
+          ctx,
           "GET",
-          `/spec-files/${projectId}`,
+          `spec-files/${pathSegment(projectId)}`,
           undefined,
           qs,
         ),
@@ -748,13 +723,7 @@ export default function currents(rl: RunlinePluginAPI) {
       if (title) qs.title = title;
       if (spec) qs.spec = spec;
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
-          "GET",
-          `/tests/${projectId}`,
-          undefined,
-          qs,
-        ),
+        await api(ctx, "GET", `tests/${pathSegment(projectId)}`, undefined, qs),
       );
     },
   });
@@ -807,10 +776,10 @@ export default function currents(rl: RunlinePluginAPI) {
       if (status) qs.status = status;
       if (branches) qs.branches = branches;
       return unwrapData(
-        await apiRequest(
-          getKey(ctx),
+        await api(
+          ctx,
           "GET",
-          `/test-results/${signature}`,
+          `test-results/${pathSegment(signature)}`,
           undefined,
           qs,
         ),

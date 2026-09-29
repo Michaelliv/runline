@@ -1,34 +1,26 @@
 import { createHash } from "node:crypto";
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { authedFetch } from "../../_shared/authedFetch.js";
+import { credentialJson, graphqlFailed } from "../../_shared/credentials.js";
+import { linearCredential } from "./credentials.js";
 
-const GQL_URL = "https://api.linear.app/graphql";
-
-export type Ctx = { connection: { config: Record<string, unknown> } };
+export type Ctx = ActionContext;
 
 export async function gql(
-  apiKey: string,
+  ctx: Ctx,
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const body: Record<string, unknown> = { query };
   if (variables) body.variables = variables;
-  const res = await authedFetch(GQL_URL, {
+  const data = (await credentialJson(ctx, linearCredential, "linear", {
+    target: "gql",
+    path: "graphql",
     method: "POST",
-    headers: { Authorization: apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok)
-    throw new Error(`Linear API error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
-  if (data.errors)
-    throw new Error(`Linear GraphQL error: ${JSON.stringify(data.errors)}`);
+    json: body,
+  })) as Record<string, unknown>;
+  if (data.errors) throw graphqlFailed("linear", data.errors);
   return data.data as Record<string, unknown>;
-}
-
-export function key(ctx: Ctx) {
-  return ctx.connection.config.apiKey as string;
 }
 
 /**
@@ -63,26 +55,32 @@ interface LabelEntry {
 type LabelDirectory = Map<string, LabelEntry[]>;
 
 /**
- * The workspace's labels, per API key. Linear rejects a non-UUID in
+ * The workspace's labels. Linear rejects a non-UUID in
  * `labels: { id: { in: [...] } }` with "each value in in must be a UUID",
  * so a human-written scope value like `requester:yosi` breaks every issue
  * query (SHFT-1644) unless it is resolved to an id first. The directory is
- * fetched once per key and re-read on a miss, so a label created later
- * still resolves.
+ * fetched once per locally signed connection and re-read on a miss, so a
+ * label created later still resolves.
  *
- * Keyed by digest, so a long-lived Map never holds the API key itself.
+ * Keyed by a digest of the connection config, API key included, so a
+ * long-lived Map never holds the key itself. A brokered connection's config
+ * holds no key: two people's connections can be identical, and only the
+ * broker knows whose workspace answers. Brokered calls read their own
+ * directory every time and cache nothing.
  */
 const labelDirectories = new Map<string, Promise<LabelDirectory>>();
 
-const directoryKey = (apiKey: string): string =>
-  createHash("sha256").update(apiKey).digest("hex");
+const directoryKey = (ctx: Ctx): string =>
+  createHash("sha256")
+    .update(JSON.stringify(ctx.connection.config))
+    .digest("hex");
 
-async function fetchLabelDirectory(apiKey: string): Promise<LabelDirectory> {
+async function fetchLabelDirectory(ctx: Ctx): Promise<LabelDirectory> {
   const byName: LabelDirectory = new Map();
   let after: string | null = null;
   for (;;) {
     const data: Record<string, unknown> = await gql(
-      apiKey,
+      ctx,
       `query($after: String) { issueLabels(first: 250, after: $after) { nodes { id name team { key } } pageInfo { hasNextPage endCursor } } }`,
       { after },
     );
@@ -111,13 +109,14 @@ async function fetchLabelDirectory(apiKey: string): Promise<LabelDirectory> {
 }
 
 function labelDirectory(
-  apiKey: string,
+  ctx: Ctx,
   { refresh = false }: { refresh?: boolean } = {},
 ): Promise<LabelDirectory> {
-  const cacheKey = directoryKey(apiKey);
+  if (ctx.credentials) return fetchLabelDirectory(ctx);
+  const cacheKey = directoryKey(ctx);
   const cached = refresh ? undefined : labelDirectories.get(cacheKey);
   if (cached) return cached;
-  const pending = fetchLabelDirectory(apiKey);
+  const pending = fetchLabelDirectory(ctx);
   labelDirectories.set(cacheKey, pending);
   // A failed lookup must not be cached as the answer for this key.
   pending.catch(() => {
@@ -161,15 +160,14 @@ export async function resolveScopeLabelIds(ctx: Ctx): Promise<string[]> {
   if (values.length === 0) return [];
   if (values.every((v) => UUID_RE.test(v))) return values;
 
-  const apiKey = key(ctx);
   const missing = (directory: LabelDirectory) =>
     values.some((v) => !UUID_RE.test(v) && !directory.has(v.toLowerCase()));
-  let directory = await labelDirectory(apiKey);
+  let directory = await labelDirectory(ctx);
   // A label created after the directory was cached would otherwise stay
   // unresolvable for the lifetime of the process: re-read once before
   // declaring a name unknown.
   if (missing(directory))
-    directory = await labelDirectory(apiKey, { refresh: true });
+    directory = await labelDirectory(ctx, { refresh: true });
 
   return values.map((value) => {
     if (UUID_RE.test(value)) return value;
@@ -219,7 +217,7 @@ export async function getIssueForScope(
   issueId: string,
 ): Promise<Record<string, unknown> | null> {
   const data = await gql(
-    key(ctx),
+    ctx,
     `query($id: String!) { issue(id: $id) { id identifier labels { nodes { id name } } } }`,
     { id: issueId },
   );
@@ -243,7 +241,7 @@ export async function assertCommentInScope(
 ): Promise<void> {
   if (!isScoped(ctx)) return;
   const data = await gql(
-    key(ctx),
+    ctx,
     `query($id: String!) { comment(id: $id) { id issue { id identifier labels { nodes { id name } } } } }`,
     { id: commentId },
   );
@@ -260,7 +258,7 @@ export async function assertAttachmentInScope(
 ): Promise<void> {
   if (!isScoped(ctx)) return;
   const data = await gql(
-    key(ctx),
+    ctx,
     `query($id: String!) { attachment(id: $id) { id issue { id identifier labels { nodes { id name } } } } }`,
     { id: attachmentId },
   );
@@ -502,7 +500,7 @@ export function registerListAction(
       const opts = (input ?? {}) as ListOpts;
       const { argsDecl, argsCall, vars } = buildConnArgs(opts, filterTypeName);
       const data = await gql(
-        key(ctx),
+        ctx,
         `query${argsDecl} { ${rootField}${argsCall} { nodes { ${selection} } pageInfo { hasNextPage endCursor } } }`,
         vars,
       );
@@ -530,7 +528,7 @@ export function registerGetAction(
     async execute(input, ctx) {
       requireRootFieldAvailable(ctx, name, rootField);
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($id: String!) { ${rootField}(id: $id) { ${selection} } }`,
         { id: (input as { id: string }).id },
       );

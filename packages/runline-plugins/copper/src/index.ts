@@ -1,39 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { copperCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.copper.com/developer_api/v1";
-
-async function apiRequest(
-  apiKey: string,
-  email: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, copperCredential, "copper", {
+    target: "api",
+    path,
     method,
     headers: {
-      "Content-Type": "application/json",
-      "X-PW-AccessToken": apiKey,
       "X-PW-Application": "developer_api",
-      "X-PW-UserEmail": email,
+      "X-PW-UserEmail": String(ctx.connection.config.email ?? ""),
     },
-  };
-  if (body && Object.keys(body).length > 0) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok)
-    throw new Error(`Copper API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 async function searchAll(
-  apiKey: string,
-  email: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   body?: Record<string, unknown>,
   limit?: number,
 ): Promise<unknown[]> {
@@ -41,7 +30,7 @@ async function searchAll(
   let page = 1;
   const size = 200;
   while (true) {
-    const data = (await apiRequest(apiKey, email, "POST", endpoint, {
+    const data = (await apiRequest(ctx, "POST", path, {
       ...body,
       page_number: page,
       page_size: size,
@@ -53,13 +42,6 @@ async function searchAll(
     page++;
   }
   return results;
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    apiKey: ctx.connection.config.apiKey as string,
-    email: ctx.connection.config.email as string,
-  };
 }
 
 function registerCrud(
@@ -89,10 +71,8 @@ function registerCrud(
       ...extraCreateFields,
     },
     async execute(input, ctx) {
-      const { apiKey, email } = getConn(ctx);
       return apiRequest(
-        apiKey,
-        email,
+        ctx,
         "POST",
         endpoint,
         (input ?? {}) as Record<string, unknown>,
@@ -111,12 +91,10 @@ function registerCrud(
       },
     },
     async execute(input, ctx) {
-      const { apiKey, email } = getConn(ctx);
       return apiRequest(
-        apiKey,
-        email,
+        ctx,
         "GET",
-        `${endpoint}/${(input as Record<string, string>)[idParam]}`,
+        `${endpoint}/${pathSegment((input as Record<string, string>)[idParam])}`,
       );
     },
   });
@@ -128,9 +106,8 @@ function registerCrud(
       limit: { type: "number", required: false, description: "Max results" },
     },
     async execute(input, ctx) {
-      const { apiKey, email } = getConn(ctx);
       const { limit } = (input ?? {}) as { limit?: number };
-      return searchAll(apiKey, email, `${endpoint}/search`, undefined, limit);
+      return searchAll(ctx, `${endpoint}/search`, undefined, limit);
     },
   });
 
@@ -145,9 +122,8 @@ function registerCrud(
       },
     },
     async execute(input, ctx) {
-      const { apiKey, email } = getConn(ctx);
       const { [idParam]: id, ...body } = input as Record<string, unknown>;
-      return apiRequest(apiKey, email, "PUT", `${endpoint}/${id}`, body);
+      return apiRequest(ctx, "PUT", `${endpoint}/${pathSegment(id)}`, body);
     },
   });
 
@@ -162,12 +138,10 @@ function registerCrud(
       },
     },
     async execute(input, ctx) {
-      const { apiKey, email } = getConn(ctx);
       return apiRequest(
-        apiKey,
-        email,
+        ctx,
         "DELETE",
-        `${endpoint}/${(input as Record<string, string>)[idParam]}`,
+        `${endpoint}/${pathSegment((input as Record<string, string>)[idParam])}`,
       );
     },
   });
@@ -176,6 +150,7 @@ function registerCrud(
 export default function copper(rl: RunlinePluginAPI) {
   rl.setName("copper");
   rl.setVersion("0.1.0");
+  rl.setCredential(copperCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -193,9 +168,9 @@ export default function copper(rl: RunlinePluginAPI) {
   });
 
   // CRUD resources
-  registerCrud(rl, "company", "/companies", "companyId", true);
-  registerCrud(rl, "lead", "/leads", "leadId", true);
-  registerCrud(rl, "opportunity", "/opportunities", "opportunityId", true, {
+  registerCrud(rl, "company", "companies", "companyId", true);
+  registerCrud(rl, "lead", "leads", "leadId", true);
+  registerCrud(rl, "opportunity", "opportunities", "opportunityId", true, {
     customerSourceId: {
       type: "string",
       required: true,
@@ -207,9 +182,9 @@ export default function copper(rl: RunlinePluginAPI) {
       description: "Primary contact ID",
     },
   });
-  registerCrud(rl, "person", "/people", "personId", true);
-  registerCrud(rl, "project", "/projects", "projectId", true);
-  registerCrud(rl, "task", "/tasks", "taskId", true);
+  registerCrud(rl, "person", "people", "personId", true);
+  registerCrud(rl, "project", "projects", "projectId", true);
+  registerCrud(rl, "task", "tasks", "taskId", true);
 
   // Read-only resources
   rl.registerAction("customerSource.list", {
@@ -219,12 +194,10 @@ export default function copper(rl: RunlinePluginAPI) {
       limit: { type: "number", required: false, description: "Max results" },
     },
     async execute(input, ctx) {
-      const { apiKey, email } = getConn(ctx);
       const data = (await apiRequest(
-        apiKey,
-        email,
+        ctx,
         "GET",
-        "/customer_sources",
+        "customer_sources",
       )) as unknown[];
       const { limit } = (input ?? {}) as { limit?: number };
       if (limit) return data.slice(0, limit);
@@ -239,9 +212,8 @@ export default function copper(rl: RunlinePluginAPI) {
       limit: { type: "number", required: false, description: "Max results" },
     },
     async execute(input, ctx) {
-      const { apiKey, email } = getConn(ctx);
       const { limit } = (input ?? {}) as { limit?: number };
-      return searchAll(apiKey, email, "/users/search", undefined, limit);
+      return searchAll(ctx, "users/search", undefined, limit);
     },
   });
 }

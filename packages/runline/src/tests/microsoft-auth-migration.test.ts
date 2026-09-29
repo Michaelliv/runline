@@ -109,7 +109,7 @@ describe("Microsoft credential migration", () => {
         { to: ["x@example.com"], subject: "test", body: "test" },
         ctx,
       ) as Promise<unknown>,
-      { message: "microsoftMail: Graph request failed (HTTP 401)" },
+      { message: "microsoftMail: request failed (HTTP 401)" },
     );
     assert.equal(calls, 1);
   });

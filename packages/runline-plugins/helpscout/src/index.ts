@@ -1,40 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
-
-const BASE_URL = "https://api.helpscout.net/v2";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialOk,
+  jsonAnswer,
+  pathSegment,
+} from "../../_shared/credentials.js";
+import { helpscoutCredential } from "./credentials.js";
 
 async function apiRequest(
-  token: string,
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  const res = await credentialOk(ctx, helpscoutCredential, "helpscout", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`HelpScout API error ${res.status}: ${await res.text()}`);
+    query: qs,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
   if (res.status === 201 || res.status === 204)
     return { success: true, location: res.headers.get("Location") };
-  return res.json();
+  return jsonAnswer(res);
 }
 
 function unwrapEmbedded(data: unknown, key: string): unknown {
@@ -53,6 +43,7 @@ function unwrapEmbedded(data: unknown, key: string): unknown {
 export default function helpscout(rl: RunlinePluginAPI) {
   rl.setName("helpscout");
   rl.setVersion("0.1.0");
+  rl.setCredential(helpscoutCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -62,9 +53,6 @@ export default function helpscout(rl: RunlinePluginAPI) {
       env: "HELPSCOUT_ACCESS_TOKEN",
     },
   });
-
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   // ── Conversation ────────────────────────────────────
 
@@ -108,7 +96,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       };
       if (status) body.status = status;
       if (tags) body.tags = tags;
-      return apiRequest(tok(ctx), "POST", "/conversations", body);
+      return apiRequest(ctx, "POST", "conversations", body);
     },
   });
 
@@ -124,9 +112,9 @@ export default function helpscout(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/conversations/${(input as { conversationId: number }).conversationId}`,
+        `conversations/${pathSegment((input as { conversationId: number }).conversationId)}`,
       );
     },
   });
@@ -159,7 +147,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       if (limit) qs.pageSize = limit;
       if (page) qs.page = page;
       return unwrapEmbedded(
-        await apiRequest(tok(ctx), "GET", "/conversations", undefined, qs),
+        await apiRequest(ctx, "GET", "conversations", undefined, qs),
         "conversations",
       );
     },
@@ -177,9 +165,9 @@ export default function helpscout(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/conversations/${(input as { conversationId: number }).conversationId}`,
+        `conversations/${pathSegment((input as { conversationId: number }).conversationId)}`,
       );
       return { success: true };
     },
@@ -209,7 +197,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       if (lastName) body.lastName = lastName;
       if (emails) body.emails = emails;
       if (phones) body.phones = phones;
-      return apiRequest(tok(ctx), "POST", "/customers", body);
+      return apiRequest(ctx, "POST", "customers", body);
     },
   });
 
@@ -225,9 +213,9 @@ export default function helpscout(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/customers/${(input as { customerId: number }).customerId}`,
+        `customers/${pathSegment((input as { customerId: number }).customerId)}`,
       );
     },
   });
@@ -245,7 +233,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
       if (limit) qs.pageSize = limit;
       if (page) qs.page = page;
       return unwrapEmbedded(
-        await apiRequest(tok(ctx), "GET", "/customers", undefined, qs),
+        await apiRequest(ctx, "GET", "customers", undefined, qs),
         "customers",
       );
     },
@@ -272,9 +260,9 @@ export default function helpscout(rl: RunlinePluginAPI) {
         properties: Record<string, unknown>;
       };
       return apiRequest(
-        tok(ctx),
+        ctx,
         "PUT",
-        `/customers/${customerId}`,
+        `customers/${pathSegment(customerId)}`,
         properties,
       );
     },
@@ -292,9 +280,9 @@ export default function helpscout(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/customers/${(input as { customerId: number }).customerId}/properties`,
+        `customers/${pathSegment((input as { customerId: number }).customerId)}/properties`,
       );
     },
   });
@@ -309,9 +297,9 @@ export default function helpscout(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/mailboxes/${(input as { mailboxId: number }).mailboxId}`,
+        `mailboxes/${pathSegment((input as { mailboxId: number }).mailboxId)}`,
       );
     },
   });
@@ -321,7 +309,7 @@ export default function helpscout(rl: RunlinePluginAPI) {
     description: "List mailboxes",
     async execute(_input, ctx) {
       return unwrapEmbedded(
-        await apiRequest(tok(ctx), "GET", "/mailboxes"),
+        await apiRequest(ctx, "GET", "mailboxes"),
         "mailboxes",
       );
     },
@@ -362,9 +350,9 @@ export default function helpscout(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { type, text };
       if (customer) body.customer = customer;
       return apiRequest(
-        tok(ctx),
+        ctx,
         "POST",
-        `/conversations/${conversationId}/reply`,
+        `conversations/${pathSegment(conversationId)}/reply`,
         body,
       );
     },
@@ -383,9 +371,9 @@ export default function helpscout(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return unwrapEmbedded(
         await apiRequest(
-          tok(ctx),
+          ctx,
           "GET",
-          `/conversations/${(input as { conversationId: number }).conversationId}/threads`,
+          `conversations/${pathSegment((input as { conversationId: number }).conversationId)}/threads`,
         ),
         "threads",
       );

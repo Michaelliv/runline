@@ -1,33 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { plivoCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return { authId: c.authId as string, authToken: c.authToken as string };
-}
-
-async function apiRequest(
-  conn: { authId: string; authToken: string },
-  method: string,
-  endpoint: string,
+/** A Plivo JSON call beneath the account; Plivo's resource paths end in /. */
+function apiRequest(
+  ctx: ActionContext,
+  resource: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = `https://api.plivo.com/v1/Account/${conn.authId}${endpoint}/`;
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: "Basic " + btoa(`${conn.authId}:${conn.authToken}`),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+  return credentialJson(ctx, plivoCredential, "plivo", {
+    target: "api",
+    path: `${resource}/`,
+    method: "POST",
+    json: body,
   });
-  if (!res.ok)
-    throw new Error(`Plivo error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function plivo(rl: RunlinePluginAPI) {
   rl.setName("plivo");
   rl.setVersion("0.1.0");
+  rl.setCredential(plivoCredential);
 
   rl.setConnectionSchema({
     authId: {
@@ -54,7 +46,7 @@ export default function plivo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { from, to, message } = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "/Message", {
+      return apiRequest(ctx, "Message", {
         src: from,
         dst: to,
         text: message,
@@ -77,7 +69,7 @@ export default function plivo(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { from, to, message, mediaUrls } = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "/Message", {
+      return apiRequest(ctx, "Message", {
         src: from,
         dst: to,
         text: message,
@@ -109,7 +101,7 @@ export default function plivo(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      return apiRequest(getConn(ctx), "POST", "/Call", {
+      return apiRequest(ctx, "Call", {
         from,
         to,
         answer_url: answerUrl,

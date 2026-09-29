@@ -7,17 +7,14 @@ import {
 } from "../../_shared/shiftCloud.js";
 
 export {
-  type Ctx,
   enumSchema,
   idSchema,
-  listParams,
   pathSegment,
-  request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
-  withQuery,
 } from "../../_shared/shiftCloud.js";
+export { request } from "./credentials.js";
 
 export const CRM_BASE = "/v1/crm";
 

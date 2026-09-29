@@ -1,8 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
+import { credentialOk } from "../../_shared/credentials.js";
+import { msg91Credential } from "./credentials.js";
 
 export default function msg91(rl: RunlinePluginAPI) {
   rl.setName("msg91");
   rl.setVersion("0.1.0");
+  rl.setCredential(msg91Credential);
 
   rl.setConnectionSchema({
     authkey: {
@@ -27,17 +30,18 @@ export default function msg91(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { from, to, message } = input as Record<string, unknown>;
-      const authkey = ctx.connection.config.authkey as string;
-      const url = new URL("https://api.msg91.com/api/sendhttp.php");
-      url.searchParams.set("authkey", authkey);
-      url.searchParams.set("route", "4");
-      url.searchParams.set("country", "0");
-      url.searchParams.set("sender", from as string);
-      url.searchParams.set("mobiles", to as string);
-      url.searchParams.set("message", message as string);
-      const res = await fetch(url.toString());
-      if (!res.ok)
-        throw new Error(`MSG91 API error ${res.status}: ${await res.text()}`);
+      // The response body is a bare request ID, not JSON.
+      const res = await credentialOk(ctx, msg91Credential, "msg91", {
+        target: "api",
+        path: "sendhttp.php",
+        query: {
+          route: "4",
+          country: "0",
+          sender: from,
+          mobiles: to,
+          message,
+        },
+      });
       const text = await res.text();
       return { requestId: text };
     },

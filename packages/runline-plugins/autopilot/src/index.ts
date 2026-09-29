@@ -1,50 +1,42 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  credentialRequest,
+  pathSegment,
+  requestFailed,
+} from "../../_shared/credentials.js";
+import { autopilotCredential } from "./credentials.js";
 
-const BASE_URL = "https://api2.autopilothq.com/v1";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, autopilotCredential, "autopilot", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      autopilotapikey: apiKey,
-    },
-  };
-  if (
-    body &&
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Autopilot API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204 || res.headers.get("content-length") === "0")
-    return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginateAll(
-  apiKey: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   dataKey: string,
   limit?: number,
 ): Promise<unknown[]> {
   const results: unknown[] = [];
-  let currentEndpoint = endpoint;
+  let currentPath = path;
 
   while (true) {
-    const data = (await apiRequest(apiKey, "GET", currentEndpoint)) as Record<
+    const data = (await apiRequest(ctx, "GET", currentPath)) as Record<
       string,
       unknown
     >;
@@ -55,21 +47,16 @@ async function paginateAll(
 
     const bookmark = data.bookmark as string | undefined;
     if (!bookmark) break;
-    currentEndpoint = `${endpoint}/${bookmark}`;
+    currentPath = `${path}/${pathSegment(bookmark)}`;
   }
 
   return results;
 }
 
-function getKey(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
-}
-
 export default function autopilot(rl: RunlinePluginAPI) {
   rl.setName("autopilot");
   rl.setVersion("0.1.0");
+  rl.setCredential(autopilotCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -120,7 +107,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
       if (phone) contact.Phone = phone;
       if (listId) contact._autopilot_list = listId;
       if (newEmail) contact._NewEmail = newEmail;
-      return apiRequest(getKey(ctx), "POST", "/contact", { contact });
+      return apiRequest(ctx, "POST", "contact", { contact });
     },
   });
 
@@ -136,7 +123,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      return apiRequest(getKey(ctx), "GET", `/contact/${contactId}`);
+      return apiRequest(ctx, "GET", `contact/${pathSegment(contactId)}`);
     },
   });
 
@@ -152,7 +139,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      return paginateAll(getKey(ctx), "/contacts", "contacts", limit);
+      return paginateAll(ctx, "contacts", "contacts", limit);
     },
   });
 
@@ -164,7 +151,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      await apiRequest(getKey(ctx), "DELETE", `/contact/${contactId}`);
+      await apiRequest(ctx, "DELETE", `contact/${pathSegment(contactId)}`);
       return { success: true };
     },
   });
@@ -188,9 +175,9 @@ export default function autopilot(rl: RunlinePluginAPI) {
         contactId: string;
       };
       await apiRequest(
-        getKey(ctx),
+        ctx,
         "POST",
-        `/trigger/${triggerId}/contact/${contactId}`,
+        `trigger/${pathSegment(triggerId)}/contact/${pathSegment(contactId)}`,
       );
       return { success: true };
     },
@@ -211,9 +198,9 @@ export default function autopilot(rl: RunlinePluginAPI) {
         contactId: string;
       };
       await apiRequest(
-        getKey(ctx),
+        ctx,
         "POST",
-        `/list/${listId}/contact/${contactId}`,
+        `list/${pathSegment(listId)}/contact/${pathSegment(contactId)}`,
       );
       return { success: true };
     },
@@ -232,9 +219,9 @@ export default function autopilot(rl: RunlinePluginAPI) {
         contactId: string;
       };
       await apiRequest(
-        getKey(ctx),
+        ctx,
         "DELETE",
-        `/list/${listId}/contact/${contactId}`,
+        `list/${pathSegment(listId)}/contact/${pathSegment(contactId)}`,
       );
       return { success: true };
     },
@@ -252,16 +239,15 @@ export default function autopilot(rl: RunlinePluginAPI) {
         listId: string;
         contactId: string;
       };
-      try {
-        await apiRequest(
-          getKey(ctx),
-          "GET",
-          `/list/${listId}/contact/${contactId}`,
-        );
-        return { exists: true };
-      } catch {
-        return { exists: false };
-      }
+      // Membership is the lookup's status: 404 means not in the list; any
+      // other failure is reported, not mistaken for an answer.
+      const response = await credentialRequest(ctx, autopilotCredential, {
+        target: "api",
+        path: `list/${pathSegment(listId)}/contact/${pathSegment(contactId)}`,
+      });
+      if (response.status === 404) return { exists: false };
+      if (!response.ok) throw requestFailed("autopilot", response.status);
+      return { exists: true };
     },
   });
 
@@ -279,8 +265,8 @@ export default function autopilot(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { listId, limit } = input as { listId: string; limit?: number };
       return paginateAll(
-        getKey(ctx),
-        `/list/${listId}/contacts`,
+        ctx,
+        `list/${pathSegment(listId)}/contacts`,
         "contacts",
         limit,
       );
@@ -297,7 +283,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name } = input as { name: string };
-      return apiRequest(getKey(ctx), "POST", "/list", { name });
+      return apiRequest(ctx, "POST", "list", { name });
     },
   });
 
@@ -313,7 +299,7 @@ export default function autopilot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const data = (await apiRequest(getKey(ctx), "GET", "/lists")) as {
+      const data = (await apiRequest(ctx, "GET", "lists")) as {
         lists: unknown[];
       };
       if (limit) return data.lists.slice(0, limit);

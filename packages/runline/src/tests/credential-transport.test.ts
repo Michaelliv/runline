@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { describe, it } from "node:test";
 import * as t from "typebox";
 import { AuthError } from "../auth/errors.js";
@@ -6,17 +7,46 @@ import { MemoryConnectionProvider } from "../connections/memory.js";
 import {
   CredentialRegistry,
   OAuthGrantSchema,
+  staticSecretSchema,
 } from "../credentials/registry.js";
 import {
   type AuthenticatedRequest,
   CredentialTransport,
 } from "../credentials/transport.js";
 import type {
+  CredentialAuthentication,
   CredentialBinding,
   CredentialMethod,
   CredentialType,
   OAuthGrant,
 } from "../credentials/types.js";
+
+type Placements = Extract<
+  CredentialAuthentication,
+  { kind: "static" }
+>["placements"];
+
+/** A static secret of named parts in field `key`, placed as declared. */
+function placed(
+  def: CredentialType,
+  parts: string[],
+  placements: Placements,
+): void {
+  def.methods.selected.schema = t.Object(
+    { key: staticSecretSchema(parts) },
+    { additionalProperties: false },
+  );
+  def.methods.selected.authentication = {
+    kind: "static",
+    field: "key",
+    parts,
+    placements,
+  };
+}
+
+const basic: Placements = [
+  { in: "basic", username: "username", password: "password" },
+];
 
 const initial: OAuthGrant = {
   tokens: { accessToken: "old", refreshToken: "r1" },
@@ -26,38 +56,27 @@ function definition(
   kind: "oauth2" | "bearer" | "apiKey" = "oauth2",
 ): CredentialType {
   const method: CredentialMethod = {
-    schema:
-      kind === "oauth2"
-        ? t.Object(
-            { grant: t.Optional(OAuthGrantSchema) },
-            { additionalProperties: false },
-          )
-        : t.Object(
-            { key: t.String({ minLength: 1 }) },
-            { additionalProperties: false },
-          ),
-    authentication:
-      kind === "oauth2"
-        ? {
-            kind,
-            grantField: "grant",
-            renewal: "refresh",
-            definition: {
-              id: "example.oauth",
-              provider: "example",
-              refresh: {
-                url: "https://auth.example/token",
-                clientAuthentication: "none",
-              },
-              clientCredentials: {
-                url: "https://auth.example/token",
-                clientAuthentication: "client_secret_post",
-              },
-            },
-          }
-        : kind === "bearer"
-          ? { kind, field: "key" }
-          : { kind, field: "key", header: "X-Api-Key" },
+    schema: t.Object(
+      { grant: t.Optional(OAuthGrantSchema) },
+      { additionalProperties: false },
+    ),
+    authentication: {
+      kind: "oauth2",
+      field: "grant",
+      renewal: "refresh",
+      definition: {
+        id: "example.oauth",
+        provider: "example",
+        refresh: {
+          url: "https://auth.example/token",
+          clientAuthentication: "none",
+        },
+        clientCredentials: {
+          url: "https://auth.example/token",
+          clientAuthentication: "client_secret_post",
+        },
+      },
+    },
     targets: {
       api: {
         baseUrl: "https://api.example/v1/",
@@ -72,7 +91,27 @@ function definition(
       acceptedStatuses: [200],
     },
   };
-  return { id: "example", methods: { selected: method } };
+  const def: CredentialType = { id: "example", methods: { selected: method } };
+  if (kind === "bearer")
+    placed(
+      def,
+      ["secret"],
+      [
+        {
+          in: "header",
+          part: "secret",
+          name: "Authorization",
+          prefix: "Bearer ",
+        },
+      ],
+    );
+  if (kind === "apiKey")
+    placed(
+      def,
+      ["secret"],
+      [{ in: "header", part: "secret", name: "X-Api-Key" }],
+    );
+  return def;
 }
 function mock(
   handler: (url: string, init: RequestInit) => Promise<Response> | Response,
@@ -109,7 +148,7 @@ const errorCode = (code: string) => (error: unknown) =>
   error instanceof AuthError && error.code === code;
 
 describe("constrained credential transport", () => {
-  it("injects API keys and bearer tokens without query credentials or ambient cookies", async () => {
+  it("injects API keys and bearer tokens from their stored secret without query credentials or ambient cookies", async () => {
     for (const kind of ["apiKey", "bearer"] as const) {
       const h = await harness(
         mock((url, init) => {
@@ -123,7 +162,7 @@ describe("constrained credential transport", () => {
           );
           return Response.json({ ok: true });
         }),
-        { key: "private" },
+        { key: { secret: "private" } },
         definition(kind),
       );
       assert.deepEqual(
@@ -131,6 +170,1025 @@ describe("constrained credential transport", () => {
         { ok: true },
       );
     }
+  });
+
+  it("prefixes an API key only with its declared scheme, in its declared header", async () => {
+    for (const prefix of ["SSWS ", "Token token=", "api-key ", "Bot "]) {
+      const def = definition("apiKey");
+      placed(
+        def,
+        ["secret"],
+        [{ in: "header", part: "secret", name: "Authorization", prefix }],
+      );
+      const h = await harness(
+        mock((_url, init) => {
+          assert.equal(
+            new Headers(init.headers).get("authorization"),
+            `${prefix}private`,
+          );
+          return Response.json({});
+        }),
+        { key: { secret: "private" } },
+        def,
+      );
+      assert.equal((await h.transport.request(h.binding, request)).status, 200);
+    }
+  });
+
+  it("signs HTTP Basic from a stored username and password, either of which may be empty", async () => {
+    for (const [username, password] of [
+      ["dana@example.com", "token"],
+      ["sk_live_1", ""],
+      ["", "token"],
+      ["user", "pass word:with colon"],
+    ]) {
+      const def = definition("bearer");
+      placed(def, ["username", "password"], basic);
+      const h = await harness(
+        mock((_url, init) => {
+          assert.equal(
+            new Headers(init.headers).get("authorization"),
+            `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+          );
+          return Response.json({});
+        }),
+        { key: { username, password } },
+        def,
+      );
+      assert.equal((await h.transport.request(h.binding, request)).status, 200);
+    }
+  });
+
+  it("refuses Basic credentials that cannot be encoded unambiguously, before any IO", async () => {
+    for (const key of [
+      { username: "has:colon", password: "p" },
+      { username: "", password: "" },
+      { username: "line\nbreak", password: "p" },
+      { username: "u", password: "tab\there" },
+      { username: "danä", password: "p" },
+      { username: "u" },
+      "u:p",
+    ]) {
+      let calls = 0;
+      const def = definition("bearer");
+      placed(def, ["username", "password"], basic);
+      const h = await harness(
+        mock(() => {
+          calls++;
+          return Response.json({});
+        }),
+        { key },
+        def,
+      );
+      await assert.rejects(
+        h.transport.request(h.binding, request),
+        (error: unknown) =>
+          error instanceof AuthError &&
+          error.code === "invalid_credentials" &&
+          !String(error).includes("colon"),
+      );
+      assert.equal(calls, 0);
+    }
+  });
+
+  it("adds a declared query key itself, beside the caller's own parameters, with no auth header", async () => {
+    const def = definition("bearer");
+    placed(def, ["secret"], [{ in: "query", part: "secret", name: "api_key" }]);
+    const seen: string[] = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push(url);
+        assert.equal(new Headers(init.headers).has("authorization"), false);
+        return Response.json({});
+      }),
+      { key: { secret: "pri&vate=1" } },
+      def,
+    );
+    await h.transport.request(h.binding, { ...request, path: "items?q=a" });
+    await h.transport.probe(h.binding);
+    assert.deepEqual(
+      seen.map((url) => Object.fromEntries(new URL(url).searchParams)),
+      [{ q: "a", api_key: "pri&vate=1" }, { api_key: "pri&vate=1" }],
+    );
+  });
+
+  it("refuses a caller-supplied copy of the declared query key, in any case, before reading credentials", async () => {
+    const def = definition("bearer");
+    placed(def, ["secret"], [{ in: "query", part: "secret", name: "hapikey" }]);
+    let reads = 0;
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { secret: "private" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    for (const path of [
+      "items?hapikey=evil",
+      "items?HapiKey=evil",
+      "items?api_key=x",
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, { ...request, path }),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
+  it("places each part of a several-part secret, and one part in two places", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["key", "token"],
+      [
+        { in: "query", part: "key", name: "key" },
+        { in: "query", part: "token", name: "token" },
+        { in: "header", part: "token", name: "X-Token" },
+      ],
+    );
+    const seen: Array<{ query: Record<string, string>; token: string | null }> =
+      [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          query: Object.fromEntries(new URL(url).searchParams),
+          token: new Headers(init.headers).get("x-token"),
+        });
+        return Response.json({});
+      }),
+      { key: { key: "k1", token: "t1" } },
+      def,
+    );
+    await h.transport.request(h.binding, { ...request, path: "items?q=a" });
+    assert.deepEqual(seen, [
+      { query: { q: "a", key: "k1", token: "t1" }, token: "t1" },
+    ]);
+    for (const input of [
+      { ...request, path: "items?TOKEN=evil" },
+      { ...request, headers: { "X-Token": "evil" } },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(seen.length, 1);
+  });
+
+  it("adds a body part to a JSON object or a form, and to the query when the request has no body", async () => {
+    const def = definition("bearer");
+    placed(def, ["key"], [{ in: "body", part: "key", name: "api_key" }]);
+    const seen: Array<{ url: string; body?: string; type: string | null }> = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          url,
+          body: init.body
+            ? Buffer.from(init.body as Uint8Array).toString()
+            : undefined,
+          type: new Headers(init.headers).get("content-type"),
+        });
+        return Response.json({});
+      }),
+      { key: { key: "k&1" } },
+      def,
+    );
+    await h.transport.request(h.binding, {
+      ...request,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ a: 1 }),
+    });
+    await h.transport.request(h.binding, {
+      ...request,
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "a=1",
+    });
+    await h.transport.request(h.binding, { ...request, path: "items?q=a" });
+    assert.deepEqual(JSON.parse(seen[0].body ?? ""), { a: 1, api_key: "k&1" });
+    assert.equal(seen[0].url, "https://api.example/v1/items");
+    assert.equal(seen[1].body, "a=1&api_key=k%261");
+    assert.equal(seen[1].url, "https://api.example/v1/items");
+    assert.equal(seen[2].body, undefined);
+    assert.deepEqual(Object.fromEntries(new URL(seen[2].url).searchParams), {
+      q: "a",
+      api_key: "k&1",
+    });
+  });
+
+  it("refuses a caller copy of a body part, or a body it cannot place it in, before reading credentials", async () => {
+    const def = definition("bearer");
+    placed(def, ["key"], [{ in: "body", part: "key", name: "token" }]);
+    let reads = 0;
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { key: "k" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    const json = { "Content-Type": "application/json" };
+    const form = { "Content-Type": "application/x-www-form-urlencoded" };
+    for (const input of [
+      { ...request, path: "items?TOKEN=evil" },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: '{"token":"evil"}',
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: '{"TOKEN":"evil"}',
+      },
+      { ...request, method: "POST" as const, headers: json, body: "[1]" },
+      { ...request, method: "POST" as const, headers: json, body: "not json" },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: form,
+        body: "token=evil",
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: { "Content-Type": "text/plain" },
+        body: "x",
+      },
+      { ...request, method: "POST" as const, body: "x" },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
+  it("inserts a path part as the first segment beneath the base, and may place the same part in Basic too", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["account", "token"],
+      [
+        { in: "path", part: "account", prefix: "bot" },
+        { in: "basic", username: "account", password: "token" },
+      ],
+    );
+    const seen: Array<{ url: string; auth: string | null }> = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          url,
+          auth: new Headers(init.headers).get("authorization"),
+        });
+        return Response.json({});
+      }),
+      { key: { account: "AC1@x", token: "t" } },
+      def,
+    );
+    await h.transport.request(h.binding, { ...request, path: "items?q=a" });
+    await h.transport.request(h.binding, { ...request, path: "" });
+    assert.deepEqual(
+      seen.map((s) => s.url),
+      [
+        "https://api.example/v1/botAC1@x/items?q=a",
+        "https://api.example/v1/botAC1@x",
+      ],
+    );
+    assert.equal(
+      seen[0].auth,
+      `Basic ${Buffer.from("AC1@x:t").toString("base64")}`,
+    );
+    // A colon stays literal in a segment, as in Telegram's bot<id>:<token>.
+    const telegram = definition("bearer");
+    placed(telegram, ["token"], [{ in: "path", part: "token", prefix: "bot" }]);
+    const t = await harness(
+      mock((url) => {
+        seen.push({ url, auth: null });
+        return Response.json({});
+      }),
+      { key: { token: "123:ABC" } },
+      telegram,
+    );
+    await t.transport.request(t.binding, { ...request, path: "getMe" });
+    assert.equal(seen.at(-1)?.url, "https://api.example/v1/bot123:ABC/getMe");
+  });
+
+  it("refuses a path part that is not one segment, before any IO", async () => {
+    for (const account of ["a/b", "..", ".", "a?b", "a#b"]) {
+      const def = definition("bearer");
+      placed(def, ["account"], [{ in: "path", part: "account" }]);
+      let calls = 0;
+      const h = await harness(
+        mock(() => {
+          calls++;
+          return Response.json({});
+        }),
+        { key: { account } },
+        def,
+      );
+      await assert.rejects(
+        h.transport.request(h.binding, request),
+        errorCode("invalid_credentials"),
+      );
+      assert.equal(calls, 0);
+    }
+  });
+
+  it("sends an unsigned method's requests with no credential, still held to its targets", async () => {
+    const def = definition("bearer");
+    def.methods.selected.schema = t.Object({}, { additionalProperties: false });
+    def.methods.selected.authentication = { kind: "none" };
+    const seen: Array<{ url: string; auth: string | null }> = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          url,
+          auth: new Headers(init.headers).get("authorization"),
+        });
+        return Response.json({});
+      }),
+      {},
+      def,
+    );
+    await h.transport.request(h.binding, request);
+    assert.deepEqual(seen, [
+      { url: "https://api.example/v1/items", auth: null },
+    ]);
+    await assert.rejects(
+      h.transport.request(h.binding, {
+        ...request,
+        path: "https://evil.example/",
+      }),
+      errorCode("request_not_allowed"),
+    );
+  });
+
+  it("allows an encoded slash inside a segment only on a target that opts in, and never a dot or empty piece", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.slashed = {
+      baseUrl: "https://api.example/v4/",
+      methods: ["GET"],
+      encodedSlashes: true,
+    };
+    const seen: string[] = [];
+    const h = await harness(
+      mock((url) => {
+        seen.push(url);
+        return Response.json({});
+      }),
+      { key: { secret: "k" } },
+      def,
+    );
+    await h.transport.request(h.binding, {
+      target: "slashed",
+      path: "projects/group%2Fsub%2Fproj/issues",
+    });
+    assert.deepEqual(seen, [
+      "https://api.example/v4/projects/group%2Fsub%2Fproj/issues",
+    ]);
+    for (const input of [
+      { target: "api", path: "projects/group%2Fproj" },
+      { target: "slashed", path: "projects/a%2F..%2Fadmin" },
+      { target: "slashed", path: "projects/..%2Fadmin" },
+      { target: "slashed", path: "projects/a%2F%2Fb" },
+      { target: "slashed", path: "projects/a%2F" },
+      { target: "slashed", path: "projects/a%2F." },
+      { target: "slashed", path: "projects/a%252Fb" },
+      { target: "slashed", path: "projects/a%5Cb" },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(seen.length, 1);
+  });
+
+  it("sends WebDAV methods, with COPY and MOVE given a Destination beneath the same target", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.dav = {
+      baseUrl: "https://api.example/dav/",
+      methods: ["MKCOL", "COPY", "MOVE", "DELETE"],
+    };
+    const seen: Array<{
+      url: string;
+      method?: string;
+      destination: string | null;
+    }> = [];
+    const h = await harness(
+      mock((url, init) => {
+        seen.push({
+          url,
+          method: init.method,
+          destination: new Headers(init.headers).get("destination"),
+        });
+        return new Response(null, { status: 201 });
+      }),
+      { key: { secret: "k" } },
+      def,
+    );
+    await h.transport.request(h.binding, {
+      target: "dav",
+      path: "a%20b",
+      method: "MKCOL",
+    });
+    await h.transport.request(h.binding, {
+      target: "dav",
+      path: "a%20b/x.txt",
+      method: "MOVE",
+      destination: "c/y.txt",
+    });
+    assert.deepEqual(seen, [
+      {
+        url: "https://api.example/dav/a%20b",
+        method: "MKCOL",
+        destination: null,
+      },
+      {
+        url: "https://api.example/dav/a%20b/x.txt",
+        method: "MOVE",
+        destination: "https://api.example/dav/c/y.txt",
+      },
+    ]);
+  });
+
+  it("refuses a destination outside the target, with a query, on another method, or set by the caller, before reading credentials", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.dav = {
+      baseUrl: "https://api.example/dav/",
+      methods: ["COPY", "DELETE"],
+    };
+    let reads = 0;
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { secret: "k" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    const copy = { target: "dav", path: "a", method: "COPY" as const };
+    for (const input of [
+      ...[
+        "../outside",
+        "/abs",
+        "https://evil.example/dav/b",
+        "%2e%2e/b",
+        "b?x=1",
+        "b#f",
+        "",
+      ].map((destination) => ({ ...copy, destination })),
+      { ...copy },
+      { target: "dav", path: "a", method: "DELETE" as const, destination: "b" },
+      { ...request, destination: "b" },
+      { ...copy, destination: "b", headers: { Destination: "https://evil/" } },
+      { target: "dav", path: "a", method: "MOVE" as const, destination: "b" },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
+  it("signs a short-lived HS256 JWT from a key id and hex secret, per request", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["adminKey"],
+      [
+        {
+          in: "jwt",
+          part: "adminKey",
+          name: "Authorization",
+          prefix: "Ghost ",
+          audience: "/admin/",
+        },
+      ],
+    );
+    const tokens: string[] = [];
+    const h = await harness(
+      mock((_url, init) => {
+        tokens.push(new Headers(init.headers).get("authorization") ?? "");
+        return Response.json({});
+      }),
+      { key: { adminKey: "kid123:00ff10" } },
+      def,
+    );
+    const before = Math.floor(Date.now() / 1000);
+    await h.transport.request(h.binding, request);
+    assert.match(tokens[0], /^Ghost [\w-]+\.[\w-]+\.[\w-]+$/);
+    const [head, body, signature] = tokens[0].slice("Ghost ".length).split(".");
+    const decode = (part: string) =>
+      JSON.parse(Buffer.from(part, "base64url").toString());
+    assert.deepEqual(decode(head), { alg: "HS256", typ: "JWT", kid: "kid123" });
+    const claims = decode(body);
+    assert.equal(claims.aud, "/admin/");
+    assert.ok(claims.iat >= before && claims.iat <= before + 5);
+    assert.equal(claims.exp, claims.iat + 300);
+    assert.equal(
+      signature,
+      createHmac("sha256", Buffer.from("00ff10", "hex"))
+        .update(`${head}.${body}`)
+        .digest("base64url"),
+    );
+  });
+
+  it("refuses a JWT key that is not a key id and hex secret, before any IO", async () => {
+    for (const adminKey of [
+      "nocolon",
+      "kid:nothex",
+      "kid:abc",
+      ":00ff",
+      "kid:",
+    ]) {
+      const def = definition("bearer");
+      placed(
+        def,
+        ["adminKey"],
+        [
+          {
+            in: "jwt",
+            part: "adminKey",
+            name: "Authorization",
+            audience: "/a/",
+          },
+        ],
+      );
+      let calls = 0;
+      const h = await harness(
+        mock(() => {
+          calls++;
+          return Response.json({});
+        }),
+        { key: { adminKey } },
+        def,
+      );
+      await assert.rejects(
+        h.transport.request(h.binding, request),
+        errorCode("invalid_credentials"),
+      );
+      assert.equal(calls, 0);
+    }
+  });
+
+  it("signs the query as sent, after every other placement, with an HMAC in a header", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["apiId", "apiKey", "extra"],
+      [
+        { in: "header", part: "apiId", name: "api-auth-id" },
+        { in: "querySignature", part: "apiKey", name: "api-auth-signature" },
+        { in: "query", part: "extra", name: "extra" },
+      ],
+    );
+    const seen: Array<{ url: string; id: string | null; sig: string | null }> =
+      [];
+    const h = await harness(
+      mock((url, init) => {
+        const headers = new Headers(init.headers);
+        seen.push({
+          url,
+          id: headers.get("api-auth-id"),
+          sig: headers.get("api-auth-signature"),
+        });
+        return Response.json({});
+      }),
+      { key: { apiId: "id1", apiKey: "k1", extra: "x" } },
+      def,
+    );
+    await h.transport.request(h.binding, { ...request, path: "items?b=2&a=1" });
+    await h.transport.request(h.binding, { ...request, path: "items" });
+    const hmac = (query: string) =>
+      createHmac("sha256", "k1").update(query).digest("base64");
+    assert.deepEqual(seen, [
+      {
+        url: "https://api.example/v1/items?b=2&a=1&extra=x",
+        id: "id1",
+        sig: hmac("b=2&a=1&extra=x"),
+      },
+      {
+        url: "https://api.example/v1/items?extra=x",
+        id: "id1",
+        sig: hmac("extra=x"),
+      },
+    ]);
+  });
+
+  it("fills a JSON body's null slot at a pointer with a part", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["password"],
+      [{ in: "jsonPointer", part: "password", pointer: "/params/args/2" }],
+    );
+    const bodies: unknown[] = [];
+    const h = await harness(
+      mock((_url, init) => {
+        bodies.push(
+          JSON.parse(Buffer.from(init.body as Uint8Array).toString()),
+        );
+        return Response.json({});
+      }),
+      { key: { password: "pw" } },
+      def,
+    );
+    await h.transport.request(h.binding, {
+      ...request,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "call",
+        params: { args: ["db", 7, null, "res.partner"] },
+      }),
+    });
+    assert.deepEqual(bodies, [
+      { method: "call", params: { args: ["db", 7, "pw", "res.partner"] } },
+    ]);
+  });
+
+  it("refuses a pointer slot the caller filled, one that does not resolve, or a request with no JSON body, before reading credentials", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["password"],
+      [{ in: "jsonPointer", part: "password", pointer: "/params/args/2" }],
+    );
+    let reads = 0;
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { password: "pw" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    const json = { "Content-Type": "application/json" };
+    for (const input of [
+      { ...request },
+      { ...request, method: "POST" as const, headers: json, body: "not json" },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: JSON.stringify({ params: { args: ["db", 7, "evil"] } }),
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: JSON.stringify({ params: { args: ["db", 7] } }),
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: json,
+        body: JSON.stringify({ params: {} }),
+      },
+      {
+        ...request,
+        method: "POST" as const,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "params=1",
+      },
+    ])
+      await assert.rejects(
+        h.transport.request(h.binding, input),
+        errorCode("request_not_allowed"),
+      );
+    assert.equal(reads, 0);
+    assert.equal(calls, 0);
+  });
+
+  it("logs in with the resource owner's password, and again once after a rejection", async () => {
+    const def = definition();
+    const auth = def.methods.selected.authentication;
+    if (auth.kind !== "oauth2") throw new Error();
+    auth.renewal = "password";
+    auth.definition.password = {
+      url: "https://auth.example/login",
+      clientAuthentication: "none",
+      encoding: "json",
+      grantType: null,
+      fields: { username: "identifier" },
+      response: { accessToken: "jwt" },
+    };
+    const seen: string[] = [];
+    let logins = 0;
+    const h = await harness(
+      mock((url, init) => {
+        if (url === "https://auth.example/login") {
+          logins++;
+          assert.deepEqual(JSON.parse(String(init.body)), {
+            identifier: "me",
+            password: "pw",
+          });
+          return Response.json({ jwt: `jwt${logins}` });
+        }
+        const token = new Headers(init.headers).get("authorization") ?? "";
+        seen.push(token);
+        return new Response(null, {
+          status: token === "Bearer jwt1" ? 401 : 200,
+        });
+      }),
+      {},
+      def,
+    );
+    h.binding.resourceOwner = { username: "me", password: "pw" };
+    assert.equal((await h.transport.request(h.binding, request)).status, 200);
+    assert.deepEqual(seen, ["Bearer jwt1", "Bearer jwt2"]);
+    assert.equal(logins, 2);
+  });
+
+  it("refuses a password renewal with no resource owner, before any request", async () => {
+    const def = definition();
+    const auth = def.methods.selected.authentication;
+    if (auth.kind !== "oauth2") throw new Error();
+    auth.renewal = "password";
+    auth.definition.password = {
+      url: "https://auth.example/login",
+      clientAuthentication: "none",
+    };
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      {},
+      def,
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, request),
+      errorCode("invalid_credentials"),
+    );
+    assert.equal(calls, 0);
+  });
+
+  it("signs a socket target's URL with its query placement, and sends nothing itself", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.cdp = {
+      baseUrl: "wss://connect.example/",
+      methods: ["GET"],
+      socket: true,
+    };
+    placed(
+      def,
+      ["key"],
+      [
+        { in: "header", part: "key", name: "x-api-key", targets: ["api"] },
+        { in: "query", part: "key", name: "apiKey", targets: ["cdp"] },
+      ],
+    );
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { key: "k&1" } },
+      def,
+    );
+    assert.equal(
+      await h.transport.socketUrl(h.binding, {
+        target: "cdp",
+        path: "?sessionId=s1",
+      }),
+      "wss://connect.example/?sessionId=s1&apiKey=k%261",
+    );
+    assert.equal(calls, 0);
+  });
+
+  it("refuses a socket URL for an HTTPS target, an HTTP request to a socket target, and a caller copy of the key", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.cdp = {
+      baseUrl: "wss://connect.example/",
+      methods: ["GET"],
+      socket: true,
+    };
+    placed(
+      def,
+      ["key"],
+      [
+        { in: "header", part: "key", name: "x-api-key", targets: ["api"] },
+        { in: "query", part: "key", name: "apiKey", targets: ["cdp"] },
+      ],
+    );
+    let reads = 0;
+    const h = await harness(
+      mock(() => Response.json({})),
+      { key: { key: "k" } },
+      def,
+    );
+    h.binding.connection.read = async () => {
+      reads++;
+      throw new Error("private");
+    };
+    await assert.rejects(
+      h.transport.socketUrl(h.binding, { target: "api", path: "x" }),
+      errorCode("request_not_allowed"),
+    );
+    await assert.rejects(
+      h.transport.socketUrl(h.binding, {
+        target: "cdp",
+        path: "?apiKey=evil",
+      }),
+      errorCode("request_not_allowed"),
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, { target: "cdp", path: "x" }),
+      errorCode("request_not_allowed"),
+    );
+    assert.equal(reads, 0);
+  });
+
+  it("places a part only on the targets it is scoped to, so two parts may share a header across targets", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.client = {
+      baseUrl: "https://api.example/v1/",
+      methods: ["GET"],
+    };
+    placed(
+      def,
+      ["app", "client"],
+      [
+        { in: "header", part: "app", name: "X-Key", targets: ["api"] },
+        { in: "header", part: "client", name: "X-Key", targets: ["client"] },
+      ],
+    );
+    const seen: Array<string | null> = [];
+    const h = await harness(
+      mock((_url, init) => {
+        seen.push(new Headers(init.headers).get("x-key"));
+        return Response.json({});
+      }),
+      { key: { app: "a1", client: "c1" } },
+      def,
+    );
+    await h.transport.request(h.binding, request);
+    await h.transport.request(h.binding, { target: "client", path: "x" });
+    assert.deepEqual(seen, ["a1", "c1"]);
+  });
+
+  it("refuses a target whose optional part the connection lacks, and signs the others", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.management = {
+      baseUrl: "https://api.example/v2/",
+      methods: ["GET"],
+    };
+    def.methods.selected.schema = t.Object(
+      {
+        key: staticSecretSchema(
+          ["content", "management"],
+          ["content", "management"],
+        ),
+      },
+      { additionalProperties: false },
+    );
+    def.methods.selected.authentication = {
+      kind: "static",
+      field: "key",
+      parts: ["content", "management"],
+      optionalParts: ["content", "management"],
+      placements: [
+        { in: "query", part: "content", name: "token", targets: ["api"] },
+        {
+          in: "header",
+          part: "management",
+          name: "Authorization",
+          targets: ["management"],
+        },
+      ],
+    };
+    const seen: string[] = [];
+    const h = await harness(
+      mock((url) => {
+        seen.push(url);
+        return Response.json({});
+      }),
+      { key: { content: "ct" } },
+      def,
+    );
+    await h.transport.request(h.binding, request);
+    await assert.rejects(
+      h.transport.request(h.binding, { target: "management", path: "x" }),
+      errorCode("invalid_credentials"),
+    );
+    assert.deepEqual(seen, ["https://api.example/v1/items?token=ct"]);
+  });
+
+  it("sends a whole header value with its interior spaces, and refuses spaces anywhere else", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["value"],
+      [{ in: "header", part: "value", name: "Authorization" }],
+    );
+    const seen: Array<string | null> = [];
+    const h = await harness(
+      mock((_url, init) => {
+        seen.push(new Headers(init.headers).get("authorization"));
+        return Response.json({});
+      }),
+      { key: { value: "Bearer a b" } },
+      def,
+    );
+    await h.transport.request(h.binding, request);
+    assert.deepEqual(seen, ["Bearer a b"]);
+    for (const [placements, value] of [
+      [[{ in: "header", part: "value", name: "Authorization" }], " Bearer x"],
+      [[{ in: "header", part: "value", name: "Authorization" }], "Bearer x "],
+      [[{ in: "header", part: "value", name: "Authorization" }], "Bearer\tx"],
+      [[{ in: "query", part: "value", name: "key" }], "a b"],
+    ] as const) {
+      const strict = definition("bearer");
+      placed(strict, ["value"], [...placements]);
+      let calls = 0;
+      const refused = await harness(
+        mock(() => {
+          calls++;
+          return Response.json({});
+        }),
+        { key: { value } },
+        strict,
+      );
+      await assert.rejects(
+        refused.transport.request(refused.binding, request),
+        errorCode("invalid_credentials"),
+      );
+      assert.equal(calls, 0);
+    }
+  });
+
+  it("refuses an empty part in a header or query placement, before any IO", async () => {
+    const def = definition("bearer");
+    placed(
+      def,
+      ["key", "token"],
+      [
+        { in: "query", part: "key", name: "key" },
+        { in: "query", part: "token", name: "token" },
+      ],
+    );
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: { key: "k1", token: "" } },
+      def,
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, request),
+      errorCode("invalid_credentials"),
+    );
+    assert.equal(calls, 0);
+  });
+
+  it("refuses a static secret stored flat instead of in its structured field", async () => {
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+      { key: "private" },
+      definition("bearer"),
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, request),
+      errorCode("invalid_credentials"),
+    );
+    assert.equal(calls, 0);
   });
 
   it("rejects escape paths, header overrides, methods and single-use bodies before reading credentials", async () => {
@@ -624,6 +1682,47 @@ describe("constrained credential transport", () => {
     assert.deepEqual(refreshes.sort(), ["alice", "bob"]);
   });
 
+  it("gives a target its declared deadline and response ceiling, capped by the host's", async () => {
+    const def = definition("bearer");
+    def.methods.selected.targets.slow = {
+      baseUrl: "https://api.example/slow/",
+      methods: ["GET"],
+      timeoutMs: 60,
+      maxResponseBytes: 16,
+    };
+    const stalled = mock(
+      () =>
+        new Promise<Response>((resolve) =>
+          setTimeout(() => resolve(new Response("0123456789")), 30),
+        ),
+    );
+    const h = await harness(stalled, { key: { secret: "k" } }, def);
+    const transport = new CredentialTransport(h.registry, {
+      fetch: stalled,
+      timeoutMs: 10,
+      maxResponseBytes: 4,
+    });
+    // The default target keeps the host defaults; the slow one gets its own.
+    await assert.rejects(
+      transport.request(h.binding, request),
+      errorCode("transport_failed"),
+    );
+    assert.equal(
+      await (
+        await transport.request(h.binding, { target: "slow", path: "x" })
+      ).text(),
+      "0123456789",
+    );
+    const capped = new CredentialTransport(h.registry, {
+      fetch: stalled,
+      maxTargetTimeoutMs: 20,
+    });
+    await assert.rejects(
+      capped.request(h.binding, { target: "slow", path: "x" }),
+      errorCode("transport_failed"),
+    );
+  });
+
   it("cancels a stalled response body on timeout", async () => {
     let cancelled = false;
     const fetch = mock(
@@ -655,7 +1754,7 @@ describe("constrained credential transport", () => {
           assert.equal(url, "https://api.example/v1/me");
           return new Response(null, { status });
         }),
-        { key: "secret" },
+        { key: { secret: "secret" } },
         definition("apiKey"),
       );
       assert.deepEqual(await h.transport.probe(h.binding), {

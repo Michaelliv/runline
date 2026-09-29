@@ -1,34 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { moceanCredential } from "./credentials.js";
 
-const BASE_URL = "https://rest.moceanapi.com";
-
-async function apiRequest(
-  apiKey: string,
-  apiSecret: string,
+/** A Mocean form call, answered in JSON. */
+function apiRequest(
+  ctx: ActionContext,
   endpoint: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  body["mocean-api-key"] = apiKey;
-  body["mocean-api-secret"] = apiSecret;
-  body["mocean-resp-format"] = "JSON";
-
-  const form = new URLSearchParams();
-  for (const [k, v] of Object.entries(body)) {
-    if (v !== undefined && v !== null) form.set(k, String(v));
-  }
-
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
+  return credentialJson(ctx, moceanCredential, "mocean", {
+    target: "api",
+    path: endpoint,
     method: "POST",
-    body: form,
+    form: { ...body, "mocean-resp-format": "JSON" },
   });
-  if (!res.ok)
-    throw new Error(`Mocean API error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function mocean(rl: RunlinePluginAPI) {
   rl.setName("mocean");
   rl.setVersion("0.1.0");
+  rl.setCredential(moceanCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -43,11 +34,6 @@ export default function mocean(rl: RunlinePluginAPI) {
       description: "Mocean API secret",
       env: "MOCEAN_API_SECRET",
     },
-  });
-
-  const creds = (ctx: { connection: { config: Record<string, unknown> } }) => ({
-    apiKey: ctx.connection.config.apiKey as string,
-    apiSecret: ctx.connection.config.apiSecret as string,
   });
 
   rl.registerAction("sms.send", {
@@ -65,7 +51,6 @@ export default function mocean(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { from, to, message, dlrUrl } = input as Record<string, unknown>;
-      const { apiKey, apiSecret } = creds(ctx);
       const body: Record<string, unknown> = {
         "mocean-from": from,
         "mocean-to": to,
@@ -75,12 +60,10 @@ export default function mocean(rl: RunlinePluginAPI) {
         body["mocean-dlr-url"] = dlrUrl;
         body["mocean-dlr-mask"] = "1";
       }
-      const data = (await apiRequest(
-        apiKey,
-        apiSecret,
-        "/rest/2/sms",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "sms", body)) as Record<
+        string,
+        unknown
+      >;
       return data.messages;
     },
   });
@@ -106,19 +89,16 @@ export default function mocean(rl: RunlinePluginAPI) {
         message,
         language = "en-US",
       } = input as Record<string, unknown>;
-      const { apiKey, apiSecret } = creds(ctx);
       const command = [{ action: "say", language, text: message }];
       const body: Record<string, unknown> = {
         "mocean-from": from,
         "mocean-to": to,
         "mocean-command": JSON.stringify(command),
       };
-      const data = (await apiRequest(
-        apiKey,
-        apiSecret,
-        "/rest/2/voice/dial",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "voice/dial", body)) as Record<
+        string,
+        unknown
+      >;
       return data.voice;
     },
   });

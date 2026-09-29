@@ -4,7 +4,6 @@ import {
   bindGetAction,
   bindListAction,
   gql,
-  key,
   requireUnscoped,
   USER_FIELDS,
   withScopedNote,
@@ -33,7 +32,7 @@ export function registerUserActions(rl: RunlinePluginAPI) {
       "Get the authenticated user. Use this to resolve 'me' before filtering issues by assignee.",
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
-      const data = await gql(key(ctx), `query { viewer { ${USER_FIELDS} } }`);
+      const data = await gql(ctx, `query { viewer { ${USER_FIELDS} } }`);
       return data.viewer;
     },
   });
@@ -77,7 +76,7 @@ export function registerUserActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "user.update");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: UserUpdateInput!) { userUpdate(id: $id, input: $input) { success user { ${USER_FIELDS} } } }`,
         { id, input: fields },
       );

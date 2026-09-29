@@ -1,28 +1,23 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { hunterCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.hunter.io/v2";
-
-async function apiRequest(
-  apiKey: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  url.searchParams.set("api_key", apiKey);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const res = await fetch(url.toString());
-  if (!res.ok)
-    throw new Error(`Hunter API error ${res.status}: ${await res.text()}`);
-  return res.json();
+  return credentialJson(ctx, hunterCredential, "hunter", {
+    target: "api",
+    path,
+    query: qs,
+  });
 }
 
 export default function hunter(rl: RunlinePluginAPI) {
   rl.setName("hunter");
   rl.setVersion("0.1.0");
+  rl.setCredential(hunterCredential);
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -53,11 +48,10 @@ export default function hunter(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { domain };
       if (type) qs.type = type;
       if (limit) qs.limit = limit;
-      const data = (await apiRequest(
-        ctx.connection.config.apiKey as string,
-        "/domain-search",
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "domain-search", qs)) as Record<
+        string,
+        unknown
+      >;
       return data.data;
     },
   });
@@ -72,11 +66,11 @@ export default function hunter(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { domain, firstName, lastName } = input as Record<string, unknown>;
-      const data = (await apiRequest(
-        ctx.connection.config.apiKey as string,
-        "/email-finder",
-        { domain, first_name: firstName, last_name: lastName },
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "email-finder", {
+        domain,
+        first_name: firstName,
+        last_name: lastName,
+      })) as Record<string, unknown>;
       return data.data;
     },
   });
@@ -88,11 +82,9 @@ export default function hunter(rl: RunlinePluginAPI) {
       email: { type: "string", required: true, description: "Email to verify" },
     },
     async execute(input, ctx) {
-      const data = (await apiRequest(
-        ctx.connection.config.apiKey as string,
-        "/email-verifier",
-        { email: (input as { email: string }).email },
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "email-verifier", {
+        email: (input as { email: string }).email,
+      })) as Record<string, unknown>;
       return data.data;
     },
   });

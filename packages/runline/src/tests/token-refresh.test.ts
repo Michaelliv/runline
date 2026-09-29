@@ -1,8 +1,15 @@
+/**
+ * The local signer's token lifecycle, observed where it matters: the
+ * bearer a resource request is signed with. Renewal is coordinated
+ * through the connection handle, persisted before use, and never
+ * surfaces provider text.
+ */
+
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, it } from "node:test";
-import { googleAccessToken } from "../../../runline-plugins/_shared/googleAuth.js";
-import { microsoftAccessToken } from "../../../runline-plugins/_shared/microsoftAuth.js";
+import { googleResponse } from "../../../runline-plugins/_shared/googleAuth.js";
+import { graphResponse } from "../../../runline-plugins/_shared/microsoftAuth.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import type { ConnectionHandle } from "../connections/types.js";
 import type { ActionContext } from "../plugin/types.js";
@@ -38,42 +45,62 @@ function provider(config: Record<string, unknown> = {}) {
   ]);
 }
 
-const helpers = {
-  google: (ctx: ActionContext, _name: string, scopes: string[]) =>
-    googleAccessToken(ctx, "googleDrive", scopes),
-  microsoft: microsoftAccessToken,
+/**
+ * Serve token issuance through `issue`, and answer every resource request
+ * with 200, recording the bearer it carried. Returns those bearers.
+ */
+function serve(
+  issue: (url: string, init: RequestInit) => Response | Promise<Response>,
+): string[] {
+  const bearers: string[] = [];
+  globalThis.fetch = (async (url, init) => {
+    if (String(url).endsWith("/token")) return issue(String(url), init ?? {});
+    bearers.push(new Headers(init?.headers).get("authorization") ?? "");
+    return Response.json({});
+  }) as typeof fetch;
+  return bearers;
+}
+
+/** One resource read through each family's local signer. */
+const reads = {
+  google: (ctx: ActionContext, scopes: string[]) =>
+    googleResponse(
+      ctx,
+      "googleDrive",
+      scopes,
+      "https://www.googleapis.com/drive/v3/files",
+    ),
+  microsoft: (ctx: ActionContext, scopes: string[]) =>
+    graphResponse(ctx, "microsoftFiles", scopes, "GET", "/me/drive/root"),
 };
-for (const [name, accessToken] of Object.entries(helpers)) {
+
+for (const [name, read] of Object.entries(reads)) {
   describe(`${name} coordinated refresh`, () => {
     it("spends a rotating token once across stale contexts and persists the replacement", async () => {
       const store = provider();
-      let requests = 0;
-      globalThis.fetch = (async (_url, init) => {
-        requests++;
+      let issued = 0;
+      const bearers = serve(async (_url, init) => {
+        issued++;
         assert.equal(
-          new URLSearchParams(String(init?.body)).get("refresh_token"),
+          new URLSearchParams(String(init.body)).get("refresh_token"),
           "r1",
         );
-        assert.equal(init?.redirect, "error");
+        assert.equal(init.redirect, "error");
         await new Promise((r) => setTimeout(r, 10));
         return Response.json({
           access_token: "a1",
           refresh_token: "r2",
           expires_in: 3600,
         });
-      }) as typeof fetch;
+      });
       const contexts = await Promise.all(
         [1, 2, 3].map(async () =>
           context(await store.resolve({ plugin: "probe" })),
         ),
       );
-      assert.deepEqual(
-        await Promise.all(
-          contexts.map((ctx) => accessToken(ctx, name, ["scope"])),
-        ),
-        ["a1", "a1", "a1"],
-      );
-      assert.equal(requests, 1);
+      await Promise.all(contexts.map((ctx) => read(ctx, ["scope"])));
+      assert.deepEqual(bearers, ["Bearer a1", "Bearer a1", "Bearer a1"]);
+      assert.equal(issued, 1);
       assert.ok(
         contexts.every((ctx) => ctx.connection.config.refreshToken === "r2"),
       );
@@ -82,13 +109,11 @@ for (const [name, accessToken] of Object.entries(helpers)) {
 
     it("preserves an existing refresh token when the provider omits a replacement", async () => {
       const store = provider();
-      globalThis.fetch = (async (_url: Parameters<typeof fetch>[0]) =>
-        Response.json({
-          access_token: "a1",
-          expires_in: 3600,
-        })) as typeof fetch;
-      const ctx = await context(await store.resolve({ plugin: "probe" }));
-      assert.equal(await accessToken(ctx, name, []), "a1");
+      const bearers = serve(() =>
+        Response.json({ access_token: "a1", expires_in: 3600 }),
+      );
+      await read(await context(await store.resolve({ plugin: "probe" })), []);
+      assert.deepEqual(bearers, ["Bearer a1"]);
       assert.equal(store.list()[0].config.refreshToken, "r1");
     });
 
@@ -97,26 +122,19 @@ for (const [name, accessToken] of Object.entries(helpers)) {
         accessToken: "expired",
         accessTokenExpiresAt: 1,
       });
-      let calls = 0;
-      globalThis.fetch = (async (_url: Parameters<typeof fetch>[0]) => {
-        calls++;
+      let issued = 0;
+      const bearers = serve(() => {
+        issued++;
         return Response.json({ access_token: "no-expiry" });
-      }) as typeof fetch;
-      const ctx = await context(await store.resolve({ plugin: "probe" }));
-      assert.equal(await accessToken(ctx, name, []), "no-expiry");
+      });
+      await read(await context(await store.resolve({ plugin: "probe" })), []);
       assert.equal(store.list()[0].config.accessTokenExpiresAt, undefined);
-      assert.equal(
-        await accessToken(
-          await context(await store.resolve({ plugin: "probe" })),
-          name,
-          [],
-        ),
-        "no-expiry",
-      );
-      assert.equal(calls, 1);
+      await read(await context(await store.resolve({ plugin: "probe" })), []);
+      assert.deepEqual(bearers, ["Bearer no-expiry", "Bearer no-expiry"]);
+      assert.equal(issued, 1);
     });
 
-    it("rejects malformed responses without committing tokens or leaking response text", async () => {
+    it("rejects malformed responses without committing tokens, reaching the resource, or leaking response text", async () => {
       const store = provider();
       const ctx = await context(await store.resolve({ plugin: "probe" }));
       for (const response of [
@@ -130,17 +148,17 @@ for (const [name, accessToken] of Object.entries(helpers)) {
         }),
         Response.json(null),
       ]) {
-        globalThis.fetch = (async (_url: Parameters<typeof fetch>[0]) =>
-          response) as typeof fetch;
-        await assert.rejects(accessToken(ctx, name, []), (err: Error) => {
+        const bearers = serve(() => response);
+        await assert.rejects(read(ctx, []), (err: Error) => {
           assert.ok(!err.message.includes("private-token"));
           return true;
         });
+        assert.deepEqual(bearers, []);
         assert.equal(store.list()[0].config.accessToken, undefined);
       }
     });
 
-    it("surfaces persistence failure without returning or installing the issued token", async () => {
+    it("surfaces persistence failure without signing with or installing the issued token", async () => {
       const store = provider();
       const handle = await store.resolve({ plugin: "probe" });
       const ctx = await context({
@@ -152,28 +170,29 @@ for (const [name, accessToken] of Object.entries(helpers)) {
           throw new Error("Persistence failed");
         },
       });
-      let calls = 0;
-      globalThis.fetch = (async (_url: Parameters<typeof fetch>[0]) => {
-        calls++;
+      let issued = 0;
+      const bearers = serve(() => {
+        issued++;
         return Response.json({
           access_token: "issued",
           refresh_token: "rotated",
           expires_in: 3600,
         });
-      }) as typeof fetch;
-      await assert.rejects(accessToken(ctx, name, []), {
+      });
+      await assert.rejects(read(ctx, []), {
         name: "AuthError",
         code: "credential_store_failed",
         message: "Credential storage failed; provider outcome may be unknown",
       });
-      assert.equal(calls, 1);
+      assert.equal(issued, 1);
+      assert.deepEqual(bearers, []);
       assert.equal(ctx.connection.config.accessToken, undefined);
       assert.equal(ctx.connection.config.refreshToken, "r1");
     });
   });
 }
 
-it("Google service-account refresh shares the same coordination", async () => {
+it("Google service-account issuance shares the same coordination", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
     privateKeyEncoding: { type: "pkcs8", format: "pem" },
@@ -183,50 +202,52 @@ it("Google service-account refresh shares the same coordination", async () => {
     serviceAccountEmail: "service@example.com",
     serviceAccountPrivateKey: privateKey,
   });
-  let calls = 0;
-  globalThis.fetch = (async (_url, init) => {
-    calls++;
+  let issued = 0;
+  const bearers = serve((_url, init) => {
+    issued++;
     assert.equal(
-      new URLSearchParams(String(init?.body)).get("grant_type"),
+      new URLSearchParams(String(init.body)).get("grant_type"),
       "urn:ietf:params:oauth:grant-type:jwt-bearer",
     );
     return Response.json({ access_token: "service-token", expires_in: 3600 });
-  }) as typeof fetch;
+  });
   const contexts = await Promise.all(
     [1, 2].map(async () => context(await store.resolve({ plugin: "probe" }))),
   );
-  assert.deepEqual(
-    await Promise.all(
-      contexts.map((ctx) => googleAccessToken(ctx, "googleDrive", ["scope"])),
-    ),
-    ["service-token", "service-token"],
-  );
-  assert.equal(calls, 1);
+  await Promise.all(contexts.map((ctx) => reads.google(ctx, ["scope"])));
+  assert.deepEqual(bearers, ["Bearer service-token", "Bearer service-token"]);
+  assert.equal(issued, 1);
 });
 
-it("Microsoft app-only acquisition uses the same coordinated runtime", async () => {
+it("Microsoft app-only acquisition uses the same coordinated signer", async () => {
   const store = provider({ refreshToken: undefined, tenantId: "tenant" });
-  let calls = 0;
-  globalThis.fetch = (async (url, init) => {
-    calls++;
+  let issued = 0;
+  const bearers = serve((url, init) => {
+    issued++;
     assert.equal(
-      String(url),
+      url,
       "https://login.microsoftonline.com/tenant/oauth2/v2.0/token",
     );
     assert.equal(
-      new URLSearchParams(String(init?.body)).get("grant_type"),
+      new URLSearchParams(String(init.body)).get("grant_type"),
       "client_credentials",
     );
     return Response.json({ access_token: "app-token", expires_in: 3600 });
-  }) as typeof fetch;
+  });
   const contexts = await Promise.all(
     [1, 2].map(async () => context(await store.resolve({ plugin: "probe" }))),
   );
-  assert.deepEqual(
-    await Promise.all(
-      contexts.map((ctx) => microsoftAccessToken(ctx, "microsoft", [])),
+  await Promise.all(
+    contexts.map((ctx) =>
+      graphResponse(
+        ctx,
+        "microsoftFiles",
+        [],
+        "GET",
+        "/users/agent/drive/root",
+      ),
     ),
-    ["app-token", "app-token"],
   );
-  assert.equal(calls, 1);
+  assert.deepEqual(bearers, ["Bearer app-token", "Bearer app-token"]);
+  assert.equal(issued, 1);
 });

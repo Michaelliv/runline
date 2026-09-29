@@ -4,55 +4,12 @@ import {
   downloadResource,
   type HttpMethod,
 } from "runline";
-import { credentialRuntime } from "./credentialAdapter.js";
-import {
-  type GoogleAuthConfig,
-  googleCredentialType,
-  googleIdentity,
-  googleMethod,
-  googleResources,
-} from "./googleCredentials.js";
+import { credentialBroker } from "./credentialAdapter.js";
+import { jsonAnswer, requestFailed } from "./credentials.js";
+import { googleCredential, googleResources } from "./googleCredentials.js";
 
 export type { GoogleAuthConfig } from "./googleCredentials.js";
-
-/** Explicit storage adapter: the registry owns token protocols and renewal. */
-export function googleRuntime(
-  ctx: ActionContext,
-  pluginName: string,
-  scopes: string[],
-) {
-  const config = ctx.connection.config as GoogleAuthConfig;
-  const method = googleMethod(config);
-  const runtime = credentialRuntime(
-    ctx,
-    googleCredentialType(scopes, pluginName),
-    method,
-    (current) => {
-      const cfg = current as GoogleAuthConfig;
-      return [
-        pluginName,
-        scopes,
-        googleMethod(cfg),
-        ...(method === "serviceAccount"
-          ? [googleIdentity(cfg)]
-          : [cfg.clientId, cfg.clientSecret]),
-      ];
-    },
-  );
-  if (method === "serviceAccount")
-    runtime.binding.jwtIdentity = googleIdentity(config);
-  return runtime;
-}
-
-/** Trusted-runtime token compatibility only; resource consumers use googleResponse. */
-export async function googleAccessToken(
-  ctx: ActionContext,
-  pluginName: string,
-  scopes: string[],
-): Promise<string> {
-  const { binding, transport } = googleRuntime(ctx, pluginName, scopes);
-  return transport.accessToken(binding);
-}
+export { googleCredential } from "./googleCredentials.js";
 
 /** Translate builtin absolute URLs at one boundary; validate the raw path before URL normalization. */
 export async function googleResponse(
@@ -87,8 +44,7 @@ export async function googleResponse(
     }
     path = `${separator < 0 ? path : path.slice(0, separator)}?${params}`;
   }
-  const { binding, transport } = googleRuntime(ctx, plugin, scopes);
-  return transport.request(binding, {
+  return credentialBroker(ctx, googleCredential(plugin, scopes)).request({
     target,
     path,
     method: (init.method ?? "GET") as HttpMethod,
@@ -97,7 +53,8 @@ export async function googleResponse(
   });
 }
 
-export async function googleJsonRequest(
+/** A Google JSON request that must succeed; its answer is read by `jsonAnswer`. */
+export async function googleJsonRequest<T = unknown>(
   ctx: ActionContext,
   plugin: string,
   scopes: string[],
@@ -105,7 +62,7 @@ export async function googleJsonRequest(
   url: string,
   body?: unknown,
   query?: Record<string, unknown>,
-): Promise<unknown> {
+): Promise<T> {
   const response = await googleResponse(
     ctx,
     plugin,
@@ -121,15 +78,8 @@ export async function googleJsonRequest(
     },
     query,
   );
-  if (!response.ok)
-    throw new Error(`${plugin}: request failed (HTTP ${response.status})`);
-  if (response.status === 204) return { success: true };
-  const text = await response.text();
-  try {
-    return text ? JSON.parse(text) : { success: true };
-  } catch {
-    throw new AuthError("invalid_response");
-  }
+  if (!response.ok) throw requestFailed(plugin, response.status);
+  return jsonAnswer<T>(response);
 }
 
 export async function googleProbe(
@@ -137,8 +87,7 @@ export async function googleProbe(
   plugin: string,
   scopes: string[],
 ) {
-  const { binding, transport } = googleRuntime(ctx, plugin, scopes);
-  return transport.probe(binding);
+  return credentialBroker(ctx, googleCredential(plugin, scopes)).probe();
 }
 
 /** Only Google-issued thumbnail hosts; never attach credentials to signed URLs. */

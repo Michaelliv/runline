@@ -7,12 +7,10 @@ import {
   type CrmPropertyDefinition,
   enumSchema,
   idSchema,
-  listParams,
   pathSegment,
   recordTypeSchema,
   request,
   STRICT_OBJECT,
-  withQuery,
 } from "./shared.js";
 
 export function registerRecordActions(rl: RunlinePluginAPI) {
@@ -45,7 +43,7 @@ export function registerRecordActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{
         propertyDefinitions: CrmPropertyDefinition[];
-      }>(ctx, withQuery(`${CRM_BASE}/property-definitions`, listParams(input)));
+      }>(ctx, `${CRM_BASE}/property-definitions`, { query: input });
       return body.propertyDefinitions;
     },
   });

@@ -1,45 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { nocodbCredential } from "./credentials.js";
 
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
-  const host = (c.host as string).replace(/\/$/, "");
-  return { host, token: c.apiToken as string };
-}
-
-async function apiRequest(
-  conn: { host: string; token: string },
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.host}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, nocodbCredential, "nocodb", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "xc-token": conn.token,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body !== undefined) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`NocoDB API error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query: qs,
+    ...(body !== undefined ? { json: body } : {}),
+  });
 }
 
 async function paginate(
-  conn: { host: string; token: string },
+  ctx: ActionContext,
   endpoint: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown[]> {
@@ -49,7 +29,7 @@ async function paginate(
   let isLast = false;
   while (!isLast) {
     const data = (await apiRequest(
-      conn,
+      ctx,
       "GET",
       endpoint,
       undefined,
@@ -67,6 +47,7 @@ async function paginate(
 export default function nocodb(rl: RunlinePluginAPI) {
   rl.setName("nocodb");
   rl.setVersion("0.1.0");
+  rl.setCredential(nocodbCredential);
 
   rl.setConnectionSchema({
     host: {
@@ -96,11 +77,10 @@ export default function nocodb(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tableId, rows } = input as Record<string, unknown>;
-      const conn = getConn(ctx);
       return apiRequest(
-        conn,
+        ctx,
         "POST",
-        `/api/v2/tables/${tableId}/records`,
+        `tables/${pathSegment(tableId)}/records`,
         rows,
       );
     },
@@ -116,9 +96,9 @@ export default function nocodb(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { tableId, rowId } = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/api/v2/tables/${tableId}/records/${rowId}`,
+        `tables/${pathSegment(tableId)}/records/${pathSegment(rowId)}`,
       );
     },
   });
@@ -161,8 +141,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const conn = getConn(ctx);
-      const endpoint = `/api/v2/tables/${p.tableId}/records`;
+      const endpoint = `tables/${pathSegment(p.tableId)}/records`;
       const qs: Record<string, unknown> = {};
       if (p.where) qs.where = p.where;
       if (p.sort) qs.sort = p.sort;
@@ -173,7 +152,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
       if (p.limit) {
         qs.limit = p.limit;
         const data = (await apiRequest(
-          conn,
+          ctx,
           "GET",
           endpoint,
           undefined,
@@ -181,7 +160,7 @@ export default function nocodb(rl: RunlinePluginAPI) {
         )) as Record<string, unknown>;
         return data.list;
       }
-      return paginate(conn, endpoint, qs);
+      return paginate(ctx, endpoint, qs);
     },
   });
 
@@ -200,9 +179,9 @@ export default function nocodb(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { tableId, rows } = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "PATCH",
-        `/api/v2/tables/${tableId}/records`,
+        `tables/${pathSegment(tableId)}/records`,
         rows,
       );
     },
@@ -223,9 +202,9 @@ export default function nocodb(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { tableId, ids } = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/api/v2/tables/${tableId}/records`,
+        `tables/${pathSegment(tableId)}/records`,
         ids,
       );
     },

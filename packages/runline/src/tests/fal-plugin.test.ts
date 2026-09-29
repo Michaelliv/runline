@@ -384,7 +384,7 @@ describe("fal queue lifecycle", () => {
     assert.ok(calls[0].url.endsWith("/requests/req-1/cancel"), calls[0].url);
   });
 
-  it("preserves the live API's already-completed cancellation status", async () => {
+  it("reports an already-completed cancellation by status alone, without provider text", async () => {
     globalThis.fetch = (async () =>
       Response.json(
         { status: "ALREADY_COMPLETED" },
@@ -396,7 +396,7 @@ describe("fal queue lifecycle", () => {
           { model: "fal-ai/flux/schnell", requestId: "req-1" },
           ctx(),
         ),
-      /fal 400: ALREADY_COMPLETED/,
+      /fal: request failed \(HTTP 400\)/,
     );
   });
 
@@ -450,14 +450,14 @@ describe("fal validation and edge cases", () => {
   it("refuses unsafe request ids on every queue operation before sending", async () => {
     const calls = mockQueue({});
     for (const name of ["queue.status", "queue.result", "queue.cancel"]) {
-      for (const requestId of [".", "..", "", "a/b", "x?y"]) {
+      for (const requestId of [".", "..", "", "a/b"]) {
         await assert.rejects(
           () =>
             action(name).execute(
               { model: "fal-ai/flux/schnell", requestId },
               ctx(),
             ),
-          /invalid request id/,
+          { code: "request_not_allowed" },
         );
       }
     }
@@ -626,7 +626,7 @@ describe("fal polling and response safety", () => {
           { model: "fal-ai/flux", input: {} },
           ctx(),
         ),
-      /Refusing a redirect/,
+      { code: "transport_failed" },
     );
   });
 
@@ -722,7 +722,7 @@ describe("fal failure reporting", () => {
     );
   });
 
-  it("reads fal's array-shaped validation errors down to field and type", async () => {
+  it("reports validation failures by status alone, without echoing field detail", async () => {
     globalThis.fetch = (async () =>
       new Response(
         JSON.stringify({
@@ -743,11 +743,11 @@ describe("fal failure reporting", () => {
           { model: "fal-ai/flux/schnell", input: {} },
           ctx(),
         ),
-      /fal 422: body\.prompt: Field required \[missing\]/,
+      /fal: request failed \(HTTP 422\)/,
     );
   });
 
-  it("reads fal's string-shaped infrastructure errors too", async () => {
+  it("reports infrastructure failures by status alone too", async () => {
     globalThis.fetch = (async () =>
       new Response(
         JSON.stringify({
@@ -763,15 +763,12 @@ describe("fal failure reporting", () => {
           { model: "fal-ai/flux/schnell", input: {} },
           ctx(),
         ),
-      /fal 504: Request timed out \[request_timeout\]/,
+      /fal: request failed \(HTTP 504\)/,
     );
   });
 
   it("reports a failed download rather than claiming success with fewer files", async () => {
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("v3.fal.media"))
         return new Response("nope", { status: 404 });
@@ -782,7 +779,6 @@ describe("fal failure reporting", () => {
         });
       if (url.endsWith("/status")) return json({ status: "COMPLETED" });
       if (url.includes("/requests/")) return json(IMAGE_OUTPUT);
-      void init;
       return json({
         request_id: "req-1",
         status_url: "s",

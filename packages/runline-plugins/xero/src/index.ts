@@ -1,44 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { xeroCredential } from "./credentials.js";
 
-const BASE = "https://api.xero.com/api.xro/2.0";
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    accessToken: ctx.connection.config.accessToken as string,
-    tenantId: ctx.connection.config.tenantId as string,
-  };
-}
-
-async function api(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, xeroCredential, "xero", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${conn.accessToken}`,
-      "Xero-tenant-id": conn.tenantId,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok) throw new Error(`Xero error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    headers: { "Xero-tenant-id": ctx.connection.config.tenantId as string },
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function xero(rl: RunlinePluginAPI) {
   rl.setName("xero");
   rl.setVersion("0.1.0");
+  rl.setCredential(xeroCredential);
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -93,12 +77,10 @@ export default function xero(rl: RunlinePluginAPI) {
       if (p.DueDate) body.DueDate = p.DueDate;
       if (p.Reference) body.Reference = p.Reference;
       if (p.CurrencyCode) body.CurrencyCode = p.CurrencyCode;
-      const data = (await api(
-        getConn(ctx),
-        "POST",
-        "/Invoices",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "POST", "Invoices", body)) as Record<
+        string,
+        unknown
+      >;
       return data.Invoices;
     },
   });
@@ -109,9 +91,9 @@ export default function xero(rl: RunlinePluginAPI) {
     inputSchema: { invoiceId: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/Invoices/${(input as Record<string, unknown>).invoiceId}`,
+        `Invoices/${pathSegment((input as Record<string, unknown>).invoiceId)}`,
       )) as Record<string, unknown>;
       return data.Invoices;
     },
@@ -134,13 +116,10 @@ export default function xero(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.statuses) qs.statuses = p.statuses;
       if (p.where) qs.where = p.where;
-      const data = (await api(
-        getConn(ctx),
-        "GET",
-        "/Invoices",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "Invoices", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       const invoices = data.Invoices as unknown[];
       return p.limit ? invoices.slice(0, p.limit as number) : invoices;
     },
@@ -160,9 +139,9 @@ export default function xero(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const result = (await api(
-        getConn(ctx),
+        ctx,
         "POST",
-        `/Invoices/${p.invoiceId}`,
+        `Invoices/${pathSegment(p.invoiceId)}`,
         p.data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return result.Invoices;
@@ -183,12 +162,10 @@ export default function xero(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { Contacts: [p] };
-      const data = (await api(
-        getConn(ctx),
-        "POST",
-        "/Contacts",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "POST", "Contacts", body)) as Record<
+        string,
+        unknown
+      >;
       return data.Contacts;
     },
   });
@@ -199,9 +176,9 @@ export default function xero(rl: RunlinePluginAPI) {
     inputSchema: { contactId: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/Contacts/${(input as Record<string, unknown>).contactId}`,
+        `Contacts/${pathSegment((input as Record<string, unknown>).contactId)}`,
       )) as Record<string, unknown>;
       return data.Contacts;
     },
@@ -220,13 +197,10 @@ export default function xero(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.where) qs.where = p.where;
       if (p.includeArchived) qs.includeArchived = "true";
-      const data = (await api(
-        getConn(ctx),
-        "GET",
-        "/Contacts",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "Contacts", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       const contacts = data.Contacts as unknown[];
       return p.limit ? contacts.slice(0, p.limit as number) : contacts;
     },
@@ -247,9 +221,9 @@ export default function xero(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { Contacts: [p.data] };
       const result = (await api(
-        getConn(ctx),
+        ctx,
         "POST",
-        `/Contacts/${p.contactId}`,
+        `Contacts/${pathSegment(p.contactId)}`,
         body,
       )) as Record<string, unknown>;
       return result.Contacts;

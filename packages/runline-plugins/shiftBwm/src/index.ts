@@ -7,6 +7,7 @@ import {
   registerSavedListActions,
 } from "./collections.js";
 import { registerRecordActions, registerSchemaActions } from "./records.js";
+import { shiftBwmCredential } from "./shared.js";
 
 /**
  * Shift Business World Model — an organization's graph of accounts,
@@ -19,12 +20,13 @@ import { registerRecordActions, registerSchemaActions } from "./records.js";
  * per object type and must be read before writing.
  *
  * Requests go through the cloud repo's own BusinessWorldModelClient,
- * vendored under src/vendor (see the SYNCED_FROM headers there), over the
- * shared Shift transport.
+ * vendored under src/vendor (see the SYNCED_FROM headers there), signed
+ * through the Shift family's declared credential.
  */
 export default function shiftBwm(rl: RunlinePluginAPI) {
   rl.setName("shiftBwm");
   rl.setVersion("0.1.0");
+  rl.setCredential(shiftBwmCredential);
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({

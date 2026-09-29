@@ -1,48 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { convertkitCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.convertkit.com/v3";
-
-async function apiRequest(
-  apiSecret: string,
-  method: string,
-  endpoint: string,
+/** Every write carries a JSON body, the one the API secret travels in. */
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  // GET requests use api_secret as query param
-  if (method === "GET" || method === "DELETE") {
-    url.searchParams.set("api_secret", apiSecret);
-  }
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, convertkitCredential, "convertkit", {
+    target: "api",
+    path,
     method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (method === "POST" || method === "PUT") {
-    const b = { api_secret: apiSecret, ...body };
-    opts.body = JSON.stringify(b);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`ConvertKit API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getSecret(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiSecret as string;
+    query,
+    ...(method === "POST" || method === "PUT" ? { json: body ?? {} } : {}),
+  });
 }
 
 export default function convertkit(rl: RunlinePluginAPI) {
   rl.setName("convertkit");
   rl.setVersion("0.1.0");
+  rl.setCredential(convertkitCredential);
 
   rl.setConnectionSchema({
     apiSecret: {
@@ -63,7 +43,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { label } = input as { label: string };
-      return apiRequest(getSecret(ctx), "POST", "/custom_fields", { label });
+      return apiRequest(ctx, "POST", "custom_fields", { label });
     },
   });
 
@@ -75,9 +55,9 @@ export default function convertkit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        getSecret(ctx),
+        ctx,
         "GET",
-        `/custom_fields/${(input as { id: string }).id}`,
+        `custom_fields/${pathSegment((input as { id: string }).id)}`,
       );
     },
   });
@@ -89,11 +69,10 @@ export default function convertkit(rl: RunlinePluginAPI) {
       limit: { type: "number", required: false, description: "Max results" },
     },
     async execute(input, ctx) {
-      const data = (await apiRequest(
-        getSecret(ctx),
-        "GET",
-        "/custom_fields",
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "custom_fields")) as Record<
+        string,
+        unknown
+      >;
       const fields = (data.custom_fields as unknown[]) ?? [];
       const { limit } = (input ?? {}) as { limit?: number };
       if (limit) return fields.slice(0, limit);
@@ -110,7 +89,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, label } = input as { id: string; label: string };
-      await apiRequest(getSecret(ctx), "PUT", `/custom_fields/${id}`, {
+      await apiRequest(ctx, "PUT", `custom_fields/${pathSegment(id)}`, {
         label,
       });
       return { success: true };
@@ -125,9 +104,9 @@ export default function convertkit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        getSecret(ctx),
+        ctx,
         "DELETE",
-        `/custom_fields/${(input as { id: string }).id}`,
+        `custom_fields/${pathSegment((input as { id: string }).id)}`,
       );
     },
   });
@@ -162,9 +141,9 @@ export default function convertkit(rl: RunlinePluginAPI) {
       if (tags) body.tags = tags;
       if (fields) body.fields = fields;
       const data = (await apiRequest(
-        getSecret(ctx),
+        ctx,
         "POST",
-        `/forms/${formId}/subscribe`,
+        `forms/${pathSegment(formId)}/subscribe`,
         body,
       )) as Record<string, unknown>;
       return data.subscription;
@@ -178,11 +157,10 @@ export default function convertkit(rl: RunlinePluginAPI) {
       limit: { type: "number", required: false, description: "Max results" },
     },
     async execute(input, ctx) {
-      const data = (await apiRequest(
-        getSecret(ctx),
-        "GET",
-        "/forms",
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "forms")) as Record<
+        string,
+        unknown
+      >;
       const forms = (data.forms as unknown[]) ?? [];
       const { limit } = (input ?? {}) as { limit?: number };
       if (limit) return forms.slice(0, limit);
@@ -210,9 +188,9 @@ export default function convertkit(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (subscriberState) qs.subscriber_state = subscriberState;
       const data = (await apiRequest(
-        getSecret(ctx),
+        ctx,
         "GET",
-        `/forms/${formId}/subscriptions`,
+        `forms/${pathSegment(formId)}/subscriptions`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -252,9 +230,9 @@ export default function convertkit(rl: RunlinePluginAPI) {
       if (tags) body.tags = tags;
       if (fields) body.fields = fields;
       const data = (await apiRequest(
-        getSecret(ctx),
+        ctx,
         "POST",
-        `/sequences/${sequenceId}/subscribe`,
+        `sequences/${pathSegment(sequenceId)}/subscribe`,
         body,
       )) as Record<string, unknown>;
       return data.subscription;
@@ -268,11 +246,10 @@ export default function convertkit(rl: RunlinePluginAPI) {
       limit: { type: "number", required: false, description: "Max results" },
     },
     async execute(input, ctx) {
-      const data = (await apiRequest(
-        getSecret(ctx),
-        "GET",
-        "/sequences",
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "sequences")) as Record<
+        string,
+        unknown
+      >;
       const courses = (data.courses as unknown[]) ?? [];
       const { limit } = (input ?? {}) as { limit?: number };
       if (limit) return courses.slice(0, limit);
@@ -304,9 +281,9 @@ export default function convertkit(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (subscriberState) qs.subscriber_state = subscriberState;
       const data = (await apiRequest(
-        getSecret(ctx),
+        ctx,
         "GET",
-        `/sequences/${sequenceId}/subscriptions`,
+        `sequences/${pathSegment(sequenceId)}/subscriptions`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -331,7 +308,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { names } = input as { names: string };
       const tag = names.split(",").map((n) => ({ name: n.trim() }));
-      return apiRequest(getSecret(ctx), "POST", "/tags", { tag });
+      return apiRequest(ctx, "POST", "tags", { tag });
     },
   });
 
@@ -342,7 +319,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
       limit: { type: "number", required: false, description: "Max results" },
     },
     async execute(input, ctx) {
-      const data = (await apiRequest(getSecret(ctx), "GET", "/tags")) as Record<
+      const data = (await apiRequest(ctx, "GET", "tags")) as Record<
         string,
         unknown
       >;
@@ -377,9 +354,9 @@ export default function convertkit(rl: RunlinePluginAPI) {
       if (firstName) body.first_name = firstName;
       if (fields) body.fields = fields;
       const data = (await apiRequest(
-        getSecret(ctx),
+        ctx,
         "POST",
-        `/tags/${tagId}/subscribe`,
+        `tags/${pathSegment(tagId)}/subscribe`,
         body,
       )) as Record<string, unknown>;
       return data.subscription;
@@ -396,9 +373,9 @@ export default function convertkit(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { tagId, limit } = input as { tagId: string; limit?: number };
       const data = (await apiRequest(
-        getSecret(ctx),
+        ctx,
         "GET",
-        `/tags/${tagId}/subscriptions`,
+        `tags/${pathSegment(tagId)}/subscriptions`,
       )) as Record<string, unknown>;
       const subs = (data.subscriptions as unknown[]) ?? [];
       if (limit) return subs.slice(0, limit);
@@ -419,7 +396,7 @@ export default function convertkit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tagId, email } = input as { tagId: string; email: string };
-      return apiRequest(getSecret(ctx), "POST", `/tags/${tagId}/unsubscribe`, {
+      return apiRequest(ctx, "POST", `tags/${pathSegment(tagId)}/unsubscribe`, {
         email,
       });
     },

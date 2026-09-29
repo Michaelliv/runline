@@ -1,28 +1,24 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { segmentCredential } from "./credentials.js";
 
-const BASE = "https://api.segment.io/v1";
-
-async function apiRequest(
-  writeKey: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await fetch(`${BASE}${endpoint}`, {
+  return credentialJson(ctx, segmentCredential, "segment", {
+    target: "api",
+    path,
     method: "POST",
-    headers: {
-      Authorization: "Basic " + btoa(`${writeKey}:`),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+    json: body,
   });
-  if (!res.ok)
-    throw new Error(`Segment error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function segment(rl: RunlinePluginAPI) {
   rl.setName("segment");
   rl.setVersion("0.1.0");
+  rl.setCredential(segmentCredential);
 
   rl.setConnectionSchema({
     writeKey: {
@@ -32,9 +28,6 @@ export default function segment(rl: RunlinePluginAPI) {
       env: "SEGMENT_WRITE_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.writeKey as string;
 
   rl.registerAction("identify.create", {
     access: "write",
@@ -62,7 +55,7 @@ export default function segment(rl: RunlinePluginAPI) {
       if (p.traits) body.traits = p.traits;
       if (p.context) body.context = p.context;
       if (p.integrations) body.integrations = p.integrations;
-      return apiRequest(key(ctx), "/identify", body);
+      return apiRequest(ctx, "identify", body);
     },
   });
 
@@ -89,7 +82,7 @@ export default function segment(rl: RunlinePluginAPI) {
       if (p.properties) body.properties = p.properties;
       if (p.context) body.context = p.context;
       if (p.integrations) body.integrations = p.integrations;
-      return apiRequest(key(ctx), "/track", body);
+      return apiRequest(ctx, "track", body);
     },
   });
 
@@ -112,7 +105,7 @@ export default function segment(rl: RunlinePluginAPI) {
       if (p.properties) body.properties = p.properties;
       if (p.context) body.context = p.context;
       if (p.integrations) body.integrations = p.integrations;
-      return apiRequest(key(ctx), "/page", body);
+      return apiRequest(ctx, "page", body);
     },
   });
 
@@ -135,7 +128,7 @@ export default function segment(rl: RunlinePluginAPI) {
       if (p.traits) body.traits = p.traits;
       if (p.context) body.context = p.context;
       if (p.integrations) body.integrations = p.integrations;
-      return apiRequest(key(ctx), "/group", body);
+      return apiRequest(ctx, "group", body);
     },
   });
 }

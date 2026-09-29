@@ -23,7 +23,12 @@
 import { writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleJsonRequest, googleDownload } from "../../_shared/googleAuth.js";
+import { pathSegment } from "../../_shared/credentials.js";
+import {
+  googleCredential,
+  googleDownload,
+  googleJsonRequest,
+} from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -83,7 +88,7 @@ function extractPresentationId(input: string): string {
   if (!input)
     throw new Error("googleSlides: presentationId or URL is required");
   const m = input.match(PRES_URL_REGEX);
-  return m ? m[1] : input;
+  return pathSegment(m ? m[1] : input);
 }
 
 // ─── Plugin ──────────────────────────────────────────────────────
@@ -93,6 +98,7 @@ const SCOPES = ["https://www.googleapis.com/auth/presentations"];
 export default function googleSlides(rl: RunlinePluginAPI) {
   rl.setName("googleSlides");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleSlides", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -327,7 +333,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       return slidesRequest(
         ctx,
         "GET",
-        `/presentations/${id}/pages/${p.pageObjectId}`,
+        `/presentations/${id}/pages/${pathSegment(p.pageObjectId)}`,
       );
     },
   });
@@ -364,7 +370,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       const res = (await slidesRequest(
         ctx,
         "GET",
-        `/presentations/${id}/pages/${p.pageObjectId}/thumbnail`,
+        `/presentations/${id}/pages/${pathSegment(p.pageObjectId)}/thumbnail`,
         undefined,
         qs,
       )) as { contentUrl: string; width?: number; height?: number };

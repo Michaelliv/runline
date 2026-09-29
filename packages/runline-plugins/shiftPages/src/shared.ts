@@ -1,16 +1,19 @@
+import type { ActionContext } from "runline";
 import { baseUrl, pathSegment } from "../../_shared/shiftCloud.js";
+import { shiftClient } from "../../_shared/shiftCredentials.js";
 
 export {
-  type Ctx,
   enumSchema,
   idSchema,
-  listParams,
   pathSegment,
-  request,
   STRICT_OBJECT,
   timestampSchema,
-  withQuery,
 } from "../../_shared/shiftCloud.js";
+
+export type Ctx = ActionContext;
+
+export const { credential: shiftPagesCredential, request } =
+  shiftClient("shiftPages");
 
 export const PAGE_STATUS = ["draft", "published", "archived"] as const;
 export const PAGE_TYPE = [

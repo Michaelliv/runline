@@ -1,35 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { metabaseCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  sessionToken: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, metabaseCredential, "metabase", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      "X-Metabase-Session": sessionToken,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(`${baseUrl}${endpoint}`, opts);
-  if (!res.ok)
-    throw new Error(`Metabase API error ${res.status}: ${await res.text()}`);
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function metabase(rl: RunlinePluginAPI) {
   rl.setName("metabase");
   rl.setVersion("0.1.0");
+  rl.setCredential(metabaseCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -46,11 +41,6 @@ export default function metabase(rl: RunlinePluginAPI) {
     },
   });
 
-  const conn = (ctx: { connection: { config: Record<string, unknown> } }) => ({
-    baseUrl: (ctx.connection.config.url as string).replace(/\/$/, ""),
-    token: ctx.connection.config.sessionToken as string,
-  });
-
   // ── Question (Card) ─────────────────────────────────
 
   rl.registerAction("question.get", {
@@ -58,12 +48,10 @@ export default function metabase(rl: RunlinePluginAPI) {
     description: "Get a specific question/card",
     inputSchema: { questionId: { type: "number", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/card/${(input as { questionId: number }).questionId}`,
+        `card/${pathSegment((input as { questionId: number }).questionId)}`,
       );
     },
   });
@@ -72,8 +60,7 @@ export default function metabase(rl: RunlinePluginAPI) {
     access: "read",
     description: "List all questions/cards",
     async execute(_input, ctx) {
-      const { baseUrl, token } = conn(ctx);
-      return apiRequest(baseUrl, token, "GET", "/api/card/");
+      return apiRequest(ctx, "GET", "card/");
     },
   });
 
@@ -91,12 +78,10 @@ export default function metabase(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { questionId, format = "json" } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "POST",
-        `/api/card/${questionId}/query/${format}`,
+        `card/${pathSegment(questionId)}/query/${pathSegment(format)}`,
       );
     },
   });
@@ -108,12 +93,10 @@ export default function metabase(rl: RunlinePluginAPI) {
     description: "Get a specific alert",
     inputSchema: { alertId: { type: "number", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/alert/${(input as { alertId: number }).alertId}`,
+        `alert/${pathSegment((input as { alertId: number }).alertId)}`,
       );
     },
   });
@@ -122,8 +105,7 @@ export default function metabase(rl: RunlinePluginAPI) {
     access: "read",
     description: "List all alerts",
     async execute(_input, ctx) {
-      const { baseUrl, token } = conn(ctx);
-      return apiRequest(baseUrl, token, "GET", "/api/alert/");
+      return apiRequest(ctx, "GET", "alert/");
     },
   });
 
@@ -133,13 +115,10 @@ export default function metabase(rl: RunlinePluginAPI) {
     access: "read",
     description: "List all databases",
     async execute(_input, ctx) {
-      const { baseUrl, token } = conn(ctx);
-      const data = (await apiRequest(
-        baseUrl,
-        token,
-        "GET",
-        "/api/database/",
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "database/")) as Record<
+        string,
+        unknown
+      >;
       return data.data;
     },
   });
@@ -149,12 +128,10 @@ export default function metabase(rl: RunlinePluginAPI) {
     description: "Get fields from a database",
     inputSchema: { databaseId: { type: "number", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/database/${(input as { databaseId: number }).databaseId}/fields`,
+        `database/${pathSegment((input as { databaseId: number }).databaseId)}/fields`,
       );
     },
   });
@@ -203,14 +180,13 @@ export default function metabase(rl: RunlinePluginAPI) {
         dbName,
         isFullSync = true,
       } = input as Record<string, unknown>;
-      const { baseUrl, token } = conn(ctx);
       const details: Record<string, unknown> = {};
       if (host) details.host = host;
       if (port) details.port = port;
       if (user) details.user = user;
       if (password) details.password = password;
       if (dbName) details.db = dbName;
-      return apiRequest(baseUrl, token, "POST", "/api/database", {
+      return apiRequest(ctx, "POST", "database", {
         name,
         engine,
         details,
@@ -226,12 +202,10 @@ export default function metabase(rl: RunlinePluginAPI) {
     description: "Get a specific metric",
     inputSchema: { metricId: { type: "number", required: true } },
     async execute(input, ctx) {
-      const { baseUrl, token } = conn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "GET",
-        `/api/metric/${(input as { metricId: number }).metricId}`,
+        `metric/${pathSegment((input as { metricId: number }).metricId)}`,
       );
     },
   });
@@ -240,8 +214,7 @@ export default function metabase(rl: RunlinePluginAPI) {
     access: "read",
     description: "List all metrics",
     async execute(_input, ctx) {
-      const { baseUrl, token } = conn(ctx);
-      return apiRequest(baseUrl, token, "GET", "/api/metric/");
+      return apiRequest(ctx, "GET", "metric/");
     },
   });
 }

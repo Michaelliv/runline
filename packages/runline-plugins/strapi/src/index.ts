@@ -1,78 +1,40 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { strapiCredential, strapiVersion } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    apiVersion: (c.apiVersion as string) || "v4",
-    apiToken: c.apiToken as string | undefined,
-    email: c.email as string | undefined,
-    password: c.password as string | undefined,
-  };
+/** Whether the connection speaks Strapi v4, whose answers wrap entries in `data`. */
+function isV4(ctx: ActionContext): boolean {
+  return strapiVersion(ctx.connection.config) === "v4";
 }
 
-let cachedJwt: { token: string; url: string; expiry: number } | undefined;
-
-async function getJwt(conn: {
-  url: string;
-  apiVersion: string;
-  email?: string;
-  password?: string;
-}): Promise<string> {
-  if (cachedJwt && cachedJwt.url === conn.url && Date.now() < cachedJwt.expiry)
-    return cachedJwt.token;
-  const authPath = conn.apiVersion === "v4" ? "/api/auth/local" : "/auth/local";
-  const res = await fetch(`${conn.url}${authPath}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ identifier: conn.email, password: conn.password }),
-  });
-  if (!res.ok)
-    throw new Error(`Strapi auth error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
-  const jwt = data.jwt as string;
-  cachedJwt = { token: jwt, url: conn.url, expiry: Date.now() + 3600_000 };
-  return jwt;
-}
-
-async function apiRequest(
-  conn: ReturnType<typeof getConn>,
-  method: string,
-  endpoint: string,
+/** A content API call; GET and DELETE carry no body. */
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  let token: string;
-  if (conn.apiToken) {
-    token = conn.apiToken;
-  } else {
-    token = await getJwt(conn);
-  }
-  const prefix = conn.apiVersion === "v4" ? "/api" : "";
-  const url = new URL(`${conn.url}${prefix}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, strapiCredential, "strapi", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Strapi error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query,
+    ...(body && method !== "GET" && method !== "DELETE" ? { json: body } : {}),
+  });
+}
+
+/** An entry, or a content type's collection, as a path beneath the API. */
+function entryPath(contentType: unknown, entryId?: unknown): string {
+  return entryId === undefined
+    ? pathSegment(contentType)
+    : `${pathSegment(contentType)}/${pathSegment(entryId)}`;
 }
 
 export default function strapi(rl: RunlinePluginAPI) {
   rl.setName("strapi");
   rl.setVersion("0.1.0");
+  rl.setCredential(strapiCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -86,6 +48,13 @@ export default function strapi(rl: RunlinePluginAPI) {
       required: false,
       description: "v3 or v4 (default: v4)",
       env: "STRAPI_API_VERSION",
+    },
+    authMethod: {
+      type: "string",
+      required: false,
+      description:
+        "apiToken or password (inferred from which credential the connection holds)",
+      env: "STRAPI_AUTH_METHOD",
     },
     apiToken: {
       type: "string",
@@ -119,13 +88,11 @@ export default function strapi(rl: RunlinePluginAPI) {
       data: { type: "object", required: true, description: "Entry fields" },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = input as Record<string, unknown>;
-      const body =
-        conn.apiVersion === "v4"
-          ? { data: p.data }
-          : (p.data as Record<string, unknown>);
-      return apiRequest(conn, "POST", `/${p.contentType}`, body);
+      const body = isV4(ctx)
+        ? { data: p.data }
+        : (p.data as Record<string, unknown>);
+      return apiRequest(ctx, "POST", entryPath(p.contentType), body);
     },
   });
 
@@ -137,14 +104,13 @@ export default function strapi(rl: RunlinePluginAPI) {
       entryId: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = input as Record<string, unknown>;
       const data = (await apiRequest(
-        conn,
+        ctx,
         "GET",
-        `/${p.contentType}/${p.entryId}`,
+        entryPath(p.contentType, p.entryId),
       )) as Record<string, unknown>;
-      return conn.apiVersion === "v4" ? data.data : data;
+      return isV4(ctx) ? data.data : data;
     },
   });
 
@@ -171,18 +137,17 @@ export default function strapi(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
-      if (conn.apiVersion === "v4") {
+      if (isV4(ctx)) {
         if (p.limit) qs["pagination[pageSize]"] = p.limit;
         if (p.sort) qs.sort = p.sort;
         if (p.filters) qs.filters = p.filters;
         if (p.publicationState) qs.publicationState = p.publicationState;
         const data = (await apiRequest(
-          conn,
+          ctx,
           "GET",
-          `/${p.contentType}`,
+          entryPath(p.contentType),
           undefined,
           qs,
         )) as Record<string, unknown>;
@@ -192,7 +157,7 @@ export default function strapi(rl: RunlinePluginAPI) {
       if (p.sort) qs._sort = p.sort;
       if (p.filters) qs._where = p.filters;
       if (p.publicationState) qs._publicationState = p.publicationState;
-      return apiRequest(conn, "GET", `/${p.contentType}`, undefined, qs);
+      return apiRequest(ctx, "GET", entryPath(p.contentType), undefined, qs);
     },
   });
 
@@ -205,19 +170,17 @@ export default function strapi(rl: RunlinePluginAPI) {
       data: { type: "object", required: true, description: "Fields to update" },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = input as Record<string, unknown>;
-      const body =
-        conn.apiVersion === "v4"
-          ? { data: p.data }
-          : (p.data as Record<string, unknown>);
+      const body = isV4(ctx)
+        ? { data: p.data }
+        : (p.data as Record<string, unknown>);
       const result = (await apiRequest(
-        conn,
+        ctx,
         "PUT",
-        `/${p.contentType}/${p.entryId}`,
+        entryPath(p.contentType, p.entryId),
         body,
       )) as Record<string, unknown>;
-      return conn.apiVersion === "v4" ? result.data : result;
+      return isV4(ctx) ? result.data : result;
     },
   });
 
@@ -229,9 +192,8 @@ export default function strapi(rl: RunlinePluginAPI) {
       entryId: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = input as Record<string, unknown>;
-      return apiRequest(conn, "DELETE", `/${p.contentType}/${p.entryId}`);
+      return apiRequest(ctx, "DELETE", entryPath(p.contentType, p.entryId));
     },
   });
 }

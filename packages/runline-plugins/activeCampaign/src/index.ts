@@ -1,43 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { activeCampaignCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, activeCampaignCredential, "activeCampaign", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      "Api-Token": apiKey,
-    },
-  };
-  if (body && Object.keys(body).length > 0) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`ActiveCampaign API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204) return { ok: true };
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 async function paginate(
-  baseUrl: string,
-  apiKey: string,
+  ctx: ActionContext,
   endpoint: string,
   dataKey: string,
   limit?: number,
@@ -47,17 +29,10 @@ async function paginate(
   const pageSize = 100;
 
   while (true) {
-    const data = (await apiRequest(
-      baseUrl,
-      apiKey,
-      "GET",
-      endpoint,
-      undefined,
-      {
-        limit: pageSize,
-        offset,
-      },
-    )) as Record<string, unknown>;
+    const data = (await apiRequest(ctx, "GET", endpoint, undefined, {
+      limit: pageSize,
+      offset,
+    })) as Record<string, unknown>;
 
     const items = (data[dataKey] as unknown[]) ?? [];
     results.push(...items);
@@ -72,16 +47,10 @@ async function paginate(
   return results;
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    baseUrl: (ctx.connection.config.apiUrl as string).replace(/\/$/, ""),
-    apiKey: ctx.connection.config.apiKey as string,
-  };
-}
-
 export default function activeCampaign(rl: RunlinePluginAPI) {
   rl.setName("activeCampaign");
   rl.setVersion("0.1.0");
+  rl.setCredential(activeCampaignCredential);
 
   rl.setConnectionSchema({
     apiUrl: {
@@ -119,15 +88,12 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { email, firstName, lastName, phone, updateIfExists, ...rest } =
         input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
       const contact: Record<string, unknown> = { email, ...rest };
       if (firstName) contact.firstName = firstName;
       if (lastName) contact.lastName = lastName;
       if (phone) contact.phone = phone;
-      const endpoint = updateIfExists
-        ? "/api/3/contact/sync"
-        : "/api/3/contacts";
-      return apiRequest(baseUrl, apiKey, "POST", endpoint, { contact });
+      const endpoint = updateIfExists ? "contact/sync" : "contacts";
+      return apiRequest(ctx, "POST", endpoint, { contact });
     },
   });
 
@@ -139,8 +105,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "GET", `/api/3/contacts/${contactId}`);
+      return apiRequest(ctx, "GET", `contacts/${pathSegment(contactId)}`);
     },
   });
 
@@ -156,8 +121,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(baseUrl, apiKey, "/api/3/contacts", "contacts", limit);
+      return paginate(ctx, "contacts", "contacts", limit);
     },
   });
 
@@ -173,16 +137,9 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId, ...fields } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "PUT",
-        `/api/3/contacts/${contactId}`,
-        {
-          contact: fields,
-        },
-      );
+      return apiRequest(ctx, "PUT", `contacts/${pathSegment(contactId)}`, {
+        contact: fields,
+      });
     },
   });
 
@@ -194,13 +151,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId } = input as { contactId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "DELETE",
-        `/api/3/contacts/${contactId}`,
-      );
+      return apiRequest(ctx, "DELETE", `contacts/${pathSegment(contactId)}`);
     },
   });
 
@@ -214,8 +165,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name, ...rest } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/accounts", {
+      return apiRequest(ctx, "POST", "accounts", {
         account: { name, ...rest },
       });
     },
@@ -229,8 +179,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { accountId } = input as { accountId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "GET", `/api/3/accounts/${accountId}`);
+      return apiRequest(ctx, "GET", `accounts/${pathSegment(accountId)}`);
     },
   });
 
@@ -246,8 +195,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(baseUrl, apiKey, "/api/3/accounts", "accounts", limit);
+      return paginate(ctx, "accounts", "accounts", limit);
     },
   });
 
@@ -260,16 +208,9 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { accountId, ...fields } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "PUT",
-        `/api/3/accounts/${accountId}`,
-        {
-          account: fields,
-        },
-      );
+      return apiRequest(ctx, "PUT", `accounts/${pathSegment(accountId)}`, {
+        account: fields,
+      });
     },
   });
 
@@ -281,13 +222,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { accountId } = input as { accountId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "DELETE",
-        `/api/3/accounts/${accountId}`,
-      );
+      return apiRequest(ctx, "DELETE", `accounts/${pathSegment(accountId)}`);
     },
   });
 
@@ -303,8 +238,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contact, account, ...rest } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/accountContacts", {
+      return apiRequest(ctx, "POST", "accountContacts", {
         accountContact: { contact, account, ...rest },
       });
     },
@@ -323,12 +257,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { accountContactId, ...fields } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "PUT",
-        `/api/3/accountContacts/${accountContactId}`,
+        `accountContacts/${pathSegment(accountContactId)}`,
         {
           accountContact: fields,
         },
@@ -348,12 +280,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { accountContactId } = input as { accountContactId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "DELETE",
-        `/api/3/accountContacts/${accountContactId}`,
+        `accountContacts/${pathSegment(accountContactId)}`,
       );
     },
   });
@@ -372,8 +302,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
         contactId: string;
         tagId: string;
       };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/contactTags", {
+      return apiRequest(ctx, "POST", "contactTags", {
         contactTag: { contact: contactId, tag: tagId },
       });
     },
@@ -391,12 +320,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactTagId } = input as { contactTagId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "DELETE",
-        `/api/3/contactTags/${contactTagId}`,
+        `contactTags/${pathSegment(contactTagId)}`,
       );
     },
   });
@@ -415,8 +342,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
         contactId: string;
         listId: string;
       };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/contactLists", {
+      return apiRequest(ctx, "POST", "contactLists", {
         contactList: { list: listId, contact: contactId, status: 1 },
       });
     },
@@ -434,8 +360,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
         contactId: string;
         listId: string;
       };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/contactLists", {
+      return apiRequest(ctx, "POST", "contactLists", {
         contactList: { list: listId, contact: contactId, status: 2 },
       });
     },
@@ -455,8 +380,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(baseUrl, apiKey, "/api/3/lists", "lists", limit);
+      return paginate(ctx, "lists", "lists", limit);
     },
   });
 
@@ -475,8 +399,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name, tagType, ...rest } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/tags", {
+      return apiRequest(ctx, "POST", "tags", {
         tag: { tag: name, tagType, ...rest },
       });
     },
@@ -490,8 +413,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tagId } = input as { tagId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "GET", `/api/3/tags/${tagId}`);
+      return apiRequest(ctx, "GET", `tags/${pathSegment(tagId)}`);
     },
   });
 
@@ -507,8 +429,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(baseUrl, apiKey, "/api/3/tags", "tags", limit);
+      return paginate(ctx, "tags", "tags", limit);
     },
   });
 
@@ -525,11 +446,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, apiKey } = getConn(ctx);
       const tag: Record<string, unknown> = { ...rest };
       if (name) tag.tag = name;
       if (tagType) tag.tagType = tagType;
-      return apiRequest(baseUrl, apiKey, "PUT", `/api/3/tags/${tagId}`, {
+      return apiRequest(ctx, "PUT", `tags/${pathSegment(tagId)}`, {
         tag,
       });
     },
@@ -543,8 +463,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { tagId } = input as { tagId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "DELETE", `/api/3/tags/${tagId}`);
+      return apiRequest(ctx, "DELETE", `tags/${pathSegment(tagId)}`);
     },
   });
 
@@ -579,8 +498,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/deals", {
+      return apiRequest(ctx, "POST", "deals", {
         deal: { title, contact, value, currency, ...rest },
       });
     },
@@ -594,8 +512,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId } = input as { dealId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "GET", `/api/3/deals/${dealId}`);
+      return apiRequest(ctx, "GET", `deals/${pathSegment(dealId)}`);
     },
   });
 
@@ -611,8 +528,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(baseUrl, apiKey, "/api/3/deals", "deals", limit);
+      return paginate(ctx, "deals", "deals", limit);
     },
   });
 
@@ -630,8 +546,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId, ...fields } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "PUT", `/api/3/deals/${dealId}`, {
+      return apiRequest(ctx, "PUT", `deals/${pathSegment(dealId)}`, {
         deal: fields,
       });
     },
@@ -645,8 +560,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId } = input as { dealId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "DELETE", `/api/3/deals/${dealId}`);
+      return apiRequest(ctx, "DELETE", `deals/${pathSegment(dealId)}`);
     },
   });
 
@@ -659,16 +573,9 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { dealId, note } = input as { dealId: string; note: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "POST",
-        `/api/3/deals/${dealId}/notes`,
-        {
-          note: { note },
-        },
-      );
+      return apiRequest(ctx, "POST", `deals/${pathSegment(dealId)}/notes`, {
+        note: { note },
+      });
     },
   });
 
@@ -686,12 +593,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
         noteId: string;
         note: string;
       };
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "PUT",
-        `/api/3/deals/${dealId}/notes/${noteId}`,
+        `deals/${pathSegment(dealId)}/notes/${pathSegment(noteId)}`,
         {
           note: { note },
         },
@@ -716,8 +621,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
       linkUrl: { type: "string", required: true, description: "Link URL" },
     },
     async execute(input, ctx) {
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/connections", {
+      return apiRequest(ctx, "POST", "connections", {
         connection: input as Record<string, unknown>,
       });
     },
@@ -735,13 +639,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { connectionId } = input as { connectionId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "GET",
-        `/api/3/connections/${connectionId}`,
-      );
+      return apiRequest(ctx, "GET", `connections/${pathSegment(connectionId)}`);
     },
   });
 
@@ -757,14 +655,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(
-        baseUrl,
-        apiKey,
-        "/api/3/connections",
-        "connections",
-        limit,
-      );
+      return paginate(ctx, "connections", "connections", limit);
     },
   });
 
@@ -780,12 +671,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { connectionId, ...fields } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "PUT",
-        `/api/3/connections/${connectionId}`,
+        `connections/${pathSegment(connectionId)}`,
         {
           connection: fields,
         },
@@ -805,12 +694,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { connectionId } = input as { connectionId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "DELETE",
-        `/api/3/connections/${connectionId}`,
+        `connections/${pathSegment(connectionId)}`,
       );
     },
   });
@@ -840,12 +727,11 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { acceptsMarketing, ...rest } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
       const customer: Record<string, unknown> = { ...rest };
       if (acceptsMarketing !== undefined) {
         customer.acceptsMarketing = acceptsMarketing ? "1" : "0";
       }
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/ecomCustomers", {
+      return apiRequest(ctx, "POST", "ecomCustomers", {
         ecomCustomer: customer,
       });
     },
@@ -863,13 +749,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { customerId } = input as { customerId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "GET",
-        `/api/3/ecomCustomers/${customerId}`,
-      );
+      return apiRequest(ctx, "GET", `ecomCustomers/${pathSegment(customerId)}`);
     },
   });
 
@@ -885,14 +765,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(
-        baseUrl,
-        apiKey,
-        "/api/3/ecomCustomers",
-        "ecomCustomers",
-        limit,
-      );
+      return paginate(ctx, "ecomCustomers", "ecomCustomers", limit);
     },
   });
 
@@ -916,16 +789,14 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, apiKey } = getConn(ctx);
       const customer: Record<string, unknown> = { ...rest };
       if (acceptsMarketing !== undefined) {
         customer.acceptsMarketing = acceptsMarketing ? "1" : "0";
       }
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "PUT",
-        `/api/3/ecomCustomers/${customerId}`,
+        `ecomCustomers/${pathSegment(customerId)}`,
         {
           ecomCustomer: customer,
         },
@@ -945,12 +816,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { customerId } = input as { customerId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "DELETE",
-        `/api/3/ecomCustomers/${customerId}`,
+        `ecomCustomers/${pathSegment(customerId)}`,
       );
     },
   });
@@ -996,8 +865,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { currency, ...rest } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/api/3/ecomOrders", {
+      return apiRequest(ctx, "POST", "ecomOrders", {
         ecomOrder: { ...rest, currency: (currency as string).toUpperCase() },
       });
     },
@@ -1011,8 +879,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { orderId } = input as { orderId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(baseUrl, apiKey, "GET", `/api/3/ecomOrders/${orderId}`);
+      return apiRequest(ctx, "GET", `ecomOrders/${pathSegment(orderId)}`);
     },
   });
 
@@ -1028,14 +895,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(
-        baseUrl,
-        apiKey,
-        "/api/3/ecomOrders",
-        "ecomOrders",
-        limit,
-      );
+      return paginate(ctx, "ecomOrders", "ecomOrders", limit);
     },
   });
 
@@ -1047,16 +907,9 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { orderId, ...fields } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "PUT",
-        `/api/3/ecomOrders/${orderId}`,
-        {
-          ecomOrder: fields,
-        },
-      );
+      return apiRequest(ctx, "PUT", `ecomOrders/${pathSegment(orderId)}`, {
+        ecomOrder: fields,
+      });
     },
   });
 
@@ -1068,13 +921,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { orderId } = input as { orderId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "DELETE",
-        `/api/3/ecomOrders/${orderId}`,
-      );
+      return apiRequest(ctx, "DELETE", `ecomOrders/${pathSegment(orderId)}`);
     },
   });
 
@@ -1088,12 +935,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { productId } = input as { productId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "GET",
-        `/api/3/ecomOrderProducts/${productId}`,
+        `ecomOrderProducts/${pathSegment(productId)}`,
       );
     },
   });
@@ -1106,12 +951,10 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { orderId } = input as { orderId: string };
-      const { baseUrl, apiKey } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        apiKey,
+        ctx,
         "GET",
-        `/api/3/ecomOrders/${orderId}/orderProducts`,
+        `ecomOrders/${pathSegment(orderId)}/orderProducts`,
       );
     },
   });
@@ -1128,14 +971,7 @@ export default function activeCampaign(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const { baseUrl, apiKey } = getConn(ctx);
-      return paginate(
-        baseUrl,
-        apiKey,
-        "/api/3/ecomOrderProducts",
-        "ecomOrderProducts",
-        limit,
-      );
+      return paginate(ctx, "ecomOrderProducts", "ecomOrderProducts", limit);
     },
   });
 }

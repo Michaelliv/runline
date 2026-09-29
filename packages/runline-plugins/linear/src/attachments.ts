@@ -5,7 +5,6 @@ import {
   assertAttachmentInScope,
   assertIssueInScope,
   gql,
-  key,
   requireUnscoped,
   withScopedNote,
 } from "./shared.js";
@@ -19,7 +18,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "attachment.list");
       const limit = (input as { limit?: number } | null)?.limit ?? 50;
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($first: Int) { attachments(first: $first) { nodes { ${ATTACHMENT_FIELDS} } pageInfo { hasNextPage endCursor } } }`,
         { first: limit },
       );
@@ -34,7 +33,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
       const id = (input as { id: string }).id;
       await assertAttachmentInScope(ctx, id);
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($id: String!) { attachment(id: $id) { ${ATTACHMENT_FIELDS} } }`,
         { id },
       );
@@ -92,7 +91,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
       const fields = input as Record<string, unknown>;
       await assertIssueInScope(ctx, String(fields.issueId));
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: AttachmentCreateInput!) { attachmentCreate(input: $input) { success attachment { ${ATTACHMENT_FIELDS} } } }`,
         { input: fields },
       );
@@ -127,7 +126,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
       const { id, ...fields } = input as Record<string, unknown>;
       await assertAttachmentInScope(ctx, String(id));
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: AttachmentUpdateInput!) { attachmentUpdate(id: $id, input: $input) { success attachment { ${ATTACHMENT_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -157,7 +156,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
       const { issueId, url, title, id } = input as Record<string, unknown>;
       await assertIssueInScope(ctx, String(issueId));
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($issueId: String!, $url: String!, $title: String, $id: String) {
           attachmentLinkURL(issueId: $issueId, url: $url, title: $title, id: $id) { success attachment { ${ATTACHMENT_FIELDS} } }
         }`,
@@ -178,7 +177,7 @@ export function registerAttachmentActions(rl: RunlinePluginAPI) {
       const id = (input as { id: string }).id;
       await assertAttachmentInScope(ctx, id);
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { attachmentDelete(id: $id) { success } }`,
         { id },
       );

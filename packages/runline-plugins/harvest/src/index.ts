@@ -1,60 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { harvestCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.harvestapp.com/v2";
-
-async function apiRequest(
-  token: string,
-  accountId: string,
-  method: string,
-  endpoint: string,
+function hv(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, harvestCredential, "harvest", {
+    target: "api",
+    path,
     method,
+    query: qs,
     headers: {
-      Authorization: `Bearer ${token}`,
-      "Harvest-Account-Id": accountId,
-      "Content-Type": "application/json",
+      "Harvest-Account-Id": String(ctx.connection.config.accountId),
       "User-Agent": "Runline",
     },
-  };
-  if (
-    body &&
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Harvest API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    token: ctx.connection.config.token as string,
-    accountId: ctx.connection.config.accountId as string,
-  };
-}
-
-function hv(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { token, accountId } = getConn(ctx);
-  return apiRequest(token, accountId, method, endpoint, body, qs);
+      ? { json: body }
+      : {}),
+  });
 }
 
 function unwrapList(data: unknown, key: string): unknown {
@@ -99,7 +69,11 @@ function registerCrud(
       id: { type: "number", required: true, description: `${resource} ID` },
     },
     async execute(input, ctx) {
-      return hv(ctx, "GET", `${apiPath}/${(input as { id: number }).id}`);
+      return hv(
+        ctx,
+        "GET",
+        `${apiPath}/${pathSegment((input as { id: number }).id)}`,
+      );
     },
   });
   rl.registerAction(`${resource}.list`, {
@@ -133,7 +107,7 @@ function registerCrud(
         id: number;
         properties: Record<string, unknown>;
       };
-      return hv(ctx, "PATCH", `${apiPath}/${id}`, properties);
+      return hv(ctx, "PATCH", `${apiPath}/${pathSegment(id)}`, properties);
     },
   });
   rl.registerAction(`${resource}.delete`, {
@@ -143,7 +117,11 @@ function registerCrud(
       id: { type: "number", required: true, description: `${resource} ID` },
     },
     async execute(input, ctx) {
-      await hv(ctx, "DELETE", `${apiPath}/${(input as { id: number }).id}`);
+      await hv(
+        ctx,
+        "DELETE",
+        `${apiPath}/${pathSegment((input as { id: number }).id)}`,
+      );
       return { success: true };
     },
   });
@@ -152,6 +130,7 @@ function registerCrud(
 export default function harvest(rl: RunlinePluginAPI) {
   rl.setName("harvest");
   rl.setVersion("0.1.0");
+  rl.setCredential(harvestCredential);
 
   rl.setConnectionSchema({
     token: {
@@ -253,7 +232,11 @@ export default function harvest(rl: RunlinePluginAPI) {
       id: { type: "number", required: true, description: "Time entry ID" },
     },
     async execute(input, ctx) {
-      return hv(ctx, "GET", `time_entries/${(input as { id: number }).id}`);
+      return hv(
+        ctx,
+        "GET",
+        `time_entries/${pathSegment((input as { id: number }).id)}`,
+      );
     },
   });
 
@@ -317,7 +300,7 @@ export default function harvest(rl: RunlinePluginAPI) {
         id: number;
         properties: Record<string, unknown>;
       };
-      return hv(ctx, "PATCH", `time_entries/${id}`, properties);
+      return hv(ctx, "PATCH", `time_entries/${pathSegment(id)}`, properties);
     },
   });
 
@@ -328,7 +311,11 @@ export default function harvest(rl: RunlinePluginAPI) {
       id: { type: "number", required: true, description: "Time entry ID" },
     },
     async execute(input, ctx) {
-      await hv(ctx, "DELETE", `time_entries/${(input as { id: number }).id}`);
+      await hv(
+        ctx,
+        "DELETE",
+        `time_entries/${pathSegment((input as { id: number }).id)}`,
+      );
       return { success: true };
     },
   });
@@ -343,7 +330,7 @@ export default function harvest(rl: RunlinePluginAPI) {
       return hv(
         ctx,
         "PATCH",
-        `time_entries/${(input as { id: number }).id}/restart`,
+        `time_entries/${pathSegment((input as { id: number }).id)}/restart`,
       );
     },
   });
@@ -358,7 +345,7 @@ export default function harvest(rl: RunlinePluginAPI) {
       return hv(
         ctx,
         "PATCH",
-        `time_entries/${(input as { id: number }).id}/stop`,
+        `time_entries/${pathSegment((input as { id: number }).id)}/stop`,
       );
     },
   });

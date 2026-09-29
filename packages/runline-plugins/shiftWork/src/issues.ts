@@ -7,7 +7,6 @@ import {
   ISSUE_SOURCE,
   ISSUE_STATUS,
   idSchema,
-  listParams,
   pathSegment,
   request,
   type ShiftIssue,
@@ -16,7 +15,6 @@ import {
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
-  withQuery,
 } from "./shared.js";
 
 const issueFields = {
@@ -89,10 +87,9 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       "List the first page of Shift Labs Issues for the API key's organization.",
     inputSchema: t.Object(issueListFields, STRICT_OBJECT),
     async execute(input, ctx) {
-      const body = await request<{ issues: ShiftIssue[] }>(
-        ctx,
-        `/v1/issues?${listParams(input)}`,
-      );
+      const body = await request<{ issues: ShiftIssue[] }>(ctx, "/v1/issues", {
+        query: input,
+      });
       return body.issues;
     },
   });
@@ -104,7 +101,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ issues: ShiftIssue[]; nextCursor?: string }>(
         ctx,
-        `/v1/issues?${listParams(input)}`,
+        "/v1/issues",
+        { query: input },
       );
     },
   });
@@ -313,10 +311,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       };
       const body = await request<{ events: ShiftIssueEvent[] }>(
         ctx,
-        withQuery(
-          `/v1/issues/${pathSegment(id)}/events`,
-          listParams(pagination),
-        ),
+        `/v1/issues/${pathSegment(id)}/events`,
+        { query: pagination },
       );
       return body.events;
     },
@@ -334,10 +330,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       };
       return request<{ events: ShiftIssueEvent[]; nextCursor?: string }>(
         ctx,
-        withQuery(
-          `/v1/issues/${pathSegment(id)}/events`,
-          listParams(pagination),
-        ),
+        `/v1/issues/${pathSegment(id)}/events`,
+        { query: pagination },
       );
     },
   });
@@ -356,10 +350,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const { id, ...pagination } = input as { id: string; limit?: number };
       const body = await request<{ dependencies: ShiftIssueDependency[] }>(
         ctx,
-        withQuery(
-          `/v1/issues/${pathSegment(id)}/dependencies`,
-          listParams(pagination),
-        ),
+        `/v1/issues/${pathSegment(id)}/dependencies`,
+        { query: pagination },
       );
       return body.dependencies;
     },
@@ -385,13 +377,9 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       return request<{
         dependencies: ShiftIssueDependency[];
         nextCursor?: string;
-      }>(
-        ctx,
-        withQuery(
-          `/v1/issues/${pathSegment(id)}/dependencies`,
-          listParams(pagination),
-        ),
-      );
+      }>(ctx, `/v1/issues/${pathSegment(id)}/dependencies`, {
+        query: pagination,
+      });
     },
   });
 

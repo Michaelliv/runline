@@ -1,61 +1,32 @@
-import type { RunlinePluginAPI } from "runline";
-
-async function apiRequest(
-  host: string,
-  apiKey: string,
-  apiUsername: string,
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-): Promise<unknown> {
-  const url = new URL(`${host}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "Api-Key": apiKey,
-      "Api-Username": apiUsername,
-    },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET") {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Discourse API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  return {
-    host: (cfg.host as string).replace(/\/$/, ""),
-    apiKey: cfg.apiKey as string,
-    apiUsername: (cfg.apiUsername as string) ?? "system",
-  };
-}
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { discourseCredential } from "./credentials.js";
 
 function req(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ) {
-  const { host, apiKey, apiUsername } = getConn(ctx);
-  return apiRequest(host, apiKey, apiUsername, method, endpoint, body, qs);
+  // Public companion header naming the user the admin key acts as.
+  const apiUsername = (ctx.connection.config.apiUsername as string) ?? "system";
+  return credentialJson(ctx, discourseCredential, "discourse", {
+    target: "api",
+    path: endpoint,
+    method,
+    query: qs,
+    headers: { "Api-Username": apiUsername },
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function discourse(rl: RunlinePluginAPI) {
   rl.setName("discourse");
   rl.setVersion("0.1.0");
+  rl.setCredential(discourseCredential);
 
   rl.setConnectionSchema({
     host: {
@@ -99,7 +70,7 @@ export default function discourse(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name, color, textColor } = input as Record<string, unknown>;
-      const data = (await req(ctx, "POST", "/categories.json", {
+      const data = (await req(ctx, "POST", "categories.json", {
         name,
         color,
         text_color: textColor,
@@ -116,7 +87,7 @@ export default function discourse(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const data = (await req(ctx, "GET", "/categories.json")) as Record<
+      const data = (await req(ctx, "GET", "categories.json")) as Record<
         string,
         unknown
       >;
@@ -155,7 +126,7 @@ export default function discourse(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/categories/${categoryId}.json`,
+        `categories/${pathSegment(categoryId)}.json`,
         body,
       )) as Record<string, unknown>;
       return data.category;
@@ -172,7 +143,7 @@ export default function discourse(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name } = input as { name: string };
-      const data = (await req(ctx, "POST", "/admin/groups.json", {
+      const data = (await req(ctx, "POST", "admin/groups.json", {
         group: { name },
       })) as Record<string, unknown>;
       return data.basic_group;
@@ -187,10 +158,11 @@ export default function discourse(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { name } = input as { name: string };
-      const data = (await req(ctx, "GET", `/groups/${name}`)) as Record<
-        string,
-        unknown
-      >;
+      const data = (await req(
+        ctx,
+        "GET",
+        `groups/${pathSegment(name)}`,
+      )) as Record<string, unknown>;
       return data.group;
     },
   });
@@ -203,7 +175,7 @@ export default function discourse(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const data = (await req(ctx, "GET", "/groups.json")) as Record<
+      const data = (await req(ctx, "GET", "groups.json")) as Record<
         string,
         unknown
       >;
@@ -222,7 +194,9 @@ export default function discourse(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { groupId, name } = input as { groupId: string; name: string };
-      return req(ctx, "PUT", `/groups/${groupId}.json`, { group: { name } });
+      return req(ctx, "PUT", `groups/${pathSegment(groupId)}.json`, {
+        group: { name },
+      });
     },
   });
 
@@ -266,7 +240,7 @@ export default function discourse(rl: RunlinePluginAPI) {
       if (categoryId) body.category = categoryId;
       if (topicId) body.topic_id = topicId;
       if (replyToPostNumber) body.reply_to_post_number = replyToPostNumber;
-      return req(ctx, "POST", "/posts.json", body);
+      return req(ctx, "POST", "posts.json", body);
     },
   });
 
@@ -277,7 +251,11 @@ export default function discourse(rl: RunlinePluginAPI) {
       postId: { type: "string", required: true, description: "Post ID" },
     },
     async execute(input, ctx) {
-      return req(ctx, "GET", `/posts/${(input as { postId: string }).postId}`);
+      return req(
+        ctx,
+        "GET",
+        `posts/${pathSegment((input as { postId: string }).postId)}`,
+      );
     },
   });
 
@@ -289,7 +267,7 @@ export default function discourse(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const data = (await req(ctx, "GET", "/posts.json")) as Record<
+      const data = (await req(ctx, "GET", "posts.json")) as Record<
         string,
         unknown
       >;
@@ -322,7 +300,7 @@ export default function discourse(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/posts/${postId}.json`,
+        `posts/${pathSegment(postId)}.json`,
         body,
       )) as Record<string, unknown>;
       return data.post;
@@ -352,7 +330,7 @@ export default function discourse(rl: RunlinePluginAPI) {
       >;
       const body: Record<string, unknown> = { name, email, username, password };
       if (active !== undefined) body.active = active;
-      return req(ctx, "POST", "/users.json", body);
+      return req(ctx, "POST", "users.json", body);
     },
   });
 
@@ -370,8 +348,8 @@ export default function discourse(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { username, externalId } = (input ?? {}) as Record<string, unknown>;
       if (externalId)
-        return req(ctx, "GET", `/u/by-external/${externalId}.json`);
-      if (username) return req(ctx, "GET", `/users/${username}`);
+        return req(ctx, "GET", `u/by-external/${pathSegment(externalId)}.json`);
+      if (username) return req(ctx, "GET", `users/${pathSegment(username)}`);
       throw new Error("Provide either username or externalId");
     },
   });
@@ -409,7 +387,7 @@ export default function discourse(rl: RunlinePluginAPI) {
       let data = (await req(
         ctx,
         "GET",
-        `/admin/users/list/${flag}.json`,
+        `admin/users/list/${pathSegment(flag)}.json`,
         undefined,
         qs,
       )) as unknown[];
@@ -436,7 +414,9 @@ export default function discourse(rl: RunlinePluginAPI) {
         groupId: string;
         usernames: string;
       };
-      return req(ctx, "PUT", `/groups/${groupId}/members.json`, { usernames });
+      return req(ctx, "PUT", `groups/${pathSegment(groupId)}/members.json`, {
+        usernames,
+      });
     },
   });
 
@@ -456,7 +436,7 @@ export default function discourse(rl: RunlinePluginAPI) {
         groupId: string;
         usernames: string;
       };
-      return req(ctx, "DELETE", `/groups/${groupId}/members.json`, {
+      return req(ctx, "DELETE", `groups/${pathSegment(groupId)}/members.json`, {
         usernames,
       });
     },

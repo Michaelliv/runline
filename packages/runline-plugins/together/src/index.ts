@@ -13,11 +13,27 @@
  * `steps` accordingly (20–30 is typical for non-schnell models).
  */
 
-import type { RunlinePluginAPI } from "runline";
-import { readImageInput, SEND_FILE_NOTE, writeImageFile } from "../../_shared/mediaFile.js";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import {
+  readImageInput,
+  SEND_FILE_NOTE,
+  writeImageFile,
+} from "../../_shared/mediaFile.js";
 import { parseSize } from "../../_shared/parseSize.js";
+import { togetherCredential } from "./credentials.js";
 
-const ENDPOINT = "https://api.together.xyz/v1/images/generations";
+function generate(
+  ctx: ActionContext,
+  body: Record<string, unknown>,
+): Promise<{ data?: TogetherImage[] }> {
+  return credentialJson(ctx, togetherCredential, "together", {
+    target: "api",
+    path: "images/generations",
+    method: "POST",
+    json: body,
+  });
+}
 
 interface CreateInput {
   prompt: string;
@@ -44,6 +60,7 @@ interface EditInput {
 export default function together(rl: RunlinePluginAPI) {
   rl.setName("together");
   rl.setVersion("0.1.0");
+  rl.setCredential(togetherCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -67,7 +84,8 @@ export default function together(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -98,11 +116,10 @@ export default function together(rl: RunlinePluginAPI) {
         throw new Error("together: prompt is required");
       }
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const model = p.model ?? "black-forest-labs/FLUX.1-schnell";
       const { width, height } = parseSize(p.size, "together");
 
-      const body: Record<string, unknown> = {
+      const data = await generate(ctx, {
         model,
         prompt: p.prompt,
         width,
@@ -110,26 +127,17 @@ export default function together(rl: RunlinePluginAPI) {
         steps: p.steps ?? 4,
         n: Math.min(p.n ?? 1, 4),
         response_format: "base64",
-      };
-
-      const res = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        throw new Error(
-          `Together API error ${res.status}: ${await res.text()}`,
-        );
-      }
-
-      const data = (await res.json()) as { data?: TogetherImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) =>
-        writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "together", index: i, saveDir: p.saveDir, stamp }),
+        writeImageFile({
+          base64: d.b64_json,
+          mimeType: "image/png",
+          provider: "together",
+          index: i,
+          saveDir: p.saveDir,
+          stamp,
+        }),
       );
       return { provider: "together", model, images, note: SEND_FILE_NOTE };
     },
@@ -153,7 +161,8 @@ export default function together(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -179,36 +188,26 @@ export default function together(rl: RunlinePluginAPI) {
       }
       const img = readImageInput(p.imagePath, "together");
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const model = p.model ?? "black-forest-labs/FLUX.1-kontext-pro";
 
-      const body: Record<string, unknown> = {
+      const data = await generate(ctx, {
         model,
         prompt: p.prompt,
         image_url: img.dataUri,
         steps: p.steps ?? 28,
         n: Math.min(p.n ?? 1, 4),
         response_format: "base64",
-      };
-
-      const res = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        throw new Error(
-          `Together API error ${res.status}: ${await res.text()}`,
-        );
-      }
-
-      const data = (await res.json()) as { data?: TogetherImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) =>
-        writeImageFile({ base64: d.b64_json, mimeType: "image/png", provider: "together", index: i, saveDir: p.saveDir, stamp }),
+        writeImageFile({
+          base64: d.b64_json,
+          mimeType: "image/png",
+          provider: "together",
+          index: i,
+          saveDir: p.saveDir,
+          stamp,
+        }),
       );
       return { provider: "together", model, images, note: SEND_FILE_NOTE };
     },

@@ -1,42 +1,35 @@
-import type { RunlinePluginAPI } from "runline";
-
-const API_URL = "https://api.dropboxapi.com/2";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { dropboxCredential } from "./credentials.js";
 
 async function apiRequest(
-  token: string,
+  ctx: ActionContext,
   endpoint: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await fetch(`${API_URL}${endpoint}`, {
+  return credentialJson(ctx, dropboxCredential, "dropbox", {
+    target: "api",
+    path: endpoint,
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body ? { json: body } : {}),
   });
-  if (!res.ok)
-    throw new Error(`Dropbox API error ${res.status}: ${await res.text()}`);
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
 }
 
 async function paginateFolder(
-  token: string,
+  ctx: ActionContext,
   path: string,
   opts: Record<string, unknown>,
   limit?: number,
 ): Promise<unknown[]> {
   const results: unknown[] = [];
   const body: Record<string, unknown> = { path, limit: 1000, ...opts };
-  let data = (await apiRequest(token, "/files/list_folder", body)) as Record<
+  let data = (await apiRequest(ctx, "files/list_folder", body)) as Record<
     string,
     unknown
   >;
   results.push(...(data.entries as unknown[]));
   while (data.has_more && (!limit || results.length < limit)) {
-    data = (await apiRequest(token, "/files/list_folder/continue", {
+    data = (await apiRequest(ctx, "files/list_folder/continue", {
       cursor: data.cursor,
     })) as Record<string, unknown>;
     results.push(...(data.entries as unknown[]));
@@ -45,7 +38,7 @@ async function paginateFolder(
 }
 
 async function paginateSearch(
-  token: string,
+  ctx: ActionContext,
   query: string,
   opts: Record<string, unknown>,
   limit?: number,
@@ -60,13 +53,13 @@ async function paginateSearch(
       limit,
       1000,
     );
-  let data = (await apiRequest(token, "/files/search_v2", body)) as Record<
+  let data = (await apiRequest(ctx, "files/search_v2", body)) as Record<
     string,
     unknown
   >;
   results.push(...(data.matches as unknown[]));
   while (data.has_more && (!limit || results.length < limit)) {
-    data = (await apiRequest(token, "/files/search/continue_v2", {
+    data = (await apiRequest(ctx, "files/search/continue_v2", {
       cursor: data.cursor,
     })) as Record<string, unknown>;
     results.push(...(data.matches as unknown[]));
@@ -77,6 +70,7 @@ async function paginateSearch(
 export default function dropbox(rl: RunlinePluginAPI) {
   rl.setName("dropbox");
   rl.setVersion("0.1.0");
+  rl.setCredential(dropboxCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -86,9 +80,6 @@ export default function dropbox(rl: RunlinePluginAPI) {
       env: "DROPBOX_ACCESS_TOKEN",
     },
   });
-
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   // ── File ────────────────────────────────────────────
 
@@ -112,7 +103,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
         fromPath: string;
         toPath: string;
       };
-      return apiRequest(tok(ctx), "/files/copy_v2", {
+      return apiRequest(ctx, "files/copy_v2", {
         from_path: fromPath,
         to_path: toPath,
       });
@@ -139,7 +130,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
         fromPath: string;
         toPath: string;
       };
-      return apiRequest(tok(ctx), "/files/move_v2", {
+      return apiRequest(ctx, "files/move_v2", {
         from_path: fromPath,
         to_path: toPath,
       });
@@ -157,7 +148,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return apiRequest(tok(ctx), "/files/delete_v2", {
+      return apiRequest(ctx, "files/delete_v2", {
         path: (input as { path: string }).path,
       });
     },
@@ -176,7 +167,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return apiRequest(tok(ctx), "/files/create_folder_v2", {
+      return apiRequest(ctx, "files/create_folder_v2", {
         path: (input as { path: string }).path,
       });
     },
@@ -210,7 +201,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
       if (recursive) opts.recursive = true;
       if (includeDeleted) opts.include_deleted = true;
       return paginateFolder(
-        tok(ctx),
+        ctx,
         path as string,
         opts,
         limit as number | undefined,
@@ -238,7 +229,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
         fromPath: string;
         toPath: string;
       };
-      return apiRequest(tok(ctx), "/files/copy_v2", {
+      return apiRequest(ctx, "files/copy_v2", {
         from_path: fromPath,
         to_path: toPath,
       });
@@ -265,7 +256,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
         fromPath: string;
         toPath: string;
       };
-      return apiRequest(tok(ctx), "/files/move_v2", {
+      return apiRequest(ctx, "files/move_v2", {
         from_path: fromPath,
         to_path: toPath,
       });
@@ -283,7 +274,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return apiRequest(tok(ctx), "/files/delete_v2", {
+      return apiRequest(ctx, "files/delete_v2", {
         path: (input as { path: string }).path,
       });
     },
@@ -328,7 +319,7 @@ export default function dropbox(rl: RunlinePluginAPI) {
       if (fileExtensions) opts.file_extensions = fileExtensions;
       if (fileStatus) opts.file_status = { ".tag": fileStatus };
       return paginateSearch(
-        tok(ctx),
+        ctx,
         query as string,
         opts,
         limit as number | undefined,

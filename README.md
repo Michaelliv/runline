@@ -472,6 +472,55 @@ const result = await rl.execute(`
 console.log(result.result);  // [{ hex: "#635BFF", type: "accent", brightness: 116 }]
 ```
 
+### Host-signed requests
+
+A host that keeps credentials outside the process running actions — a server signing for a sandboxed worker — passes `credentialBroker`. The engine calls it once per action call of a plugin that declares its credential (`setCredential`), with `{ plugin, action, context }` (`context` is whatever that `execute()` passed) and hands the result to the action as `ctx.credentials`. Every built-in that declares its credential then sends every request and probe through it and signs nothing itself, so its connection config carries public settings only.
+
+```typescript
+const rl = Runline.create({
+  plugins: [gmail],
+  credentialBroker: ({ plugin, action, context }) => ({
+    request: (req) => signOnServer({ plugin, action, context, req }),
+    probe: () => probeOnServer({ plugin, context }),
+  }),
+});
+```
+
+The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application and JWT identity — never with anything the plugin's process sends.
+
+Each method's `authentication.field` names the one config field a host stores the secret in. There are three kinds:
+
+| kind | stored shape | sent as |
+|---|---|---|
+| `none` | nothing | unsigned, still held to the method's targets: the method of a connection without an optional credential |
+| `static` | its named `parts`, each a string, `optionalParts` allowed to be absent (`staticSecretSchema(parts, optionalParts)`) | each part through its `placements` |
+| `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection by its declared `renewal`: a refresh token, client credentials, a JWT bearer assertion (`jwtIdentity`), or the resource owner's username and password (`resourceOwner`, under the endpoint's own `fields` names) |
+
+A static placement is one of:
+
+| placement | sent as |
+|---|---|
+| `{ in: "header", part, name, prefix? }` | `<name>: <prefix><part>` |
+| `{ in: "query", part, name }` | `?<name>=<part>` |
+| `{ in: "body", part, name }` | a top-level field of a JSON-object or form body; `?<name>=<part>` when the request has no body |
+| `{ in: "jsonPointer", part, pointer }` | the value at an RFC 6901 pointer in a JSON body (`/params/args/2`), where the request carries null for the transport to fill |
+| `{ in: "path", part, prefix? }` | the first path segment beneath the base, `<prefix><part>`; at most one per method. A secret in a URL can reach access logs, so a host may refuse this placement |
+| `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
+| `{ in: "jwt", part, name, prefix?, audience }` | `<name>: <prefix><JWT>`: an HS256 JWT signed per request from a `<key id>:<hex secret>` part, for `audience`, valid five minutes |
+| `{ in: "querySignature", part, name }` | `<name>: base64(HMAC-SHA256(query))`, keyed by the part, over the query as sent, after every other placement |
+
+Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. A placement may name `targets` it alone signs, so a connection holding two credentials for two APIs keeps them as two parts scoped to their own targets; every target of a static method must be signed by at least one placement. A part listed in `optionalParts` may be missing, which refuses only the targets that place it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`). With `optional: true` the type also declares a `none` method, which a connection selects unless it holds the flat secret fields or says `authenticated: true` in its public config.
+
+A public config field that picks a host — a region, an environment, a hosting mode, a sandbox flag — accepts only its documented values; anything else makes the declaration throw `invalid_credentials` rather than fall back to a default host.
+
+Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
+
+A target with `socket: true` is a `wss://` endpoint, such as a browser's CDP socket. The broker's optional `socketUrl({ target, path })` returns a URL the plugin may open: the local signer returns it signed by the method's query placements, the only placements such a target may have; a host keeping the credential returns a relay it controls. A broker without `socketUrl` serves no sockets, and plugins refuse those actions as `unsupported_operation`.
+
+A target may allow the WebDAV methods `MKCOL`, `COPY` and `MOVE`. A `COPY` or `MOVE` names its `destination`, a path beneath the same target checked as `path` is, and the transport alone sends it as the absolute `Destination` header; a caller never sets that header.
+
+A target that the provider holds open longer, or answers larger, than the transport defaults declares its own `timeoutMs` or `maxResponseBytes`; the host caps both with `maxTargetTimeoutMs` and `maxTargetResponseBytes` on `CredentialTransport`.
+
 ## CLI Reference
 
 ```bash

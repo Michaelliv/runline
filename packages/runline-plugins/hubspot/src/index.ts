@@ -1,39 +1,26 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { hubspotCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.hubapi.com";
-
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, hubspotCredential, "hubspot", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`HubSpot API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function hubspot(rl: RunlinePluginAPI) {
@@ -49,8 +36,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
     },
   });
 
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
+  rl.setCredential(hubspotCredential);
 
   // Helper for CRM objects (contacts, companies, deals, tickets)
   function registerCrmObject(resource: string, objectType: string) {
@@ -65,7 +51,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
         },
       },
       async execute(input, ctx) {
-        return apiRequest(tok(ctx), "POST", `/crm/v3/objects/${objectType}`, {
+        return apiRequest(ctx, "POST", `crm/v3/objects/${objectType}`, {
           properties: (input as { properties: Record<string, unknown> })
             .properties,
         });
@@ -88,9 +74,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
         if (properties && Array.isArray(properties))
           qs.properties = (properties as string[]).join(",");
         return apiRequest(
-          tok(ctx),
+          ctx,
           "GET",
-          `/crm/v3/objects/${objectType}/${id}`,
+          `crm/v3/objects/${objectType}/${pathSegment(id)}`,
           undefined,
           qs,
         );
@@ -127,9 +113,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
         if (properties && Array.isArray(properties))
           qs.properties = (properties as string[]).join(",");
         return apiRequest(
-          tok(ctx),
+          ctx,
           "GET",
-          `/crm/v3/objects/${objectType}`,
+          `crm/v3/objects/${objectType}`,
           undefined,
           qs,
         );
@@ -152,9 +138,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
           properties: Record<string, unknown>;
         };
         return apiRequest(
-          tok(ctx),
+          ctx,
           "PATCH",
-          `/crm/v3/objects/${objectType}/${id}`,
+          `crm/v3/objects/${objectType}/${pathSegment(id)}`,
           { properties },
         );
       },
@@ -167,9 +153,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
       },
       async execute(input, ctx) {
         await apiRequest(
-          tok(ctx),
+          ctx,
           "DELETE",
-          `/crm/v3/objects/${objectType}/${(input as { id: string }).id}`,
+          `crm/v3/objects/${objectType}/${pathSegment((input as { id: string }).id)}`,
         );
         return { success: true };
       },
@@ -202,9 +188,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
         if (limit) body.limit = limit;
         if (after) body.after = after;
         return apiRequest(
-          tok(ctx),
+          ctx,
           "POST",
-          `/crm/v3/objects/${objectType}/search`,
+          `crm/v3/objects/${objectType}/search`,
           body,
         );
       },
@@ -234,9 +220,14 @@ export default function hubspot(rl: RunlinePluginAPI) {
         listId: string;
         contactIds: number[];
       };
-      return apiRequest(tok(ctx), "POST", `/contacts/v1/lists/${listId}/add`, {
-        vids: contactIds,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `contacts/v1/lists/${pathSegment(listId)}/add`,
+        {
+          vids: contactIds,
+        },
+      );
     },
   });
 
@@ -257,9 +248,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
         contactIds: number[];
       };
       return apiRequest(
-        tok(ctx),
+        ctx,
         "POST",
-        `/contacts/v1/lists/${listId}/remove`,
+        `contacts/v1/lists/${pathSegment(listId)}/remove`,
         { vids: contactIds },
       );
     },
@@ -296,7 +287,7 @@ export default function hubspot(rl: RunlinePluginAPI) {
         engagement: { type, ...(properties as Record<string, unknown>) },
       };
       if (associations) body.associations = associations;
-      return apiRequest(tok(ctx), "POST", "/engagements/v1/engagements", body);
+      return apiRequest(ctx, "POST", "engagements/v1/engagements", body);
     },
   });
 
@@ -312,9 +303,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/engagements/v1/engagements/${(input as { engagementId: string }).engagementId}`,
+        `engagements/v1/engagements/${pathSegment((input as { engagementId: string }).engagementId)}`,
       );
     },
   });
@@ -332,9 +323,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
       if (limit) qs.limit = limit;
       if (offset) qs.offset = offset;
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/engagements/v1/engagements/paged",
+        "engagements/v1/engagements/paged",
         undefined,
         qs,
       );
@@ -353,9 +344,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/engagements/v1/engagements/${(input as { engagementId: string }).engagementId}`,
+        `engagements/v1/engagements/${pathSegment((input as { engagementId: string }).engagementId)}`,
       );
       return { success: true };
     },
@@ -392,9 +383,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { fields };
       if (context) body.context = context;
       return apiRequest(
-        tok(ctx),
+        ctx,
         "POST",
-        `/submissions/v3/integration/secure/submit/${portalId}/${formId}`,
+        `submissions/v3/integration/secure/submit/${pathSegment(portalId)}/${pathSegment(formId)}`,
         body,
       );
     },
@@ -408,9 +399,9 @@ export default function hubspot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/forms/v2/fields/${(input as { formId: string }).formId}`,
+        `forms/v2/fields/${pathSegment((input as { formId: string }).formId)}`,
       );
     },
   });

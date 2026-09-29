@@ -3,6 +3,7 @@ import * as t from "typebox";
 import { registerIssueViewActions } from "./issue-views.js";
 import { registerIssueActions } from "./issues.js";
 import { registerProjectActions } from "./projects.js";
+import { shiftWorkCredential } from "./shared.js";
 
 /**
  * Shift Work — the work-tracking domain of the Shift cloud: Projects,
@@ -13,6 +14,7 @@ import { registerProjectActions } from "./projects.js";
 export default function shiftWork(rl: RunlinePluginAPI) {
   rl.setName("shiftWork");
   rl.setVersion("0.1.0");
+  rl.setCredential(shiftWorkCredential);
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({

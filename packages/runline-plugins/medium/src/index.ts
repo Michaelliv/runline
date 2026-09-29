@@ -1,33 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { mediumCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.medium.com/v1";
-
-async function apiRequest(
-  token: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, mediumCredential, "medium", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "Accept-Charset": "utf-8",
-    },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET")
-    opts.body = JSON.stringify(body);
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok)
-    throw new Error(`Medium API error ${res.status}: ${await res.text()}`);
-  return res.json();
+    headers: { "Accept-Charset": "utf-8" },
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function medium(rl: RunlinePluginAPI) {
   rl.setName("medium");
   rl.setVersion("0.1.0");
+  rl.setCredential(mediumCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -37,9 +32,6 @@ export default function medium(rl: RunlinePluginAPI) {
       env: "MEDIUM_ACCESS_TOKEN",
     },
   });
-
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   rl.registerAction("post.create", {
     access: "write",
@@ -118,24 +110,24 @@ export default function medium(rl: RunlinePluginAPI) {
 
       if (publicationId) {
         const resp = (await apiRequest(
-          tok(ctx),
+          ctx,
           "POST",
-          `/publications/${publicationId}/posts`,
+          `publications/${pathSegment(publicationId)}/posts`,
           body,
         )) as Record<string, unknown>;
         return resp.data;
       }
 
       // Get authenticated user ID first
-      const me = (await apiRequest(tok(ctx), "GET", "/me")) as Record<
+      const me = (await apiRequest(ctx, "GET", "me")) as Record<
         string,
         unknown
       >;
       const authorId = (me.data as Record<string, unknown>).id;
       const resp = (await apiRequest(
-        tok(ctx),
+        ctx,
         "POST",
-        `/users/${authorId}/posts`,
+        `users/${pathSegment(authorId)}/posts`,
         body,
       )) as Record<string, unknown>;
       return resp.data;
@@ -148,15 +140,15 @@ export default function medium(rl: RunlinePluginAPI) {
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as Record<string, unknown>;
-      const me = (await apiRequest(tok(ctx), "GET", "/me")) as Record<
+      const me = (await apiRequest(ctx, "GET", "me")) as Record<
         string,
         unknown
       >;
       const userId = (me.data as Record<string, unknown>).id;
       const resp = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/users/${userId}/publications`,
+        `users/${pathSegment(userId)}/publications`,
       )) as Record<string, unknown>;
       let data = resp.data as unknown[];
       if (limit) data = data.slice(0, limit as number);
@@ -168,7 +160,7 @@ export default function medium(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get the authenticated user's profile",
     async execute(_input, ctx) {
-      const resp = (await apiRequest(tok(ctx), "GET", "/me")) as Record<
+      const resp = (await apiRequest(ctx, "GET", "me")) as Record<
         string,
         unknown
       >;

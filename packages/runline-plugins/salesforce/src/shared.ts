@@ -1,175 +1,55 @@
-import { type ActionContext, requestOAuth2Token } from "runline";
+import { type ActionContext, AuthError, type HttpMethod } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { salesforceCredential } from "./credentials.js";
 
 export const DEFAULT_API_VERSION = "v59.0";
 
-export type Ctx = {
-  connection: { config: Record<string, unknown> };
-} & Partial<ActionContext>;
+export type Ctx = ActionContext;
 
-type MaybePromise<T> = T | Promise<T>;
-
-export type SalesforceConn = {
-  instanceUrl?: string;
-  accessToken?: string;
-  loginUrl?: string;
-  clientId?: string;
-  clientSecret?: string;
-  apiVersion?: string;
-};
-
-export type SalesforceSession = {
-  instanceUrl: string;
-  accessToken: string;
-  tokenType?: string;
-  scope?: string;
-  id?: string;
-  issuedAt?: string;
-};
-
-export function config(ctx: Ctx): SalesforceConn {
-  return ctx.connection.config as SalesforceConn;
-}
-
-export function trimTrailingSlash(url: string): string {
-  return url.replace(/\/+$/, "");
-}
-
-function requireString(value: unknown, name: string): string {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`Salesforce connection is missing ${name}`);
-  }
-  return value.trim();
-}
-
+/** The connection's REST API version, as `vNN.N`; anything else is refused. */
 export function apiVersion(ctx: Ctx): string {
-  const raw = config(ctx).apiVersion;
+  const raw = ctx.connection.config.apiVersion;
   if (typeof raw !== "string" || raw.trim() === "") return DEFAULT_API_VERSION;
-  const version = raw.trim();
-  return version.startsWith("v") ? version : `v${version}`;
+  const version = raw.trim().startsWith("v") ? raw.trim() : `v${raw.trim()}`;
+  if (!/^v\d+\.\d+$/.test(version)) throw new AuthError("invalid_credentials");
+  return version;
 }
 
-export function validateInstanceUrl(url: string): string {
-  const normalized = trimTrailingSlash(url.trim());
-  if (/\.lightning\.force\.com$/i.test(new URL(normalized).hostname)) {
-    throw new Error(
-      "Salesforce instanceUrl/loginUrl must be the API My Domain URL, not the Lightning UI URL. Use a URL like https://your-domain.my.salesforce.com.",
-    );
-  }
-  return normalized;
-}
-
-export async function getSession(ctx: Ctx): Promise<SalesforceSession> {
-  const c = config(ctx);
-  if (c.accessToken) {
-    return {
-      instanceUrl: validateInstanceUrl(
-        requireString(c.instanceUrl, "instanceUrl"),
-      ),
-      accessToken: requireString(c.accessToken, "accessToken"),
-      tokenType: "Bearer",
-    };
-  }
-
-  const loginUrl = validateInstanceUrl(
-    requireString(c.loginUrl ?? c.instanceUrl, "loginUrl or instanceUrl"),
-  );
-  const clientId = requireString(c.clientId, "clientId");
-  const clientSecret = requireString(c.clientSecret, "clientSecret");
-
-  const tokens = await requestOAuth2Token(
-    {
-      url: `${loginUrl}/services/oauth2/token`,
-      clientAuthentication: "client_secret_post",
-      response: {
-        metadata: {
-          instanceUrl: "instance_url",
-          id: "id",
-          issuedAt: "issued_at",
-        },
-      },
-    },
-    { grant_type: "client_credentials" },
-    { clientId, clientSecret },
-  );
-
-  return {
-    instanceUrl: validateInstanceUrl(
-      requireString(
-        tokens.metadata?.instanceUrl,
-        "token response instance_url",
-      ),
-    ),
-    accessToken: tokens.accessToken,
-    tokenType: tokens.tokenType ?? "Bearer",
-    scope: tokens.scope,
-    id: tokens.metadata?.id,
-    issuedAt: tokens.metadata?.issuedAt,
-  };
-}
-
-export async function api(
+/** A request on the org's instance, by a path from its root. */
+export function rest(
   ctx: Ctx,
-  method: string,
+  method: HttpMethod,
+  path: string,
+  body?: Record<string, unknown>,
+  query?: Record<string, unknown>,
+): Promise<unknown> {
+  return credentialJson(ctx, salesforceCredential, "salesforce", {
+    target: "api",
+    path: path.replace(/^\//, ""),
+    method,
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
+}
+
+/** A REST API request beneath `services/data/<version>`. */
+export function api(
+  ctx: Ctx,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-  session: MaybePromise<SalesforceSession> = getSession(ctx),
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
   return rest(
     ctx,
     method,
-    `/services/data/${apiVersion(ctx)}${endpoint}`,
+    `services/data/${apiVersion(ctx)}${endpoint}`,
     body,
-    qs,
-    session,
+    query,
   );
 }
 
-export async function rest(
-  ctx: Ctx,
-  method: string,
-  path: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-  session: MaybePromise<SalesforceSession> = getSession(ctx),
-): Promise<unknown> {
-  const resolvedSession = await session;
-  const url = new URL(path, resolvedSession.instanceUrl);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Bearer ${resolvedSession.accessToken}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Salesforce error ${res.status}: ${text}`);
-  return text ? JSON.parse(text) : null;
-}
-
-export async function identity(ctx: Ctx): Promise<Record<string, unknown>> {
-  const session = await getSession(ctx);
-  if (!session.id) {
-    return { instanceUrl: session.instanceUrl, tokenType: session.tokenType };
-  }
-  const res = await fetch(session.id, {
-    headers: {
-      Authorization: `Bearer ${session.accessToken}`,
-      Accept: "application/json",
-    },
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Salesforce identity error ${res.status}: ${text}`);
-  }
-  return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+/** The signed-in user, from the instance's OpenID Connect userinfo endpoint. */
+export function identity(ctx: Ctx): Promise<unknown> {
+  return rest(ctx, "GET", "services/oauth2/userinfo");
 }

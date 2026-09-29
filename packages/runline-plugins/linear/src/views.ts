@@ -9,7 +9,6 @@ import {
   gql,
   INITIATIVE_FIELDS,
   ISSUE_LITE,
-  key,
   LIST_INPUT_SCHEMA,
   type ListOpts,
   mergeIssueScopeFilter,
@@ -75,7 +74,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
           vars.includeSubTeams = opts.includeSubTeams;
         }
         const data = await gql(
-          key(ctx),
+          ctx,
           `query(${declParts.join(", ")}) {
             customView(id: $id) { ${connectionField}(${callParts.join(", ")}) { nodes { ${selection} } pageInfo { hasNextPage endCursor } } }
           }`,
@@ -161,7 +160,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "view.create");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: CustomViewCreateInput!) { customViewCreate(input: $input) { success customView { ${CUSTOM_VIEW_FIELDS} } } }`,
         { input: input as Record<string, unknown> },
       );
@@ -227,7 +226,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "view.update");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: CustomViewUpdateInput!) { customViewUpdate(id: $id, input: $input) { success customView { ${CUSTOM_VIEW_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -245,7 +244,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "view.delete");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { customViewDelete(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );

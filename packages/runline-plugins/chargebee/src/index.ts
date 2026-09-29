@@ -1,49 +1,26 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { chargebeeCredential } from "./credentials.js";
 
-function buildBaseUrl(accountName: string): string {
-  return `https://${accountName}.chargebee.com/api/v2`;
-}
-
-async function apiRequest(
-  accountName: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+/** Chargebee takes write parameters as query-string params, never a body. */
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${buildBaseUrl(accountName)}/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, chargebeeCredential, "chargebee", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${apiKey}:`)}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-  };
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Chargebee API error ${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    accountName: ctx.connection.config.accountName as string,
-    apiKey: ctx.connection.config.apiKey as string,
-  };
+    query: qs,
+  });
 }
 
 export default function chargebee(rl: RunlinePluginAPI) {
   rl.setName("chargebee");
   rl.setVersion("0.1.0");
+  rl.setCredential(chargebeeCredential);
 
   rl.setConnectionSchema({
     accountName: {
@@ -82,10 +59,8 @@ export default function chargebee(rl: RunlinePluginAPI) {
       company: { type: "string", required: false, description: "Company" },
     },
     async execute(input, ctx) {
-      const { accountName, apiKey } = getConn(ctx);
       const params = (input ?? {}) as Record<string, unknown>;
-      // Chargebee uses form-encoded POST params via query string
-      return apiRequest(accountName, apiKey, "POST", "customers", params);
+      return apiRequest(ctx, "POST", "customers", params);
     },
   });
 
@@ -100,26 +75,17 @@ export default function chargebee(rl: RunlinePluginAPI) {
         required: false,
         description: "Max results (default: 10, max: 100)",
       },
-      sortBy: {
-        type: "string",
-        required: false,
-        description: "Sort field (default: date desc)",
-      },
     },
     async execute(input, ctx) {
-      const { accountName, apiKey } = getConn(ctx);
       const { limit = 10 } = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {
         limit,
         "sort_by[desc]": "date",
       };
-      const data = (await apiRequest(
-        accountName,
-        apiKey,
-        "GET",
-        "invoices",
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "invoices", qs)) as Record<
+        string,
+        unknown
+      >;
       const list = (data.list as Array<Record<string, unknown>>) ?? [];
       return list.map((item) => item.invoice);
     },
@@ -133,12 +99,10 @@ export default function chargebee(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { invoiceId } = input as { invoiceId: string };
-      const { accountName, apiKey } = getConn(ctx);
       const data = (await apiRequest(
-        accountName,
-        apiKey,
+        ctx,
         "POST",
-        `invoices/${invoiceId.trim()}/pdf`,
+        `invoices/${pathSegment(invoiceId.trim())}/pdf`,
       )) as Record<string, unknown>;
       const download = data.download as Record<string, unknown>;
       return { pdfUrl: download?.download_url };
@@ -168,14 +132,12 @@ export default function chargebee(rl: RunlinePluginAPI) {
         subscriptionId: string;
         endOfTerm?: boolean;
       };
-      const { accountName, apiKey } = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (endOfTerm) qs.end_of_term = "true";
       return apiRequest(
-        accountName,
-        apiKey,
+        ctx,
         "POST",
-        `subscriptions/${subscriptionId.trim()}/cancel`,
+        `subscriptions/${pathSegment(subscriptionId.trim())}/cancel`,
         qs,
       );
     },
@@ -193,12 +155,10 @@ export default function chargebee(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { subscriptionId } = input as { subscriptionId: string };
-      const { accountName, apiKey } = getConn(ctx);
       return apiRequest(
-        accountName,
-        apiKey,
+        ctx,
         "POST",
-        `subscriptions/${subscriptionId.trim()}/delete`,
+        `subscriptions/${pathSegment(subscriptionId.trim())}/delete`,
       );
     },
   });

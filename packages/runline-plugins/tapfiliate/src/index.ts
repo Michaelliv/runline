@@ -1,35 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { tapfiliateCredential } from "./credentials.js";
 
-const BASE = "https://api.tapfiliate.com/1.6";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, tapfiliateCredential, "tapfiliate", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: { "Api-Key": apiKey, "Content-Type": "application/json" },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Tapfiliate error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function tapfiliate(rl: RunlinePluginAPI) {
   rl.setName("tapfiliate");
   rl.setVersion("0.1.0");
+  rl.setCredential(tapfiliateCredential);
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -38,8 +30,6 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       env: "TAPFILIATE_API_KEY",
     },
   });
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   // ── Affiliate ───────────────────────────────────────
 
@@ -60,7 +50,7 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
         email: p.email,
       };
       if (p.companyName) body.company = { name: p.companyName };
-      return apiRequest(key(ctx), "POST", "/affiliates/", body);
+      return apiRequest(ctx, "POST", "affiliates/", body);
     },
   });
 
@@ -70,9 +60,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     inputSchema: { affiliateId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/affiliates/${(input as Record<string, unknown>).affiliateId}/`,
+        `affiliates/${pathSegment((input as Record<string, unknown>).affiliateId)}/`,
       );
     },
   });
@@ -89,9 +79,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.email) qs.email = p.email;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        "/affiliates/",
+        "affiliates/",
         undefined,
         qs,
       )) as unknown[];
@@ -105,9 +95,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     inputSchema: { affiliateId: { type: "string", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/affiliates/${(input as Record<string, unknown>).affiliateId}/`,
+        `affiliates/${pathSegment((input as Record<string, unknown>).affiliateId)}/`,
       );
       return { success: true };
     },
@@ -126,9 +116,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "PUT",
-        `/affiliates/${p.affiliateId}/meta-data/${p.key}/`,
+        `affiliates/${pathSegment(p.affiliateId)}/meta-data/${pathSegment(p.key)}/`,
         { value: p.value },
       );
     },
@@ -144,9 +134,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/affiliates/${p.affiliateId}/meta-data/${p.key}/`,
+        `affiliates/${pathSegment(p.affiliateId)}/meta-data/${pathSegment(p.key)}/`,
       );
       return { success: true };
     },
@@ -164,9 +154,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        `/programs/${p.programId}/affiliates/`,
+        `programs/${pathSegment(p.programId)}/affiliates/`,
         { affiliate: { id: p.affiliateId } },
       );
     },
@@ -182,9 +172,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "PUT",
-        `/programs/${p.programId}/affiliates/${p.affiliateId}/approved/`,
+        `programs/${pathSegment(p.programId)}/affiliates/${pathSegment(p.affiliateId)}/approved/`,
       );
     },
   });
@@ -199,9 +189,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/programs/${p.programId}/affiliates/${p.affiliateId}/approved/`,
+        `programs/${pathSegment(p.programId)}/affiliates/${pathSegment(p.affiliateId)}/approved/`,
       );
       return { success: true };
     },
@@ -217,9 +207,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/programs/${p.programId}/affiliates/${p.affiliateId}/`,
+        `programs/${pathSegment(p.programId)}/affiliates/${pathSegment(p.affiliateId)}/`,
       );
     },
   });
@@ -234,9 +224,9 @@ export default function tapfiliate(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/programs/${p.programId}/affiliates/`,
+        `programs/${pathSegment(p.programId)}/affiliates/`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },

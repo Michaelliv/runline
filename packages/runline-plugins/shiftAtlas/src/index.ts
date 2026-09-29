@@ -1,6 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { registerGraphActions } from "./graph.js";
+import { shiftAtlasCredential } from "./shared.js";
 
 /**
  * Shift Atlas — the operational graph of a Shift cloud organization:
@@ -12,6 +13,7 @@ import { registerGraphActions } from "./graph.js";
 export default function shiftAtlas(rl: RunlinePluginAPI) {
   rl.setName("shiftAtlas");
   rl.setVersion("0.1.0");
+  rl.setCredential(shiftAtlasCredential);
   rl.setConnectionSchema(
     t.Object({
       // Same Shift Labs API key family as the shiftLabs plugin; needs

@@ -1,37 +1,32 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { answerFailed, credentialJson } from "../../_shared/credentials.js";
+import { telegramCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  const baseUrl = ((c.baseUrl as string) || "https://api.telegram.org").replace(
-    /\/$/,
-    "",
-  );
-  return { baseUrl, token: c.accessToken as string };
-}
-
+/** A call to the Bot API method `name`; an answer that is not ok is a failure. */
 async function apiRequest(
-  conn: ReturnType<typeof getConn>,
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
+  ctx: ActionContext,
+  name: string,
+  body: Record<string, unknown> = {},
 ): Promise<unknown> {
-  const url = `${conn.baseUrl}/bot${conn.token}/${endpoint}`;
-  const init: RequestInit = {
-    method,
-    headers: { "Content-Type": "application/json" },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url, init);
-  if (!res.ok)
-    throw new Error(`Telegram error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
-  if (!data.ok) throw new Error(`Telegram API error: ${JSON.stringify(data)}`);
+  const data = await credentialJson<Record<string, unknown>>(
+    ctx,
+    telegramCredential,
+    "telegram",
+    { target: "api", path: name, method: "POST", json: body },
+  );
+  if (!data.ok)
+    throw answerFailed("telegram", {
+      code: data.error_code,
+      message: data.description,
+    });
   return data.result;
 }
 
 export default function telegram(rl: RunlinePluginAPI) {
   rl.setName("telegram");
   rl.setVersion("0.1.0");
+  rl.setCredential(telegramCredential);
+
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -71,7 +66,7 @@ export default function telegram(rl: RunlinePluginAPI) {
       if (p.disableWebPagePreview) body.disable_web_page_preview = true;
       if (p.disableNotification) body.disable_notification = true;
       if (p.replyToMessageId) body.reply_to_message_id = p.replyToMessageId;
-      return apiRequest(getConn(ctx), "POST", "sendMessage", body);
+      return apiRequest(ctx, "sendMessage", body);
     },
   });
 
@@ -92,7 +87,7 @@ export default function telegram(rl: RunlinePluginAPI) {
         text: p.text,
       };
       if (p.parseMode) body.parse_mode = p.parseMode;
-      return apiRequest(getConn(ctx), "POST", "editMessageText", body);
+      return apiRequest(ctx, "editMessageText", body);
     },
   });
 
@@ -105,7 +100,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "deleteMessage", {
+      return apiRequest(ctx, "deleteMessage", {
         chat_id: p.chatId,
         message_id: p.messageId,
       });
@@ -127,7 +122,7 @@ export default function telegram(rl: RunlinePluginAPI) {
         message_id: p.messageId,
       };
       if (p.disableNotification) body.disable_notification = true;
-      return apiRequest(getConn(ctx), "POST", "pinChatMessage", body);
+      return apiRequest(ctx, "pinChatMessage", body);
     },
   });
 
@@ -140,7 +135,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "unpinChatMessage", {
+      return apiRequest(ctx, "unpinChatMessage", {
         chat_id: p.chatId,
         message_id: p.messageId,
       });
@@ -157,7 +152,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "sendLocation", {
+      return apiRequest(ctx, "sendLocation", {
         chat_id: p.chatId,
         latitude: p.latitude,
         longitude: p.longitude,
@@ -178,7 +173,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "sendChatAction", {
+      return apiRequest(ctx, "sendChatAction", {
         chat_id: p.chatId,
         action: p.action,
       });
@@ -204,7 +199,7 @@ export default function telegram(rl: RunlinePluginAPI) {
         photo: p.photo,
       };
       if (p.caption) body.caption = p.caption;
-      return apiRequest(getConn(ctx), "POST", "sendPhoto", body);
+      return apiRequest(ctx, "sendPhoto", body);
     },
   });
 
@@ -227,7 +222,7 @@ export default function telegram(rl: RunlinePluginAPI) {
         document: p.document,
       };
       if (p.caption) body.caption = p.caption;
-      return apiRequest(getConn(ctx), "POST", "sendDocument", body);
+      return apiRequest(ctx, "sendDocument", body);
     },
   });
 
@@ -250,7 +245,7 @@ export default function telegram(rl: RunlinePluginAPI) {
         video: p.video,
       };
       if (p.caption) body.caption = p.caption;
-      return apiRequest(getConn(ctx), "POST", "sendVideo", body);
+      return apiRequest(ctx, "sendVideo", body);
     },
   });
 
@@ -267,7 +262,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "sendSticker", {
+      return apiRequest(ctx, "sendSticker", {
         chat_id: p.chatId,
         sticker: p.sticker,
       });
@@ -293,7 +288,7 @@ export default function telegram(rl: RunlinePluginAPI) {
         animation: p.animation,
       };
       if (p.caption) body.caption = p.caption;
-      return apiRequest(getConn(ctx), "POST", "sendAnimation", body);
+      return apiRequest(ctx, "sendAnimation", body);
     },
   });
 
@@ -316,7 +311,7 @@ export default function telegram(rl: RunlinePluginAPI) {
         audio: p.audio,
       };
       if (p.caption) body.caption = p.caption;
-      return apiRequest(getConn(ctx), "POST", "sendAudio", body);
+      return apiRequest(ctx, "sendAudio", body);
     },
   });
 
@@ -327,7 +322,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     description: "Get chat info",
     inputSchema: { chatId: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(getConn(ctx), "POST", "getChat", {
+      return apiRequest(ctx, "getChat", {
         chat_id: (input as Record<string, unknown>).chatId,
       });
     },
@@ -338,7 +333,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     description: "Get chat administrators",
     inputSchema: { chatId: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(getConn(ctx), "POST", "getChatAdministrators", {
+      return apiRequest(ctx, "getChatAdministrators", {
         chat_id: (input as Record<string, unknown>).chatId,
       });
     },
@@ -353,7 +348,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "getChatMember", {
+      return apiRequest(ctx, "getChatMember", {
         chat_id: p.chatId,
         user_id: p.userId,
       });
@@ -365,7 +360,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     description: "Leave a chat",
     inputSchema: { chatId: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(getConn(ctx), "POST", "leaveChat", {
+      return apiRequest(ctx, "leaveChat", {
         chat_id: (input as Record<string, unknown>).chatId,
       });
     },
@@ -380,7 +375,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "setChatDescription", {
+      return apiRequest(ctx, "setChatDescription", {
         chat_id: p.chatId,
         description: p.description,
       });
@@ -396,7 +391,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", "setChatTitle", {
+      return apiRequest(ctx, "setChatTitle", {
         chat_id: p.chatId,
         title: p.title,
       });
@@ -420,7 +415,7 @@ export default function telegram(rl: RunlinePluginAPI) {
       };
       if (p.text) body.text = p.text;
       if (p.showAlert) body.show_alert = true;
-      return apiRequest(getConn(ctx), "POST", "answerCallbackQuery", body);
+      return apiRequest(ctx, "answerCallbackQuery", body);
     },
   });
 
@@ -431,7 +426,7 @@ export default function telegram(rl: RunlinePluginAPI) {
     description: "Get file metadata (use result.file_path to download)",
     inputSchema: { fileId: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(getConn(ctx), "POST", "getFile", {
+      return apiRequest(ctx, "getFile", {
         file_id: (input as Record<string, unknown>).fileId,
       });
     },

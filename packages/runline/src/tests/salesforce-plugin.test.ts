@@ -22,6 +22,7 @@ function getAction(plugin: PluginDef, name: string) {
   return action;
 }
 
+/** A connection whose updates land in its config, as the CLI stores them. */
 function ctx(config: Record<string, unknown> = {}): ActionContext {
   return {
     connection: {
@@ -30,7 +31,11 @@ function ctx(config: Record<string, unknown> = {}): ActionContext {
       config,
     },
     log: { info() {}, warn() {}, error() {} },
-    async updateConnection() {},
+    async updateConnection(change) {
+      const patch =
+        typeof change === "function" ? await change(config) : change;
+      if (patch) Object.assign(config, patch);
+    },
   };
 }
 
@@ -61,50 +66,63 @@ describe("salesforce plugin", () => {
     }
   });
 
-  it("uses OAuth client credentials without persisting tokens", async () => {
+  it("exchanges client credentials at the My Domain token endpoint once, and signs with the kept token", async () => {
     const plugin = makeSalesforce();
-    const seen: Array<{ url: string; method?: string }> = [];
+    const seen: Array<{ url: string; method?: string; auth: string | null }> =
+      [];
     globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
-      seen.push({ url: String(url), method: init?.method });
+      seen.push({
+        url: String(url),
+        method: init?.method,
+        auth: new Headers(init?.headers).get("authorization"),
+      });
       if (String(url).endsWith("/services/oauth2/token")) {
-        assert.equal(init?.method, "POST");
-        assert.equal(
-          String(init.body).includes("grant_type=client_credentials"),
-          true,
-        );
+        const fields = new URLSearchParams(String(init?.body));
+        assert.equal(fields.get("grant_type"), "client_credentials");
+        assert.equal(fields.get("client_id"), "client");
+        assert.equal(fields.get("client_secret"), "secret");
         return Response.json({
           access_token: "tok_test",
           instance_url: "https://example.my.salesforce.com",
           token_type: "Bearer",
-          scope: "api",
-          id: "https://login.salesforce.com/id/org/user",
         });
       }
-      assert.equal(
-        String(url),
-        "https://example.my.salesforce.com/services/data/v59.0/query?q=SELECT+Id%2CName+FROM+Account+LIMIT+1",
-      );
-      assert.equal(
-        (init?.headers as Record<string, string>).Authorization,
-        "Bearer tok_test",
-      );
       return Response.json({ records: [{ Id: "001", Name: "Acme" }] });
     }) as typeof fetch;
 
+    const context = ctx({
+      loginUrl: "https://example.my.salesforce.com",
+      clientId: "client",
+      clientSecret: "secret",
+    });
+    const query = { query: "SELECT Id,Name FROM Account LIMIT 1" };
     const result = await getAction(plugin, "soql.query").execute(
-      { query: "SELECT Id,Name FROM Account LIMIT 1" },
-      ctx({
-        loginUrl: "https://example.my.salesforce.com",
-        clientId: "client",
-        clientSecret: "secret",
-      }),
+      query,
+      context,
     );
+    await getAction(plugin, "soql.query").execute(query, context);
 
     assert.deepEqual(result, [{ Id: "001", Name: "Acme" }]);
-    assert.equal(seen.length, 2);
+    assert.deepEqual(seen, [
+      {
+        url: "https://example.my.salesforce.com/services/oauth2/token",
+        method: "POST",
+        auth: null,
+      },
+      {
+        url: "https://example.my.salesforce.com/services/data/v59.0/query?q=SELECT+Id%2CName+FROM+Account+LIMIT+1",
+        method: "GET",
+        auth: "Bearer tok_test",
+      },
+      {
+        url: "https://example.my.salesforce.com/services/data/v59.0/query?q=SELECT+Id%2CName+FROM+Account+LIMIT+1",
+        method: "GET",
+        auth: "Bearer tok_test",
+      },
+    ]);
   });
 
-  it("returns Salesforce pagination metadata and fetches next pages", async () => {
+  it("returns Salesforce pagination metadata and fetches next pages on the instance alone", async () => {
     const plugin = makeSalesforce();
     const urls: string[] = [];
     globalThis.fetch = (async (url: string | URL) => {
@@ -138,53 +156,81 @@ describe("salesforce plugin", () => {
       context,
     );
 
-    assert.deepEqual(page, {
-      totalSize: 3,
-      done: false,
-      nextRecordsUrl: "/services/data/v60.0/query/01g-next",
-      records: [{ Id: "001" }],
-    });
     assert.deepEqual((next as { records: unknown[] }).records, [
       { Id: "002" },
       { Id: "003" },
     ]);
-    assert.equal(
-      urls[0],
+    assert.deepEqual(urls, [
       "https://example.my.salesforce.com/services/data/v60.0/query?q=SELECT+Id+FROM+Account",
-    );
-    assert.equal(
-      urls[1],
       "https://example.my.salesforce.com/services/data/v60.0/query/01g-next",
+    ]);
+    await assert.rejects(
+      getAction(plugin, "soql.nextPage").execute(
+        { nextRecordsUrl: "https://evil.example/services/data/v60.0/query/x" },
+        context,
+      ),
+      { code: "request_not_allowed" },
     );
+    assert.equal(urls.length, 2);
   });
 
-  it("builds write requests with static access token auth", async () => {
+  it("builds write requests with static access token auth, IDs as one segment", async () => {
     const plugin = makeSalesforce();
+    const seen: Array<{
+      url: string;
+      method?: string;
+      auth: string | null;
+      body: string;
+    }> = [];
     globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
-      assert.equal(
-        String(url),
-        "https://example.my.salesforce.com/services/data/v59.0/sobjects/Account",
-      );
-      assert.equal(init?.method, "POST");
-      assert.equal(
-        (init?.headers as Record<string, string>).Authorization,
-        "Bearer tok",
-      );
-      assert.equal(init?.body, JSON.stringify({ Name: "Acme" }));
-      return Response.json({ id: "001", success: true });
+      seen.push({
+        url: String(url),
+        method: init?.method,
+        auth: new Headers(init?.headers).get("authorization"),
+        body: new TextDecoder().decode(init?.body as Uint8Array),
+      });
+      return new Response(null, { status: 204 });
     }) as typeof fetch;
 
-    const result = await getAction(plugin, "account.create").execute(
-      { data: { Name: "Acme" } },
+    const result = await getAction(plugin, "account.update").execute(
+      { id: "001 x", data: { Name: "Acme" } },
       ctx({
         instanceUrl: "https://example.my.salesforce.com",
         accessToken: "tok",
       }),
     );
-    assert.deepEqual(result, { id: "001", success: true });
+    assert.deepEqual(result, { success: true, id: "001 x" });
+    assert.deepEqual(seen, [
+      {
+        url: "https://example.my.salesforce.com/services/data/v59.0/sobjects/Account/001%20x",
+        method: "PATCH",
+        auth: "Bearer tok",
+        body: JSON.stringify({ Name: "Acme" }),
+      },
+    ]);
   });
 
-  it("rejects Lightning UI URLs with a clear error", async () => {
+  it("reads the OAuth identity from the instance's userinfo endpoint", async () => {
+    const plugin = makeSalesforce();
+    const urls: string[] = [];
+    globalThis.fetch = (async (url: string | URL) => {
+      urls.push(String(url));
+      return Response.json({ user_id: "005" });
+    }) as typeof fetch;
+    const result = await getAction(plugin, "auth.identity").execute(
+      {},
+      ctx({
+        instanceUrl: "https://example.my.salesforce.com",
+        accessToken: "tok",
+      }),
+    );
+    assert.deepEqual(result, { user_id: "005" });
+    assert.deepEqual(urls, [
+      "https://example.my.salesforce.com/services/oauth2/userinfo",
+    ]);
+  });
+
+  it("refuses a Lightning UI URL, which serves no API", async () => {
     const plugin = makeSalesforce();
     await assert.rejects(
       getAction(plugin, "account.query").execute(
@@ -194,7 +240,7 @@ describe("salesforce plugin", () => {
           accessToken: "tok",
         }),
       ),
-      /not the Lightning UI URL/,
+      { code: "invalid_credentials" },
     );
   });
 });

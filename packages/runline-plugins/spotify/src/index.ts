@@ -1,34 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { spotifyCredential } from "./credentials.js";
 
-const BASE = "https://api.spotify.com/v1";
-
-async function api(
-  token: string,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, spotifyCredential, "spotify", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  if (!res.ok)
-    throw new Error(`Spotify error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : { success: true };
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 function stripUri(uri: string, prefix: string): string {
@@ -38,6 +25,7 @@ function stripUri(uri: string, prefix: string): string {
 export default function spotify(rl: RunlinePluginAPI) {
   rl.setName("spotify");
   rl.setVersion("0.1.0");
+  rl.setCredential(spotifyCredential);
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -46,9 +34,6 @@ export default function spotify(rl: RunlinePluginAPI) {
       env: "SPOTIFY_ACCESS_TOKEN",
     },
   });
-  const t = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
-
   // ── Player ──────────────────────────────────────────
 
   rl.registerAction("player.pause", {
@@ -56,7 +41,7 @@ export default function spotify(rl: RunlinePluginAPI) {
     description: "Pause playback",
     inputSchema: {},
     async execute(_i, ctx) {
-      return api(t(ctx), "PUT", "/me/player/pause");
+      return api(ctx, "PUT", "me/player/pause");
     },
   });
 
@@ -65,7 +50,7 @@ export default function spotify(rl: RunlinePluginAPI) {
     description: "Resume playback",
     inputSchema: {},
     async execute(_i, ctx) {
-      return api(t(ctx), "PUT", "/me/player/play");
+      return api(ctx, "PUT", "me/player/play");
     },
   });
 
@@ -74,7 +59,7 @@ export default function spotify(rl: RunlinePluginAPI) {
     description: "Skip to next track",
     inputSchema: {},
     async execute(_i, ctx) {
-      return api(t(ctx), "POST", "/me/player/next");
+      return api(ctx, "POST", "me/player/next");
     },
   });
 
@@ -83,7 +68,7 @@ export default function spotify(rl: RunlinePluginAPI) {
     description: "Skip to previous track",
     inputSchema: {},
     async execute(_i, ctx) {
-      return api(t(ctx), "POST", "/me/player/previous");
+      return api(ctx, "POST", "me/player/previous");
     },
   });
 
@@ -92,7 +77,7 @@ export default function spotify(rl: RunlinePluginAPI) {
     description: "Get currently playing track",
     inputSchema: {},
     async execute(_i, ctx) {
-      return api(t(ctx), "GET", "/me/player/currently-playing");
+      return api(ctx, "GET", "me/player/currently-playing");
     },
   });
 
@@ -105,9 +90,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/me/player/recently-played",
+        "me/player/recently-played",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -122,7 +107,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       uri: { type: "string", required: true, description: "Track URI or ID" },
     },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/me/player/queue", undefined, {
+      return api(ctx, "POST", "me/player/queue", undefined, {
         uri: (input as Record<string, unknown>).uri,
       });
     },
@@ -135,7 +120,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       volumePercent: { type: "number", required: true, description: "0-100" },
     },
     async execute(input, ctx) {
-      return api(t(ctx), "PUT", "/me/player/volume", undefined, {
+      return api(ctx, "PUT", "me/player/volume", undefined, {
         volume_percent: (input as Record<string, unknown>).volumePercent,
       });
     },
@@ -152,7 +137,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return api(t(ctx), "PUT", "/me/player/play", {
+      return api(ctx, "PUT", "me/player/play", {
         context_uri: (input as Record<string, unknown>).contextUri,
       });
     },
@@ -166,9 +151,9 @@ export default function spotify(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/albums/${stripUri((input as Record<string, unknown>).id as string, "spotify:album:")}`,
+        `albums/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:album:"))}`,
       );
     },
   });
@@ -185,9 +170,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.limit = p.limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        `/albums/${stripUri(p.id as string, "spotify:album:")}/tracks`,
+        `albums/${pathSegment(stripUri(p.id as string, "spotify:album:"))}/tracks`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -208,9 +193,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       if (p.limit) qs.limit = p.limit;
       if (p.country) qs.country = p.country;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/browse/new-releases",
+        "browse/new-releases",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -230,13 +215,10 @@ export default function spotify(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { q: p.query, type: "album" };
       if (p.limit) qs.limit = p.limit;
       else qs.limit = 50;
-      const data = (await api(
-        t(ctx),
-        "GET",
-        "/search",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "search", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return (data.albums as Record<string, unknown>).items;
     },
   });
@@ -249,9 +231,9 @@ export default function spotify(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/artists/${stripUri((input as Record<string, unknown>).id as string, "spotify:artist:")}`,
+        `artists/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:artist:"))}`,
       );
     },
   });
@@ -268,9 +250,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.limit = p.limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        `/artists/${stripUri(p.id as string, "spotify:artist:")}/albums`,
+        `artists/${pathSegment(stripUri(p.id as string, "spotify:artist:"))}/albums`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -284,9 +266,9 @@ export default function spotify(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        `/artists/${stripUri((input as Record<string, unknown>).id as string, "spotify:artist:")}/related-artists`,
+        `artists/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:artist:"))}/related-artists`,
       )) as Record<string, unknown>;
       return data.artists;
     },
@@ -302,9 +284,9 @@ export default function spotify(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        `/artists/${stripUri(p.id as string, "spotify:artist:")}/top-tracks`,
+        `artists/${pathSegment(stripUri(p.id as string, "spotify:artist:"))}/top-tracks`,
         undefined,
         { country: p.country },
       )) as Record<string, unknown>;
@@ -326,13 +308,10 @@ export default function spotify(rl: RunlinePluginAPI) {
         type: "artist",
         limit: p.limit ?? 50,
       };
-      const data = (await api(
-        t(ctx),
-        "GET",
-        "/search",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "search", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return (data.artists as Record<string, unknown>).items;
     },
   });
@@ -345,9 +324,9 @@ export default function spotify(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/playlists/${stripUri((input as Record<string, unknown>).id as string, "spotify:playlist:")}`,
+        `playlists/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:playlist:"))}`,
       );
     },
   });
@@ -364,9 +343,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.limit = p.limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        `/playlists/${stripUri(p.id as string, "spotify:playlist:")}/tracks`,
+        `playlists/${pathSegment(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -383,12 +362,7 @@ export default function spotify(rl: RunlinePluginAPI) {
       public: { type: "boolean", required: false },
     },
     async execute(input, ctx) {
-      return api(
-        t(ctx),
-        "POST",
-        "/me/playlists",
-        input as Record<string, unknown>,
-      );
+      return api(ctx, "POST", "me/playlists", input as Record<string, unknown>);
     },
   });
 
@@ -405,9 +379,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { uris: p.trackUri };
       if (p.position !== undefined) qs.position = p.position;
       return api(
-        t(ctx),
+        ctx,
         "POST",
-        `/playlists/${stripUri(p.id as string, "spotify:playlist:")}/tracks`,
+        `playlists/${pathSegment(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
         {},
         qs,
       );
@@ -424,9 +398,9 @@ export default function spotify(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        t(ctx),
+        ctx,
         "DELETE",
-        `/playlists/${stripUri(p.id as string, "spotify:playlist:")}/tracks`,
+        `playlists/${pathSegment(stripUri(p.id as string, "spotify:playlist:"))}/tracks`,
         { tracks: [{ uri: p.trackUri }] },
       );
     },
@@ -441,9 +415,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/me/playlists",
+        "me/playlists",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -465,13 +439,10 @@ export default function spotify(rl: RunlinePluginAPI) {
         type: "playlist",
         limit: p.limit ?? 50,
       };
-      const data = (await api(
-        t(ctx),
-        "GET",
-        "/search",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "search", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return (data.playlists as Record<string, unknown>).items;
     },
   });
@@ -484,9 +455,9 @@ export default function spotify(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/tracks/${stripUri((input as Record<string, unknown>).id as string, "spotify:track:")}`,
+        `tracks/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:track:"))}`,
       );
     },
   });
@@ -497,9 +468,9 @@ export default function spotify(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/audio-features/${stripUri((input as Record<string, unknown>).id as string, "spotify:track:")}`,
+        `audio-features/${pathSegment(stripUri((input as Record<string, unknown>).id as string, "spotify:track:"))}`,
       );
     },
   });
@@ -518,13 +489,10 @@ export default function spotify(rl: RunlinePluginAPI) {
         type: "track",
         limit: p.limit ?? 50,
       };
-      const data = (await api(
-        t(ctx),
-        "GET",
-        "/search",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "search", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return (data.tracks as Record<string, unknown>).items;
     },
   });
@@ -540,9 +508,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/me/tracks",
+        "me/tracks",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -561,9 +529,9 @@ export default function spotify(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        "/me/following",
+        "me/following",
         undefined,
         qs,
       )) as Record<string, unknown>;

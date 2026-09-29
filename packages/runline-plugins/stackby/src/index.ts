@@ -1,34 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { stackbyCredential } from "./credentials.js";
 
-const BASE = "https://stackby.com/api/betav1";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, stackbyCredential, "stackby", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: { "api-key": apiKey, "Content-Type": "application/json" },
-  };
-  if (body !== undefined) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Stackby error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    ...(body !== undefined ? { json: body } : {}),
+  });
 }
 
 export default function stackby(rl: RunlinePluginAPI) {
   rl.setName("stackby");
   rl.setVersion("0.1.0");
+  rl.setCredential(stackbyCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -38,9 +31,6 @@ export default function stackby(rl: RunlinePluginAPI) {
       env: "STACKBY_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("row.read", {
     access: "read",
@@ -53,9 +43,9 @@ export default function stackby(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/rowlist/${p.stackId}/${encodeURIComponent(p.table as string)}`,
+        `rowlist/${pathSegment(p.stackId)}/${pathSegment(p.table)}`,
         undefined,
         { rowIds: p.rowId },
       )) as Array<Record<string, unknown>>;
@@ -78,9 +68,9 @@ export default function stackby(rl: RunlinePluginAPI) {
       if (p.view) qs.view = p.view;
       if (p.limit) qs.maxrecord = p.limit;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/rowlist/${p.stackId}/${encodeURIComponent(p.table as string)}`,
+        `rowlist/${pathSegment(p.stackId)}/${pathSegment(p.table)}`,
         undefined,
         qs,
       )) as Array<Record<string, unknown>>;
@@ -103,9 +93,9 @@ export default function stackby(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        `/rowcreate/${p.stackId}/${encodeURIComponent(p.table as string)}`,
+        `rowcreate/${pathSegment(p.stackId)}/${pathSegment(p.table)}`,
         { records: p.records },
       )) as Array<Record<string, unknown>>;
       return data.map((d) => d.field);
@@ -123,9 +113,9 @@ export default function stackby(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/rowdelete/${p.stackId}/${encodeURIComponent(p.table as string)}`,
+        `rowdelete/${pathSegment(p.stackId)}/${pathSegment(p.table)}`,
         undefined,
         { rowIds: p.rowId },
       );

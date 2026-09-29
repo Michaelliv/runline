@@ -1,68 +1,32 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { keapCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.infusionsoft.com/crm/rest/v1";
-
-async function apiRequest(
-  token: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, keapCredential, "keap", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Keap API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-async function apiRequestAllItems(
-  token: string,
-  propertyName: string,
-  method: string,
-  endpoint: string,
-  qs: Record<string, unknown> = {},
-): Promise<unknown[]> {
-  const all: unknown[] = [];
-  let uri: string | undefined;
-  qs.limit = 50;
-  let data: Record<string, unknown>;
-  do {
-    data = (
-      uri
-        ? await apiRequest(token, method, "", undefined, { ...qs })
-        : await apiRequest(token, method, endpoint, undefined, qs)
-    ) as Record<string, unknown>;
-    const items = data[propertyName];
-    if (Array.isArray(items)) all.push(...items);
-    uri = data.next as string | undefined;
-  } while (all.length < ((data.count as number) ?? all.length + 1) && uri);
-  return all;
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function keap(rl: RunlinePluginAPI) {
   rl.setName("keap");
   rl.setVersion("0.1.0");
+  rl.setCredential(keapCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -72,9 +36,6 @@ export default function keap(rl: RunlinePluginAPI) {
       env: "KEAP_ACCESS_TOKEN",
     },
   });
-
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   // ── Company ─────────────────────────────────────────
   rl.registerAction("company.create", {
@@ -117,7 +78,7 @@ export default function keap(rl: RunlinePluginAPI) {
       if (address) body.address = address;
       if (phone) body.phone_number = phone;
       if (fax) body.fax_number = fax;
-      return apiRequest(tok(ctx), "POST", "/companies", body);
+      return apiRequest(ctx, "POST", "companies", body);
     },
   });
 
@@ -147,9 +108,9 @@ export default function keap(rl: RunlinePluginAPI) {
       if (offset) qs.offset = offset;
       if (optionalProperties) qs.optional_properties = optionalProperties;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/companies",
+        "companies",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -228,7 +189,7 @@ export default function keap(rl: RunlinePluginAPI) {
       if (faxNumbers) body.fax_numbers = faxNumbers;
       if (socialAccounts) body.social_accounts = socialAccounts;
       if (additionalFields) Object.assign(body, additionalFields);
-      return apiRequest(tok(ctx), "PUT", "/contacts", body);
+      return apiRequest(ctx, "PUT", "contacts", body);
     },
   });
 
@@ -251,9 +212,9 @@ export default function keap(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (optionalProperties) qs.optional_properties = optionalProperties;
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/contacts/${contactId}`,
+        `contacts/${pathSegment(contactId)}`,
         undefined,
         qs,
       );
@@ -289,9 +250,9 @@ export default function keap(rl: RunlinePluginAPI) {
       if (p.since) qs.since = p.since;
       if (p.until) qs.until = p.until;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/contacts",
+        "contacts",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -305,9 +266,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { contactId: { type: "number", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/contacts/${(input as { contactId: number }).contactId}`,
+        `contacts/${pathSegment((input as { contactId: number }).contactId)}`,
       );
       return { success: true };
     },
@@ -347,7 +308,7 @@ export default function keap(rl: RunlinePluginAPI) {
       if (noteBody) b.body = noteBody;
       if (title) b.title = title;
       if (type) b.type = type;
-      return apiRequest(tok(ctx), "POST", "/notes", b);
+      return apiRequest(ctx, "POST", "notes", b);
     },
   });
 
@@ -357,9 +318,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { noteId: { type: "number", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/notes/${(input as { noteId: number }).noteId}`,
+        `notes/${pathSegment((input as { noteId: number }).noteId)}`,
       );
     },
   });
@@ -387,9 +348,9 @@ export default function keap(rl: RunlinePluginAPI) {
       if (p.contactId) qs.contact_id = p.contactId;
       if (p.userId) qs.user_id = p.userId;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/notes",
+        "notes",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -412,7 +373,7 @@ export default function keap(rl: RunlinePluginAPI) {
       if (b) bd.body = b;
       if (title) bd.title = title;
       if (type) bd.type = type;
-      return apiRequest(tok(ctx), "PATCH", `/notes/${noteId}`, bd);
+      return apiRequest(ctx, "PATCH", `notes/${pathSegment(noteId)}`, bd);
     },
   });
 
@@ -422,9 +383,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { noteId: { type: "number", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/notes/${(input as { noteId: number }).noteId}`,
+        `notes/${pathSegment((input as { noteId: number }).noteId)}`,
       );
       return { success: true };
     },
@@ -444,9 +405,14 @@ export default function keap(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { contactId, tagIds } = input as Record<string, unknown>;
-      return apiRequest(tok(ctx), "POST", `/contacts/${contactId}/tags`, {
-        tagIds,
-      });
+      return apiRequest(
+        ctx,
+        "POST",
+        `contacts/${pathSegment(contactId)}/tags`,
+        {
+          tagIds,
+        },
+      );
     },
   });
 
@@ -464,9 +430,9 @@ export default function keap(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { contactId, tagIds } = input as Record<string, unknown>;
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/contacts/${contactId}/tags`,
+        `contacts/${pathSegment(contactId)}/tags`,
         undefined,
         { ids: tagIds as string },
       );
@@ -486,9 +452,9 @@ export default function keap(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (limit) qs.limit = limit;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/contacts/${contactId}/tags`,
+        `contacts/${pathSegment(contactId)}/tags`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -542,7 +508,7 @@ export default function keap(rl: RunlinePluginAPI) {
       };
       if (shippingAddress) body.shipping_address = shippingAddress;
       if (additionalFields) Object.assign(body, additionalFields);
-      return apiRequest(tok(ctx), "POST", "/orders", body);
+      return apiRequest(ctx, "POST", "orders", body);
     },
   });
 
@@ -552,9 +518,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { orderId: { type: "number", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/orders/${(input as { orderId: number }).orderId}`,
+        `orders/${pathSegment((input as { orderId: number }).orderId)}`,
       );
     },
   });
@@ -576,9 +542,9 @@ export default function keap(rl: RunlinePluginAPI) {
       if (p.since) qs.since = p.since;
       if (p.until) qs.until = p.until;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/orders",
+        "orders",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -592,9 +558,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { orderId: { type: "number", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/orders/${(input as { orderId: number }).orderId}`,
+        `orders/${pathSegment((input as { orderId: number }).orderId)}`,
       );
       return { success: true };
     },
@@ -619,7 +585,7 @@ export default function keap(rl: RunlinePluginAPI) {
       >;
       const body: Record<string, unknown> = { product_name: productName };
       if (additionalFields) Object.assign(body, additionalFields);
-      return apiRequest(tok(ctx), "POST", "/products", body);
+      return apiRequest(ctx, "POST", "products", body);
     },
   });
 
@@ -629,9 +595,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { productId: { type: "number", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/products/${(input as { productId: number }).productId}`,
+        `products/${pathSegment((input as { productId: number }).productId)}`,
       );
     },
   });
@@ -645,9 +611,9 @@ export default function keap(rl: RunlinePluginAPI) {
       if ((input as Record<string, unknown>)?.limit)
         qs.limit = (input as Record<string, unknown>).limit;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/products",
+        "products",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -661,9 +627,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { productId: { type: "number", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/products/${(input as { productId: number }).productId}`,
+        `products/${pathSegment((input as { productId: number }).productId)}`,
       );
       return { success: true };
     },
@@ -691,7 +657,7 @@ export default function keap(rl: RunlinePluginAPI) {
         sent_from_address: sentFromAddress,
       };
       if (additionalFields) Object.assign(body, additionalFields);
-      return apiRequest(tok(ctx), "POST", "/emails", body);
+      return apiRequest(ctx, "POST", "emails", body);
     },
   });
 
@@ -701,9 +667,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { emailRecordId: { type: "number", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/emails/${(input as { emailRecordId: number }).emailRecordId}`,
+        `emails/${pathSegment((input as { emailRecordId: number }).emailRecordId)}`,
       );
       return { success: true };
     },
@@ -726,9 +692,9 @@ export default function keap(rl: RunlinePluginAPI) {
       if (p.email) qs.email = p.email;
       if (p.sinceDate) qs.since_sent_date = p.sinceDate;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/emails",
+        "emails",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -776,7 +742,7 @@ export default function keap(rl: RunlinePluginAPI) {
       if (htmlContent) body.html_content = htmlContent;
       if (plainContent) body.plain_content = plainContent;
       if (attachments) body.attachments = attachments;
-      await apiRequest(tok(ctx), "POST", "/emails/queue", body);
+      await apiRequest(ctx, "POST", "emails/queue", body);
       return { success: true };
     },
   });
@@ -788,9 +754,9 @@ export default function keap(rl: RunlinePluginAPI) {
     inputSchema: { fileId: { type: "number", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/files/${(input as { fileId: number }).fileId}`,
+        `files/${pathSegment((input as { fileId: number }).fileId)}`,
       );
       return { success: true };
     },
@@ -828,9 +794,9 @@ export default function keap(rl: RunlinePluginAPI) {
       if (p.viewable) qs.viewable = (p.viewable as string).toUpperCase();
       if (p.contactId) qs.contact_id = p.contactId;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/files",
+        "files",
         undefined,
         qs,
       )) as Record<string, unknown>;

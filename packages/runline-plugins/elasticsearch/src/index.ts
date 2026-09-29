@@ -1,66 +1,42 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialOk,
+  jsonOrAcknowledged,
+  pathSegment,
+} from "../../_shared/credentials.js";
+import { elasticsearchCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  username: string,
-  password: string,
-  method: string,
-  endpoint: string,
+async function req(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Basic ${btoa(`${username}:${password}`)}`,
-      "Content-Type": "application/json",
+  const res = await credentialOk(
+    ctx,
+    elasticsearchCredential,
+    "elasticsearch",
+    {
+      target: "api",
+      path,
+      method,
+      query,
+      ...(body &&
+      Object.keys(body).length > 0 &&
+      method !== "GET" &&
+      method !== "DELETE"
+        ? { json: body }
+        : {}),
     },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Elasticsearch error ${res.status}: ${await res.text()}`);
-  const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) return res.json();
-  return { success: true };
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  return {
-    baseUrl: (cfg.baseUrl as string).replace(/\/$/, ""),
-    username: (cfg.username as string) ?? "",
-    password: (cfg.password as string) ?? "",
-  };
-}
-
-function req(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { baseUrl, username, password } = getConn(ctx);
-  return apiRequest(baseUrl, username, password, method, endpoint, body, qs);
+  );
+  return jsonOrAcknowledged(res);
 }
 
 export default function elasticsearch(rl: RunlinePluginAPI) {
   rl.setName("elasticsearch");
   rl.setVersion("0.1.0");
+  rl.setCredential(elasticsearchCredential);
 
   rl.setConnectionSchema({
     baseUrl: {
@@ -99,7 +75,9 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { index, id, body } = input as Record<string, unknown>;
-      const endpoint = id ? `/${index}/_doc/${id}` : `/${index}/_doc`;
+      const endpoint = id
+        ? `${pathSegment(index)}/_doc/${pathSegment(id)}`
+        : `${pathSegment(index)}/_doc`;
       return req(
         ctx,
         id ? "PUT" : "POST",
@@ -118,7 +96,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { index, id } = input as { index: string; id: string };
-      return req(ctx, "GET", `/${index}/_doc/${id}`);
+      return req(ctx, "GET", `${pathSegment(index)}/_doc/${pathSegment(id)}`);
     },
   });
 
@@ -136,7 +114,12 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { index, id, body } = input as Record<string, unknown>;
-      return req(ctx, "POST", `/${index}/_update/${id}`, { doc: body });
+      return req(
+        ctx,
+        "POST",
+        `${pathSegment(index)}/_update/${pathSegment(id)}`,
+        { doc: body },
+      );
     },
   });
 
@@ -149,7 +132,11 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { index, id } = input as { index: string; id: string };
-      return req(ctx, "DELETE", `/${index}/_doc/${id}`);
+      return req(
+        ctx,
+        "DELETE",
+        `${pathSegment(index)}/_doc/${pathSegment(id)}`,
+      );
     },
   });
 
@@ -187,7 +174,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        `/${index}/_search`,
+        `${pathSegment(index)}/_search`,
         body,
       )) as Record<string, unknown>;
       return (data.hits as Record<string, unknown>)?.hits;
@@ -220,12 +207,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if (settings) body.settings = settings;
       if (mappings) body.mappings = mappings;
-      return req(
-        ctx,
-        "PUT",
-        `/${index}`,
-        Object.keys(body).length > 0 ? body : undefined,
-      );
+      return req(ctx, "PUT", pathSegment(index), body);
     },
   });
 
@@ -236,7 +218,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
       index: { type: "string", required: true, description: "Index name" },
     },
     async execute(input, ctx) {
-      return req(ctx, "GET", `/${(input as { index: string }).index}`);
+      return req(ctx, "GET", pathSegment((input as { index: string }).index));
     },
   });
 
@@ -244,7 +226,7 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
     access: "read",
     description: "List all indices",
     async execute(_input, ctx) {
-      return req(ctx, "GET", "/_cat/indices", undefined, { format: "json" });
+      return req(ctx, "GET", "_cat/indices", undefined, { format: "json" });
     },
   });
 
@@ -255,7 +237,11 @@ export default function elasticsearch(rl: RunlinePluginAPI) {
       index: { type: "string", required: true, description: "Index name" },
     },
     async execute(input, ctx) {
-      return req(ctx, "DELETE", `/${(input as { index: string }).index}`);
+      return req(
+        ctx,
+        "DELETE",
+        pathSegment((input as { index: string }).index),
+      );
     },
   });
 }

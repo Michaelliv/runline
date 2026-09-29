@@ -1,37 +1,32 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { redditCredential } from "./credentials.js";
 
-async function apiRequest(
-  token: string | undefined,
-  method: string,
+/**
+ * A Reddit call; every answer is asked for as JSON (`api_type=json`). A
+ * read's parameters travel as its query, a write's as a form body, so
+ * posted text never reaches a URL.
+ */
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
-  qs?: Record<string, unknown>,
+  params?: Record<string, unknown>,
 ): Promise<unknown> {
-  const base = token ? "https://oauth.reddit.com" : "https://www.reddit.com";
-  const url = new URL(`${base}/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  url.searchParams.set("api_type", "json");
-  const headers: Record<string, string> = { "User-Agent": "runline" };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const init: RequestInit = { method, headers };
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Reddit error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-function getToken(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string | undefined {
-  return ctx.connection.config.accessToken as string | undefined;
+  const all = { ...params, api_type: "json" };
+  return credentialJson(ctx, redditCredential, "reddit", {
+    target: "api",
+    path: endpoint,
+    method,
+    ...(method === "GET" ? { query: all } : { form: all }),
+    headers: { "User-Agent": "runline" },
+  });
 }
 
 export default function reddit(rl: RunlinePluginAPI) {
   rl.setName("reddit");
   rl.setVersion("0.1.0");
+  rl.setCredential(redditCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -78,12 +73,10 @@ export default function reddit(rl: RunlinePluginAPI) {
       if (p.kind === "self") qs.text = p.text;
       else qs.url = p.url;
       if (p.resubmit) qs.resubmit = "true";
-      const data = (await apiRequest(
-        getToken(ctx),
-        "POST",
-        "api/submit",
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "POST", "api/submit", qs)) as Record<
+        string,
+        unknown
+      >;
       return (data.json as Record<string, unknown>)?.data;
     },
   });
@@ -98,9 +91,9 @@ export default function reddit(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { subreddit, postId } = input as Record<string, unknown>;
       const data = (await apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `r/${subreddit}/comments/${postId}.json`,
+        `r/${pathSegment(subreddit)}/comments/${pathSegment(`${postId}.json`)}`,
       )) as Array<Record<string, unknown>>;
       const listing = data[0] as Record<string, unknown>;
       const ld = listing.data as Record<string, unknown>;
@@ -130,16 +123,14 @@ export default function reddit(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       const cat = (p.category as string) ?? "";
       const endpoint = cat
-        ? `r/${p.subreddit}/${cat}.json`
-        : `r/${p.subreddit}.json`;
+        ? `r/${pathSegment(p.subreddit)}/${pathSegment(`${cat}.json`)}`
+        : `r/${pathSegment(`${p.subreddit}.json`)}`;
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.limit = p.limit;
-      const data = (await apiRequest(
-        getToken(ctx),
-        "GET",
-        endpoint,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", endpoint, qs)) as Record<
+        string,
+        unknown
+      >;
       const ld = data.data as Record<string, unknown>;
       return (ld.children as Array<Record<string, unknown>>).map((c) => c.data);
     },
@@ -151,7 +142,7 @@ export default function reddit(rl: RunlinePluginAPI) {
     inputSchema: { postId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { postId } = input as Record<string, unknown>;
-      await apiRequest(getToken(ctx), "POST", "api/del", {
+      await apiRequest(ctx, "POST", "api/del", {
         id: `t3_${postId}`,
       });
       return { success: true };
@@ -181,15 +172,13 @@ export default function reddit(rl: RunlinePluginAPI) {
       if (p.sort) qs.sort = p.sort;
       if (p.limit) qs.limit = p.limit;
       const endpoint = p.subreddit
-        ? `r/${p.subreddit}/search.json`
+        ? `r/${pathSegment(p.subreddit)}/search.json`
         : "search.json";
       if (p.subreddit) qs.restrict_sr = "true";
-      const data = (await apiRequest(
-        getToken(ctx),
-        "GET",
-        endpoint,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", endpoint, qs)) as Record<
+        string,
+        unknown
+      >;
       const ld = data.data as Record<string, unknown>;
       return (ld.children as Array<Record<string, unknown>>).map((c) => c.data);
     },
@@ -206,7 +195,7 @@ export default function reddit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { postId, text } = input as Record<string, unknown>;
-      const data = (await apiRequest(getToken(ctx), "POST", "api/comment", {
+      const data = (await apiRequest(ctx, "POST", "api/comment", {
         thing_id: `t3_${postId}`,
         text,
       })) as Record<string, unknown>;
@@ -226,7 +215,7 @@ export default function reddit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { commentId, text } = input as Record<string, unknown>;
-      const data = (await apiRequest(getToken(ctx), "POST", "api/comment", {
+      const data = (await apiRequest(ctx, "POST", "api/comment", {
         thing_id: `t1_${commentId}`,
         text,
       })) as Record<string, unknown>;
@@ -243,7 +232,7 @@ export default function reddit(rl: RunlinePluginAPI) {
     inputSchema: { commentId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { commentId } = input as Record<string, unknown>;
-      await apiRequest(getToken(ctx), "POST", "api/del", {
+      await apiRequest(ctx, "POST", "api/del", {
         id: `t1_${commentId}`,
       });
       return { success: true };
@@ -267,11 +256,11 @@ export default function reddit(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const content = (p.content as string) ?? "about";
       const data = (await apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `r/${p.subreddit}/about/${content}.json`,
+        `r/${pathSegment(p.subreddit)}/about/${pathSegment(`${content}.json`)}`,
       )) as Record<string, unknown>;
-      if (content === "rules") return (data as Record<string, unknown>).rules;
+      if (content === "rules") return data.rules;
       return data.data;
     },
   });
@@ -285,9 +274,9 @@ export default function reddit(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { username } = input as Record<string, unknown>;
       const data = (await apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `user/${username}/about.json`,
+        `user/${pathSegment(username)}/about.json`,
       )) as Record<string, unknown>;
       return data.data;
     },

@@ -1,42 +1,29 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  pathSegment,
+  slashEncodedSegment,
+} from "../../_shared/credentials.js";
+import { npmCredential } from "./credentials.js";
 
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
-  const registryUrl = (
-    (c.registryUrl as string) ?? "https://registry.npmjs.org"
-  ).replace(/\/$/, "");
-  const token = c.token as string | undefined;
-  return { registryUrl, token };
-}
-
-async function apiRequest(
-  conn: { registryUrl: string; token?: string },
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   path: string,
-  body?: string,
-  contentType?: string,
+  options: { query?: Record<string, unknown>; json?: unknown } = {},
 ): Promise<unknown> {
-  const headers: Record<string, string> = {};
-  if (conn.token) headers.Authorization = `Bearer ${conn.token}`;
-  if (contentType) headers["Content-Type"] = contentType;
-  else headers["Content-Type"] = "application/json";
-
-  const init: RequestInit = { method, headers };
-  if (body !== undefined) init.body = body;
-  const res = await fetch(`${conn.registryUrl}${path}`, init);
-  if (!res.ok)
-    throw new Error(`npm registry error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+  return credentialJson(ctx, npmCredential, "npm", {
+    target: "registry",
+    path,
+    method,
+    ...options,
+  });
 }
 
 export default function npm(rl: RunlinePluginAPI) {
   rl.setName("npm");
   rl.setVersion("0.1.0");
+  rl.setCredential(npmCredential);
 
   rl.setConnectionSchema({
     registryUrl: {
@@ -73,9 +60,9 @@ export default function npm(rl: RunlinePluginAPI) {
       const { packageName, version } = input as Record<string, unknown>;
       const v = (version as string) || "latest";
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/${encodeURIComponent(packageName as string)}/${v}`,
+        `${slashEncodedSegment(packageName)}/${pathSegment(v)}`,
       );
     },
   });
@@ -93,9 +80,9 @@ export default function npm(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { packageName } = input as Record<string, unknown>;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/${encodeURIComponent(packageName as string)}`,
+        slashEncodedSegment(packageName),
       )) as Record<string, unknown>;
       const time = (data.time ?? {}) as Record<string, string>;
       const versions = Object.entries(time)
@@ -128,16 +115,14 @@ export default function npm(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const params = new URLSearchParams();
-      params.set("text", p.query as string);
-      params.set("size", String(p.limit ?? 10));
-      params.set("from", String(p.offset ?? 0));
-      params.set("popularity", "0.99");
-      const data = (await apiRequest(
-        getConn(ctx),
-        "GET",
-        `/-/v1/search?${params.toString()}`,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "-/v1/search", {
+        query: {
+          text: p.query,
+          size: p.limit ?? 10,
+          from: p.offset ?? 0,
+          popularity: 0.99,
+        },
+      })) as Record<string, unknown>;
       const objects = (data.objects ?? []) as Array<{
         package: Record<string, unknown>;
       }>;
@@ -162,9 +147,9 @@ export default function npm(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { packageName } = input as Record<string, unknown>;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/-/package/${encodeURIComponent(packageName as string)}/dist-tags`,
+        `-/package/${slashEncodedSegment(packageName)}/dist-tags`,
       );
     },
   });
@@ -195,11 +180,10 @@ export default function npm(rl: RunlinePluginAPI) {
         unknown
       >;
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `/-/package/${encodeURIComponent(packageName as string)}/dist-tags/${encodeURIComponent(tagName as string)}`,
-        version as string,
-        "application/x-www-form-urlencoded",
+        `-/package/${slashEncodedSegment(packageName)}/dist-tags/${pathSegment(tagName)}`,
+        { json: version },
       );
     },
   });

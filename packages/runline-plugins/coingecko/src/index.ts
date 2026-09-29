@@ -1,29 +1,23 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { coingeckoCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.coingecko.com/api/v3";
-
-async function apiRequest(
-  endpoint: string,
-  qs?: Record<string, unknown>,
-  apiKey?: string,
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (apiKey) headers["x-cg-demo-api-key"] = apiKey;
-  const res = await fetch(url.toString(), { headers });
-  if (!res.ok)
-    throw new Error(`CoinGecko API error ${res.status}: ${await res.text()}`);
-  return res.json();
+  return credentialJson(ctx, coingeckoCredential, "coingecko", {
+    target: "api",
+    path,
+    query,
+  });
 }
 
 export default function coingecko(rl: RunlinePluginAPI) {
   rl.setName("coingecko");
   rl.setVersion("0.1.0");
+  rl.setCredential(coingeckoCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -33,12 +27,6 @@ export default function coingecko(rl: RunlinePluginAPI) {
       env: "COINGECKO_API_KEY",
     },
   });
-
-  function getKey(ctx: {
-    connection: { config: Record<string, unknown> };
-  }): string | undefined {
-    return ctx.connection.config.apiKey as string | undefined;
-  }
 
   // ── Coin ────────────────────────────────────────────
 
@@ -102,12 +90,12 @@ export default function coingecko(rl: RunlinePluginAPI) {
       };
       if (contractAddress && platformId) {
         return apiRequest(
-          `/coins/${platformId}/contract/${contractAddress}`,
+          ctx,
+          `coins/${pathSegment(platformId)}/contract/${pathSegment(contractAddress)}`,
           qs,
-          getKey(ctx),
         );
       }
-      return apiRequest(`/coins/${coinId}`, qs, getKey(ctx));
+      return apiRequest(ctx, `coins/${pathSegment(coinId)}`, qs);
     },
   });
 
@@ -119,11 +107,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input ?? {}) as { limit?: number };
-      const data = (await apiRequest(
-        "/coins/list",
-        undefined,
-        getKey(ctx),
-      )) as unknown[];
+      const data = (await apiRequest(ctx, "coins/list")) as unknown[];
       if (limit) return data.slice(0, limit);
       return data;
     },
@@ -171,7 +155,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
       if (priceChangePercentage)
         qs.price_change_percentage = priceChangePercentage;
       if (limit) qs.per_page = limit;
-      return apiRequest("/coins/markets", qs, getKey(ctx));
+      return apiRequest(ctx, "coins/markets", qs);
     },
   });
 
@@ -220,7 +204,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
       if (includeMarketCap) qs.include_market_cap = true;
       if (include24hrVol) qs.include_24hr_vol = true;
       if (include24hrChange) qs.include_24hr_change = true;
-      return apiRequest("/simple/price", qs, getKey(ctx));
+      return apiRequest(ctx, "simple/price", qs);
     },
   });
 
@@ -249,14 +233,10 @@ export default function coingecko(rl: RunlinePluginAPI) {
         string,
         string
       >;
-      return apiRequest(
-        `/simple/token_price/${platformId}`,
-        {
-          contract_addresses: contractAddresses,
-          vs_currencies: vsCurrencies,
-        },
-        getKey(ctx),
-      );
+      return apiRequest(ctx, `simple/token_price/${pathSegment(platformId)}`, {
+        contract_addresses: contractAddresses,
+        vs_currencies: vsCurrencies,
+      });
     },
   });
 
@@ -280,9 +260,9 @@ export default function coingecko(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (exchangeIds) qs.exchange_ids = exchangeIds;
       const data = (await apiRequest(
-        `/coins/${coinId}/tickers`,
+        ctx,
+        `coins/${pathSegment(coinId)}/tickers`,
         qs,
-        getKey(ctx),
       )) as Record<string, unknown>;
       const tickers = (data.tickers as unknown[]) ?? [];
       if (limit) return tickers.slice(0, limit as number);
@@ -310,7 +290,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
       const { coinId, date, localization } = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { date };
       if (localization !== undefined) qs.localization = localization;
-      return apiRequest(`/coins/${coinId}/history`, qs, getKey(ctx));
+      return apiRequest(ctx, `coins/${pathSegment(coinId)}/history`, qs);
     },
   });
 
@@ -346,11 +326,11 @@ export default function coingecko(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { vs_currency: vsCurrency, days };
       let endpoint: string;
       if (contractAddress && platformId) {
-        endpoint = `/coins/${platformId}/contract/${contractAddress}/market_chart`;
+        endpoint = `coins/${pathSegment(platformId)}/contract/${pathSegment(contractAddress)}/market_chart`;
       } else {
-        endpoint = `/coins/${coinId}/market_chart`;
+        endpoint = `coins/${pathSegment(coinId)}/market_chart`;
       }
-      const data = (await apiRequest(endpoint, qs, getKey(ctx))) as Record<
+      const data = (await apiRequest(ctx, endpoint, qs)) as Record<
         string,
         unknown
       >;
@@ -382,14 +362,10 @@ export default function coingecko(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { coinId, vsCurrency, days } = input as Record<string, string>;
-      const data = (await apiRequest(
-        `/coins/${coinId}/ohlc`,
-        {
-          vs_currency: vsCurrency,
-          days,
-        },
-        getKey(ctx),
-      )) as number[][];
+      const data = (await apiRequest(ctx, `coins/${pathSegment(coinId)}/ohlc`, {
+        vs_currency: vsCurrency,
+        days,
+      })) as number[][];
       return data.map(([time, open, high, low, close]) => ({
         time: new Date(time).toISOString(),
         open,
@@ -427,7 +403,7 @@ export default function coingecko(rl: RunlinePluginAPI) {
       if (countryCode) qs.country_code = countryCode;
       if (type) qs.type = type;
       if (limit) qs.per_page = limit;
-      const data = (await apiRequest("/events", qs, getKey(ctx))) as Record<
+      const data = (await apiRequest(ctx, "events", qs)) as Record<
         string,
         unknown
       >;

@@ -1,25 +1,19 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { uptimerobotCredential } from "./credentials.js";
 
-const BASE = "https://api.uptimerobot.com/v2";
-
+/** An UptimeRobot form call; an answer whose stat is not "ok" is a failure. */
 async function apiRequest(
-  apiKey: string,
+  ctx: ActionContext,
   endpoint: string,
   body: Record<string, unknown> = {},
 ): Promise<unknown> {
-  const form = new URLSearchParams();
-  form.set("api_key", apiKey);
-  for (const [k, v] of Object.entries(body)) {
-    if (v !== undefined && v !== null) form.set(k, String(v));
-  }
-  const res = await fetch(`${BASE}${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form,
-  });
-  if (!res.ok)
-    throw new Error(`UptimeRobot error ${res.status}: ${await res.text()}`);
-  const data = (await res.json()) as Record<string, unknown>;
+  const data = await credentialJson<Record<string, unknown>>(
+    ctx,
+    uptimerobotCredential,
+    "uptimerobot",
+    { target: "api", path: endpoint, method: "POST", form: body },
+  );
   if (data.stat !== "ok")
     throw new Error(`UptimeRobot error: ${JSON.stringify(data)}`);
   return data;
@@ -28,6 +22,8 @@ async function apiRequest(
 export default function uptimerobot(rl: RunlinePluginAPI) {
   rl.setName("uptimerobot");
   rl.setVersion("0.1.0");
+  rl.setCredential(uptimerobotCredential);
+
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -36,8 +32,6 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       env: "UPTIMEROBOT_API_KEY",
     },
   });
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   // ── Account ─────────────────────────────────────────
 
@@ -46,7 +40,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Get account details",
     inputSchema: {},
     async execute(_input, ctx) {
-      const data = (await apiRequest(key(ctx), "/getAccountDetails")) as Record<
+      const data = (await apiRequest(ctx, "getAccountDetails")) as Record<
         string,
         unknown
       >;
@@ -70,7 +64,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await apiRequest(key(ctx), "/newMonitor", {
+      const data = (await apiRequest(ctx, "newMonitor", {
         friendly_name: p.friendlyName,
         url: p.url,
         type: p.type,
@@ -84,7 +78,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Get a monitor by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "/getMonitors", {
+      const data = (await apiRequest(ctx, "getMonitors", {
         monitors: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.monitors;
@@ -99,7 +93,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       const body: Record<string, unknown> = {};
       if (p.limit) body.limit = p.limit;
-      const data = (await apiRequest(key(ctx), "/getMonitors", body)) as Record<
+      const data = (await apiRequest(ctx, "getMonitors", body)) as Record<
         string,
         unknown
       >;
@@ -122,7 +116,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       if (fields.friendlyName) body.friendly_name = fields.friendlyName;
       if (fields.url) body.url = fields.url;
       if (fields.type) body.type = fields.type;
-      const data = (await apiRequest(key(ctx), "/editMonitor", body)) as Record<
+      const data = (await apiRequest(ctx, "editMonitor", body)) as Record<
         string,
         unknown
       >;
@@ -135,7 +129,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Delete a monitor",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "/deleteMonitor", {
+      const data = (await apiRequest(ctx, "deleteMonitor", {
         id: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.monitor;
@@ -147,7 +141,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Reset a monitor's stats",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "/resetMonitor", {
+      const data = (await apiRequest(ctx, "resetMonitor", {
         id: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.monitor;
@@ -170,7 +164,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await apiRequest(key(ctx), "/newAlertContact", {
+      const data = (await apiRequest(ctx, "newAlertContact", {
         friendly_name: p.friendlyName,
         value: p.value,
         type: p.type,
@@ -184,7 +178,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Get an alert contact by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "/getAlertContacts", {
+      const data = (await apiRequest(ctx, "getAlertContacts", {
         alert_contacts: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.alert_contacts;
@@ -199,11 +193,10 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if ((input as Record<string, unknown>)?.limit)
         body.limit = (input as Record<string, unknown>).limit;
-      const data = (await apiRequest(
-        key(ctx),
-        "/getAlertContacts",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "getAlertContacts", body)) as Record<
+        string,
+        unknown
+      >;
       return data.alert_contacts;
     },
   });
@@ -221,11 +214,10 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { id };
       if (fields.friendlyName) body.friendly_name = fields.friendlyName;
       if (fields.value) body.value = fields.value;
-      const data = (await apiRequest(
-        key(ctx),
-        "/editAlertContact",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "editAlertContact", body)) as Record<
+        string,
+        unknown
+      >;
       return data.alert_contact;
     },
   });
@@ -235,7 +227,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Delete an alert contact",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "/deleteAlertContact", {
+      const data = (await apiRequest(ctx, "deleteAlertContact", {
         id: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.alert_contact;
@@ -279,7 +271,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
         duration: p.duration,
       };
       if (p.value) body.value = p.value;
-      const data = (await apiRequest(key(ctx), "/newMWindow", body)) as Record<
+      const data = (await apiRequest(ctx, "newMWindow", body)) as Record<
         string,
         unknown
       >;
@@ -292,7 +284,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Get a maintenance window",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "/getMWindows", {
+      const data = (await apiRequest(ctx, "getMWindows", {
         mwindows: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.mwindows;
@@ -307,7 +299,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if ((input as Record<string, unknown>)?.limit)
         body.limit = (input as Record<string, unknown>).limit;
-      const data = (await apiRequest(key(ctx), "/getMWindows", body)) as Record<
+      const data = (await apiRequest(ctx, "getMWindows", body)) as Record<
         string,
         unknown
       >;
@@ -330,7 +322,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       if (fields.friendlyName) body.friendly_name = fields.friendlyName;
       if (fields.duration) body.duration = fields.duration;
       if (fields.startTime) body.start_time = fields.startTime;
-      const data = (await apiRequest(key(ctx), "/editMWindow", body)) as Record<
+      const data = (await apiRequest(ctx, "editMWindow", body)) as Record<
         string,
         unknown
       >;
@@ -343,7 +335,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Delete a maintenance window",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(key(ctx), "/deleteMWindow", {
+      return apiRequest(ctx, "deleteMWindow", {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -364,7 +356,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await apiRequest(key(ctx), "/newPSP", {
+      const data = (await apiRequest(ctx, "newPSP", {
         friendly_name: p.friendlyName,
         monitors: p.monitors,
       })) as Record<string, unknown>;
@@ -377,7 +369,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Get a public status page",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "/getPSPs", {
+      const data = (await apiRequest(ctx, "getPSPs", {
         psps: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.psps;
@@ -392,7 +384,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if ((input as Record<string, unknown>)?.limit)
         body.limit = (input as Record<string, unknown>).limit;
-      const data = (await apiRequest(key(ctx), "/getPSPs", body)) as Record<
+      const data = (await apiRequest(ctx, "getPSPs", body)) as Record<
         string,
         unknown
       >;
@@ -413,7 +405,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { id };
       if (fields.friendlyName) body.friendly_name = fields.friendlyName;
       if (fields.monitors) body.monitors = fields.monitors;
-      const data = (await apiRequest(key(ctx), "/editPSP", body)) as Record<
+      const data = (await apiRequest(ctx, "editPSP", body)) as Record<
         string,
         unknown
       >;
@@ -426,7 +418,7 @@ export default function uptimerobot(rl: RunlinePluginAPI) {
     description: "Delete a public status page",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "/deletePSP", {
+      const data = (await apiRequest(ctx, "deletePSP", {
         id: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.psp;

@@ -1,12 +1,14 @@
+import { type ActionContext, AuthError, type HttpMethod } from "runline";
 import * as t from "typebox";
+import { credentialBroker } from "../../_shared/credentialAdapter.js";
+import { errorIdentifier, failureMessage } from "../../_shared/credentials.js";
+import { SHIFT_API_URL, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
+import { shiftCredential, shiftPath } from "../../_shared/shiftCredentials.js";
 import {
-  apiKey,
-  type Ctx,
-  SHIFT_API_URL,
-  STRICT_OBJECT,
-  shiftFetch,
-} from "../../_shared/shiftCloud.js";
-import { BusinessWorldModelClient, BwmClientError } from "./vendor/client.js";
+  BusinessWorldModelClient,
+  BwmClientError,
+  type BwmFetch,
+} from "./vendor/client.js";
 import {
   BWM_BUILT_IN_OBJECT_TYPES,
   BWM_LIST_MAX_LIMIT,
@@ -14,19 +16,44 @@ import {
 import { BwmFilterOperator } from "./vendor/models.js";
 
 export {
-  type Ctx,
   idSchema,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
 } from "../../_shared/shiftCloud.js";
 
+export type Ctx = ActionContext;
+
+export const shiftBwmCredential = shiftCredential();
+
 // ─── client ──────────────────────────────────────────────────────
+
+/**
+ * The vendored client's fetch, sent through the declared credential: the
+ * client names Shift API URLs, and each becomes a path beneath the Shift
+ * target. The client never holds the key.
+ */
+function brokeredFetch(ctx: Ctx): BwmFetch {
+  return (input, init) => {
+    const url = new URL(input);
+    if (url.origin !== SHIFT_API_URL)
+      throw new AuthError("request_not_allowed");
+    return credentialBroker(ctx, shiftBwmCredential).request({
+      target: "api",
+      path: `${shiftPath(url.pathname)}${url.search}`,
+      method: (init?.method ?? "GET") as HttpMethod,
+      headers: {
+        Accept: "application/json",
+        ...Object.fromEntries(init?.headers ?? []),
+      },
+      ...(init?.body !== undefined ? { body: init.body } : {}),
+    });
+  };
+}
 
 /**
  * One client per call. Cheap (prefix + fetch closure), and it lets a
  * create attach its own `Idempotency-Key` without leaking it into the
- * next request. Transport is the shared Shift one: redirects refused,
- * one deadline, bounded body.
+ * next request.
  */
 export function clientFor(
   ctx: Ctx,
@@ -34,11 +61,8 @@ export function clientFor(
 ): BusinessWorldModelClient {
   return new BusinessWorldModelClient({
     baseUrl: SHIFT_API_URL,
-    fetch: shiftFetch,
-    headers: {
-      authorization: `Bearer ${apiKey(ctx)}`,
-      ...extraHeaders,
-    },
+    fetch: brokeredFetch(ctx),
+    headers: extraHeaders,
   });
 }
 
@@ -52,24 +76,26 @@ export function idempotentClientFor(ctx: Ctx): BusinessWorldModelClient {
 /**
  * Only `message` survives the trip back to the agent's code, so the
  * fields the model needs to self-correct — `code` and `param` — are
- * folded into it. `param` names the offending request location
- * (`fields.tier`, `relationships.$owner`).
+ * folded into it, as for every Shift plugin. `param` names the offending
+ * request location (`fields.tier`, `relationships.$owner`). The service's
+ * free-text message can echo request data and is not returned.
  */
 export function describeError(err: unknown): Error {
   if (err instanceof BwmClientError) {
-    const where = err.param ? ` (param: ${err.param})` : "";
+    const code = errorIdentifier(err.code);
+    const param = errorIdentifier(err.param);
     const error = new Error(
-      `Shift Business World Model ${err.status} ${err.code}: ${err.message}${where}`,
+      failureMessage("shiftBwm", err.status, { code, param }),
     ) as Error & {
       status: number;
-      type: string;
-      code: string;
+      type?: string;
+      code?: string;
       param?: string;
     };
     error.status = err.status;
-    error.type = err.type;
-    error.code = err.code;
-    error.param = err.param;
+    error.type = errorIdentifier(err.type);
+    error.code = code;
+    error.param = param;
     return error;
   }
   return err instanceof Error ? err : new Error(String(err));

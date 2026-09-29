@@ -1,41 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { onfleetCredential } from "./credentials.js";
 
-const BASE = "https://onfleet.com/api/v2";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, onfleetCredential, "onfleet", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${apiKey}:`)}`,
-      "Content-Type": "application/json",
-      "User-Agent": "runline-onfleet",
-    },
-  };
-  if (body !== undefined && method !== "GET") init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Onfleet error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query: qs,
+    headers: { "User-Agent": "runline-onfleet" },
+    ...(body !== undefined && method !== "GET" ? { json: body } : {}),
+  });
 }
 
 function registerCrud(
   rl: RunlinePluginAPI,
   resource: string,
   plural: string,
-  key: (ctx: { connection: { config: Record<string, unknown> } }) => string,
   createSchema: Record<
     string,
     { type: string; required: boolean; description?: string }
@@ -46,7 +33,7 @@ function registerCrud(
     description: `Create a ${resource}`,
     inputSchema: createSchema,
     async execute(input, ctx) {
-      return apiRequest(key(ctx), "POST", plural, input);
+      return apiRequest(ctx, "POST", plural, input);
     },
   });
 
@@ -56,9 +43,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -68,7 +55,7 @@ function registerCrud(
     description: `List ${plural}`,
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "GET", plural)) as unknown[];
+      const data = (await apiRequest(ctx, "GET", plural)) as unknown[];
       const p = (input ?? {}) as Record<string, unknown>;
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -83,7 +70,7 @@ function registerCrud(
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "PUT", `${plural}/${p.id}`, p.data);
+      return apiRequest(ctx, "PUT", `${plural}/${pathSegment(p.id)}`, p.data);
     },
   });
 
@@ -93,9 +80,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -105,6 +92,7 @@ function registerCrud(
 export default function onfleet(rl: RunlinePluginAPI) {
   rl.setName("onfleet");
   rl.setVersion("0.1.0");
+  rl.setCredential(onfleetCredential);
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -113,8 +101,6 @@ export default function onfleet(rl: RunlinePluginAPI) {
       env: "ONFLEET_API_KEY",
     },
   });
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   // ── Organization ────────────────────────────────────
 
@@ -123,7 +109,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
     description: "Get organization details",
     inputSchema: {},
     async execute(_input, ctx) {
-      return apiRequest(key(ctx), "GET", "organization");
+      return apiRequest(ctx, "GET", "organization");
     },
   });
 
@@ -157,7 +143,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       notes: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      return apiRequest(key(ctx), "POST", "tasks", input);
+      return apiRequest(ctx, "POST", "tasks", input);
     },
   });
 
@@ -167,8 +153,11 @@ export default function onfleet(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const id = (input as Record<string, unknown>).id as string;
-      const path = id.length <= 8 ? `tasks/shortId/${id}` : `tasks/${id}`;
-      return apiRequest(key(ctx), "GET", path);
+      const path =
+        id.length <= 8
+          ? `tasks/shortId/${pathSegment(id)}`
+          : `tasks/${pathSegment(id)}`;
+      return apiRequest(ctx, "GET", path);
     },
   });
 
@@ -187,7 +176,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       else qs.from = Date.now() - 604800000;
       if (p.to) qs.to = p.to;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
         "tasks/all",
         undefined,
@@ -207,7 +196,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "PUT", `tasks/${p.id}`, p.data);
+      return apiRequest(ctx, "PUT", `tasks/${pathSegment(p.id)}`, p.data);
     },
   });
 
@@ -217,9 +206,9 @@ export default function onfleet(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `tasks/${(input as Record<string, unknown>).id}`,
+        `tasks/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -240,14 +229,19 @@ export default function onfleet(rl: RunlinePluginAPI) {
       };
       if (p.notes)
         (body.completionDetails as Record<string, unknown>).notes = p.notes;
-      await apiRequest(key(ctx), "POST", `tasks/${p.id}/complete`, body);
+      await apiRequest(
+        ctx,
+        "POST",
+        `tasks/${pathSegment(p.id)}/complete`,
+        body,
+      );
       return { success: true };
     },
   });
 
   // ── Worker ──────────────────────────────────────────
 
-  registerCrud(rl, "worker", "workers", key, {
+  registerCrud(rl, "worker", "workers", {
     name: { type: "string", required: true },
     phone: { type: "string", required: true },
     teams: { type: "object", required: true, description: "Array of team IDs" },
@@ -255,7 +249,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
 
   // ── Admin ───────────────────────────────────────────
 
-  registerCrud(rl, "admin", "admins", key, {
+  registerCrud(rl, "admin", "admins", {
     name: { type: "string", required: true },
     email: { type: "string", required: true },
   });
@@ -270,7 +264,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       address: { type: "object", required: true },
     },
     async execute(input, ctx) {
-      return apiRequest(key(ctx), "POST", "hubs", input);
+      return apiRequest(ctx, "POST", "hubs", input);
     },
   });
 
@@ -279,7 +273,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
     description: "List hubs",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "GET", "hubs")) as unknown[];
+      const data = (await apiRequest(ctx, "GET", "hubs")) as unknown[];
       const p = (input ?? {}) as Record<string, unknown>;
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -294,13 +288,13 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "PUT", `hubs/${p.id}`, p.data);
+      return apiRequest(ctx, "PUT", `hubs/${pathSegment(p.id)}`, p.data);
     },
   });
 
   // ── Team ────────────────────────────────────────────
 
-  registerCrud(rl, "team", "teams", key, {
+  registerCrud(rl, "team", "teams", {
     name: { type: "string", required: true },
     workers: {
       type: "object",
@@ -325,7 +319,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       notes: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      return apiRequest(key(ctx), "POST", "recipients", input);
+      return apiRequest(ctx, "POST", "recipients", input);
     },
   });
 
@@ -335,9 +329,9 @@ export default function onfleet(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `recipients/${(input as Record<string, unknown>).id}`,
+        `recipients/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -351,7 +345,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "PUT", `recipients/${p.id}`, p.data);
+      return apiRequest(ctx, "PUT", `recipients/${pathSegment(p.id)}`, p.data);
     },
   });
 
@@ -371,9 +365,9 @@ export default function onfleet(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `containers/${p.containerType}/${p.containerId}`,
+        `containers/${pathSegment(p.containerType)}/${pathSegment(p.containerId)}`,
       );
     },
   });
@@ -397,9 +391,9 @@ export default function onfleet(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "PUT",
-        `containers/${p.containerType}/${p.containerId}`,
+        `containers/${pathSegment(p.containerType)}/${pathSegment(p.containerId)}`,
         { tasks: p.tasks },
       );
     },
@@ -423,7 +417,13 @@ export default function onfleet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...qs } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "GET", `teams/${id}/estimate`, undefined, qs);
+      return apiRequest(
+        ctx,
+        "GET",
+        `teams/${pathSegment(id)}/estimate`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -437,9 +437,9 @@ export default function onfleet(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        `teams/${p.id}/dispatch`,
+        `teams/${pathSegment(p.id)}/dispatch`,
         p.data ?? {},
       );
     },
@@ -459,7 +459,7 @@ export default function onfleet(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return apiRequest(key(ctx), "POST", "destinations", input);
+      return apiRequest(ctx, "POST", "destinations", input);
     },
   });
 
@@ -469,9 +469,9 @@ export default function onfleet(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `destinations/${(input as Record<string, unknown>).id}`,
+        `destinations/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });

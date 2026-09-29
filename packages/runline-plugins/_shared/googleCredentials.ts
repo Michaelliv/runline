@@ -1,12 +1,12 @@
 import {
   AuthError,
+  type CredentialDeclaration,
   type CredentialProbe,
   type CredentialTarget,
   type CredentialType,
-  OAuthGrantSchema,
   type OAuthJwtIdentity,
 } from "runline";
-import * as t from "typebox";
+import { grantSchema } from "./credentials.js";
 
 export type GoogleAuthConfig = {
   authMethod?: "delegated" | "serviceAccount";
@@ -145,25 +145,47 @@ export function googleResources(plugin: string): {
   };
 }
 
+/**
+ * A Google plugin's credential declaration: its own targets and the scopes
+ * it signs service-account requests for, the method its config selects,
+ * and — for a service account — the JWT identity, subject included.
+ */
+export function googleCredential(
+  plugin: string,
+  scopes: string[],
+): CredentialDeclaration {
+  return (config) => {
+    const cfg = config as GoogleAuthConfig;
+    const method = googleMethod(cfg);
+    return {
+      type: googleCredentialType(scopes, plugin),
+      method,
+      application: {
+        clientId: cfg.clientId as string,
+        clientSecret: cfg.clientSecret,
+      },
+      ...(method === "serviceAccount"
+        ? { jwtIdentity: googleIdentity(cfg) }
+        : {}),
+    };
+  };
+}
+
 /** Fixed vendor endpoints; a JSON credential's token_uri can never select egress. */
 export function googleCredentialType(
   scopes: string[],
   plugin: string,
 ): CredentialType {
   const url = "https://oauth2.googleapis.com/token";
-  const schema = t.Object(
-    { grant: t.Optional(OAuthGrantSchema) },
-    { additionalProperties: false },
-  );
   const { targets, probe } = googleResources(plugin);
   return {
     id: "google.oauth",
     methods: {
       delegated: {
-        schema,
+        schema: grantSchema,
         authentication: {
           kind: "oauth2",
-          grantField: "grant",
+          field: "grant",
           renewal: "refresh",
           definition: {
             id: "google.oauth",
@@ -177,10 +199,10 @@ export function googleCredentialType(
       ...(scopes.length
         ? {
             serviceAccount: {
-              schema,
+              schema: grantSchema,
               authentication: {
                 kind: "oauth2",
-                grantField: "grant",
+                field: "grant",
                 renewal: "jwtBearer",
                 scopes,
                 definition: {

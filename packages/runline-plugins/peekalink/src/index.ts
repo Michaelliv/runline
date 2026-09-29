@@ -1,25 +1,24 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { peekalinkCredential } from "./credentials.js";
 
-const BASE = "https://api.peekalink.io";
-
-async function apiRequest(
-  apiKey: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await fetch(`${BASE}${endpoint}`, {
+  return credentialJson(ctx, peekalinkCredential, "peekalink", {
+    target: "api",
+    path,
     method: "POST",
-    headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    json: body,
   });
-  if (!res.ok)
-    throw new Error(`Peekalink error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function peekalink(rl: RunlinePluginAPI) {
   rl.setName("peekalink");
   rl.setVersion("0.1.0");
+  rl.setCredential(peekalinkCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -30,9 +29,6 @@ export default function peekalink(rl: RunlinePluginAPI) {
     },
   });
 
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
-
   rl.registerAction("link.preview", {
     access: "read",
     description: "Get a rich preview for a URL",
@@ -41,7 +37,7 @@ export default function peekalink(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { url } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "", { link: url });
+      return apiRequest(ctx, "", { link: url });
     },
   });
 
@@ -53,7 +49,7 @@ export default function peekalink(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { url } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "/is-available/", { link: url });
+      return apiRequest(ctx, "is-available/", { link: url });
     },
   });
 }

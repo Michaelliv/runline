@@ -1,46 +1,31 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { supabaseCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    host: (c.host as string).replace(/\/$/, ""),
-    serviceRole: c.serviceRole as string,
-  };
-}
-
-async function apiRequest(
-  conn: ReturnType<typeof getConn>,
-  method: string,
-  endpoint: string,
+/** A table's rows, answered back as written (`Prefer: return=representation`). */
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  table: unknown,
   body?: unknown,
-  qs?: Record<string, unknown>,
-  extraHeaders?: Record<string, string>,
+  query?: Record<string, unknown>,
+  headers?: Record<string, string>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.host}/rest/v1${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const headers: Record<string, string> = {
-    apikey: conn.serviceRole,
-    Authorization: `Bearer ${conn.serviceRole}`,
-    Prefer: "return=representation",
-    "Content-Type": "application/json",
-    ...extraHeaders,
-  };
-  const init: RequestInit = { method, headers };
-  if (body !== undefined) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Supabase error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+  return credentialJson(ctx, supabaseCredential, "supabase", {
+    target: "rest",
+    path: pathSegment(table),
+    method,
+    query,
+    headers: { Prefer: "return=representation", ...headers },
+    ...(body !== undefined ? { json: body } : {}),
+  });
 }
 
 export default function supabase(rl: RunlinePluginAPI) {
   rl.setName("supabase");
   rl.setVersion("0.1.0");
+  rl.setCredential(supabaseCredential);
+
   rl.setConnectionSchema({
     host: {
       type: "string",
@@ -73,19 +58,11 @@ export default function supabase(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = input as Record<string, unknown>;
       const headers: Record<string, string> = {};
       if (p.schema && p.schema !== "public")
         headers["Content-Profile"] = p.schema as string;
-      return apiRequest(
-        conn,
-        "POST",
-        `/${p.table}`,
-        p.data,
-        undefined,
-        headers,
-      );
+      return apiRequest(ctx, "POST", p.table, p.data, undefined, headers);
     },
   });
 
@@ -102,15 +79,14 @@ export default function supabase(rl: RunlinePluginAPI) {
       schema: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = input as Record<string, unknown>;
       const headers: Record<string, string> = {};
       if (p.schema && p.schema !== "public")
         headers["Accept-Profile"] = p.schema as string;
       return apiRequest(
-        conn,
+        ctx,
         "GET",
-        `/${p.table}`,
+        p.table,
         undefined,
         p.filters as Record<string, unknown>,
         headers,
@@ -132,7 +108,6 @@ export default function supabase(rl: RunlinePluginAPI) {
       schema: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {
         ...((p.filters as Record<string, unknown>) ?? {}),
@@ -141,7 +116,7 @@ export default function supabase(rl: RunlinePluginAPI) {
       const headers: Record<string, string> = {};
       if (p.schema && p.schema !== "public")
         headers["Accept-Profile"] = p.schema as string;
-      return apiRequest(conn, "GET", `/${p.table}`, undefined, qs, headers);
+      return apiRequest(ctx, "GET", p.table, undefined, qs, headers);
     },
   });
 
@@ -159,15 +134,14 @@ export default function supabase(rl: RunlinePluginAPI) {
       schema: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = input as Record<string, unknown>;
       const headers: Record<string, string> = {};
       if (p.schema && p.schema !== "public")
         headers["Content-Profile"] = p.schema as string;
       return apiRequest(
-        conn,
+        ctx,
         "PATCH",
-        `/${p.table}`,
+        p.table,
         p.data,
         p.filters as Record<string, unknown>,
         headers,
@@ -188,15 +162,14 @@ export default function supabase(rl: RunlinePluginAPI) {
       schema: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const conn = getConn(ctx);
       const p = input as Record<string, unknown>;
       const headers: Record<string, string> = {};
       if (p.schema && p.schema !== "public")
         headers["Content-Profile"] = p.schema as string;
       return apiRequest(
-        conn,
+        ctx,
         "DELETE",
-        `/${p.table}`,
+        p.table,
         undefined,
         p.filters as Record<string, unknown>,
         headers,

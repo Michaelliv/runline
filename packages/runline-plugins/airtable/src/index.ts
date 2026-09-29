@@ -1,53 +1,38 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { airtableCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.airtable.com/v0";
-
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}/${endpoint}`);
+  // Airtable's repeated-array convention: fields[]=a&fields[]=b.
+  const query: Record<string, unknown> = {};
   if (qs) {
     for (const [k, v] of Object.entries(qs)) {
       if (v === undefined) continue;
-      if (Array.isArray(v)) {
-        for (const item of v) url.searchParams.append(`${k}[]`, String(item));
-      } else {
-        url.searchParams.set(k, String(v));
-      }
+      query[Array.isArray(v) ? `${k}[]` : k] = v;
     }
   }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, airtableCredential, "airtable", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  };
-  if (
-    body &&
+    query,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Airtable API error ${res.status}: ${text}`);
-  }
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginateRecords(
-  token: string,
+  ctx: ActionContext,
   endpoint: string,
   qs?: Record<string, unknown>,
   limit?: number,
@@ -58,7 +43,7 @@ async function paginateRecords(
 
   while (true) {
     if (offset) (_qs as Record<string, unknown>).offset = offset;
-    const data = (await apiRequest(token, "GET", endpoint, undefined, _qs)) as {
+    const data = (await apiRequest(ctx, "GET", endpoint, undefined, _qs)) as {
       records: unknown[];
       offset?: string;
     };
@@ -75,7 +60,7 @@ async function paginateRecords(
 
 /** Airtable limits batch writes to 10 records at a time */
 async function batchWrite(
-  token: string,
+  ctx: ActionContext,
   method: "POST" | "PATCH",
   endpoint: string,
   records: Array<Record<string, unknown>>,
@@ -87,7 +72,7 @@ async function batchWrite(
   for (let i = 0; i < records.length; i += batchSize) {
     const batch = records.slice(i, i + batchSize);
     const body = { ...extraBody, records: batch };
-    const data = (await apiRequest(token, method, endpoint, body)) as {
+    const data = (await apiRequest(ctx, method, endpoint, body)) as {
       records: unknown[];
     };
     results.push(...data.records);
@@ -96,15 +81,10 @@ async function batchWrite(
   return results;
 }
 
-function getToken(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.token as string;
-}
-
 export default function airtable(rl: RunlinePluginAPI) {
   rl.setName("airtable");
   rl.setVersion("0.1.0");
+  rl.setCredential(airtableCredential);
 
   rl.setConnectionSchema({
     token: {
@@ -129,7 +109,6 @@ export default function airtable(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { limit } = (input as { limit?: number }) ?? {};
-      const token = getToken(ctx);
       const results: unknown[] = [];
       let offset: string | undefined;
 
@@ -137,7 +116,7 @@ export default function airtable(rl: RunlinePluginAPI) {
         const qs: Record<string, unknown> = {};
         if (offset) qs.offset = offset;
         const data = (await apiRequest(
-          token,
+          ctx,
           "GET",
           "meta/bases",
           undefined,
@@ -168,7 +147,7 @@ export default function airtable(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { baseId } = input as { baseId: string };
-      return apiRequest(getToken(ctx), "GET", `meta/bases/${baseId}/tables`);
+      return apiRequest(ctx, "GET", `meta/bases/${pathSegment(baseId)}/tables`);
     },
   });
 
@@ -204,7 +183,12 @@ export default function airtable(rl: RunlinePluginAPI) {
       };
       const body: Record<string, unknown> = { fields };
       if (typecast) body.typecast = true;
-      return apiRequest(getToken(ctx), "POST", `${baseId}/${tableId}`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
+        body,
+      );
     },
   });
 
@@ -239,9 +223,9 @@ export default function airtable(rl: RunlinePluginAPI) {
       const extra: Record<string, unknown> = {};
       if (typecast) extra.typecast = true;
       return batchWrite(
-        getToken(ctx),
+        ctx,
         "POST",
-        `${baseId}/${tableId}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
         records,
         extra,
       );
@@ -271,9 +255,9 @@ export default function airtable(rl: RunlinePluginAPI) {
         recordId: string;
       };
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `${baseId}/${tableId}/${recordId}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}/${pathSegment(recordId)}`,
       );
     },
   });
@@ -325,11 +309,20 @@ export default function airtable(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (filterByFormula) qs.filterByFormula = filterByFormula;
       if (fields) qs.fields = fields;
-      if (sort) qs.sort = sort;
+      // Airtable's indexed form: sort[0][field]=Due&sort[0][direction]=asc.
+      for (const [i, s] of (sort ?? []).entries()) {
+        qs[`sort[${i}][field]`] = s.field;
+        qs[`sort[${i}][direction]`] = s.direction;
+      }
       if (view) qs.view = view;
       if (limit && !filterByFormula) qs.maxRecords = limit;
 
-      return paginateRecords(getToken(ctx), `${baseId}/${tableId}`, qs, limit);
+      return paginateRecords(
+        ctx,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
+        qs,
+        limit,
+      );
     },
   });
 
@@ -367,9 +360,9 @@ export default function airtable(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { fields };
       if (typecast) body.typecast = true;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "PATCH",
-        `${baseId}/${tableId}/${recordId}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}/${pathSegment(recordId)}`,
         body,
       );
     },
@@ -406,9 +399,9 @@ export default function airtable(rl: RunlinePluginAPI) {
       const extra: Record<string, unknown> = {};
       if (typecast) extra.typecast = true;
       return batchWrite(
-        getToken(ctx),
+        ctx,
         "PATCH",
-        `${baseId}/${tableId}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
         records,
         extra,
       );
@@ -451,7 +444,12 @@ export default function airtable(rl: RunlinePluginAPI) {
         performUpsert: { fieldsToMergeOn },
       };
       if (typecast) body.typecast = true;
-      return apiRequest(getToken(ctx), "PATCH", `${baseId}/${tableId}`, body);
+      return apiRequest(
+        ctx,
+        "PATCH",
+        `${pathSegment(baseId)}/${pathSegment(tableId)}`,
+        body,
+      );
     },
   });
 
@@ -474,9 +472,9 @@ export default function airtable(rl: RunlinePluginAPI) {
         recordId: string;
       };
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "DELETE",
-        `${baseId}/${tableId}/${recordId}`,
+        `${pathSegment(baseId)}/${pathSegment(tableId)}/${pathSegment(recordId)}`,
       );
     },
   });

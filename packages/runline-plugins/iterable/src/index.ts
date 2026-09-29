@@ -1,39 +1,34 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { iterableCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}/api${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
-    method,
-    headers: { "Api-Key": apiKey, "Content-Type": "application/json" },
-  };
-  if (
+  const json =
     body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Iterable API error ${res.status}: ${await res.text()}`);
-  return res.json();
+      ? body
+      : undefined;
+  return credentialJson(ctx, iterableCredential, "iterable", {
+    target: "api",
+    path,
+    method,
+    query: qs,
+    ...(json !== undefined ? { json } : {}),
+  });
 }
 
 export default function iterable(rl: RunlinePluginAPI) {
   rl.setName("iterable");
   rl.setVersion("0.1.0");
+  rl.setCredential(iterableCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -51,13 +46,6 @@ export default function iterable(rl: RunlinePluginAPI) {
     },
   });
 
-  const conn = (ctx: { connection: { config: Record<string, unknown> } }) => ({
-    baseUrl: (
-      (ctx.connection.config.region as string) ?? "https://api.iterable.com"
-    ).replace(/\/$/, ""),
-    apiKey: ctx.connection.config.apiKey as string,
-  });
-
   // ── Event ───────────────────────────────────────────
   rl.registerAction("event.track", {
     access: "write",
@@ -73,10 +61,7 @@ export default function iterable(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { events } = input as { events: Record<string, unknown>[] };
-      const { baseUrl, apiKey } = conn(ctx);
-      return apiRequest(baseUrl, apiKey, "POST", "/events/trackBulk", {
-        events,
-      });
+      return apiRequest(ctx, "POST", "events/trackBulk", { events });
     },
   });
 
@@ -112,7 +97,6 @@ export default function iterable(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const { baseUrl, apiKey } = conn(ctx);
       const body: Record<string, unknown> = {};
       if (identifier === "email") {
         body.email = value;
@@ -121,7 +105,7 @@ export default function iterable(rl: RunlinePluginAPI) {
         if (preferUserId !== undefined) body.preferUserId = preferUserId;
       }
       if (dataFields) body.dataFields = dataFields;
-      return apiRequest(baseUrl, apiKey, "POST", "/users/update", body);
+      return apiRequest(ctx, "POST", "users/update", body);
     },
   });
 
@@ -142,24 +126,19 @@ export default function iterable(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { by, value } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = conn(ctx);
       if (by === "email") {
         const data = await apiRequest(
-          baseUrl,
-          apiKey,
+          ctx,
           "GET",
-          "/users/getByEmail",
+          "users/getByEmail",
           undefined,
-          { email: value as string },
+          {
+            email: value as string,
+          },
         );
         return (data as Record<string, unknown>).user ?? data;
       }
-      return apiRequest(
-        baseUrl,
-        apiKey,
-        "GET",
-        `/users/byUserId/${encodeURIComponent(value as string)}`,
-      );
+      return apiRequest(ctx, "GET", `users/byUserId/${pathSegment(value)}`);
     },
   });
 
@@ -180,12 +159,11 @@ export default function iterable(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { by, value } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = conn(ctx);
       const endpoint =
         by === "email"
-          ? `/users/${encodeURIComponent(value as string)}`
-          : `/users/byUserId/${encodeURIComponent(value as string)}`;
-      return apiRequest(baseUrl, apiKey, "DELETE", endpoint);
+          ? `users/${pathSegment(value)}`
+          : `users/byUserId/${pathSegment(value)}`;
+      return apiRequest(ctx, "DELETE", endpoint);
     },
   });
 
@@ -208,11 +186,10 @@ export default function iterable(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { listId, identifier, values } = input as Record<string, unknown>;
-      const { baseUrl, apiKey } = conn(ctx);
       const subscribers = (values as string[]).map((v) =>
         identifier === "email" ? { email: v } : { userId: v },
       );
-      return apiRequest(baseUrl, apiKey, "POST", "/lists/subscribe", {
+      return apiRequest(ctx, "POST", "lists/subscribe", {
         listId,
         subscribers,
       });
@@ -248,7 +225,6 @@ export default function iterable(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { listId, identifier, values, campaignId, channelUnsubscribe } =
         input as Record<string, unknown>;
-      const { baseUrl, apiKey } = conn(ctx);
       const subscribers = (values as string[]).map((v) =>
         identifier === "email" ? { email: v } : { userId: v },
       );
@@ -256,7 +232,7 @@ export default function iterable(rl: RunlinePluginAPI) {
       if (campaignId !== undefined) body.campaignId = campaignId;
       if (channelUnsubscribe !== undefined)
         body.channelUnsubscribe = channelUnsubscribe;
-      return apiRequest(baseUrl, apiKey, "POST", "/lists/unsubscribe", body);
+      return apiRequest(ctx, "POST", "lists/unsubscribe", body);
     },
   });
 }

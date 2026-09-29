@@ -2,6 +2,7 @@ export { AuthError, type AuthErrorCode } from "./auth/errors.js";
 export {
   acquireOAuth2ClientToken,
   acquireOAuth2JwtToken,
+  acquireOAuth2PasswordToken,
   buildOAuth2AuthorizationUrl,
   exchangeOAuth2Code,
   refreshOAuth2Token,
@@ -16,6 +17,7 @@ export type {
   OAuthEvent,
   OAuthJwtIdentity,
   OAuthOperation,
+  OAuthResourceOwner,
   OAuthRuntimeOptions,
 } from "./auth/types.js";
 export {
@@ -67,23 +69,32 @@ export {
   CredentialRegistry,
   OAuthGrantSchema,
   OAuthTokensSchema,
+  staticSecretSchema,
   validateCredential,
 } from "./credentials/registry.js";
 export type {
   AuthenticatedRequest,
+  CredentialBroker,
+  CredentialBrokerCall,
   CredentialTransportOptions,
+  SocketRequest,
 } from "./credentials/transport.js";
 export { CredentialTransport } from "./credentials/transport.js";
 export type {
   CredentialAuthentication,
   CredentialBinding,
+  CredentialDeclaration,
   CredentialMethod,
   CredentialProbe,
   CredentialProbeResult,
+  CredentialSelection,
   CredentialTarget,
   CredentialType,
   HttpMethod,
+  LocalSecretPart,
+  LocalSecretSource,
   OAuthGrant,
+  SecretPlacement,
 } from "./credentials/types.js";
 export type {
   ActionDefinition,

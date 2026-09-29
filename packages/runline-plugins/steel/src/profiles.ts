@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "../../_shared/credentials.js";
 import { api } from "./shared.js";
 
 function profileForm(input: Record<string, unknown>): FormData {
@@ -26,7 +27,7 @@ export function registerProfileActions(rl: RunlinePluginAPI) {
     description: "Get a Steel profile by ID.",
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/profiles/${encodeURIComponent((input as { id: string }).id)}`);
+      return api(ctx, `/v1/profiles/${pathSegment((input as { id: string }).id)}`);
     },
   });
 
@@ -43,7 +44,7 @@ export function registerProfileActions(rl: RunlinePluginAPI) {
         body: { timeout: 60000, inactivityTimeout: 30000, ...(input as Record<string, unknown>), persistProfile: true },
       }) as Record<string, unknown>;
       try {
-        await api(ctx, `/v1/sessions/${encodeURIComponent(String(session.id))}/release`, { method: "POST" });
+        await api(ctx, `/v1/sessions/${pathSegment(session.id)}/release`, { method: "POST" });
       } catch {
         // Profile creation is tied to session release. Return the session metadata even if release cleanup fails.
       }
@@ -57,7 +58,7 @@ export function registerProfileActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ id: t.String(), userAgent: t.Optional(t.String()), proxy: t.Optional(t.Any()), metadata: t.Optional(t.Any()) }),
     async execute(input, ctx) {
       const { id, ...body } = input as Record<string, unknown>;
-      return api(ctx, `/v1/profiles/${encodeURIComponent(String(id))}`, { method: "PATCH", body: profileForm(body) });
+      return api(ctx, `/v1/profiles/${pathSegment(id)}`, { method: "PATCH", body: profileForm(body) });
     },
   });
 

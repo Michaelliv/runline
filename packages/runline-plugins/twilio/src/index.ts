@@ -1,35 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { twilioCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    accountSid: c.accountSid as string,
-    authToken: c.authToken as string,
-  };
-}
-
-async function apiRequest(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+/** A Twilio form call beneath the account; empty fields are left out. */
+function apiRequest(
+  ctx: ActionContext,
   endpoint: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${conn.accountSid}${endpoint}`;
-  const form = new URLSearchParams();
-  for (const [k, v] of Object.entries(body)) {
-    if (v !== undefined && v !== null && v !== "") form.set(k, String(v));
-  }
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Basic ${btoa(`${conn.accountSid}:${conn.authToken}`)}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: form,
+  return credentialJson(ctx, twilioCredential, "twilio", {
+    target: "api",
+    path: endpoint,
+    method: "POST",
+    form: Object.fromEntries(
+      Object.entries(body).filter(([, value]) => value !== ""),
+    ),
   });
-  if (!res.ok)
-    throw new Error(`Twilio error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 function escapeXml(str: string): string {
@@ -49,6 +35,8 @@ function escapeXml(str: string): string {
 export default function twilio(rl: RunlinePluginAPI) {
   rl.setName("twilio");
   rl.setVersion("0.1.0");
+  rl.setCredential(twilioCredential);
+
   rl.setConnectionSchema({
     accountSid: {
       type: "string",
@@ -94,7 +82,7 @@ export default function twilio(rl: RunlinePluginAPI) {
         from = `whatsapp:${from}`;
         to = `whatsapp:${to}`;
       }
-      return apiRequest(getConn(ctx), "POST", "/Messages.json", {
+      return apiRequest(ctx, "Messages.json", {
         From: from,
         To: to,
         Body: p.body,
@@ -126,7 +114,7 @@ export default function twilio(rl: RunlinePluginAPI) {
       const twiml = p.twiml
         ? (p.message as string)
         : `<Response><Say>${escapeXml(p.message as string)}</Say></Response>`;
-      return apiRequest(getConn(ctx), "POST", "/Calls.json", {
+      return apiRequest(ctx, "Calls.json", {
         From: p.from,
         To: p.to,
         Twiml: twiml,

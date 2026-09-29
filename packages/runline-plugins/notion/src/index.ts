@@ -1,39 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { NOTION_VERSION, notionCredential } from "./credentials.js";
 
-const BASE = "https://api.notion.com/v1";
-const NOTION_VERSION = "2021-08-16";
-
-async function api(
-  token: string,
-  method: string,
-  endpoint: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, notionCredential, "notion", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Notion-Version": NOTION_VERSION,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Notion error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query,
+    headers: { "Notion-Version": NOTION_VERSION },
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function notion(rl: RunlinePluginAPI) {
   rl.setName("notion");
   rl.setVersion("0.1.0");
+  rl.setCredential(notionCredential);
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -42,8 +31,6 @@ export default function notion(rl: RunlinePluginAPI) {
       env: "NOTION_API_KEY",
     },
   });
-  const t = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   // ── Block ───────────────────────────────────────────
 
@@ -60,7 +47,7 @@ export default function notion(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "PATCH", `/blocks/${p.blockId}/children`, {
+      return api(ctx, "PATCH", `blocks/${pathSegment(p.blockId)}/children`, {
         children: p.children,
       });
     },
@@ -78,9 +65,9 @@ export default function notion(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.page_size = p.limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
-        `/blocks/${p.blockId}/children`,
+        `blocks/${pathSegment(p.blockId)}/children`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -94,9 +81,9 @@ export default function notion(rl: RunlinePluginAPI) {
     inputSchema: { blockId: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "DELETE",
-        `/blocks/${(input as Record<string, unknown>).blockId}`,
+        `blocks/${pathSegment((input as Record<string, unknown>).blockId)}`,
       );
     },
   });
@@ -109,9 +96,9 @@ export default function notion(rl: RunlinePluginAPI) {
     inputSchema: { databaseId: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/databases/${(input as Record<string, unknown>).databaseId}`,
+        `databases/${pathSegment((input as Record<string, unknown>).databaseId)}`,
       );
     },
   });
@@ -126,7 +113,7 @@ export default function notion(rl: RunlinePluginAPI) {
       };
       if ((input as Record<string, unknown>)?.limit)
         body.page_size = (input as Record<string, unknown>).limit;
-      const data = (await api(t(ctx), "POST", "/search", body)) as Record<
+      const data = (await api(ctx, "POST", "search", body)) as Record<
         string,
         unknown
       >;
@@ -158,9 +145,9 @@ export default function notion(rl: RunlinePluginAPI) {
       if (p.sorts) body.sorts = p.sorts;
       if (p.limit) body.page_size = p.limit;
       const data = (await api(
-        t(ctx),
+        ctx,
         "POST",
-        `/databases/${p.databaseId}/query`,
+        `databases/${pathSegment(p.databaseId)}/query`,
         body,
       )) as Record<string, unknown>;
       return data.results;
@@ -191,7 +178,7 @@ export default function notion(rl: RunlinePluginAPI) {
       icon: { type: "object", required: false },
     },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/pages", input as Record<string, unknown>);
+      return api(ctx, "POST", "pages", input as Record<string, unknown>);
     },
   });
 
@@ -201,9 +188,9 @@ export default function notion(rl: RunlinePluginAPI) {
     inputSchema: { pageId: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/pages/${(input as Record<string, unknown>).pageId}`,
+        `pages/${pathSegment((input as Record<string, unknown>).pageId)}`,
       );
     },
   });
@@ -219,7 +206,7 @@ export default function notion(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { pageId, ...body } = input as Record<string, unknown>;
-      return api(t(ctx), "PATCH", `/pages/${pageId}`, body);
+      return api(ctx, "PATCH", `pages/${pathSegment(pageId)}`, body);
     },
   });
 
@@ -229,9 +216,9 @@ export default function notion(rl: RunlinePluginAPI) {
     inputSchema: { pageId: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "PATCH",
-        `/pages/${(input as Record<string, unknown>).pageId}`,
+        `pages/${pathSegment((input as Record<string, unknown>).pageId)}`,
         { archived: true },
       );
     },
@@ -249,7 +236,7 @@ export default function notion(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = {};
       if (p.query) body.query = p.query;
       if (p.limit) body.page_size = p.limit;
-      const data = (await api(t(ctx), "POST", "/search", body)) as Record<
+      const data = (await api(ctx, "POST", "search", body)) as Record<
         string,
         unknown
       >;
@@ -265,9 +252,9 @@ export default function notion(rl: RunlinePluginAPI) {
     inputSchema: { userId: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/users/${(input as Record<string, unknown>).userId}`,
+        `users/${pathSegment((input as Record<string, unknown>).userId)}`,
       );
     },
   });
@@ -280,13 +267,10 @@ export default function notion(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if ((input as Record<string, unknown>)?.limit)
         qs.page_size = (input as Record<string, unknown>).limit;
-      const data = (await api(
-        t(ctx),
-        "GET",
-        "/users",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", "users", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return data.results;
     },
   });
@@ -296,7 +280,7 @@ export default function notion(rl: RunlinePluginAPI) {
     description: "Get the bot user",
     inputSchema: {},
     async execute(_input, ctx) {
-      return api(t(ctx), "GET", "/users/me");
+      return api(ctx, "GET", "users/me");
     },
   });
 }

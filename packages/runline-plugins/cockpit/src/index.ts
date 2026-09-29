@@ -1,40 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { cockpitCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}/api${endpoint}`);
-  url.searchParams.set("token", token);
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, cockpitCredential, "cockpit", {
+    target: "api",
+    path,
     method,
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET") {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Cockpit API error ${res.status}: ${text}`);
-  }
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    baseUrl: (ctx.connection.config.url as string).replace(/\/$/, ""),
-    token: ctx.connection.config.accessToken as string,
-  };
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function cockpit(rl: RunlinePluginAPI) {
   rl.setName("cockpit");
   rl.setVersion("0.1.0");
+  rl.setCredential(cockpitCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -73,13 +60,13 @@ export default function cockpit(rl: RunlinePluginAPI) {
         collection: string;
         data: Record<string, unknown>;
       };
-      const { baseUrl, token } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "POST",
-        `/collections/save/${collection}`,
-        { data },
+        `collections/save/${pathSegment(collection)}`,
+        {
+          data,
+        },
       );
     },
   });
@@ -128,7 +115,6 @@ export default function cockpit(rl: RunlinePluginAPI) {
         populate,
         language,
       } = (input ?? {}) as Record<string, unknown>;
-      const { baseUrl, token } = getConn(ctx);
       const body: Record<string, unknown> = { simple: true };
       if (filter) body.filter = filter;
       if (fields) {
@@ -142,10 +128,9 @@ export default function cockpit(rl: RunlinePluginAPI) {
       if (populate) body.populate = populate;
       if (language) body.lang = language;
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "POST",
-        `/collections/get/${collection}`,
+        `collections/get/${pathSegment(collection)}`,
         body,
       );
     },
@@ -169,12 +154,10 @@ export default function cockpit(rl: RunlinePluginAPI) {
         id: string;
         data: Record<string, unknown>;
       };
-      const { baseUrl, token } = getConn(ctx);
       return apiRequest(
-        baseUrl,
-        token,
+        ctx,
         "POST",
-        `/collections/save/${collection}`,
+        `collections/save/${pathSegment(collection)}`,
         {
           data: { _id: id, ...data },
         },
@@ -200,8 +183,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
         form: string;
         data: Record<string, unknown>;
       };
-      const { baseUrl, token } = getConn(ctx);
-      return apiRequest(baseUrl, token, "POST", `/forms/submit/${form}`, {
+      return apiRequest(ctx, "POST", `forms/submit/${pathSegment(form)}`, {
         form: data,
       });
     },
@@ -221,8 +203,7 @@ export default function cockpit(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { singleton } = input as { singleton: string };
-      const { baseUrl, token } = getConn(ctx);
-      return apiRequest(baseUrl, token, "GET", `/singletons/get/${singleton}`);
+      return apiRequest(ctx, "GET", `singletons/get/${pathSegment(singleton)}`);
     },
   });
 }

@@ -540,7 +540,7 @@ describe("shiftCrm plugin", () => {
         String(input),
         "https://cloud.shift-labs.ai/v1/crm/records/rec_1/change-events",
       );
-      assert.equal(init?.method, undefined);
+      assert.equal(init?.method, "GET");
       return { changeEvents: [{ id: "evt_1", action: "created" }] };
     });
 

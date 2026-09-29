@@ -1,42 +1,43 @@
-import type { RunlinePluginAPI } from "runline";
+import {
+  AuthError,
+  type ActionContext,
+  type HttpMethod,
+  type RunlinePluginAPI,
+} from "runline";
+import { credentialOk, pathSegment } from "../../_shared/credentials.js";
+import { sendgridCredential } from "./credentials.js";
 
-const BASE = "https://api.sendgrid.com/v3";
-
+/** A JSON request whose response headers stay readable (mail.send's x-message-id). */
 async function apiRequest(
-  apiKey: string,
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<{ data: unknown; headers: Record<string, string> }> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  const res = await credentialOk(ctx, sendgridCredential, "sendgrid", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body !== undefined) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok && res.status !== 202)
-    throw new Error(`SendGrid error ${res.status}: ${await res.text()}`);
+    query: qs,
+    ...(body !== undefined ? { json: body } : {}),
+  });
   const text = await res.text();
   const headers: Record<string, string> = {};
   res.headers.forEach((v, k) => {
     headers[k] = v;
   });
-  return { data: text ? JSON.parse(text) : {}, headers };
+  try {
+    return { data: text ? JSON.parse(text) : {}, headers };
+  } catch {
+    throw new AuthError("invalid_response");
+  }
 }
 
 export default function sendgrid(rl: RunlinePluginAPI) {
   rl.setName("sendgrid");
   rl.setVersion("0.1.0");
+  rl.setCredential(sendgridCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -46,9 +47,6 @@ export default function sendgrid(rl: RunlinePluginAPI) {
       env: "SENDGRID_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   // ── Mail ────────────────────────────────────────────
 
@@ -124,12 +122,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
         body.reply_to_list = (p.replyTo as string)
           .split(",")
           .map((e) => ({ email: e.trim() }));
-      const { headers } = await apiRequest(
-        key(ctx),
-        "POST",
-        "/mail/send",
-        body,
-      );
+      const { headers } = await apiRequest(ctx, "POST", "mail/send", body);
       return { messageId: headers["x-message-id"] ?? null };
     },
   });
@@ -151,16 +144,16 @@ export default function sendgrid(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       if (p.contactId) {
         const { data } = await apiRequest(
-          key(ctx),
+          ctx,
           "GET",
-          `/marketing/contacts/${p.contactId}`,
+          `marketing/contacts/${pathSegment(p.contactId)}`,
         );
         return data;
       }
       const { data } = await apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        "/marketing/contacts/search",
+        "marketing/contacts/search",
         { query: `email LIKE '${p.email}'` },
       );
       const result = (data as Record<string, unknown>).result as unknown[];
@@ -181,16 +174,16 @@ export default function sendgrid(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      let endpoint = "/marketing/contacts";
-      let method = "GET";
+      let endpoint = "marketing/contacts";
+      let method: HttpMethod = "GET";
       const body: Record<string, unknown> = {};
       if (p.query) {
-        endpoint = "/marketing/contacts/search";
+        endpoint = "marketing/contacts/search";
         method = "POST";
         body.query = p.query;
       }
       const { data } = await apiRequest(
-        key(ctx),
+        ctx,
         method,
         endpoint,
         Object.keys(body).length ? body : undefined,
@@ -222,12 +215,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { contacts: p.contacts };
       if (p.listIds) body.list_ids = p.listIds;
-      const { data } = await apiRequest(
-        key(ctx),
-        "PUT",
-        "/marketing/contacts",
-        body,
-      );
+      const { data } = await apiRequest(ctx, "PUT", "marketing/contacts", body);
       return data;
     },
   });
@@ -245,9 +233,9 @@ export default function sendgrid(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { ids } = input as Record<string, unknown>;
       const { data } = await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        "/marketing/contacts",
+        "marketing/contacts",
         undefined,
         { ids },
       );
@@ -262,7 +250,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
     description: "Create a contact list",
     inputSchema: { name: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { data } = await apiRequest(key(ctx), "POST", "/marketing/lists", {
+      const { data } = await apiRequest(ctx, "POST", "marketing/lists", {
         name: (input as Record<string, unknown>).name,
       });
       return data;
@@ -275,9 +263,9 @@ export default function sendgrid(rl: RunlinePluginAPI) {
     inputSchema: { listId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { data } = await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/marketing/lists/${(input as Record<string, unknown>).listId}`,
+        `marketing/lists/${pathSegment((input as Record<string, unknown>).listId)}`,
       );
       return data;
     },
@@ -288,7 +276,7 @@ export default function sendgrid(rl: RunlinePluginAPI) {
     description: "List all contact lists",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const { data } = await apiRequest(key(ctx), "GET", "/marketing/lists");
+      const { data } = await apiRequest(ctx, "GET", "marketing/lists");
       let result = ((data as Record<string, unknown>).result ??
         []) as unknown[];
       if ((input as Record<string, unknown>)?.limit)
@@ -310,9 +298,9 @@ export default function sendgrid(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const { data } = await apiRequest(
-        key(ctx),
+        ctx,
         "PATCH",
-        `/marketing/lists/${p.listId}`,
+        `marketing/lists/${pathSegment(p.listId)}`,
         { name: p.name },
       );
       return data;
@@ -333,9 +321,9 @@ export default function sendgrid(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `/marketing/lists/${p.listId}`,
+        `marketing/lists/${pathSegment(p.listId)}`,
         undefined,
         { delete_contacts: p.deleteContacts ? "true" : "false" },
       );

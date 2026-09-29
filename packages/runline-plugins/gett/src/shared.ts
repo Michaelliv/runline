@@ -1,34 +1,22 @@
 import { randomUUID } from "node:crypto";
-import type { ActionContext } from "runline";
-import { authedFetch } from "../../_shared/authedFetch.js";
-import {
-  arr,
-  num,
-  numOrNull,
-  obj,
-  pick,
-  readBounded,
-  seg as segment,
-} from "../../_shared/provider.js";
-import { coordinatedAccessToken } from "../../_shared/tokenRefresh.js";
+import { type ActionContext, AuthError, type HttpMethod } from "runline";
+import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
+import { arr, num, numOrNull, obj, pick } from "../../_shared/provider.js";
+import { appHeaders, gettCredential } from "./credentials.js";
 
+export { APP_VERSION } from "./credentials.js";
 export { arr, num, numOrNull, obj, pick };
 
 /**
- * Transport and credentials for the Gett consumer surface.
- *
- * One host, one bearer, one refresh grant. Everything above this file works in
- * terms of `http`/`authed` and never reaches the network itself.
+ * The Gett consumer surface: one host, one bearer, one refresh grant, all
+ * signed through the declared credential. Everything above this file works
+ * in terms of `authed` and never reaches the network itself.
  */
 
-const HOST = "b2cgateway.gett.com";
-const UA = "Gett/android/10.48.187";
-export const APP_VERSION = "10.48.187";
 /** Dizengoff Sq, TLV — a location that always has supply, used when none is given. */
 export const DEF_LAT = 32.0779;
 export const DEF_LON = 34.7743;
 
-const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_TOKEN_TTL_MS = 3_600_000;
 
 export type Cfg = {
@@ -58,7 +46,7 @@ export const cfgOf = (ctx: ActionContext): Cfg =>
  * Gett signals refusal inside the body on some endpoints (`rc`) and in a status
  * string on others, and answers 200 either way. An explicit `rc` decides; failing
  * that an explicit status decides; a body carrying neither is an acceptance,
- * because `http` has already rejected every non-2xx. Erring the other way would
+ * because every non-2xx has already been rejected. Erring the other way would
  * report a booked ride as unbooked, and the caller would order a second car.
  */
 export function accepted(body: Record<string, unknown>): boolean {
@@ -84,13 +72,14 @@ export function normPhone(input: string): string {
   return `972${digits}`;
 }
 
-export const seg = (value: unknown, what: string): string =>
-  segment(value, what, "gett");
+/** A configured or caller-supplied value as one path segment; surrounding whitespace is not part of it. */
+export const seg = (value: unknown): string =>
+  pathSegment(String(value ?? "").trim());
 
 // ---------- HTTP ----------
 
 /** Carries the status for control flow without putting a provider body in the message. */
-class GettError extends Error {
+export class GettError extends Error {
   readonly status: number;
   constructor(status: number, endpoint: string) {
     super(`gett: request failed (HTTP ${status}) on ${endpoint}`);
@@ -100,40 +89,16 @@ class GettError extends Error {
 }
 
 /** The account's phone is in nearly every path; it never belongs in an error. */
-function endpointOf(path: string): string {
+export function endpointOf(path: string): string {
   return path.split("?")[0].replace(/\/phone\/[^/]+/, "/phone/{phone}");
 }
 
-export async function http(
-  ctx: ActionContext,
+/** A 2xx body as an object; anything that is not JSON reads as empty. */
+export async function bodyOf(
+  res: Response,
   path: string,
-  opts: { method?: string; body?: unknown; token?: string | null } = {},
 ): Promise<Record<string, unknown>> {
-  const cfg = cfgOf(ctx);
-  const { method = "GET", body = null, token = null } = opts;
-  const payload = body == null ? null : JSON.stringify(body);
-  const headers: Record<string, string> = {
-    accept: "application/json",
-    "user-agent": UA,
-    "app-platform": "android",
-    "app-version": APP_VERSION,
-    "x-device-id": cfg.deviceId || "",
-    "x-client-device-unique-id": cfg.clientDeviceUniqueId || "",
-    "x-country-code": "IL",
-  };
-  if (token) headers.authorization = `Bearer ${token}`;
-  if (payload) headers["content-type"] = "application/json; charset=UTF-8";
-  const endpoint = endpointOf(path);
-  const res = await authedFetch(`https://${HOST}${path}`, {
-    method,
-    headers,
-    body: payload,
-  });
-  const text = await readBounded(
-    res,
-    MAX_RESPONSE_BYTES,
-    `gett: response exceeded the size limit on ${endpoint}`,
-  );
+  const text = await res.text();
   let parsed: unknown = null;
   try {
     parsed = text ? JSON.parse(text) : null;
@@ -142,7 +107,7 @@ export async function http(
   }
   // The body can hold tokens, the OTP, or the account holder's details; the
   // status and the redacted endpoint are what a caller can act on.
-  if (!res.ok) throw new GettError(res.status, endpoint);
+  if (!res.ok) throw new GettError(res.status, endpointOf(path));
   return obj(parsed);
 }
 
@@ -160,82 +125,48 @@ export async function ensureDevice(ctx: ActionContext): Promise<void> {
   if (Object.keys(patch).length) await ctx.updateConnection(patch);
 }
 
-// ---------- credentials ----------
-
 export function expiresAt(expiresIn: unknown): number {
   const seconds = numOrNull(expiresIn);
   return Date.now() + (seconds ? seconds * 1000 : DEFAULT_TOKEN_TTL_MS);
 }
 
 /**
- * The refresh grant itself.
- *
- * `?lc=en` is REQUIRED on every /auth/token call: the app sends it and the server
- * 400s with an empty body without it. Access-token TTL is irrelevant to the grant
- * (a bearer expired by days still refreshes), so a genuine 400 here means the
- * refresh token itself is dead and a fresh owner login is required.
- *
- * Called only from inside an update owner, and always with an explicit token, so
- * it can never re-enter the connection store.
+ * What a failed renewal means to the owner: no stored login, or a refresh
+ * token Gett no longer honours — both mended by the owner login.
  */
-async function refreshGrant(
-  ctx: ActionContext,
-  cfg: Cfg,
-): Promise<Record<string, unknown>> {
-  try {
-    return await http(
-      ctx,
-      `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/token?lc=en`,
-      {
-        method: "POST",
-        token: cfg.accessToken || cfg.refreshToken,
-        body: { grant_type: "refresh_token", refresh_token: cfg.refreshToken },
-      },
-    );
-  } catch (e) {
-    if (e instanceof GettError && e.status === 400) {
-      throw new Error(
-        "gett: session expired (refresh rejected) — re-run the owner login: account.requestCode -> account.verifyCode -> account.verifyCard",
-      );
-    }
-    throw e;
-  }
-}
-
-export async function accessToken(
-  ctx: ActionContext,
-  force = false,
-): Promise<string> {
-  const cfg = cfgOf(ctx);
-  if (!cfg.refreshToken)
-    throw new Error(
+function sessionError(error: unknown): unknown {
+  if (!(error instanceof AuthError)) return error;
+  if (error.code === "invalid_credentials")
+    return new Error(
       "gett: not connected — run account.requestCode({ phone }) -> account.verifyCode({ code }) -> account.verifyCard({ card })",
     );
-  if (!cfg.phone) throw new Error("gett: no phone configured");
-  // Renewal runs under the store's update ownership, so parallel actions
-  // coalesce onto one grant instead of clobbering each other's rotated token.
-  return coordinatedAccessToken(
-    ctx,
-    async (current) => {
-      const resp = await refreshGrant(ctx, current as Cfg);
-      const issued = pick(resp.access_token);
-      if (!issued)
-        throw new Error("gett: token refresh returned no access_token");
-      const rotated = pick(resp.refresh_token);
-      return {
-        accessToken: issued,
-        accessTokenExpiresAt: expiresAt(resp.expires_in),
-        ...(rotated ? { refreshToken: rotated } : {}),
-      };
-    },
-    force,
-  );
+  if (
+    error.code === "reconnect_required" ||
+    (error.code === "provider_rejected" && error.status === 400)
+  )
+    return new Error(
+      "gett: session expired (refresh rejected) — re-run the owner login: account.requestCode -> account.verifyCode -> account.verifyCard",
+    );
+  return error;
 }
 
+/** A call on the gateway, signed with the session's access token and renewed on demand. */
 export async function authed(
   ctx: ActionContext,
   path: string,
-  opts: { method?: string; body?: unknown } = {},
+  opts: { method?: HttpMethod; body?: unknown } = {},
 ): Promise<Record<string, unknown>> {
-  return http(ctx, path, { ...opts, token: await accessToken(ctx) });
+  let res: Response;
+  try {
+    res = await credentialRequest(ctx, gettCredential, {
+      target: "api",
+      path: path.replace(/^\//, ""),
+      method: opts.method ?? "GET",
+      headers: appHeaders(ctx.connection.config),
+      ...(opts.body == null ? {} : { json: opts.body }),
+    });
+  } catch (error) {
+    throw sessionError(error);
+  }
+  return bodyOf(res, path);
 }

@@ -1,43 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { zohoCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    accessToken: c.accessToken as string,
-    apiDomain: ((c.apiDomain as string) || "https://www.zohoapis.com").replace(
-      /\/$/,
-      "",
-    ),
-  };
-}
-
-async function api(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.apiDomain}/crm/v2${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, zohoCredential, "zoho", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Zoho-oauthtoken ${conn.accessToken}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0)
-    init.body = JSON.stringify({ data: [body] });
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Zoho CRM error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: { data: [body] } } : {}),
+  });
 }
 
 const MODULES: Record<string, string> = {
@@ -53,11 +31,7 @@ const MODULES: Record<string, string> = {
   quote: "Quotes",
 };
 
-function registerCrmResource(
-  rl: RunlinePluginAPI,
-  resource: string,
-  conn: typeof getConn,
-) {
+function registerCrmResource(rl: RunlinePluginAPI, resource: string) {
   const mod = MODULES[resource];
 
   rl.registerAction(`${resource}.create`, {
@@ -68,9 +42,9 @@ function registerCrmResource(
     },
     async execute(input, ctx) {
       const data = (await api(
-        conn(ctx),
+        ctx,
         "POST",
-        `/${mod}`,
+        `${mod}`,
         (input as Record<string, unknown>).data as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.data;
@@ -83,9 +57,9 @@ function registerCrmResource(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       const data = (await api(
-        conn(ctx),
+        ctx,
         "GET",
-        `/${mod}/${(input as Record<string, unknown>).id}`,
+        `${mod}/${pathSegment((input as Record<string, unknown>).id)}`,
       )) as Record<string, unknown>;
       return data.data;
     },
@@ -107,13 +81,10 @@ function registerCrmResource(
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.per_page = p.limit;
       if (p.fields) qs.fields = p.fields;
-      const data = (await api(
-        conn(ctx),
-        "GET",
-        `/${mod}`,
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "GET", `${mod}`, undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return data.data ?? [];
     },
   });
@@ -128,7 +99,7 @@ function registerCrmResource(
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const body = { ...(p.data as Record<string, unknown>), id: p.id };
-      const data = (await api(conn(ctx), "PUT", `/${mod}`, body)) as Record<
+      const data = (await api(ctx, "PUT", `${mod}`, body)) as Record<
         string,
         unknown
       >;
@@ -141,7 +112,7 @@ function registerCrmResource(
     description: `Delete a ${resource}`,
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const data = (await api(conn(ctx), "DELETE", `/${mod}`, undefined, {
+      const data = (await api(ctx, "DELETE", `${mod}`, undefined, {
         ids: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.data;
@@ -162,18 +133,15 @@ function registerCrmResource(
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const body = p.data as Record<string, unknown>;
-      const qs: Record<string, unknown> = {};
       if (p.duplicateCheckFields) {
         body.duplicate_check_fields = (p.duplicateCheckFields as string)
           .split(",")
           .map((f) => f.trim());
       }
-      const data = (await api(
-        conn(ctx),
-        "POST",
-        `/${mod}/upsert`,
-        body,
-      )) as Record<string, unknown>;
+      const data = (await api(ctx, "POST", `${mod}/upsert`, body)) as Record<
+        string,
+        unknown
+      >;
       return data.data;
     },
   });
@@ -182,6 +150,7 @@ function registerCrmResource(
 export default function zoho(rl: RunlinePluginAPI) {
   rl.setName("zoho");
   rl.setVersion("0.1.0");
+  rl.setCredential(zohoCredential);
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -198,6 +167,6 @@ export default function zoho(rl: RunlinePluginAPI) {
   });
 
   for (const resource of Object.keys(MODULES)) {
-    registerCrmResource(rl, resource, getConn);
+    registerCrmResource(rl, resource);
   }
 }

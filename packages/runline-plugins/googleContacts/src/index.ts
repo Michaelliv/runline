@@ -19,13 +19,15 @@
  *
  * The People API uses `resourceName` ("people/c1234…") as the
  * canonical identifier; we accept either the full `resourceName` or
- * the bare ID and normalize. The response always includes a
- * convenience `contactId` field stripped from `resourceName`.
+ * the bare ID and normalize, and either way the ID is one path
+ * segment. The response always includes a convenience `contactId`
+ * field stripped from `resourceName`.
  */
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { googleJsonRequest } from "../../_shared/googleAuth.js";
+import { pathSegment } from "../../_shared/credentials.js";
+import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -149,13 +151,15 @@ async function paginateAll(
  * Accepts either the raw ID (`c1234…`) or the full prefixed form.
  */
 function normalizeContactResource(input: string): string {
-  if (!input) throw new Error("googleContacts: contact ID is required");
-  return input.startsWith("people/") ? input : `people/${input}`;
+  const id = input.startsWith("people/") ? input.slice("people/".length) : input;
+  return `people/${pathSegment(id)}`;
 }
 
 function normalizeGroupResource(input: string): string {
-  if (!input) throw new Error("googleContacts: group ID is required");
-  return input.startsWith("contactGroups/") ? input : `contactGroups/${input}`;
+  const id = input.startsWith("contactGroups/")
+    ? input.slice("contactGroups/".length)
+    : input;
+  return `contactGroups/${pathSegment(id)}`;
 }
 
 function contactIdFromResource(resourceName: string | undefined): string | undefined {
@@ -472,6 +476,7 @@ const groupSchemas = {
 export default function googleContacts(rl: RunlinePluginAPI) {
   rl.setName("googleContacts");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleContacts", SCOPES));
 
   rl.setOAuth({
     authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

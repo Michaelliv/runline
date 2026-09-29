@@ -1,0 +1,618 @@
+/**
+ * The shared plugin side of the credential broker (`_shared/credentials.ts`):
+ * one declaration factory for static keys, one way to turn public config
+ * into an HTTPS target, one request path. Every migrated plugin uses these,
+ * so a plugin cannot sign differently from its siblings.
+ */
+
+import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+import {
+  answerFailed,
+  credentialJson,
+  credentialOk,
+  credentialRequest,
+  credentialSocketUrl,
+  graphqlFailed,
+  hostLabel,
+  httpsBase,
+  jsonOrAcknowledged,
+  multipartBody,
+  pathSegment,
+  pathSegments,
+  pathWithin,
+  slashEncodedSegment,
+  staticCredential,
+} from "../../../runline-plugins/_shared/credentials.js";
+import { CredentialRegistry } from "../credentials/registry.js";
+import type {
+  AuthenticatedRequest,
+  CredentialBroker,
+} from "../credentials/transport.js";
+import type { ActionContext } from "../plugin/types.js";
+
+const originalFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+const example = staticCredential({
+  id: "example",
+  auth: { kind: "apiKey", header: "X-Api-Key" },
+  local: { secret: "apiKey" },
+  targets: (config) => ({
+    api: {
+      baseUrl: httpsBase(config.url, "api/v1/"),
+      methods: ["GET", "POST"],
+    },
+  }),
+  probe: { target: "api", path: "me", method: "GET", acceptedStatuses: [200] },
+});
+
+function brokered(body: BodyInit | null, status = 200) {
+  const requests: AuthenticatedRequest[] = [];
+  const broker: CredentialBroker = {
+    async request(input) {
+      requests.push(input);
+      return new Response(body, { status });
+    },
+    async probe() {
+      return { outcome: "unverified" };
+    },
+  };
+  const ctx: ActionContext = {
+    connection: { name: "c", plugin: "example", config: {} },
+    credentials: broker,
+    log: { info() {}, warn() {}, error() {} },
+    async updateConnection() {},
+  };
+  return { ctx, requests };
+}
+
+describe("staticCredential", () => {
+  it("declares one structured credential field, a method named for its shorthand, and the flat fields it signs from locally", () => {
+    const selection = example({ url: "https://tenant.example.com" });
+    assert.equal(selection.method, "apiKey");
+    assert.deepEqual(selection.localSecret, { secret: { field: "apiKey" } });
+    const method = selection.type.methods.apiKey;
+    assert.deepEqual(method.authentication, {
+      kind: "static",
+      field: "credential",
+      parts: ["secret"],
+      placements: [{ in: "header", part: "secret", name: "X-Api-Key" }],
+    });
+    assert.equal(
+      method.targets.api.baseUrl,
+      "https://tenant.example.com/api/v1/",
+    );
+    new CredentialRegistry().register(selection.type);
+  });
+
+  it("basic declarations name both parts, fixed or from config", () => {
+    const basic = staticCredential({
+      id: "basic",
+      auth: { kind: "basic" },
+      local: { username: "email", password: { value: "X" } },
+      targets: { api: { baseUrl: "https://api.example/", methods: ["GET"] } },
+    })({});
+    assert.deepEqual(basic.localSecret, {
+      username: { field: "email" },
+      password: { value: "X" },
+    });
+    assert.deepEqual(basic.type.methods.basic.authentication, {
+      kind: "static",
+      field: "credential",
+      parts: ["username", "password"],
+      placements: [{ in: "basic", username: "username", password: "password" }],
+    });
+    new CredentialRegistry().register(basic.type);
+  });
+
+  it("the general form places several named parts, each read locally from its own field", () => {
+    const selection = staticCredential({
+      id: "trello",
+      auth: {
+        kind: "static",
+        parts: ["key", "token"],
+        placements: [
+          { in: "query", part: "key", name: "key" },
+          { in: "query", part: "token", name: "token" },
+        ],
+      },
+      local: { key: "apiKey", token: "token" },
+      targets: {
+        api: { baseUrl: "https://api.trello.com/1/", methods: ["GET"] },
+      },
+    })({});
+    assert.equal(selection.method, "static");
+    assert.deepEqual(selection.localSecret, {
+      key: { field: "apiKey" },
+      token: { field: "token" },
+    });
+    new CredentialRegistry().register(selection.type);
+  });
+
+  it("refuses a local source for a part the credential does not have, or a part with none", () => {
+    const targets = {
+      api: { baseUrl: "https://api.example/", methods: ["GET" as const] },
+    };
+    for (const local of [
+      { key: "apiKey" },
+      { key: "a", token: "t", extra: "x" },
+    ])
+      assert.throws(
+        () =>
+          staticCredential({
+            id: "x",
+            auth: {
+              kind: "static",
+              parts: ["key", "token"],
+              placements: [
+                { in: "query", part: "key", name: "key" },
+                { in: "query", part: "token", name: "token" },
+              ],
+            },
+            local,
+            targets,
+          }),
+        { code: "invalid_definition" },
+      );
+  });
+
+  it("an optional credential signs when the connection holds it, or says so publicly, and otherwise sends unsigned", () => {
+    const optional = staticCredential({
+      id: "coingecko",
+      auth: { kind: "apiKey", header: "x-cg-demo-api-key" },
+      local: { secret: "apiKey" },
+      optional: true,
+      targets: {
+        api: { baseUrl: "https://api.coingecko.com/api/v3/", methods: ["GET"] },
+      },
+    });
+    assert.equal(optional({ apiKey: "k" }).method, "apiKey");
+    assert.equal(optional({ authenticated: true }).method, "apiKey");
+    const unsigned = optional({});
+    assert.equal(unsigned.method, "none");
+    assert.equal(unsigned.localSecret, undefined);
+    assert.deepEqual(unsigned.type.methods.none.authentication, {
+      kind: "none",
+    });
+    new CredentialRegistry().register(unsigned.type);
+  });
+
+  it("an optional credential's unsigned method may have targets of its own", () => {
+    const reddit = staticCredential({
+      id: "reddit",
+      auth: { kind: "bearer" },
+      local: { secret: "accessToken" },
+      optional: {
+        targets: {
+          api: { baseUrl: "https://www.reddit.com/", methods: ["GET"] },
+        },
+      },
+      targets: {
+        api: { baseUrl: "https://oauth.reddit.com/", methods: ["GET", "POST"] },
+      },
+    });
+    const signed = reddit({ accessToken: "t" });
+    assert.equal(signed.method, "bearer");
+    assert.equal(
+      signed.type.methods.bearer.targets.api.baseUrl,
+      "https://oauth.reddit.com/",
+    );
+    const unsigned = reddit({});
+    assert.equal(unsigned.method, "none");
+    assert.equal(
+      unsigned.type.methods.none.targets.api.baseUrl,
+      "https://www.reddit.com/",
+    );
+    new CredentialRegistry().register(unsigned.type);
+  });
+
+  it("bearer and query-key shorthands place one secret part", () => {
+    const targets = {
+      api: { baseUrl: "https://api.example/", methods: ["GET" as const] },
+    };
+    const bearer = staticCredential({
+      id: "b",
+      auth: { kind: "bearer" },
+      local: { secret: "token" },
+      targets,
+    })({});
+    assert.deepEqual(bearer.type.methods.bearer.authentication, {
+      kind: "static",
+      field: "credential",
+      parts: ["secret"],
+      placements: [
+        {
+          in: "header",
+          part: "secret",
+          name: "Authorization",
+          prefix: "Bearer ",
+        },
+      ],
+    });
+    const query = staticCredential({
+      id: "q",
+      auth: { kind: "queryKey", param: "key" },
+      local: { secret: "token" },
+      targets,
+    })({});
+    assert.deepEqual(query.type.methods.queryKey.authentication.kind, "static");
+    new CredentialRegistry().register(bearer.type);
+    new CredentialRegistry().register(query.type);
+  });
+});
+
+describe("config-derived hosts", () => {
+  it("httpsBase keeps an HTTPS origin and path, and appends the API path", () => {
+    assert.equal(
+      httpsBase("https://jira.example.com", ""),
+      "https://jira.example.com/",
+    );
+    assert.equal(
+      httpsBase("https://example.com/sub/", "api/"),
+      "https://example.com/sub/api/",
+    );
+    assert.equal(
+      httpsBase("https://example.com:8443", "api/"),
+      "https://example.com:8443/api/",
+    );
+  });
+
+  it("httpsBase refuses anything but a plain HTTPS URL, as invalid_credentials", () => {
+    for (const value of [
+      undefined,
+      "",
+      "http://example.com",
+      "example.com",
+      "https://user:pass@example.com",
+      "https://example.com/?q=1",
+      "https://example.com/#x",
+      "ftp://example.com",
+      7,
+    ])
+      assert.throws(() => httpsBase(value, "api/"), {
+        code: "invalid_credentials",
+      });
+  });
+
+  it("hostLabel accepts one DNS label and nothing that could change the host", () => {
+    assert.equal(hostLabel("acme-co"), "acme-co");
+    for (const value of [
+      "",
+      "a.b",
+      "a/b",
+      "-a",
+      "a-",
+      "a b",
+      "evil.com#",
+      7,
+      undefined,
+    ])
+      assert.throws(() => hostLabel(value), { code: "invalid_credentials" });
+  });
+});
+
+describe("credentialRequest and credentialJson", () => {
+  it("build the query, set JSON headers and body, and send through the broker", async () => {
+    const { ctx, requests } = brokered(JSON.stringify({ ok: true }));
+    const result = await credentialJson(ctx, example, "example", {
+      target: "api",
+      path: "items",
+      method: "POST",
+      query: { a: 1, tags: ["x", "y"], skip: undefined, none: null },
+      json: { name: "n" },
+    });
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(requests, [
+      {
+        target: "api",
+        path: "items?a=1&tags=x&tags=y",
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "n" }),
+      },
+    ]);
+  });
+
+  it("serializes a form body, skipping null and undefined, with a form Content-Type", async () => {
+    const { ctx, requests } = brokered("{}");
+    await credentialRequest(ctx, example, {
+      target: "api",
+      path: "items",
+      method: "POST",
+      form: { a: "x y&z", n: 2, skip: undefined, none: null },
+    });
+    assert.deepEqual(requests[0].headers, {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    });
+    assert.equal(requests[0].body, "a=x+y%26z&n=2");
+  });
+
+  it("passes a COPY or MOVE destination through to the broker", async () => {
+    const { ctx, requests } = brokered(null, 201);
+    await credentialRequest(ctx, example, {
+      target: "api",
+      path: "a.txt",
+      method: "MOVE",
+      destination: "b.txt",
+    });
+    assert.equal(requests[0].method, "MOVE");
+    assert.equal(requests[0].destination, "b.txt");
+  });
+
+  it("asks the broker for a socket URL, and refuses when the broker has none", async () => {
+    const { ctx } = brokered(null);
+    await assert.rejects(
+      credentialSocketUrl(ctx, example, { target: "cdp", path: "" }),
+      { code: "unsupported_operation" },
+    );
+    const asked: unknown[] = [];
+    ctx.credentials = {
+      request: async () => new Response(null),
+      probe: async () => ({ outcome: "unverified" }),
+      socketUrl: async (input) => {
+        asked.push(input);
+        return "wss://relay.host/abc";
+      },
+    };
+    assert.equal(
+      await credentialSocketUrl(ctx, example, {
+        target: "cdp",
+        path: "",
+        query: { sessionId: "s 1" },
+      }),
+      "wss://relay.host/abc",
+    );
+    assert.deepEqual(asked, [{ target: "cdp", path: "?sessionId=s+1" }]);
+  });
+
+  it("appends to a query already in the path", async () => {
+    const { ctx, requests } = brokered("{}");
+    await credentialRequest(ctx, example, {
+      target: "api",
+      path: "items?page=2",
+      query: { per: 10 },
+    });
+    assert.equal(requests[0].path, "items?page=2&per=10");
+  });
+
+  it("credentialOk hands back a successful Response, headers and body intact", async () => {
+    const { ctx } = brokered("plain text", 201);
+    const response = await credentialOk(ctx, example, "example", {
+      target: "api",
+      path: "x",
+    });
+    assert.equal(response.status, 201);
+    assert.equal(await response.text(), "plain text");
+    const failed = brokered("private-provider-detail", 404);
+    await assert.rejects(
+      credentialOk(failed.ctx, example, "example", {
+        target: "api",
+        path: "x",
+      }),
+      { message: "example: request failed (HTTP 404)" },
+    );
+  });
+
+  it("reports a failure by status alone, never with provider text", async () => {
+    const { ctx } = brokered("private-provider-detail", 422);
+    await assert.rejects(
+      credentialJson(ctx, example, "example", { target: "api", path: "x" }),
+      (error: Error) =>
+        error.message === "example: request failed (HTTP 422)" &&
+        !String(error).includes("private"),
+    );
+  });
+
+  it("an empty or 204 answer is { success: true }; unparseable JSON is invalid_response", async () => {
+    for (const [body, status] of [
+      [null, 204],
+      ["", 200],
+    ] as const) {
+      const { ctx } = brokered(body, status);
+      assert.deepEqual(
+        await credentialJson(ctx, example, "example", {
+          target: "api",
+          path: "x",
+        }),
+        { success: true },
+      );
+    }
+    const { ctx } = brokered("not json <private>");
+    await assert.rejects(
+      credentialJson(ctx, example, "example", { target: "api", path: "x" }),
+      { code: "invalid_response" },
+    );
+  });
+});
+
+describe("answerFailed", () => {
+  it("reads a failure inside a 2xx answer by its code, field and message", () => {
+    assert.equal(
+      answerFailed("slack", { code: "channel_not_found" }).message,
+      "slack: request failed (channel_not_found)",
+    );
+    assert.equal(
+      answerFailed("nextcloud", { code: 102, message: "User already exists" })
+        .message,
+      "nextcloud: request failed (102): User already exists",
+    );
+    assert.equal(
+      answerFailed("yourls", { code: "error:keyword", message: "taken" })
+        .message,
+      "yourls: request failed (error:keyword): taken",
+    );
+    assert.equal(answerFailed("x", {}).message, "x: request failed");
+  });
+
+  it("drops a code that is not a plain identifier, and tidies and caps the message", () => {
+    assert.equal(
+      answerFailed("x", { code: "not a code", message: "line\none\t\u0000two" })
+        .message,
+      "x: request failed: line one two",
+    );
+    const long = answerFailed("x", { message: "a".repeat(1000) }).message;
+    assert.equal(long, `x: request failed: ${"a".repeat(300)}…`);
+  });
+});
+
+describe("graphqlFailed", () => {
+  it("reads the first GraphQL error by its code, field path and message", () => {
+    assert.equal(
+      graphqlFailed("linear", [
+        {
+          message: "Argument Validation Error",
+          path: ["issueCreate", "title"],
+          extensions: { code: "INVALID_INPUT" },
+        },
+        { message: "second", extensions: { code: "OTHER" } },
+      ]).message,
+      "linear: request failed (INVALID_INPUT, param: issueCreate.title): Argument Validation Error",
+    );
+    assert.equal(
+      graphqlFailed("monday", [{ message: "Bad board" }]).message,
+      "monday: request failed: Bad board",
+    );
+    assert.equal(
+      graphqlFailed("x", "not an array").message,
+      "x: request failed",
+    );
+  });
+});
+
+describe("jsonOrAcknowledged", () => {
+  it("reads a JSON answer, and takes any other body as an acknowledgement", async () => {
+    assert.deepEqual(
+      await jsonOrAcknowledged(
+        new Response('{"a":1}', {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      ),
+      { a: 1 },
+    );
+    for (const response of [
+      new Response("OK", { headers: { "content-type": "text/plain" } }),
+      new Response(null, { status: 204 }),
+    ])
+      assert.deepEqual(await jsonOrAcknowledged(response), { success: true });
+    await assert.rejects(
+      jsonOrAcknowledged(
+        new Response("<private>", {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+      { code: "invalid_response" },
+    );
+  });
+});
+
+describe("pathSegment", () => {
+  it("encodes a value as exactly one path segment", () => {
+    assert.equal(pathSegment("a?c#d e+f"), "a%3Fc%23d%20e%2Bf");
+    assert.equal(pathSegment(42), "42");
+  });
+
+  it("refuses a value that is not one segment: empty, dot segments, separators", () => {
+    for (const value of ["", undefined, null, ".", "..", "a/b", "a\\b"])
+      assert.throws(() => pathSegment(value), { code: "request_not_allowed" });
+  });
+});
+
+describe("slashEncodedSegment", () => {
+  it("encodes a slashed name, slashes included, as one segment", () => {
+    assert.equal(slashEncodedSegment("@scope/pkg"), "%40scope%2Fpkg");
+    assert.equal(slashEncodedSegment("group/sub/proj"), "group%2Fsub%2Fproj");
+    assert.equal(slashEncodedSegment("lodash"), "lodash");
+  });
+
+  it("refuses an empty or dot piece, or a backslash", () => {
+    for (const value of ["", "a//b", "a/", "/a", "a/../b", "./a", "a\\b", ".."])
+      assert.throws(() => slashEncodedSegment(value), {
+        code: "request_not_allowed",
+      });
+  });
+});
+
+describe("pathSegments", () => {
+  it("encodes a slash-separated name segment by segment, keeping its slashes", () => {
+    assert.equal(pathSegments("owner/model v2"), "owner/model%20v2");
+    assert.equal(pathSegments("a?b/c#d"), "a%3Fb/c%23d");
+    assert.equal(pathSegments("single"), "single");
+  });
+
+  it("refuses empty and dot segments, as pathSegment does for each", () => {
+    for (const value of ["", "/a", "a/", "a//b", "a/../b", "./a", "a\\b"])
+      assert.throws(() => pathSegments(value), {
+        code: "request_not_allowed",
+      });
+  });
+});
+
+describe("pathWithin", () => {
+  // The target's base comes from the declaration, config-derived host included.
+  const { ctx } = brokered(null);
+  ctx.connection.config = { url: "https://tenant.example.com" };
+
+  it("turns an API-returned absolute URL back into a path under the declared target", () => {
+    assert.equal(
+      pathWithin(
+        ctx,
+        example,
+        "api",
+        "https://tenant.example.com/api/v1/items?page=2",
+      ),
+      "items?page=2",
+    );
+  });
+
+  it("refuses URLs outside the target, and targets the declaration lacks", () => {
+    for (const url of [
+      "https://evil.example/api/v1/items",
+      "http://tenant.example.com/api/v1/items",
+      "https://tenant.example.com:8443/api/v1/items",
+      "https://tenant.example.com/api/v2/items",
+      "https://user:pw@tenant.example.com/api/v1/items",
+      "https://tenant.example.com/api/v1/items#frag",
+      "not a url",
+    ])
+      assert.throws(() => pathWithin(ctx, example, "api", url), {
+        code: "request_not_allowed",
+      });
+    assert.throws(
+      () =>
+        pathWithin(
+          ctx,
+          example,
+          "other",
+          "https://tenant.example.com/api/v1/items",
+        ),
+      { code: "request_not_allowed" },
+    );
+  });
+});
+
+describe("multipartBody", () => {
+  it("serializes FormData into buffered bytes with its boundary content type", async () => {
+    const form = new FormData();
+    form.set("prompt", "a cat");
+    form.set(
+      "image",
+      new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }),
+      "in.png",
+    );
+    const { body, contentType } = await multipartBody(form);
+    assert.ok(body instanceof Uint8Array);
+    assert.match(contentType, /^multipart\/form-data; boundary=/);
+    const parsed = await new Response(body, {
+      headers: { "content-type": contentType },
+    }).formData();
+    assert.equal(parsed.get("prompt"), "a cat");
+    assert.equal((parsed.get("image") as File).size, 3);
+  });
+});

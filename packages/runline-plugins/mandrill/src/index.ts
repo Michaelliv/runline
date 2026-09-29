@@ -1,26 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { mandrillCredential } from "./credentials.js";
 
-const BASE_URL = "https://mandrillapp.com/api/1.0";
-
-async function apiRequest(
-  apiKey: string,
+/** Every Mandrill call is a JSON POST to `<endpoint>.json`. */
+function apiRequest(
+  ctx: ActionContext,
   endpoint: string,
-  body: Record<string, unknown> = {},
+  body: Record<string, unknown>,
 ): Promise<unknown> {
-  body.key = apiKey;
-  const res = await fetch(`${BASE_URL}${endpoint}.json`, {
+  return credentialJson(ctx, mandrillCredential, "mandrill", {
+    target: "api",
+    path: `${endpoint}.json`,
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    json: body,
   });
-  if (!res.ok)
-    throw new Error(`Mandrill API error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function mandrill(rl: RunlinePluginAPI) {
   rl.setName("mandrill");
   rl.setVersion("0.1.0");
+  rl.setCredential(mandrillCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -30,9 +29,6 @@ export default function mandrill(rl: RunlinePluginAPI) {
       env: "MANDRILL_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   function buildMessage(p: Record<string, unknown>): Record<string, unknown> {
     const message: Record<string, unknown> = {
@@ -162,7 +158,7 @@ export default function mandrill(rl: RunlinePluginAPI) {
         template_content: [],
       };
       if (p.sendAt) body.send_at = p.sendAt;
-      return apiRequest(key(ctx), "/messages/send", body);
+      return apiRequest(ctx, "messages/send", body);
     },
   });
 
@@ -185,7 +181,7 @@ export default function mandrill(rl: RunlinePluginAPI) {
         message: buildMessage(p),
       };
       if (p.sendAt) body.send_at = p.sendAt;
-      return apiRequest(key(ctx), "/messages/send-template", body);
+      return apiRequest(ctx, "messages/send-template", body);
     },
   });
 }

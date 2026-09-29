@@ -1,13 +1,16 @@
 import {
   type ActionContext,
   AuthError,
+  type CredentialDeclaration,
   type CredentialType,
   downloadResource,
   type OAuth2Definition,
-  OAuthGrantSchema,
 } from "runline";
-import * as t from "typebox";
-import { credentialRuntime } from "../../_shared/credentialAdapter.js";
+import {
+  credentialOk,
+  grantSchema,
+  pathSegment,
+} from "../../_shared/credentials.js";
 
 const BASE = "https://platform.plaud.ai/developer/api";
 
@@ -39,13 +42,10 @@ export const PLAUD_CREDENTIAL: CredentialType = {
   id: "plaud",
   methods: {
     oauth2: {
-      schema: t.Object(
-        { grant: t.Optional(OAuthGrantSchema) },
-        { additionalProperties: false },
-      ),
+      schema: grantSchema,
       authentication: {
         kind: "oauth2",
-        grantField: "grant",
+        field: "grant",
         definition: PLAUD_OAUTH,
         renewal: "refresh",
       },
@@ -62,11 +62,12 @@ export const PLAUD_CREDENTIAL: CredentialType = {
   },
 };
 
-export function plaudRuntime(ctx: ActionContext) {
-  return credentialRuntime(ctx, PLAUD_CREDENTIAL, "oauth2", (config) => [
-    config.clientId,
-  ]);
-}
+/** Plaud signs one way: its public client's OAuth grant. */
+export const plaudCredential: CredentialDeclaration = (config) => ({
+  type: PLAUD_CREDENTIAL,
+  method: "oauth2",
+  application: { clientId: config.clientId as string },
+});
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -74,31 +75,33 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+/** Every Plaud answer is one JSON object; anything else, empty included, is invalid_response. */
 export async function request(
   ctx: ActionContext,
   path: string,
+  query?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const { binding, transport } = plaudRuntime(ctx);
-  const response = await transport.request(binding, { target: "api", path });
-  if (!response.ok)
-    throw new Error(`plaud: request failed (HTTP ${response.status})`);
+  const response = await credentialOk(ctx, plaudCredential, "plaud", {
+    target: "api",
+    path,
+    query,
+  });
   try {
-    return object(await response.json());
+    return object(JSON.parse(await response.text()));
   } catch {
     throw new AuthError("invalid_response");
   }
 }
 
 export async function recording(ctx: ActionContext, id: string) {
-  // Encoding protects separators/query injection; the transport also rejects traversal.
-  return request(ctx, `files/${encodeURIComponent(id)}`);
+  return request(ctx, `files/${pathSegment(id)}`);
 }
 
 export async function list(ctx: ActionContext, page: number, pageSize: number) {
-  const result = await request(
-    ctx,
-    `files/?${new URLSearchParams({ page: String(page), page_size: String(pageSize) })}`,
-  );
+  const result = await request(ctx, "files/", {
+    page,
+    page_size: pageSize,
+  });
   if (!Array.isArray(result.data) || result.data.length > pageSize)
     throw new AuthError("invalid_response");
   const data = result.data.map(object);

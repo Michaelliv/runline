@@ -18,16 +18,30 @@
  * inline next to the instruction and writes the edited result to disk.
  */
 
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import {
   readImageInput,
   type SavedMedia,
   SEND_FILE_NOTE,
   writeImageFile,
 } from "../../_shared/mediaFile.js";
+import { googleImageCredential } from "./credentials.js";
 
-const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+/** The model as one path segment before the fixed :generateContent verb. */
+function generateContent(
+  ctx: ActionContext,
+  model: string,
+  body: Record<string, unknown>,
+): Promise<GeminiResponse> {
+  return credentialJson(ctx, googleImageCredential, "googleImage", {
+    target: "api",
+    path: `models/${pathSegment(model)}:generateContent`,
+    method: "POST",
+    json: body,
+  }) as Promise<GeminiResponse>;
+}
 
 interface CreateInput {
   prompt: string;
@@ -80,6 +94,7 @@ function saveInlineImages(
 export default function googleImage(rl: RunlinePluginAPI) {
   rl.setName("googleImage");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleImageCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -122,24 +137,11 @@ export default function googleImage(rl: RunlinePluginAPI) {
         throw new Error("googleImage: prompt is required");
       }
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const model = p.model ?? "gemini-2.5-flash-image";
-
-      const url = `${BASE}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const body = {
+      const data = await generateContent(ctx, model, {
         contents: [{ parts: [{ text: p.prompt }] }],
         generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-      };
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        throw new Error(`Google API error ${res.status}: ${await res.text()}`);
-      }
-
-      const data = (await res.json()) as GeminiResponse;
       const images = saveInlineImages(data, p.saveDir);
       return { provider: "googleImage", model, images, note: SEND_FILE_NOTE };
     },
@@ -182,11 +184,8 @@ export default function googleImage(rl: RunlinePluginAPI) {
       }
       const img = readImageInput(p.imagePath, "googleImage");
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const model = p.model ?? "gemini-2.5-flash-image";
-
-      const url = `${BASE}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const body = {
+      const data = await generateContent(ctx, model, {
         contents: [
           {
             parts: [
@@ -196,17 +195,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
           },
         ],
         generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
-      };
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        throw new Error(`Google API error ${res.status}: ${await res.text()}`);
-      }
-
-      const data = (await res.json()) as GeminiResponse;
       const images = saveInlineImages(data, p.saveDir);
       if (images.length === 0) {
         throw new Error(

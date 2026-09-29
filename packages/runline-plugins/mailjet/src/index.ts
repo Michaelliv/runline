@@ -1,10 +1,62 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { configFlag, credentialJson } from "../../_shared/credentials.js";
+import { mailjetCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.mailjet.com";
+/** A comma-separated address list as Send API recipients. */
+function emails(list: unknown): Array<{ Email: string }> {
+  return String(list)
+    .split(",")
+    .map((address) => ({ Email: address.trim() }));
+}
+
+/** The message fields plain and template sends share, from action input. */
+function message(p: Record<string, unknown>): Record<string, unknown> {
+  const fields: Record<string, unknown> = {
+    From: { Email: p.fromEmail, ...(p.fromName ? { Name: p.fromName } : {}) },
+    Subject: p.subject,
+    To: emails(p.toEmail),
+  };
+  if (p.cc) fields.Cc = emails(p.cc);
+  if (p.bcc) fields.Bcc = emails(p.bcc);
+  if (p.replyTo) fields.ReplyTo = { Email: p.replyTo };
+  if (p.variables) fields.Variables = p.variables;
+  if (p.trackOpens) fields.TrackOpens = p.trackOpens;
+  if (p.trackClicks) fields.TrackClicks = p.trackClicks;
+  if (p.templateLanguage !== undefined)
+    fields.TemplateLanguage = p.templateLanguage;
+  if (p.priority) fields.Priority = p.priority;
+  if (p.customCampaign) fields.CustomCampaign = p.customCampaign;
+  if (p.deduplicateCampaign !== undefined)
+    fields.DeduplicateCampaign = p.deduplicateCampaign;
+  return fields;
+}
+
+/** One message through the v3.1 Send API, in sandbox mode when the connection asks. */
+async function sendMessage(
+  ctx: ActionContext,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  const data = await credentialJson<{ Messages?: unknown }>(
+    ctx,
+    mailjetCredential,
+    "mailjet",
+    {
+      target: "email",
+      path: "send",
+      method: "POST",
+      json: {
+        Messages: [body],
+        SandboxMode: configFlag(ctx.connection.config.sandboxMode),
+      },
+    },
+  );
+  return data.Messages;
+}
 
 export default function mailjet(rl: RunlinePluginAPI) {
   rl.setName("mailjet");
   rl.setVersion("0.1.0");
+  rl.setCredential(mailjetCredential);
 
   rl.setConnectionSchema({
     apiKeyPublic: {
@@ -32,13 +84,6 @@ export default function mailjet(rl: RunlinePluginAPI) {
       env: "MAILJET_SMS_TOKEN",
     },
   });
-
-  const emailAuth = (ctx: {
-    connection: { config: Record<string, unknown> };
-  }) =>
-    `Basic ${btoa(`${ctx.connection.config.apiKeyPublic}:${ctx.connection.config.apiKeyPrivate}`)}`;
-  const sandbox = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    (ctx.connection.config.sandboxMode as boolean) ?? false;
 
   rl.registerAction("email.send", {
     access: "write",
@@ -103,51 +148,11 @@ export default function mailjet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const message: Record<string, unknown> = {
-        From: {
-          Email: p.fromEmail,
-          ...(p.fromName ? { Name: p.fromName } : {}),
-        },
-        Subject: p.subject,
-        To: (p.toEmail as string).split(",").map((e) => ({ Email: e.trim() })),
-      };
-      if (p.htmlPart) message.HTMLPart = p.htmlPart;
-      if (p.textPart) message.TextPart = p.textPart;
-      if (p.cc)
-        message.Cc = (p.cc as string)
-          .split(",")
-          .map((e) => ({ Email: e.trim() }));
-      if (p.bcc)
-        message.Bcc = (p.bcc as string)
-          .split(",")
-          .map((e) => ({ Email: e.trim() }));
-      if (p.replyTo) message.ReplyTo = { Email: p.replyTo };
-      if (p.variables) message.Variables = p.variables;
-      if (p.trackOpens) message.TrackOpens = p.trackOpens;
-      if (p.trackClicks) message.TrackClicks = p.trackClicks;
-      if (p.templateLanguage !== undefined)
-        message.TemplateLanguage = p.templateLanguage;
-      if (p.priority) message.Priority = p.priority;
-      if (p.customCampaign) message.CustomCampaign = p.customCampaign;
-      if (p.deduplicateCampaign !== undefined)
-        message.DeduplicateCampaign = p.deduplicateCampaign;
-
-      const res = await fetch(`${BASE_URL}/v3.1/send`, {
-        method: "POST",
-        headers: {
-          Authorization: emailAuth(ctx),
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          Messages: [message],
-          SandboxMode: sandbox(ctx),
-        }),
+      return sendMessage(ctx, {
+        ...message(p),
+        ...(p.htmlPart ? { HTMLPart: p.htmlPart } : {}),
+        ...(p.textPart ? { TextPart: p.textPart } : {}),
       });
-      if (!res.ok)
-        throw new Error(`Mailjet API error ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as Record<string, unknown>;
-      return data.Messages;
     },
   });
 
@@ -185,50 +190,7 @@ export default function mailjet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const message: Record<string, unknown> = {
-        From: {
-          Email: p.fromEmail,
-          ...(p.fromName ? { Name: p.fromName } : {}),
-        },
-        Subject: p.subject,
-        To: (p.toEmail as string).split(",").map((e) => ({ Email: e.trim() })),
-        TemplateID: p.templateId,
-      };
-      if (p.variables) message.Variables = p.variables;
-      if (p.cc)
-        message.Cc = (p.cc as string)
-          .split(",")
-          .map((e) => ({ Email: e.trim() }));
-      if (p.bcc)
-        message.Bcc = (p.bcc as string)
-          .split(",")
-          .map((e) => ({ Email: e.trim() }));
-      if (p.replyTo) message.ReplyTo = { Email: p.replyTo };
-      if (p.trackOpens) message.TrackOpens = p.trackOpens;
-      if (p.trackClicks) message.TrackClicks = p.trackClicks;
-      if (p.templateLanguage !== undefined)
-        message.TemplateLanguage = p.templateLanguage;
-      if (p.priority) message.Priority = p.priority;
-      if (p.customCampaign) message.CustomCampaign = p.customCampaign;
-      if (p.deduplicateCampaign !== undefined)
-        message.DeduplicateCampaign = p.deduplicateCampaign;
-
-      const res = await fetch(`${BASE_URL}/v3.1/send`, {
-        method: "POST",
-        headers: {
-          Authorization: emailAuth(ctx),
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          Messages: [message],
-          SandboxMode: sandbox(ctx),
-        }),
-      });
-      if (!res.ok)
-        throw new Error(`Mailjet API error ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as Record<string, unknown>;
-      return data.Messages;
+      return sendMessage(ctx, { ...message(p), TemplateID: p.templateId });
     },
   });
 
@@ -250,22 +212,12 @@ export default function mailjet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { from, to, text } = input as Record<string, unknown>;
-      const smsToken = ctx.connection.config.smsToken as string;
-      if (!smsToken)
-        throw new Error(
-          "SMS token not configured — set smsToken in connection config",
-        );
-      const res = await fetch(`${BASE_URL}/v4/sms-send`, {
+      return credentialJson(ctx, mailjetCredential, "mailjet", {
+        target: "sms",
+        path: "sms-send",
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${smsToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ From: from, To: to, Text: text }),
+        json: { From: from, To: to, Text: text },
       });
-      if (!res.ok)
-        throw new Error(`Mailjet SMS error ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 }

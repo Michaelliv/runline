@@ -1,11 +1,11 @@
 import {
   AuthError,
-  OAuthGrantSchema,
+  type CredentialDeclaration,
   type CredentialMethod,
   type CredentialProbe,
   type CredentialType,
 } from "runline";
-import * as t from "typebox";
+import { grantSchema, pathSegment } from "./credentials.js";
 
 export type MicrosoftAuthConfig = {
   authMethod?: "delegated" | "appOnly";
@@ -37,13 +37,42 @@ export function microsoftMethod(
 export function microsoftUserBase(cfg: MicrosoftAuthConfig): string {
   if (microsoftMethod(cfg) === "delegated") return "/me";
   if (!cfg.userUpn) throw new AuthError("invalid_credentials");
-  return `/users/${encodeURIComponent(cfg.userUpn)}`;
+  return `/users/${pathSegment(cfg.userUpn)}`;
 }
 
 export function microsoftDriveBase(cfg: MicrosoftAuthConfig): string {
-  if (cfg.driveId) return `/drives/${encodeURIComponent(cfg.driveId)}`;
-  if (cfg.siteId) return `/sites/${encodeURIComponent(cfg.siteId)}/drive`;
+  if (cfg.driveId) return `/drives/${pathSegment(cfg.driveId)}`;
+  if (cfg.siteId) return `/sites/${pathSegment(cfg.siteId)}/drive`;
   return `${microsoftUserBase(cfg)}/drive`;
+}
+
+/**
+ * A Microsoft plugin's credential declaration. App-only signs for one
+ * tenant's directory, so a multi-tenant authority is refused here, where
+ * every signer reads it.
+ */
+export function microsoftCredential(
+  plugin: string,
+  scopes: string[],
+): CredentialDeclaration {
+  return (config) => {
+    const cfg = config as MicrosoftAuthConfig;
+    const method = microsoftMethod(cfg);
+    if (
+      method === "appOnly" &&
+      (!cfg.tenantId ||
+        ["common", "organizations", "consumers"].includes(cfg.tenantId))
+    )
+      throw new AuthError("invalid_credentials");
+    return {
+      type: microsoftCredentialType(cfg, plugin, scopes),
+      method,
+      application: {
+        clientId: cfg.clientId as string,
+        clientSecret: cfg.clientSecret,
+      },
+    };
+  };
 }
 
 /** Scope-appropriate probes never require User.Read merely to check mail/calendar/files. */
@@ -59,10 +88,6 @@ export function microsoftCredentialType(
     url: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
     clientAuthentication: "client_secret_post" as const,
   };
-  const schema = t.Object(
-    { grant: t.Optional(OAuthGrantSchema) },
-    { additionalProperties: false },
-  );
   const methods = Object.fromEntries(
     (["delegated", "appOnly"] as const).map(
       (method): [string, CredentialMethod] => {
@@ -92,10 +117,10 @@ export function microsoftCredentialType(
         return [
           method,
           {
-            schema,
+            schema: grantSchema,
             authentication: {
               kind: "oauth2" as const,
-              grantField: "grant",
+              field: "grant",
               renewal:
                 method === "delegated"
                   ? ("refresh" as const)

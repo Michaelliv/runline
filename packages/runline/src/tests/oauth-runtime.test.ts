@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import { AuthError } from "../auth/errors.js";
 import {
   acquireOAuth2ClientToken,
+  acquireOAuth2PasswordToken,
   buildOAuth2AuthorizationUrl,
   exchangeOAuth2Code,
   refreshOAuth2Token,
@@ -290,6 +291,106 @@ describe("OAuth2 definitions and protocol runtime", () => {
       },
     );
     assert.deepEqual(tokens, { accessToken: "app" });
+  });
+
+  it("exchanges a resource owner's username and password for a token", async () => {
+    const def = definition();
+    def.password = {
+      url: "https://auth.example/token",
+      clientAuthentication: "none",
+    };
+    const tokens = await acquireOAuth2PasswordToken(
+      def,
+      { owner: { username: "me@x.io", password: "pw" } },
+      {
+        fetch: mock((_url, init) => {
+          assert.deepEqual(
+            Object.fromEntries(new URLSearchParams(String(init.body))),
+            { grant_type: "password", username: "me@x.io", password: "pw" },
+          );
+          return Response.json({ access_token: "a" });
+        }),
+      },
+    );
+    assert.deepEqual(tokens, { accessToken: "a" });
+  });
+
+  it("sends the owner's credentials under the provider's own field names", async () => {
+    const def = definition();
+    def.password = {
+      url: "https://cms.example/api/auth/local",
+      clientAuthentication: "none",
+      encoding: "json",
+      grantType: null,
+      fields: { username: "identifier" },
+      response: { accessToken: "jwt" },
+    };
+    const tokens = await acquireOAuth2PasswordToken(
+      def,
+      { owner: { username: "me@x.io", password: "pw" } },
+      {
+        fetch: mock((_url, init) => {
+          assert.deepEqual(JSON.parse(String(init.body)), {
+            identifier: "me@x.io",
+            password: "pw",
+          });
+          return Response.json({ jwt: "j", user: { id: 1 } });
+        }),
+      },
+    );
+    assert.deepEqual(tokens, { accessToken: "j" });
+    await assert.rejects(
+      acquireOAuth2PasswordToken(def, {
+        owner: { username: "", password: "pw" },
+      }),
+      errorCode("invalid_credentials"),
+    );
+  });
+
+  it("sends an endpoint's fixed provider headers, and the refresh token as bearer when it asks", async () => {
+    const def = definition();
+    if (!def.refresh) throw new Error("fixture");
+    def.refresh.headers = { "user-agent": "App/1.0", "x-device-id": "d1" };
+    def.refresh.refreshTokenBearer = true;
+    await refreshOAuth2Token(
+      def,
+      { tokens: { accessToken: "old", refreshToken: "r1" } },
+      {
+        fetch: mock((_url, init) => {
+          const headers = new Headers(init.headers);
+          assert.equal(headers.get("user-agent"), "App/1.0");
+          assert.equal(headers.get("x-device-id"), "d1");
+          assert.equal(headers.get("authorization"), "Bearer r1");
+          assert.equal(headers.get("content-type"), "application/json");
+          return Response.json({ access_token: "new" });
+        }),
+      },
+    );
+  });
+
+  it("refuses provider headers that claim a protocol header, and a refresh bearer beside Basic client auth", async () => {
+    for (const headers of [
+      { Authorization: "x" },
+      { "content-type": "text/plain" },
+      { Accept: "text/html" },
+      { Host: "evil" },
+      { "bad name": "x" },
+    ]) {
+      const def = definition();
+      if (!def.refresh) throw new Error("fixture");
+      def.refresh.headers = headers;
+      await assert.rejects(
+        refreshOAuth2Token(def, { tokens: { refreshToken: "r1" } }),
+        errorCode("invalid_definition"),
+      );
+    }
+    const def = definition();
+    if (!def.exchange) throw new Error("fixture");
+    def.exchange.refreshTokenBearer = true;
+    await assert.rejects(
+      exchangeOAuth2Code(def, code),
+      errorCode("invalid_definition"),
+    );
   });
 
   it("fails unsupported operations without a network request", async () => {

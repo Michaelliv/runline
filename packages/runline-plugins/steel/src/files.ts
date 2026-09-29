@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { pathSegment, pathSegments } from "../../_shared/credentials.js";
 import { api } from "./shared.js";
 
 function fileSchema() {
@@ -16,12 +17,9 @@ function fileForm(input: Record<string, unknown>): FormData {
   return form;
 }
 
-function normalizeFilePath(path: unknown): string {
-  return String(path).replace(/^\/files\/+/, "").replace(/^\/+/, "");
-}
-
+/** A file path beneath `files/`, each segment encoded; a leading `/files/` or `/` is dropped. */
 function encodeFilePath(path: unknown): string {
-  return normalizeFilePath(path).split("/").map(encodeURIComponent).join("/");
+  return pathSegments(String(path).replace(/^\/files\/+/, "").replace(/^\/+/, ""));
 }
 
 export function registerFileActions(rl: RunlinePluginAPI) {
@@ -66,7 +64,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
     description: "List files in a Steel session filesystem.",
     inputSchema: t.Object({ sessionId: t.String() }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/sessions/${encodeURIComponent((input as { sessionId: string }).sessionId)}/files`);
+      return api(ctx, `/v1/sessions/${pathSegment((input as { sessionId: string }).sessionId)}/files`);
     },
   });
 
@@ -76,7 +74,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ sessionId: t.String(), ...fileSchema() }),
     async execute(input, ctx) {
       const { sessionId, ...body } = input as Record<string, unknown>;
-      return api(ctx, `/v1/sessions/${encodeURIComponent(String(sessionId))}/files`, { method: "POST", body: fileForm(body) });
+      return api(ctx, `/v1/sessions/${pathSegment(sessionId)}/files`, { method: "POST", body: fileForm(body) });
     },
   });
 
@@ -86,7 +84,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ sessionId: t.String(), path: t.String() }),
     async execute(input, ctx) {
       const { sessionId, path } = input as Record<string, unknown>;
-      return api(ctx, `/v1/sessions/${encodeURIComponent(String(sessionId))}/files/${encodeFilePath(path)}`);
+      return api(ctx, `/v1/sessions/${pathSegment(sessionId)}/files/${encodeFilePath(path)}`);
     },
   });
 
@@ -95,7 +93,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
     description: "Download/read the zip archive of all files in a session.",
     inputSchema: t.Object({ sessionId: t.String() }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/sessions/${encodeURIComponent((input as { sessionId: string }).sessionId)}/files.zip`);
+      return api(ctx, `/v1/sessions/${pathSegment((input as { sessionId: string }).sessionId)}/files.zip`);
     },
   });
 
@@ -105,7 +103,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ sessionId: t.String(), path: t.String() }),
     async execute(input, ctx) {
       const { sessionId, path } = input as Record<string, unknown>;
-      return api(ctx, `/v1/sessions/${encodeURIComponent(String(sessionId))}/files/${encodeFilePath(path)}`, { method: "DELETE" });
+      return api(ctx, `/v1/sessions/${pathSegment(sessionId)}/files/${encodeFilePath(path)}`, { method: "DELETE" });
     },
   });
 
@@ -114,7 +112,7 @@ export function registerFileActions(rl: RunlinePluginAPI) {
     description: "Delete all files in a session filesystem.",
     inputSchema: t.Object({ sessionId: t.String() }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/sessions/${encodeURIComponent((input as { sessionId: string }).sessionId)}/files`, { method: "DELETE" });
+      return api(ctx, `/v1/sessions/${pathSegment((input as { sessionId: string }).sessionId)}/files`, { method: "DELETE" });
     },
   });
 }

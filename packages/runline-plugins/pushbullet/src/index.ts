@@ -1,34 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { pushbulletCredential } from "./credentials.js";
 
-const BASE = "https://api.pushbullet.com/v2";
-
-async function apiRequest(
-  token: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, pushbulletCredential, "pushbullet", {
+    target: "api",
+    path: path.replace(/^\//, ""),
     method,
-    headers: { "Access-Token": token, "Content-Type": "application/json" },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Pushbullet error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 async function paginate(
-  token: string,
+  ctx: ActionContext,
   path: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown[]> {
@@ -36,13 +27,10 @@ async function paginate(
   let cursor: string | undefined;
   do {
     if (cursor) qs.cursor = cursor;
-    const data = (await apiRequest(
-      token,
-      "GET",
-      path,
-      undefined,
-      qs,
-    )) as Record<string, unknown>;
+    const data = (await apiRequest(ctx, "GET", path, undefined, qs)) as Record<
+      string,
+      unknown
+    >;
     const items = (data.pushes ?? []) as unknown[];
     all.push(...items);
     cursor = data.cursor as string | undefined;
@@ -53,6 +41,7 @@ async function paginate(
 export default function pushbullet(rl: RunlinePluginAPI) {
   rl.setName("pushbullet");
   rl.setVersion("0.1.0");
+  rl.setCredential(pushbulletCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -62,9 +51,6 @@ export default function pushbullet(rl: RunlinePluginAPI) {
       env: "PUSHBULLET_ACCESS_TOKEN",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   rl.registerAction("push.create", {
     access: "write",
@@ -100,7 +86,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
       const target = (p.target as string) ?? "default";
       if (target !== "default" && p.targetValue)
         reqBody[target] = p.targetValue;
-      return apiRequest(key(ctx), "POST", "/pushes", reqBody);
+      return apiRequest(ctx, "POST", "/pushes", reqBody);
     },
   });
 
@@ -131,7 +117,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
       if (p.limit) {
         qs.limit = p.limit;
         const d = (await apiRequest(
-          key(ctx),
+          ctx,
           "GET",
           "/pushes",
           undefined,
@@ -139,7 +125,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
         )) as Record<string, unknown>;
         return d.pushes;
       }
-      return paginate(key(ctx), "/pushes", qs);
+      return paginate(ctx, "/pushes", qs);
     },
   });
 
@@ -149,7 +135,7 @@ export default function pushbullet(rl: RunlinePluginAPI) {
     inputSchema: { pushId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { pushId } = input as Record<string, unknown>;
-      await apiRequest(key(ctx), "DELETE", `/pushes/${pushId}`);
+      await apiRequest(ctx, "DELETE", `/pushes/${pathSegment(pushId)}`);
       return { success: true };
     },
   });
@@ -167,7 +153,9 @@ export default function pushbullet(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { pushId, dismissed } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "POST", `/pushes/${pushId}`, { dismissed });
+      return apiRequest(ctx, "POST", `/pushes/${pathSegment(pushId)}`, {
+        dismissed,
+      });
     },
   });
 }

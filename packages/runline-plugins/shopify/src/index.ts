@@ -1,76 +1,59 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  credentialOk,
+  jsonAnswer,
+  pathSegment,
+  pathWithin,
+} from "../../_shared/credentials.js";
+import { shopifyCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  const subdomain = c.shopSubdomain as string;
-  const base = `https://${subdomain}.myshopify.com/admin/api/2024-07`;
-  return { base, accessToken: c.accessToken as string };
-}
-
-async function apiRequest(
-  conn: { base: string; accessToken: string },
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: unknown,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.base}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, shopifyCredential, "shopify", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "X-Shopify-Access-Token": conn.accessToken,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body !== undefined) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Shopify error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query: qs,
+    ...(body !== undefined ? { json: body } : {}),
+  });
 }
 
 async function paginate(
-  conn: { base: string; accessToken: string },
+  ctx: ActionContext,
   propertyName: string,
-  endpoint: string,
+  path: string,
   qs: Record<string, unknown> = {},
 ): Promise<unknown[]> {
   const all: unknown[] = [];
-  let nextUrl: string | undefined;
+  let nextPath: string | undefined;
   do {
-    const url = nextUrl ?? `${conn.base}${endpoint}`;
-    const u = new URL(url);
-    if (!nextUrl && qs) {
-      for (const [k, v] of Object.entries(qs)) {
-        if (v !== undefined && v !== null) u.searchParams.set(k, String(v));
-      }
-    }
-    const res = await fetch(u.toString(), {
-      headers: { "X-Shopify-Access-Token": conn.accessToken },
+    const res = await credentialOk(ctx, shopifyCredential, "shopify", {
+      target: "api",
+      path: nextPath ?? path,
+      ...(nextPath === undefined ? { query: qs } : {}),
     });
-    if (!res.ok)
-      throw new Error(`Shopify error ${res.status}: ${await res.text()}`);
-    const data = (await res.json()) as Record<string, unknown>;
+    const data = (await jsonAnswer(res)) as Record<string, unknown>;
     all.push(...((data[propertyName] ?? []) as unknown[]));
-    nextUrl = undefined;
+    nextPath = undefined;
     const link = res.headers.get("link") ?? "";
     if (link.includes('rel="next"')) {
       const match = link.match(/<([^>]+)>;\s*rel="next"/);
-      if (match) nextUrl = match[1];
+      if (match) nextPath = pathWithin(ctx, shopifyCredential, "api", match[1]);
     }
-  } while (nextUrl);
+  } while (nextPath);
   return all;
 }
 
 export default function shopify(rl: RunlinePluginAPI) {
   rl.setName("shopify");
   rl.setVersion("0.1.0");
+  rl.setCredential(shopifyCredential);
 
   rl.setConnectionSchema({
     shopSubdomain: {
@@ -116,7 +99,7 @@ export default function shopify(rl: RunlinePluginAPI) {
       if (p.email) order.email = p.email;
       if (p.note) order.note = p.note;
       if (p.tags) order.tags = p.tags;
-      const data = (await apiRequest(getConn(ctx), "POST", "/orders.json", {
+      const data = (await apiRequest(ctx, "POST", "orders.json", {
         order,
       })) as Record<string, unknown>;
       return data.order;
@@ -135,9 +118,9 @@ export default function shopify(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.fields) qs.fields = p.fields;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/orders/${p.orderId}.json`,
+        `orders/${pathSegment(p.orderId)}.json`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -160,7 +143,6 @@ export default function shopify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const conn = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (p.status) qs.status = p.status;
       if (p.createdAtMin) qs.created_at_min = p.createdAtMin;
@@ -168,15 +150,15 @@ export default function shopify(rl: RunlinePluginAPI) {
       if (p.limit) {
         qs.limit = p.limit;
         const d = (await apiRequest(
-          conn,
+          ctx,
           "GET",
-          "/orders.json",
+          "orders.json",
           undefined,
           qs,
         )) as Record<string, unknown>;
         return d.orders;
       }
-      return paginate(conn, "orders", "/orders.json", qs);
+      return paginate(ctx, "orders", "orders.json", qs);
     },
   });
 
@@ -196,9 +178,9 @@ export default function shopify(rl: RunlinePluginAPI) {
       if (p.tags) order.tags = p.tags;
       if (p.email) order.email = p.email;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `/orders/${p.orderId}.json`,
+        `orders/${pathSegment(p.orderId)}.json`,
         { order },
       )) as Record<string, unknown>;
       return data.order;
@@ -211,9 +193,9 @@ export default function shopify(rl: RunlinePluginAPI) {
     inputSchema: { orderId: { type: "string", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/orders/${(input as Record<string, unknown>).orderId}.json`,
+        `orders/${pathSegment((input as Record<string, unknown>).orderId)}.json`,
       );
       return { success: true };
     },
@@ -233,7 +215,7 @@ export default function shopify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await apiRequest(getConn(ctx), "POST", "/products.json", {
+      const data = (await apiRequest(ctx, "POST", "products.json", {
         product: p,
       })) as Record<string, unknown>;
       return data.product;
@@ -252,9 +234,9 @@ export default function shopify(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.fields) qs.fields = p.fields;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/products/${p.productId}.json`,
+        `products/${pathSegment(p.productId)}.json`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -271,21 +253,20 @@ export default function shopify(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const conn = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (p.title) qs.title = p.title;
       if (p.limit) {
         qs.limit = p.limit;
         const d = (await apiRequest(
-          conn,
+          ctx,
           "GET",
-          "/products.json",
+          "products.json",
           undefined,
           qs,
         )) as Record<string, unknown>;
         return d.products;
       }
-      return paginate(conn, "products", "/products.json", qs);
+      return paginate(ctx, "products", "products.json", qs);
     },
   });
 
@@ -303,9 +284,9 @@ export default function shopify(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const { productId, ...fields } = p;
       const data = (await apiRequest(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `/products/${productId}.json`,
+        `products/${pathSegment(productId)}.json`,
         { product: fields },
       )) as Record<string, unknown>;
       return data.product;
@@ -318,9 +299,9 @@ export default function shopify(rl: RunlinePluginAPI) {
     inputSchema: { productId: { type: "string", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `/products/${(input as Record<string, unknown>).productId}.json`,
+        `products/${pathSegment((input as Record<string, unknown>).productId)}.json`,
       );
       return { success: true };
     },

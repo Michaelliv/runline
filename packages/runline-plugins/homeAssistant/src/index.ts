@@ -1,65 +1,34 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  credentialOk,
+  pathSegment,
+} from "../../_shared/credentials.js";
+import { homeAssistantCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  token: string,
-  method: string,
+/** One Home Assistant call: every endpoint is a path beneath /api/. */
+function ha(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${baseUrl}/api${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, homeAssistantCredential, "homeAssistant", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(
-      `Home Assistant API error ${res.status}: ${await res.text()}`,
-    );
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  const ssl = cfg.ssl === true || cfg.ssl === "true";
-  const proto = ssl ? "https" : "http";
-  return {
-    baseUrl: `${proto}://${cfg.host}:${cfg.port ?? 8123}`,
-    token: cfg.accessToken as string,
-  };
-}
-
-function ha(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { baseUrl, token } = getConn(ctx);
-  return apiRequest(baseUrl, token, method, endpoint, body, qs);
+    query: qs,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function homeAssistant(rl: RunlinePluginAPI) {
   rl.setName("homeAssistant");
   rl.setVersion("0.1.0");
+  rl.setCredential(homeAssistantCredential);
 
   rl.setConnectionSchema({
     host: {
@@ -92,7 +61,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get Home Assistant configuration",
     async execute(_input, ctx) {
-      return ha(ctx, "GET", "/config");
+      return ha(ctx, "GET", "config");
     },
   });
 
@@ -100,7 +69,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
     access: "read",
     description: "Check if configuration is valid",
     async execute(_input, ctx) {
-      return ha(ctx, "POST", "/config/core/check_config");
+      return ha(ctx, "POST", "config/core/check_config");
     },
   });
 
@@ -108,7 +77,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
     access: "read",
     description: "List available services",
     async execute(_input, ctx) {
-      return ha(ctx, "GET", "/services");
+      return ha(ctx, "GET", "services");
     },
   });
 
@@ -137,7 +106,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       return ha(
         ctx,
         "POST",
-        `/services/${domain}/${service}`,
+        `services/${pathSegment(domain)}/${pathSegment(service)}`,
         (serviceData as Record<string, unknown>) ?? {},
       );
     },
@@ -147,7 +116,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
     access: "read",
     description: "List all entity states",
     async execute(_input, ctx) {
-      return ha(ctx, "GET", "/states");
+      return ha(ctx, "GET", "states");
     },
   });
 
@@ -165,7 +134,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       return ha(
         ctx,
         "GET",
-        `/states/${(input as { entityId: string }).entityId}`,
+        `states/${pathSegment((input as { entityId: string }).entityId)}`,
       );
     },
   });
@@ -186,7 +155,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       const { entityId, state, attributes } = input as Record<string, unknown>;
       const body: Record<string, unknown> = { state };
       if (attributes) body.attributes = attributes;
-      return ha(ctx, "POST", `/states/${entityId}`, body);
+      return ha(ctx, "POST", `states/${pathSegment(entityId)}`, body);
     },
   });
 
@@ -194,7 +163,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
     access: "read",
     description: "List event types",
     async execute(_input, ctx) {
-      return ha(ctx, "GET", "/events");
+      return ha(ctx, "GET", "events");
     },
   });
 
@@ -210,7 +179,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       return ha(
         ctx,
         "POST",
-        `/events/${eventType}`,
+        `events/${pathSegment(eventType)}`,
         (eventData as Record<string, unknown>) ?? {},
       );
     },
@@ -220,7 +189,7 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get error log",
     async execute(_input, ctx) {
-      return ha(ctx, "GET", "/error_log");
+      return ha(ctx, "GET", "error_log");
     },
   });
 
@@ -249,8 +218,8 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      let endpoint = "/logbook";
-      if (startTime) endpoint += `/${startTime}`;
+      let endpoint = "logbook";
+      if (startTime) endpoint += `/${pathSegment(startTime)}`;
       const qs: Record<string, unknown> = {};
       if (entityId) qs.entity = entityId;
       if (endTime) qs.end_time = endTime;
@@ -269,9 +238,19 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return ha(ctx, "POST", "/template", {
-        template: (input as { template: string }).template,
-      });
+      // /api/template answers the rendered value as plain text, not JSON.
+      const res = await credentialOk(
+        ctx,
+        homeAssistantCredential,
+        "homeAssistant",
+        {
+          target: "api",
+          path: "template",
+          method: "POST",
+          json: { template: (input as { template: string }).template },
+        },
+      );
+      return res.text();
     },
   });
 
@@ -296,8 +275,8 @@ export default function homeAssistant(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      let endpoint = "/history/period";
-      if (startTime) endpoint += `/${startTime}`;
+      let endpoint = "history/period";
+      if (startTime) endpoint += `/${pathSegment(startTime)}`;
       const qs: Record<string, unknown> = {};
       if (entityIds) qs.filter_entity_id = entityIds;
       if (endTime) qs.end_time = endTime;

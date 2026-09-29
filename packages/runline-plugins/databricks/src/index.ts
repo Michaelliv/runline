@@ -1,40 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  credentialOk,
+  pathSegment,
+  pathSegments,
+} from "../../_shared/credentials.js";
+import { databricksCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const host = (ctx.connection.config.host as string).replace(/\/$/, "");
-  const token = ctx.connection.config.accessToken as string;
-  return { host, token };
-}
-
-async function api(
-  host: string,
-  token: string,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, string>,
 ): Promise<unknown> {
-  const url = new URL(`${host}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v) url.searchParams.set(k, v);
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, databricksCredential, "databricks", {
+    target: "workspace",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204 || res.headers.get("content-length") === "0")
-    return { success: true };
-  if (!res.ok)
-    throw new Error(`Databricks error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : { success: true };
+    query: qs
+      ? Object.fromEntries(Object.entries(qs).filter(([, v]) => v))
+      : undefined,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 function volumeParts(volumePath: string) {
@@ -51,6 +39,7 @@ function sleep(ms: number) {
 export default function databricks(rl: RunlinePluginAPI) {
   rl.setName("databricks");
   rl.setVersion("0.1.0");
+  rl.setCredential(databricksCredential);
   rl.setConnectionSchema({
     host: {
       type: "string",
@@ -86,7 +75,6 @@ export default function databricks(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const params = (p.parameters ?? []) as Array<{
         name: string;
@@ -105,10 +93,9 @@ export default function databricks(rl: RunlinePluginAPI) {
         );
 
       let result = (await api(
-        host,
-        token,
+        ctx,
         "POST",
-        "/api/2.0/sql/statements",
+        "api/2.0/sql/statements",
         body,
       )) as Record<string, unknown>;
       const statementId = result.statement_id as string;
@@ -123,10 +110,9 @@ export default function databricks(rl: RunlinePluginAPI) {
       ) {
         await sleep(5000);
         result = (await api(
-          host,
-          token,
+          ctx,
           "GET",
-          `/api/2.0/sql/statements/${statementId}`,
+          `api/2.0/sql/statements/${pathSegment(statementId)}`,
         )) as Record<string, unknown>;
         status = (result.status as Record<string, string>).state;
         retries++;
@@ -146,10 +132,9 @@ export default function databricks(rl: RunlinePluginAPI) {
       let chunkIdx = allRows.length > 0 ? 1 : 0;
       while (chunkIdx < totalChunks) {
         const chunk = (await api(
-          host,
-          token,
+          ctx,
           "GET",
-          `/api/2.0/sql/statements/${statementId}/result/chunks/${chunkIdx}`,
+          `api/2.0/sql/statements/${pathSegment(statementId)}/result/chunks/${pathSegment(chunkIdx)}`,
         )) as Record<string, unknown>;
         if (chunk.data_array)
           allRows.push(...(chunk.data_array as unknown[][]));
@@ -183,14 +168,12 @@ export default function databricks(rl: RunlinePluginAPI) {
       directoryPath: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
       await api(
-        host,
-        token,
+        ctx,
         "PUT",
-        `/api/2.0/fs/directories/Volumes/${cat}/${sch}/${vol}/${p.directoryPath}`,
+        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${pathSegments(p.directoryPath)}`,
       );
       return { success: true, directoryPath: p.directoryPath };
     },
@@ -208,14 +191,12 @@ export default function databricks(rl: RunlinePluginAPI) {
       directoryPath: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
       await api(
-        host,
-        token,
+        ctx,
         "DELETE",
-        `/api/2.0/fs/directories/Volumes/${cat}/${sch}/${vol}/${p.directoryPath}`,
+        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${pathSegments(p.directoryPath)}`,
       );
       return { success: true };
     },
@@ -233,14 +214,12 @@ export default function databricks(rl: RunlinePluginAPI) {
       filePath: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
       await api(
-        host,
-        token,
+        ctx,
         "DELETE",
-        `/api/2.0/fs/files/Volumes/${cat}/${sch}/${vol}/${p.filePath}`,
+        `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${pathSegments(p.filePath)}`,
       );
       return { success: true };
     },
@@ -258,15 +237,13 @@ export default function databricks(rl: RunlinePluginAPI) {
       filePath: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
-      const url = `${host}/api/2.0/fs/files/Volumes/${cat}/${sch}/${vol}/${p.filePath}`;
-      const res = await fetch(url, {
+      const res = await credentialOk(ctx, databricksCredential, "databricks", {
+        target: "workspace",
+        path: `api/2.0/fs/files/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}/${pathSegments(p.filePath)}`,
         method: "HEAD",
-        headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error(`Databricks error ${res.status}`);
       return {
         filePath: p.filePath,
         contentLength: res.headers.get("content-length"),
@@ -290,18 +267,16 @@ export default function databricks(rl: RunlinePluginAPI) {
       pageToken: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const [cat, sch, vol] = volumeParts(p.volumePath as string);
-      const dir = p.directoryPath ? `/${p.directoryPath}` : "";
+      const dir = p.directoryPath ? `/${pathSegments(p.directoryPath)}` : "";
       const qs: Record<string, string> = {};
       if (p.pageSize) qs.page_size = String(p.pageSize);
       if (p.pageToken) qs.page_token = p.pageToken as string;
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.0/fs/directories/Volumes/${cat}/${sch}/${vol}${dir}`,
+        `api/2.0/fs/directories/Volumes/${pathSegment(cat)}/${pathSegment(sch)}/${pathSegment(vol)}${dir}`,
         undefined,
         qs,
       );
@@ -318,13 +293,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       initialMessage: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       return api(
-        host,
-        token,
+        ctx,
         "POST",
-        `/api/2.0/genie/spaces/${p.spaceId}/start-conversation`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/start-conversation`,
         { content: p.initialMessage },
       );
     },
@@ -339,13 +312,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       message: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       return api(
-        host,
-        token,
+        ctx,
         "POST",
-        `/api/2.0/genie/spaces/${p.spaceId}/conversations/${p.conversationId}/messages`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/conversations/${pathSegment(p.conversationId)}/messages`,
         { content: p.message },
       );
     },
@@ -360,13 +331,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       messageId: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.0/genie/spaces/${p.spaceId}/conversations/${p.conversationId}/messages/${p.messageId}`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/conversations/${pathSegment(p.conversationId)}/messages/${pathSegment(p.messageId)}`,
       );
     },
   });
@@ -381,13 +350,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       attachmentId: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.0/genie/spaces/${p.spaceId}/conversations/${p.conversationId}/messages/${p.messageId}/attachments/${p.attachmentId}/query-result`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/conversations/${pathSegment(p.conversationId)}/messages/${pathSegment(p.messageId)}/attachments/${pathSegment(p.attachmentId)}/query-result`,
       );
     },
   });
@@ -402,13 +369,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       attachmentId: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       return api(
-        host,
-        token,
+        ctx,
         "POST",
-        `/api/2.0/genie/spaces/${p.spaceId}/conversations/${p.conversationId}/messages/${p.messageId}/attachments/${p.attachmentId}/execute-query`,
+        `api/2.0/genie/spaces/${pathSegment(p.spaceId)}/conversations/${pathSegment(p.conversationId)}/messages/${pathSegment(p.messageId)}/attachments/${pathSegment(p.attachmentId)}/execute-query`,
       );
     },
   });
@@ -418,12 +383,10 @@ export default function databricks(rl: RunlinePluginAPI) {
     description: "Get a Genie space",
     inputSchema: { spaceId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.0/genie/spaces/${(input as Record<string, unknown>).spaceId}`,
+        `api/2.0/genie/spaces/${pathSegment((input as Record<string, unknown>).spaceId)}`,
       );
     },
   });
@@ -443,14 +406,12 @@ export default function databricks(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const body = p.requestBody as Record<string, unknown>;
       return api(
-        host,
-        token,
+        ctx,
         "POST",
-        `/serving-endpoints/${p.endpointName}/invocations`,
+        `serving-endpoints/${pathSegment(p.endpointName)}/invocations`,
         body,
       );
     },
@@ -466,11 +427,10 @@ export default function databricks(rl: RunlinePluginAPI) {
       comment: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { name: p.name };
       if (p.comment) body.comment = p.comment;
-      return api(host, token, "POST", "/api/2.1/unity-catalog/catalogs", body);
+      return api(ctx, "POST", "api/2.1/unity-catalog/catalogs", body);
     },
   });
 
@@ -479,12 +439,10 @@ export default function databricks(rl: RunlinePluginAPI) {
     description: "Get a catalog",
     inputSchema: { name: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.1/unity-catalog/catalogs/${(input as Record<string, unknown>).name}`,
+        `api/2.1/unity-catalog/catalogs/${pathSegment((input as Record<string, unknown>).name)}`,
       );
     },
   });
@@ -494,8 +452,7 @@ export default function databricks(rl: RunlinePluginAPI) {
     description: "List all catalogs",
     inputSchema: {},
     async execute(_input, ctx) {
-      const { host, token } = getConn(ctx);
-      return api(host, token, "GET", "/api/2.1/unity-catalog/catalogs");
+      return api(ctx, "GET", "api/2.1/unity-catalog/catalogs");
     },
   });
 
@@ -507,13 +464,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       comment: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       return api(
-        host,
-        token,
+        ctx,
         "PATCH",
-        `/api/2.1/unity-catalog/catalogs/${p.name}`,
+        `api/2.1/unity-catalog/catalogs/${pathSegment(p.name)}`,
         { comment: p.comment },
       );
     },
@@ -524,12 +479,10 @@ export default function databricks(rl: RunlinePluginAPI) {
     description: "Delete a catalog",
     inputSchema: { name: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       await api(
-        host,
-        token,
+        ctx,
         "DELETE",
-        `/api/2.1/unity-catalog/catalogs/${(input as Record<string, unknown>).name}`,
+        `api/2.1/unity-catalog/catalogs/${pathSegment((input as Record<string, unknown>).name)}`,
       );
       return { success: true };
     },
@@ -553,7 +506,6 @@ export default function databricks(rl: RunlinePluginAPI) {
       comment: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = {
         catalog_name: p.catalogName,
@@ -565,7 +517,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       };
       if (p.columns) body.columns = p.columns;
       if (p.comment) body.comment = p.comment;
-      return api(host, token, "POST", "/api/2.1/unity-catalog/tables", body);
+      return api(ctx, "POST", "api/2.1/unity-catalog/tables", body);
     },
   });
 
@@ -580,12 +532,10 @@ export default function databricks(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.1/unity-catalog/tables/${(input as Record<string, unknown>).fullName}`,
+        `api/2.1/unity-catalog/tables/${pathSegment((input as Record<string, unknown>).fullName)}`,
       );
     },
   });
@@ -598,19 +548,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       schemaName: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, string> = {};
       if (p.catalogName) qs.catalog_name = p.catalogName as string;
       if (p.schemaName) qs.schema_name = p.schemaName as string;
-      return api(
-        host,
-        token,
-        "GET",
-        "/api/2.1/unity-catalog/tables",
-        undefined,
-        qs,
-      );
+      return api(ctx, "GET", "api/2.1/unity-catalog/tables", undefined, qs);
     },
   });
 
@@ -625,12 +567,10 @@ export default function databricks(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       await api(
-        host,
-        token,
+        ctx,
         "DELETE",
-        `/api/2.1/unity-catalog/tables/${(input as Record<string, unknown>).fullName}`,
+        `api/2.1/unity-catalog/tables/${pathSegment((input as Record<string, unknown>).fullName)}`,
       );
       return { success: true };
     },
@@ -658,7 +598,6 @@ export default function databricks(rl: RunlinePluginAPI) {
       comment: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       if (p.volumeType === "EXTERNAL" && !p.storageLocation)
         throw new Error("storageLocation required for EXTERNAL volumes");
@@ -670,7 +609,7 @@ export default function databricks(rl: RunlinePluginAPI) {
       };
       if (p.storageLocation) body.storage_location = p.storageLocation;
       if (p.comment) body.comment = p.comment;
-      return api(host, token, "POST", "/api/2.1/unity-catalog/volumes", body);
+      return api(ctx, "POST", "api/2.1/unity-catalog/volumes", body);
     },
   });
 
@@ -683,13 +622,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       volumeName: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.1/unity-catalog/volumes/${p.catalogName}.${p.schemaName}.${p.volumeName}`,
+        `api/2.1/unity-catalog/volumes/${pathSegment(p.catalogName)}.${pathSegment(p.schemaName)}.${pathSegment(p.volumeName)}`,
       );
     },
   });
@@ -702,19 +639,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       schemaName: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, string> = {};
       if (p.catalogName) qs.catalog_name = p.catalogName as string;
       if (p.schemaName) qs.schema_name = p.schemaName as string;
-      return api(
-        host,
-        token,
-        "GET",
-        "/api/2.1/unity-catalog/volumes",
-        undefined,
-        qs,
-      );
+      return api(ctx, "GET", "api/2.1/unity-catalog/volumes", undefined, qs);
     },
   });
 
@@ -727,13 +656,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       volumeName: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       await api(
-        host,
-        token,
+        ctx,
         "DELETE",
-        `/api/2.1/unity-catalog/volumes/${p.catalogName}.${p.schemaName}.${p.volumeName}`,
+        `api/2.1/unity-catalog/volumes/${pathSegment(p.catalogName)}.${pathSegment(p.schemaName)}.${pathSegment(p.volumeName)}`,
       );
       return { success: true };
     },
@@ -771,7 +698,6 @@ export default function databricks(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const params = (
         Array.isArray(p.inputParams)
@@ -783,7 +709,7 @@ export default function databricks(rl: RunlinePluginAPI) {
         type_text: param.type_text ?? param.type_name,
         type_json: param.type_json ?? JSON.stringify({ name: param.type_name }),
       }));
-      return api(host, token, "POST", "/api/2.1/unity-catalog/functions", {
+      return api(ctx, "POST", "api/2.1/unity-catalog/functions", {
         function_info: {
           name: p.functionName,
           catalog_name: p.catalogName,
@@ -815,12 +741,10 @@ export default function databricks(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.1/unity-catalog/functions/${(input as Record<string, unknown>).fullName}`,
+        `api/2.1/unity-catalog/functions/${pathSegment((input as Record<string, unknown>).fullName)}`,
       );
     },
   });
@@ -833,19 +757,11 @@ export default function databricks(rl: RunlinePluginAPI) {
       schemaName: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, string> = {};
       if (p.catalogName) qs.catalog_name = p.catalogName as string;
       if (p.schemaName) qs.schema_name = p.schemaName as string;
-      return api(
-        host,
-        token,
-        "GET",
-        "/api/2.1/unity-catalog/functions",
-        undefined,
-        qs,
-      );
+      return api(ctx, "GET", "api/2.1/unity-catalog/functions", undefined, qs);
     },
   });
 
@@ -860,12 +776,10 @@ export default function databricks(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       await api(
-        host,
-        token,
+        ctx,
         "DELETE",
-        `/api/2.1/unity-catalog/functions/${(input as Record<string, unknown>).fullName}`,
+        `api/2.1/unity-catalog/functions/${pathSegment((input as Record<string, unknown>).fullName)}`,
       );
       return { success: true };
     },
@@ -897,7 +811,6 @@ export default function databricks(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = {
         name: p.indexName,
@@ -909,7 +822,7 @@ export default function databricks(rl: RunlinePluginAPI) {
         body.delta_sync_index_spec = p.deltaSyncIndexSpec;
       if (p.indexType === "DIRECT_ACCESS" && p.directAccessIndexSpec)
         body.direct_access_index_spec = p.directAccessIndexSpec;
-      return api(host, token, "POST", "/api/2.0/vector-search/indexes", body);
+      return api(ctx, "POST", "api/2.0/vector-search/indexes", body);
     },
   });
 
@@ -918,12 +831,10 @@ export default function databricks(rl: RunlinePluginAPI) {
     description: "Get a vector search index",
     inputSchema: { indexName: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       return api(
-        host,
-        token,
+        ctx,
         "GET",
-        `/api/2.0/vector-search/indexes/${(input as Record<string, unknown>).indexName}`,
+        `api/2.0/vector-search/indexes/${pathSegment((input as Record<string, unknown>).indexName)}`,
       );
     },
   });
@@ -933,18 +844,10 @@ export default function databricks(rl: RunlinePluginAPI) {
     description: "List vector search indexes for an endpoint",
     inputSchema: { endpointName: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
-      return api(
-        host,
-        token,
-        "GET",
-        "/api/2.0/vector-search/indexes",
-        undefined,
-        {
-          endpoint_name: (input as Record<string, unknown>)
-            .endpointName as string,
-        },
-      );
+      return api(ctx, "GET", "api/2.0/vector-search/indexes", undefined, {
+        endpoint_name: (input as Record<string, unknown>)
+          .endpointName as string,
+      });
     },
   });
 
@@ -986,7 +889,6 @@ export default function databricks(rl: RunlinePluginAPI) {
       columnsToRerank: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { host, token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = {
         num_results: p.numResults ?? 10,
@@ -1012,10 +914,9 @@ export default function databricks(rl: RunlinePluginAPI) {
         };
       }
       return api(
-        host,
-        token,
+        ctx,
         "POST",
-        `/api/2.0/vector-search/indexes/${p.indexName}/query`,
+        `api/2.0/vector-search/indexes/${pathSegment(p.indexName)}/query`,
         body,
       );
     },

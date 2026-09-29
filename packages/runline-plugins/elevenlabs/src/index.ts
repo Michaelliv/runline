@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { elevenlabsCredential } from "./credentials.js";
 import {
   audioOptions,
   formatSchema,
@@ -158,6 +159,7 @@ const sound = t.Object(
 export default function elevenlabs(rl: RunlinePluginAPI): void {
   rl.setName("elevenlabs");
   rl.setVersion("0.1.0");
+  rl.setCredential(elevenlabsCredential);
   registerWorkflows(rl);
   rl.setConnectionSchema(
     t.Object({
@@ -319,12 +321,14 @@ export default function elevenlabs(rl: RunlinePluginAPI): void {
       })) {
         if (value !== undefined) form.append(key, String(value));
       }
+      // The audio target carries the long transcription deadline.
       return jsonRequest(
         ctx,
         "/v1/speech-to-text",
         "transcription",
         { method: "POST", body: form },
         p.timeoutMs ?? 300_000,
+        "audio",
       );
     },
   });

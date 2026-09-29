@@ -28,6 +28,13 @@ export interface RunlineOptions {
   connections?: ConnectionConfig[];
   /** Host-owned credentials; mutually exclusive with initial connections. */
   connectionProvider?: ConnectionProvider;
+  /**
+   * Host-signed requests, built per action call of a plugin that declares
+   * its credential and handed to the action as `ctx.credentials`. For
+   * hosts that keep credentials outside the process running actions;
+   * absent, plugins sign with their connection.
+   */
+  credentialBroker?: EngineHooks["credentialBroker"];
   timeoutMs?: number;
   memoryLimitBytes?: number;
   /**
@@ -65,10 +72,12 @@ export class Runline {
   private _engine: ExecutionEngine | null = null;
 
   private readonly _onAction: EngineHooks["onAction"];
+  private readonly _credentialBroker: EngineHooks["credentialBroker"];
 
   private constructor(options: RunlineOptions) {
     this._registry = new PluginRegistry();
     this._onAction = options.onAction;
+    this._credentialBroker = options.credentialBroker;
     if (options.connectionProvider && options.connections) {
       throw new Error("Pass connections or connectionProvider, not both");
     }
@@ -102,6 +111,7 @@ export class Runline {
       this._engine = new ExecutionEngine(this._registry, this._config, {
         onAction: this._onAction,
         connectionProvider: this._connectionProvider,
+        credentialBroker: this._credentialBroker,
       });
     }
     return this._engine;

@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { steelCredential } from "./auth.js";
 import { registerBrowserActions } from "./browser.js";
 import { registerCaptchaActions } from "./captchas.js";
 import { registerCredentialActions } from "./credentials.js";
@@ -12,6 +13,7 @@ import { registerSessionActions } from "./sessions.js";
 export default function steel(rl: RunlinePluginAPI) {
   rl.setName("steel");
   rl.setVersion("0.1.0");
+  rl.setCredential(steelCredential);
   rl.setConnectionSchema(t.Object({
     apiKey: t.String({
       description: "Steel API key (https://app.steel.dev/settings/api-keys)",

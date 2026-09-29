@@ -1,52 +1,36 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { discordCredential } from "./credentials.js";
 
-const BASE_URL = "https://discord.com/api/v10";
-
-async function apiRequest(
-  botToken: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, discordCredential, "discord", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bot ${botToken}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Discord API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    botToken: ctx.connection.config.botToken as string,
-    guildId: ctx.connection.config.guildId as string,
-  };
+function guildOf(ctx: ActionContext): string {
+  return pathSegment(ctx.connection.config.guildId);
 }
 
 export default function discord(rl: RunlinePluginAPI) {
   rl.setName("discord");
   rl.setVersion("0.1.0");
+  rl.setCredential(discordCredential);
 
   rl.setConnectionSchema({
     botToken: {
@@ -108,7 +92,6 @@ export default function discord(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { botToken, guildId } = getConn(ctx);
       const {
         name,
         type,
@@ -129,7 +112,7 @@ export default function discord(rl: RunlinePluginAPI) {
       if (userLimit !== undefined) body.user_limit = userLimit;
       if (rateLimitPerUser !== undefined)
         body.rate_limit_per_user = rateLimitPerUser;
-      return apiRequest(botToken, "POST", `/guilds/${guildId}/channels`, body);
+      return apiRequest(ctx, "POST", `guilds/${guildOf(ctx)}/channels`, body);
     },
   });
 
@@ -140,11 +123,10 @@ export default function discord(rl: RunlinePluginAPI) {
       channelId: { type: "string", required: true, description: "Channel ID" },
     },
     async execute(input, ctx) {
-      const { botToken } = getConn(ctx);
       return apiRequest(
-        botToken,
+        ctx,
         "GET",
-        `/channels/${(input as { channelId: string }).channelId}`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}`,
       );
     },
   });
@@ -161,12 +143,11 @@ export default function discord(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { botToken, guildId } = getConn(ctx);
       const { limit, filterType } = (input ?? {}) as Record<string, unknown>;
       let channels = (await apiRequest(
-        botToken,
+        ctx,
         "GET",
-        `/guilds/${guildId}/channels`,
+        `guilds/${guildOf(ctx)}/channels`,
       )) as Array<Record<string, unknown>>;
       if (filterType && Array.isArray(filterType) && filterType.length > 0) {
         channels = channels.filter((c) =>
@@ -213,7 +194,6 @@ export default function discord(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { botToken } = getConn(ctx);
       const {
         channelId,
         name,
@@ -235,7 +215,12 @@ export default function discord(rl: RunlinePluginAPI) {
       if (userLimit !== undefined) body.user_limit = userLimit;
       if (rateLimitPerUser !== undefined)
         body.rate_limit_per_user = rateLimitPerUser;
-      return apiRequest(botToken, "PATCH", `/channels/${channelId}`, body);
+      return apiRequest(
+        ctx,
+        "PATCH",
+        `channels/${pathSegment(channelId)}`,
+        body,
+      );
     },
   });
 
@@ -246,11 +231,10 @@ export default function discord(rl: RunlinePluginAPI) {
       channelId: { type: "string", required: true, description: "Channel ID" },
     },
     async execute(input, ctx) {
-      const { botToken } = getConn(ctx);
       return apiRequest(
-        botToken,
+        ctx,
         "DELETE",
-        `/channels/${(input as { channelId: string }).channelId}`,
+        `channels/${pathSegment((input as { channelId: string }).channelId)}`,
       );
     },
   });
@@ -273,15 +257,14 @@ export default function discord(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { botToken, guildId } = getConn(ctx);
       const { limit, after } = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (limit) qs.limit = limit;
       if (after) qs.after = after;
       return apiRequest(
-        botToken,
+        ctx,
         "GET",
-        `/guilds/${guildId}/members`,
+        `guilds/${guildOf(ctx)}/members`,
         undefined,
         qs,
       );
@@ -296,12 +279,11 @@ export default function discord(rl: RunlinePluginAPI) {
       roleId: { type: "string", required: true, description: "Role ID" },
     },
     async execute(input, ctx) {
-      const { botToken, guildId } = getConn(ctx);
       const { userId, roleId } = input as { userId: string; roleId: string };
       await apiRequest(
-        botToken,
+        ctx,
         "PUT",
-        `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
+        `guilds/${guildOf(ctx)}/members/${pathSegment(userId)}/roles/${pathSegment(roleId)}`,
       );
       return { success: true };
     },
@@ -315,12 +297,11 @@ export default function discord(rl: RunlinePluginAPI) {
       roleId: { type: "string", required: true, description: "Role ID" },
     },
     async execute(input, ctx) {
-      const { botToken, guildId } = getConn(ctx);
       const { userId, roleId } = input as { userId: string; roleId: string };
       await apiRequest(
-        botToken,
+        ctx,
         "DELETE",
-        `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
+        `guilds/${guildOf(ctx)}/members/${pathSegment(userId)}/roles/${pathSegment(roleId)}`,
       );
       return { success: true };
     },
@@ -351,7 +332,6 @@ export default function discord(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { botToken } = getConn(ctx);
       const { channelId, content, tts, replyTo, embeds } = input as Record<
         string,
         unknown
@@ -361,9 +341,9 @@ export default function discord(rl: RunlinePluginAPI) {
       if (replyTo) body.message_reference = { message_id: replyTo };
       if (embeds) body.embeds = embeds;
       return apiRequest(
-        botToken,
+        ctx,
         "POST",
-        `/channels/${channelId}/messages`,
+        `channels/${pathSegment(channelId)}/messages`,
         body,
       );
     },
@@ -377,15 +357,14 @@ export default function discord(rl: RunlinePluginAPI) {
       messageId: { type: "string", required: true, description: "Message ID" },
     },
     async execute(input, ctx) {
-      const { botToken } = getConn(ctx);
       const { channelId, messageId } = input as {
         channelId: string;
         messageId: string;
       };
       return apiRequest(
-        botToken,
+        ctx,
         "GET",
-        `/channels/${channelId}/messages/${messageId}`,
+        `channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}`,
       );
     },
   });
@@ -417,7 +396,6 @@ export default function discord(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { botToken } = getConn(ctx);
       const { channelId, limit, before, after, around } = (input ??
         {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
@@ -426,9 +404,9 @@ export default function discord(rl: RunlinePluginAPI) {
       if (after) qs.after = after;
       if (around) qs.around = around;
       return apiRequest(
-        botToken,
+        ctx,
         "GET",
-        `/channels/${channelId}/messages`,
+        `channels/${pathSegment(channelId)}/messages`,
         undefined,
         qs,
       );
@@ -443,15 +421,14 @@ export default function discord(rl: RunlinePluginAPI) {
       messageId: { type: "string", required: true, description: "Message ID" },
     },
     async execute(input, ctx) {
-      const { botToken } = getConn(ctx);
       const { channelId, messageId } = input as {
         channelId: string;
         messageId: string;
       };
       await apiRequest(
-        botToken,
+        ctx,
         "DELETE",
-        `/channels/${channelId}/messages/${messageId}`,
+        `channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}`,
       );
       return { success: true };
     },
@@ -470,16 +447,15 @@ export default function discord(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { botToken } = getConn(ctx);
       const { channelId, messageId, emoji } = input as {
         channelId: string;
         messageId: string;
         emoji: string;
       };
       await apiRequest(
-        botToken,
+        ctx,
         "PUT",
-        `/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/@me`,
+        `channels/${pathSegment(channelId)}/messages/${pathSegment(messageId)}/reactions/${pathSegment(emoji)}/@me`,
       );
       return { success: true };
     },

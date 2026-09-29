@@ -1,74 +1,39 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { todoistCredential } from "./credentials.js";
 
-const BASE = "https://api.todoist.com/rest/v2";
-const SYNC_BASE = "https://api.todoist.com/sync/v9";
-
-async function api(
-  token: string,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, todoistCredential, "todoist", {
+    target: "rest",
+    path: endpoint.replace(/^\//, ""),
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (res.status === 204) return { success: true };
-  if (!res.ok)
-    throw new Error(`Todoist error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : { success: true };
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
-async function syncApi(
-  token: string,
+function quickAdd(
+  ctx: ActionContext,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await fetch(`${SYNC_BASE}/sync`, {
+  return credentialJson(ctx, todoistCredential, "todoist", {
+    target: "sync",
+    path: "quick/add",
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+    json: body,
   });
-  if (!res.ok)
-    throw new Error(`Todoist Sync error ${res.status}: ${await res.text()}`);
-  return res.json();
-}
-
-async function quickAdd(
-  token: string,
-  body: Record<string, unknown>,
-): Promise<unknown> {
-  const res = await fetch(`${SYNC_BASE}/quick/add`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok)
-    throw new Error(`Todoist error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function todoist(rl: RunlinePluginAPI) {
   rl.setName("todoist");
   rl.setVersion("0.1.0");
+  rl.setCredential(todoistCredential);
   rl.setConnectionSchema({
     apiToken: {
       type: "string",
@@ -77,8 +42,6 @@ export default function todoist(rl: RunlinePluginAPI) {
       env: "TODOIST_API_TOKEN",
     },
   });
-  const t = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiToken as string;
 
   // ── Task ────────────────────────────────────────────
 
@@ -117,7 +80,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (p.sectionId) body.section_id = p.sectionId;
       if (p.parentId) body.parent_id = p.parentId;
       if (p.assigneeId) body.assignee_id = p.assigneeId;
-      return api(t(ctx), "POST", "/tasks", body);
+      return api(ctx, "POST", "/tasks", body);
     },
   });
 
@@ -127,9 +90,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/tasks/${(input as Record<string, unknown>).id}`,
+        `/tasks/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -152,7 +115,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (p.label) qs.label = p.label;
       if (p.filter) qs.filter = p.filter;
       const data = (await api(
-        t(ctx),
+        ctx,
         "GET",
         "/tasks",
         undefined,
@@ -185,7 +148,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (fields.dueDate) body.due_date = fields.dueDate;
       if (fields.labels) body.labels = fields.labels;
       if (fields.assigneeId) body.assignee_id = fields.assigneeId;
-      return api(t(ctx), "POST", `/tasks/${id}`, body);
+      return api(ctx, "POST", `/tasks/${pathSegment(id)}`, body);
     },
   });
 
@@ -195,9 +158,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "POST",
-        `/tasks/${(input as Record<string, unknown>).id}/close`,
+        `/tasks/${pathSegment((input as Record<string, unknown>).id)}/close`,
       );
       return { success: true };
     },
@@ -209,9 +172,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "POST",
-        `/tasks/${(input as Record<string, unknown>).id}/reopen`,
+        `/tasks/${pathSegment((input as Record<string, unknown>).id)}/reopen`,
       );
       return { success: true };
     },
@@ -223,9 +186,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "DELETE",
-        `/tasks/${(input as Record<string, unknown>).id}`,
+        `/tasks/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -248,7 +211,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { text: p.text };
       if (p.note) body.note = p.note;
       if (p.reminder) body.reminder = p.reminder;
-      return quickAdd(t(ctx), body);
+      return quickAdd(ctx, body);
     },
   });
 
@@ -275,7 +238,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (p.isFavorite) body.is_favorite = true;
       if (p.parentId) body.parent_id = p.parentId;
       if (p.viewStyle) body.view_style = p.viewStyle;
-      return api(t(ctx), "POST", "/projects", body);
+      return api(ctx, "POST", "/projects", body);
     },
   });
 
@@ -285,9 +248,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/projects/${(input as Record<string, unknown>).id}`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -297,7 +260,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "List all projects",
     inputSchema: {},
     async execute(_input, ctx) {
-      return api(t(ctx), "GET", "/projects");
+      return api(ctx, "GET", "/projects");
     },
   });
 
@@ -318,7 +281,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (fields.color) body.color = fields.color;
       if (fields.isFavorite !== undefined) body.is_favorite = fields.isFavorite;
       if (fields.viewStyle) body.view_style = fields.viewStyle;
-      return api(t(ctx), "POST", `/projects/${id}`, body);
+      return api(ctx, "POST", `/projects/${pathSegment(id)}`, body);
     },
   });
 
@@ -328,9 +291,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "DELETE",
-        `/projects/${(input as Record<string, unknown>).id}`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -342,9 +305,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "POST",
-        `/projects/${(input as Record<string, unknown>).id}/archive`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}/archive`,
       );
       return { success: true };
     },
@@ -356,9 +319,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "POST",
-        `/projects/${(input as Record<string, unknown>).id}/unarchive`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}/unarchive`,
       );
       return { success: true };
     },
@@ -370,9 +333,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/projects/${(input as Record<string, unknown>).id}/collaborators`,
+        `/projects/${pathSegment((input as Record<string, unknown>).id)}/collaborators`,
       );
     },
   });
@@ -389,7 +352,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "POST", "/sections", {
+      return api(ctx, "POST", "/sections", {
         project_id: p.projectId,
         name: p.name,
         ...(p.order ? { order: p.order } : {}),
@@ -403,9 +366,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/sections/${(input as Record<string, unknown>).id}`,
+        `/sections/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -418,7 +381,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if ((input as Record<string, unknown>)?.projectId)
         qs.project_id = (input as Record<string, unknown>).projectId;
-      return api(t(ctx), "GET", "/sections", undefined, qs);
+      return api(ctx, "GET", "/sections", undefined, qs);
     },
   });
 
@@ -431,7 +394,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "POST", `/sections/${p.id}`, { name: p.name });
+      return api(ctx, "POST", `/sections/${pathSegment(p.id)}`, {
+        name: p.name,
+      });
     },
   });
 
@@ -441,9 +406,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "DELETE",
-        `/sections/${(input as Record<string, unknown>).id}`,
+        `/sections/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -460,7 +425,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "POST", "/comments", {
+      return api(ctx, "POST", "/comments", {
         task_id: p.taskId,
         content: p.content,
       });
@@ -473,9 +438,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/comments/${(input as Record<string, unknown>).id}`,
+        `/comments/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -492,7 +457,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.taskId) qs.task_id = p.taskId;
       if (p.projectId) qs.project_id = p.projectId;
-      return api(t(ctx), "GET", "/comments", undefined, qs);
+      return api(ctx, "GET", "/comments", undefined, qs);
     },
   });
 
@@ -505,7 +470,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "POST", `/comments/${p.id}`, { content: p.content });
+      return api(ctx, "POST", `/comments/${pathSegment(p.id)}`, {
+        content: p.content,
+      });
     },
   });
 
@@ -515,9 +482,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "DELETE",
-        `/comments/${(input as Record<string, unknown>).id}`,
+        `/comments/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -540,7 +507,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (p.color) body.color = p.color;
       if (p.order) body.order = p.order;
       if (p.isFavorite) body.is_favorite = true;
-      return api(t(ctx), "POST", "/labels", body);
+      return api(ctx, "POST", "/labels", body);
     },
   });
 
@@ -550,9 +517,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "GET",
-        `/labels/${(input as Record<string, unknown>).id}`,
+        `/labels/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -562,7 +529,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "List all labels",
     inputSchema: {},
     async execute(_input, ctx) {
-      return api(t(ctx), "GET", "/labels");
+      return api(ctx, "GET", "/labels");
     },
   });
 
@@ -583,7 +550,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       if (fields.color) body.color = fields.color;
       if (fields.order) body.order = fields.order;
       if (fields.isFavorite !== undefined) body.is_favorite = fields.isFavorite;
-      return api(t(ctx), "POST", `/labels/${id}`, body);
+      return api(ctx, "POST", `/labels/${pathSegment(id)}`, body);
     },
   });
 
@@ -593,9 +560,9 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       await api(
-        t(ctx),
+        ctx,
         "DELETE",
-        `/labels/${(input as Record<string, unknown>).id}`,
+        `/labels/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },

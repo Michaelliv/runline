@@ -1,30 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { raindropCredential } from "./credentials.js";
 
-const BASE = "https://api.raindrop.io/rest/v1";
-
-async function apiRequest(
-  token: string,
-  method: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const init: RequestInit = {
+  return credentialJson(ctx, raindropCredential, "raindrop", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(`${BASE}${endpoint}`, init);
-  if (!res.ok)
-    throw new Error(`Raindrop error ${res.status}: ${await res.text()}`);
-  return res.json();
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function raindrop(rl: RunlinePluginAPI) {
   rl.setName("raindrop");
   rl.setVersion("0.1.0");
+  rl.setCredential(raindropCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -34,9 +29,6 @@ export default function raindrop(rl: RunlinePluginAPI) {
       env: "RAINDROP_ACCESS_TOKEN",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   // ── Bookmark ────────────────────────────────────────
 
@@ -68,12 +60,10 @@ export default function raindrop(rl: RunlinePluginAPI) {
       if (p.tags)
         body.tags = (p.tags as string).split(",").map((t) => t.trim());
       if (p.pleaseParse) body.pleaseParse = {};
-      const data = (await apiRequest(
-        key(ctx),
-        "POST",
-        "/raindrop",
-        body,
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "POST", "raindrop", body)) as Record<
+        string,
+        unknown
+      >;
       return data.item;
     },
   });
@@ -85,9 +75,9 @@ export default function raindrop(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { bookmarkId } = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/raindrop/${bookmarkId}`,
+        `raindrop/${pathSegment(bookmarkId)}`,
       )) as Record<string, unknown>;
       return data.item;
     },
@@ -103,9 +93,9 @@ export default function raindrop(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/raindrops/${p.collectionId}`,
+        `raindrops/${pathSegment(p.collectionId)}`,
       )) as Record<string, unknown>;
       let items = (data.items ?? []) as unknown[];
       if (p.limit) items = items.slice(0, p.limit as number);
@@ -136,9 +126,9 @@ export default function raindrop(rl: RunlinePluginAPI) {
         body.tags = (p.tags as string).split(",").map((t) => t.trim());
       if (p.collectionId) body.collection = { $id: Number(p.collectionId) };
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "PUT",
-        `/raindrop/${p.bookmarkId}`,
+        `raindrop/${pathSegment(p.bookmarkId)}`,
         body,
       )) as Record<string, unknown>;
       return data.item;
@@ -151,7 +141,7 @@ export default function raindrop(rl: RunlinePluginAPI) {
     inputSchema: { bookmarkId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { bookmarkId } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "DELETE", `/raindrop/${bookmarkId}`);
+      return apiRequest(ctx, "DELETE", `raindrop/${pathSegment(bookmarkId)}`);
     },
   });
 
@@ -173,9 +163,9 @@ export default function raindrop(rl: RunlinePluginAPI) {
       const body: Record<string, unknown> = { title: p.title };
       if (p.parentId) body["parent.$id"] = Number(p.parentId);
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        "/collection",
+        "collection",
         body,
       )) as Record<string, unknown>;
       return data.item;
@@ -189,9 +179,9 @@ export default function raindrop(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { collectionId } = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/collection/${collectionId}`,
+        `collection/${pathSegment(collectionId)}`,
       )) as Record<string, unknown>;
       return data.item;
     },
@@ -211,8 +201,8 @@ export default function raindrop(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const endpoint =
-        p.type === "children" ? "/collections/childrens" : "/collections";
-      const data = (await apiRequest(key(ctx), "GET", endpoint)) as Record<
+        p.type === "children" ? "collections/childrens" : "collections";
+      const data = (await apiRequest(ctx, "GET", endpoint)) as Record<
         string,
         unknown
       >;
@@ -236,9 +226,9 @@ export default function raindrop(rl: RunlinePluginAPI) {
       if (p.title) body.title = p.title;
       if (p.parentId) body["parent.$id"] = Number(p.parentId);
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "PUT",
-        `/collection/${p.collectionId}`,
+        `collection/${pathSegment(p.collectionId)}`,
         body,
       )) as Record<string, unknown>;
       return data.item;
@@ -251,7 +241,11 @@ export default function raindrop(rl: RunlinePluginAPI) {
     inputSchema: { collectionId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { collectionId } = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "DELETE", `/collection/${collectionId}`);
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `collection/${pathSegment(collectionId)}`,
+      );
     },
   });
 
@@ -266,8 +260,10 @@ export default function raindrop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const endpoint = p.collectionId ? `/tags/${p.collectionId}` : "/tags";
-      const data = (await apiRequest(key(ctx), "GET", endpoint)) as Record<
+      const endpoint = p.collectionId
+        ? `tags/${pathSegment(p.collectionId)}`
+        : "tags";
+      const data = (await apiRequest(ctx, "GET", endpoint)) as Record<
         string,
         unknown
       >;
@@ -290,8 +286,10 @@ export default function raindrop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const endpoint = p.collectionId ? `/tags/${p.collectionId}` : "/tags";
-      return apiRequest(key(ctx), "DELETE", endpoint, {
+      const endpoint = p.collectionId
+        ? `tags/${pathSegment(p.collectionId)}`
+        : "tags";
+      return apiRequest(ctx, "DELETE", endpoint, {
         tags: (p.tags as string).split(",").map((t) => t.trim()),
       });
     },
@@ -311,8 +309,8 @@ export default function raindrop(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const userId = (input as Record<string, unknown>)?.userId;
-      const endpoint = userId ? `/user/${userId}` : "/user";
-      const data = (await apiRequest(key(ctx), "GET", endpoint)) as Record<
+      const endpoint = userId ? `user/${pathSegment(userId)}` : "user";
+      const data = (await apiRequest(ctx, "GET", endpoint)) as Record<
         string,
         unknown
       >;

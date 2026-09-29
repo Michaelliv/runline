@@ -1,15 +1,16 @@
+import { shiftClient } from "../../_shared/shiftCredentials.js";
+
 export {
-  type Ctx,
   cursorSchema,
   enumSchema,
   idSchema,
-  listParams,
   pathSegment,
-  request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
-  withQuery,
 } from "../../_shared/shiftCloud.js";
+
+export const { credential: shiftAtlasCredential, request } =
+  shiftClient("shiftAtlas");
 
 /** Base path of the operational graph service in the Shift cloud API. */
 export const ATLAS_BASE = "/v1/services/operational-graph";

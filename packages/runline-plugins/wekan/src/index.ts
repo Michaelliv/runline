@@ -1,38 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { wekanCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    token: c.token as string,
-  };
-}
-
-async function api(
-  conn: ReturnType<typeof getConn>,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const init: RequestInit = {
+  return credentialJson(ctx, wekanCredential, "wekan", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${conn.token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(`${conn.url}/api/${endpoint}`, init);
-  if (!res.ok)
-    throw new Error(`Wekan error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function wekan(rl: RunlinePluginAPI) {
   rl.setName("wekan");
   rl.setVersion("0.1.0");
+  rl.setCredential(wekanCredential);
   rl.setConnectionSchema({
     url: {
       type: "string",
@@ -58,12 +45,7 @@ export default function wekan(rl: RunlinePluginAPI) {
       owner: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      return api(
-        getConn(ctx),
-        "POST",
-        "boards",
-        input as Record<string, unknown>,
-      );
+      return api(ctx, "POST", "boards", input as Record<string, unknown>);
     },
   });
 
@@ -73,9 +55,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${(input as Record<string, unknown>).boardId}`,
+        `boards/${pathSegment((input as Record<string, unknown>).boardId)}`,
       );
     },
   });
@@ -90,9 +72,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `users/${p.userId}/boards`,
+        `users/${pathSegment(p.userId)}/boards`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -104,9 +86,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     inputSchema: { boardId: { type: "string", required: true } },
     async execute(input, ctx) {
       return api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `boards/${(input as Record<string, unknown>).boardId}`,
+        `boards/${pathSegment((input as Record<string, unknown>).boardId)}`,
       );
     },
   });
@@ -122,7 +104,7 @@ export default function wekan(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(getConn(ctx), "POST", `boards/${p.boardId}/lists`, {
+      return api(ctx, "POST", `boards/${pathSegment(p.boardId)}/lists`, {
         title: p.title,
       });
     },
@@ -137,7 +119,11 @@ export default function wekan(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(getConn(ctx), "GET", `boards/${p.boardId}/lists/${p.listId}`);
+      return api(
+        ctx,
+        "GET",
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}`,
+      );
     },
   });
 
@@ -151,9 +137,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/lists`,
+        `boards/${pathSegment(p.boardId)}/lists`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -169,9 +155,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `boards/${p.boardId}/lists/${p.listId}`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}`,
       );
     },
   });
@@ -192,9 +178,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { boardId, listId, ...body } = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        `boards/${boardId}/lists/${listId}/cards`,
+        `boards/${pathSegment(boardId)}/lists/${pathSegment(listId)}/cards`,
         body,
       );
     },
@@ -211,9 +197,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/lists/${p.listId}/cards/${p.cardId}`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}/cards/${pathSegment(p.cardId)}`,
       );
     },
   });
@@ -229,9 +215,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/lists/${p.listId}/cards`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}/cards`,
       )) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
     },
@@ -249,9 +235,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `boards/${p.boardId}/lists/${p.listId}/cards/${p.cardId}`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}/cards/${pathSegment(p.cardId)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -268,9 +254,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `boards/${p.boardId}/lists/${p.listId}/cards/${p.cardId}`,
+        `boards/${pathSegment(p.boardId)}/lists/${pathSegment(p.listId)}/cards/${pathSegment(p.cardId)}`,
       );
     },
   });
@@ -289,9 +275,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        `boards/${p.boardId}/cards/${p.cardId}/comments`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/comments`,
         { authorId: p.authorId, comment: p.comment },
       );
     },
@@ -308,9 +294,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/cards/${p.cardId}/comments/${p.commentId}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/comments/${pathSegment(p.commentId)}`,
       );
     },
   });
@@ -325,9 +311,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/cards/${p.cardId}/comments`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/comments`,
       );
     },
   });
@@ -343,9 +329,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `boards/${p.boardId}/cards/${p.cardId}/comments/${p.commentId}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/comments/${pathSegment(p.commentId)}`,
       );
     },
   });
@@ -368,9 +354,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "POST",
-        `boards/${p.boardId}/cards/${p.cardId}/checklists`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists`,
         { title: p.title, items: p.items },
       );
     },
@@ -387,9 +373,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/cards/${p.cardId}/checklists/${p.checklistId}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}`,
       );
     },
   });
@@ -404,9 +390,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/cards/${p.cardId}/checklists`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists`,
       );
     },
   });
@@ -422,9 +408,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `boards/${p.boardId}/cards/${p.cardId}/checklists/${p.checklistId}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}`,
       );
     },
   });
@@ -443,9 +429,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "GET",
-        `boards/${p.boardId}/cards/${p.cardId}/checklists/${p.checklistId}/items/${p.itemId}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}/items/${pathSegment(p.itemId)}`,
       );
     },
   });
@@ -463,9 +449,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "PUT",
-        `boards/${p.boardId}/cards/${p.cardId}/checklists/${p.checklistId}/items/${p.itemId}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}/items/${pathSegment(p.itemId)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -483,9 +469,9 @@ export default function wekan(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return api(
-        getConn(ctx),
+        ctx,
         "DELETE",
-        `boards/${p.boardId}/cards/${p.cardId}/checklists/${p.checklistId}/items/${p.itemId}`,
+        `boards/${pathSegment(p.boardId)}/cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.checklistId)}/items/${pathSegment(p.itemId)}`,
       );
     },
   });

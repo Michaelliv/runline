@@ -5,7 +5,6 @@ import {
   bindListAction,
   CYCLE_FIELDS,
   gql,
-  key,
   requireUnscoped,
   withScopedNote,
 } from "./shared.js";
@@ -55,7 +54,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "cycles.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: CycleCreateInput!) { cycleCreate(input: $input) { success cycle { ${CYCLE_FIELDS} } } }`,
         { input: input as Record<string, unknown> },
       );
@@ -94,7 +93,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "cycles.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: CycleUpdateInput!) { cycleUpdate(id: $id, input: $input) { success cycle { ${CYCLE_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -116,7 +115,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "cycles.*");
       const { id } = input as { id: string };
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { cycleArchive(id: $id) { success } }`,
         { id },
       );
@@ -147,7 +146,7 @@ export function registerCycleActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "cycles.*");
       const { teamId } = input as { teamId: string };
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { teamCyclesDelete(id: $id) { success } }`,
         { id: teamId },
       );

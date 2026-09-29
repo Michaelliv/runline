@@ -1,8 +1,21 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { signl4Credential } from "./credentials.js";
+
+/** One alert event, posted as a form to the team's webhook. */
+function send(ctx: ActionContext, form: Record<string, unknown>) {
+  return credentialJson(ctx, signl4Credential, "signl4", {
+    target: "webhook",
+    path: "",
+    method: "POST",
+    form: { ...form, "X-S4-SourceSystem": "runline" },
+  });
+}
 
 export default function signl4(rl: RunlinePluginAPI) {
   rl.setName("signl4");
   rl.setVersion("0.1.0");
+  rl.setCredential(signl4Credential);
 
   rl.setConnectionSchema({
     teamSecret: {
@@ -12,9 +25,6 @@ export default function signl4(rl: RunlinePluginAPI) {
       env: "SIGNL4_TEAM_SECRET",
     },
   });
-
-  const url = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    `https://connect.signl4.com/webhook/${ctx.connection.config.teamSecret}`;
 
   rl.registerAction("alert.send", {
     access: "write",
@@ -39,23 +49,19 @@ export default function signl4(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const form = new URLSearchParams();
-      form.set("message", p.message as string);
-      form.set("X-S4-Status", "new");
-      form.set("X-S4-SourceSystem", "runline");
-      if (p.title) form.set("title", p.title as string);
-      if (p.service) form.set("service", p.service as string);
-      if (p.externalId) form.set("X-S4-ExternalID", p.externalId as string);
-      if (p.alertingScenario)
-        form.set("X-S4-AlertingScenario", p.alertingScenario as string);
-      if (p.latitude && p.longitude)
-        form.set("X-S4-Location", `${p.latitude},${p.longitude}`);
-      if (p.filtering !== undefined)
-        form.set("X-S4-Filtering", String(p.filtering));
-      const res = await fetch(url(ctx), { method: "POST", body: form });
-      if (!res.ok)
-        throw new Error(`SIGNL4 error ${res.status}: ${await res.text()}`);
-      return res.json();
+      return send(ctx, {
+        message: p.message,
+        "X-S4-Status": "new",
+        title: p.title || undefined,
+        service: p.service || undefined,
+        "X-S4-ExternalID": p.externalId || undefined,
+        "X-S4-AlertingScenario": p.alertingScenario || undefined,
+        "X-S4-Location":
+          p.latitude && p.longitude
+            ? `${p.latitude},${p.longitude}`
+            : undefined,
+        "X-S4-Filtering": p.filtering,
+      });
     },
   });
 
@@ -67,14 +73,10 @@ export default function signl4(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { externalId } = input as Record<string, unknown>;
-      const form = new URLSearchParams();
-      form.set("X-S4-ExternalID", externalId as string);
-      form.set("X-S4-Status", "resolved");
-      form.set("X-S4-SourceSystem", "runline");
-      const res = await fetch(url(ctx), { method: "POST", body: form });
-      if (!res.ok)
-        throw new Error(`SIGNL4 error ${res.status}: ${await res.text()}`);
-      return res.json();
+      return send(ctx, {
+        "X-S4-ExternalID": externalId,
+        "X-S4-Status": "resolved",
+      });
     },
   });
 }

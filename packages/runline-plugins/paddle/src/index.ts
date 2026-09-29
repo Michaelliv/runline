@@ -1,44 +1,26 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { paddleCredential } from "./credentials.js";
 
-interface Conn {
-  config: Record<string, unknown>;
-}
-
-function getConn(ctx: { connection: Conn }) {
-  const c = ctx.connection.config;
-  const sandbox = c.sandbox as boolean | undefined;
-  const base = sandbox
-    ? "https://sandbox-vendors.paddle.com/api"
-    : "https://vendors.paddle.com/api";
-  return {
-    base,
-    vendorId: c.vendorId as string,
-    vendorAuthCode: c.vendorAuthCode as string,
-  };
-}
-
+/** A Paddle JSON call; an answer without success is a failure. */
 async function apiRequest(
-  conn: { base: string; vendorId: string; vendorAuthCode: string },
+  ctx: ActionContext,
   endpoint: string,
   body: Record<string, unknown> = {},
 ): Promise<unknown> {
-  body.vendor_id = conn.vendorId;
-  body.vendor_auth_code = conn.vendorAuthCode;
-  const res = await fetch(`${conn.base}${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok)
-    throw new Error(`Paddle API error ${res.status}: ${await res.text()}`);
-  const json = (await res.json()) as Record<string, unknown>;
+  const json = await credentialJson<Record<string, unknown>>(
+    ctx,
+    paddleCredential,
+    "paddle",
+    { target: "api", path: endpoint, method: "POST", json: body },
+  );
   if (!json.success)
     throw new Error(`Paddle API error: ${JSON.stringify(json.error ?? json)}`);
   return json.response;
 }
 
 async function paginate(
-  conn: { base: string; vendorId: string; vendorAuthCode: string },
+  ctx: ActionContext,
   endpoint: string,
   body: Record<string, unknown> = {},
 ): Promise<unknown[]> {
@@ -47,7 +29,7 @@ async function paginate(
   body.page = 1;
   let items: unknown[];
   do {
-    const resp = await apiRequest(conn, endpoint, { ...body });
+    const resp = await apiRequest(ctx, endpoint, { ...body });
     items = Array.isArray(resp) ? resp : [];
     all.push(...items);
     body.page = (body.page as number) + 1;
@@ -58,6 +40,7 @@ async function paginate(
 export default function paddle(rl: RunlinePluginAPI) {
   rl.setName("paddle");
   rl.setVersion("0.1.0");
+  rl.setCredential(paddleCredential);
 
   rl.setConnectionSchema({
     vendorId: {
@@ -137,8 +120,8 @@ export default function paddle(rl: RunlinePluginAPI) {
       if (p.numberOfCoupons) body.num_coupons = p.numberOfCoupons;
       if (p.description) body.description = p.description;
       const resp = (await apiRequest(
-        getConn(ctx),
-        "/2.1/product/create_coupon",
+        ctx,
+        "2.1/product/create_coupon",
         body,
       )) as Record<string, unknown>;
       return resp.coupon_codes;
@@ -154,11 +137,9 @@ export default function paddle(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const resp = (await apiRequest(
-        getConn(ctx),
-        "/2.0/product/list_coupons",
-        { product_id: p.productId },
-      )) as unknown[];
+      const resp = (await apiRequest(ctx, "2.0/product/list_coupons", {
+        product_id: p.productId,
+      })) as unknown[];
       if (p.limit) return resp.slice(0, p.limit as number);
       return resp;
     },
@@ -200,7 +181,7 @@ export default function paddle(rl: RunlinePluginAPI) {
       if (p.expires) body.expires = p.expires;
       if (p.productIds) body.product_ids = p.productIds;
       if (p.recurring !== undefined) body.recurring = p.recurring ? 1 : 0;
-      return apiRequest(getConn(ctx), "/2.1/product/update_coupon", body);
+      return apiRequest(ctx, "2.1/product/update_coupon", body);
     },
   });
 
@@ -228,8 +209,8 @@ export default function paddle(rl: RunlinePluginAPI) {
       if (p.from) body.from = p.from;
       if (p.to) body.to = p.to;
       const resp = (await apiRequest(
-        getConn(ctx),
-        "/2.0/subscription/payments",
+        ctx,
+        "2.0/subscription/payments",
         body,
       )) as unknown[];
       if (p.limit) return resp.slice(0, p.limit as number);
@@ -250,7 +231,7 @@ export default function paddle(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { paymentId, date } = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "/2.0/subscription/payments_reschedule", {
+      return apiRequest(ctx, "2.0/subscription/payments_reschedule", {
         payment_id: paymentId,
         date,
       });
@@ -265,7 +246,7 @@ export default function paddle(rl: RunlinePluginAPI) {
     inputSchema: { planId: { type: "string", required: true } },
     async execute(input, ctx) {
       const { planId } = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "/2.0/subscription/plans", {
+      return apiRequest(ctx, "2.0/subscription/plans", {
         plan: planId,
       });
     },
@@ -277,8 +258,8 @@ export default function paddle(rl: RunlinePluginAPI) {
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
       const resp = (await apiRequest(
-        getConn(ctx),
-        "/2.0/subscription/plans",
+        ctx,
+        "2.0/subscription/plans",
       )) as unknown[];
       const limit = (input as Record<string, unknown>)?.limit;
       if (limit) return resp.slice(0, limit as number);
@@ -294,8 +275,8 @@ export default function paddle(rl: RunlinePluginAPI) {
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
       const resp = (await apiRequest(
-        getConn(ctx),
-        "/2.0/product/get_products",
+        ctx,
+        "2.0/product/get_products",
       )) as Record<string, unknown>;
       const products = (resp.products ?? resp) as unknown[];
       const limit = (input as Record<string, unknown>)?.limit;
@@ -321,16 +302,15 @@ export default function paddle(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const conn = getConn(ctx);
       const body: Record<string, unknown> = {};
       if (p.state) body.state = p.state;
       if (p.planId) body.plan_id = p.planId;
       if (p.subscriptionId) body.subscription_id = p.subscriptionId;
       if (p.limit) {
         body.results_per_page = p.limit;
-        return apiRequest(conn, "/2.0/subscription/users", body);
+        return apiRequest(ctx, "2.0/subscription/users", body);
       }
-      return paginate(conn, "/2.0/subscription/users", body);
+      return paginate(ctx, "2.0/subscription/users", body);
     },
   });
 }

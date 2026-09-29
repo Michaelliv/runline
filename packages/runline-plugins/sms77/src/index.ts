@@ -1,29 +1,25 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson } from "../../_shared/credentials.js";
+import { sms77Credential } from "./credentials.js";
 
-const BASE = "https://gateway.seven.io/api";
-
-async function apiRequest(
-  apiKey: string,
+function apiRequest(
+  ctx: ActionContext,
   endpoint: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  const form = new URLSearchParams();
-  for (const [k, v] of Object.entries(body)) {
-    if (v !== undefined && v !== null) form.set(k, String(v));
-  }
-  const res = await fetch(`${BASE}${endpoint}`, {
+  return credentialJson(ctx, sms77Credential, "sms77", {
+    target: "api",
+    path: endpoint,
     method: "POST",
-    headers: { "X-Api-Key": apiKey, SentWith: "runline" },
-    body: form,
+    form: body,
+    headers: { SentWith: "runline" },
   });
-  if (!res.ok)
-    throw new Error(`seven API error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function sms77(rl: RunlinePluginAPI) {
   rl.setName("sms77");
   rl.setVersion("0.1.0");
+  rl.setCredential(sms77Credential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -33,9 +29,6 @@ export default function sms77(rl: RunlinePluginAPI) {
       env: "SMS77_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("sms.send", {
     access: "write",
@@ -71,7 +64,7 @@ export default function sms77(rl: RunlinePluginAPI) {
       if (p.flash) body.flash = 1;
       if (p.delay) body.delay = p.delay;
       if (p.ttl) body.ttl = p.ttl;
-      return apiRequest(key(ctx), "/sms", body);
+      return apiRequest(ctx, "sms", body);
     },
   });
 
@@ -87,7 +80,7 @@ export default function sms77(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { to: p.to, text: p.message };
       if (p.from) body.from = p.from;
-      return apiRequest(key(ctx), "/voice", body);
+      return apiRequest(ctx, "voice", body);
     },
   });
 }

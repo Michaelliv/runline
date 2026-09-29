@@ -1,4 +1,6 @@
 import type { ActionContext } from "runline";
+import { refuseUnderHost } from "../../_shared/credentials.js";
+import { loginRequest } from "./login.js";
 import {
   APP_VERSION,
   accepted,
@@ -9,7 +11,6 @@ import {
   DEF_LON,
   ensureDevice,
   expiresAt,
-  http,
   normPhone,
   num,
   numOrNull,
@@ -37,6 +38,7 @@ export interface Identity {
 type Warnings = string[];
 
 export async function requestCode(ctx: ActionContext, phone?: string) {
+  refuseUnderHost(ctx);
   await ensureDevice(ctx);
   let cfg = cfgOf(ctx);
   if (phone) {
@@ -57,10 +59,10 @@ export async function requestCode(ctx: ActionContext, phone?: string) {
     appsflyer_uid: `${Date.now()}-${Math.floor(Math.random() * 1e18)}`,
     gaid: "",
   };
-  const r = await http(
+  const r = await loginRequest(
     ctx,
-    `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/otp/challenge`,
-    { method: "POST", body },
+    `/gl/api/v2/phone/${seg(cfg.phone)}/auth/otp/challenge`,
+    body,
   );
   // Gett answers 200 even when it refuses to send, so a refusal is reported
   // rather than an SMS claimed that will never arrive.
@@ -96,13 +98,14 @@ function tokensIn(r: Record<string, unknown>): Record<string, unknown> | null {
 }
 
 export async function verifyCode(ctx: ActionContext, code: string) {
+  refuseUnderHost(ctx);
   const cfg = cfgOf(ctx);
   if (!cfg.phone)
     throw new Error("gett: no phone — call account.requestCode first");
-  const r = await http(
+  const r = await loginRequest(
     ctx,
-    `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/otp/verify`,
-    { method: "POST", body: { code } },
+    `/gl/api/v2/phone/${seg(cfg.phone)}/auth/otp/verify`,
+    { code },
   );
   const toks = tokensIn(r);
   if (toks) {
@@ -130,16 +133,14 @@ export async function verifyCode(ctx: ActionContext, code: string) {
 }
 
 export async function verifyCard(ctx: ActionContext, digits: string) {
+  refuseUnderHost(ctx);
   const cfg = cfgOf(ctx);
   if (!cfg.pendingTempCode)
     throw new Error("gett: no pending MFA — call account.verifyCode first");
-  const r = await http(
+  const r = await loginRequest(
     ctx,
-    `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/mfa/verify`,
-    {
-      method: "POST",
-      body: { temp_code: cfg.pendingTempCode, card_digits: digits },
-    },
+    `/gl/api/v2/phone/${seg(cfg.phone)}/auth/mfa/verify`,
+    { temp_code: cfg.pendingTempCode, card_digits: digits },
   );
   const toks = tokensIn(r);
   if (!toks) {
@@ -154,13 +155,12 @@ export async function verifyCard(ctx: ActionContext, digits: string) {
 }
 
 /**
- * Store the IL-scoped tokens, convert to the GL family the app uses for ongoing
- * refresh, then learn identity and the saved card.
+ * Store the login's tokens, then learn identity and the saved card.
  *
- * The conversion and the discovery are both optional: an IL token still serves
- * reads, and a missing card only blocks booking. Neither failure is allowed to
- * lose a login that otherwise succeeded, so both are reported as warnings rather
- * than swallowed or thrown.
+ * The tokens are IL-scoped; the first renewal, at the GL token endpoint the
+ * credential declares, is what converts them to the GL family the app keeps
+ * refreshing. The discovery is optional: a missing card only blocks booking,
+ * so its failure is reported as a warning rather than losing the login.
  */
 async function finishTokens(
   ctx: ActionContext,
@@ -172,33 +172,6 @@ async function finishTokens(
     accessToken: pick(toks.access_token),
     accessTokenExpiresAt: expiresAt(toks.expires_in),
   });
-  const cfg = cfgOf(ctx);
-  try {
-    // `?lc=en` is required here too: the conversion 400s without it even with a
-    // valid IL bearer.
-    const gl = await http(
-      ctx,
-      `/gl/api/v2/phone/${seg(cfg.phone, "phone")}/auth/token?lc=en`,
-      {
-        method: "POST",
-        token: cfg.accessToken,
-        body: { grant_type: "refresh_token", refresh_token: cfg.refreshToken },
-      },
-    );
-    const patch: Record<string, unknown> = {};
-    const rotated = pick(gl.refresh_token);
-    const issued = pick(gl.access_token);
-    if (rotated) patch.refreshToken = rotated;
-    if (issued) {
-      patch.accessToken = issued;
-      patch.accessTokenExpiresAt = expiresAt(gl.expires_in);
-    }
-    if (Object.keys(patch).length) await ctx.updateConnection(patch);
-  } catch (e) {
-    warnings.push(
-      `IL->GL token conversion failed (${(e as Error).message}); reads work, but the session may need an earlier re-login.`,
-    );
-  }
   try {
     await createSession(ctx, DEF_LAT, DEF_LON);
   } catch (e) {
@@ -275,7 +248,7 @@ export async function createSession(
   };
   const r = await authed(
     ctx,
-    `/gl/rider-facade/phone/${seg(cfg.phone, "phone")}/create_session`,
+    `/gl/rider-facade/phone/${seg(cfg.phone)}/create_session`,
     { method: "POST", body },
   );
   const profile = obj(r.user_profile);

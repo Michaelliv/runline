@@ -1,49 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    username: c.username as string,
-    password: c.password as string,
-  };
-}
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { wordpressCredential } from "./credentials.js";
 
 async function apiRequest(
-  conn: ReturnType<typeof getConn>,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.url}/wp-json/wp/v2${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, wordpressCredential, "wordpress", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${conn.username}:${conn.password}`)}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`WordPress error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 function registerContentCrud(
   rl: RunlinePluginAPI,
   resource: string,
   plural: string,
-  conn: (ctx: {
-    connection: { config: Record<string, unknown> };
-  }) => ReturnType<typeof getConn>,
 ) {
   rl.registerAction(`${resource}.create`, {
     access: "write",
@@ -59,12 +37,7 @@ function registerContentCrud(
       slug: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        conn(ctx),
-        "POST",
-        `/${plural}`,
-        input as Record<string, unknown>,
-      );
+      return apiRequest(ctx, "POST", plural, input as Record<string, unknown>);
     },
   });
 
@@ -74,9 +47,9 @@ function registerContentCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        conn(ctx),
+        ctx,
         "GET",
-        `/${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -97,7 +70,7 @@ function registerContentCrud(
       if (p.search) qs.search = p.search;
       if (p.status) qs.status = p.status;
       if (p.orderby) qs.orderby = p.orderby;
-      return apiRequest(conn(ctx), "GET", `/${plural}`, undefined, qs);
+      return apiRequest(ctx, "GET", plural, undefined, qs);
     },
   });
 
@@ -113,7 +86,7 @@ function registerContentCrud(
     },
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
-      return apiRequest(conn(ctx), "POST", `/${plural}/${id}`, fields);
+      return apiRequest(ctx, "POST", `${plural}/${pathSegment(id)}`, fields);
     },
   });
 
@@ -129,9 +102,9 @@ function registerContentCrud(
       const qs: Record<string, unknown> = {};
       if (p.force) qs.force = "true";
       return apiRequest(
-        conn(ctx),
+        ctx,
         "DELETE",
-        `/${plural}/${p.id}`,
+        `${plural}/${pathSegment(p.id)}`,
         undefined,
         qs,
       );
@@ -142,6 +115,7 @@ function registerContentCrud(
 export default function wordpress(rl: RunlinePluginAPI) {
   rl.setName("wordpress");
   rl.setVersion("0.1.0");
+  rl.setCredential(wordpressCredential);
   rl.setConnectionSchema({
     url: {
       type: "string",
@@ -163,8 +137,8 @@ export default function wordpress(rl: RunlinePluginAPI) {
     },
   });
 
-  registerContentCrud(rl, "post", "posts", getConn);
-  registerContentCrud(rl, "page", "pages", getConn);
+  registerContentCrud(rl, "post", "posts");
+  registerContentCrud(rl, "page", "pages");
 
   // ── User ────────────────────────────────────────────
 
@@ -178,12 +152,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
       name: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      return apiRequest(
-        getConn(ctx),
-        "POST",
-        "/users",
-        input as Record<string, unknown>,
-      );
+      return apiRequest(ctx, "POST", "users", input as Record<string, unknown>);
     },
   });
 
@@ -193,9 +162,9 @@ export default function wordpress(rl: RunlinePluginAPI) {
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        getConn(ctx),
+        ctx,
         "GET",
-        `/users/${(input as Record<string, unknown>).id}`,
+        `users/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -212,7 +181,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (p.limit) qs.per_page = p.limit;
       if (p.search) qs.search = p.search;
-      return apiRequest(getConn(ctx), "GET", "/users", undefined, qs);
+      return apiRequest(ctx, "GET", "users", undefined, qs);
     },
   });
 
@@ -227,7 +196,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { id, ...fields } = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "POST", `/users/${id}`, fields);
+      return apiRequest(ctx, "POST", `users/${pathSegment(id)}`, fields);
     },
   });
 
@@ -242,7 +211,7 @@ export default function wordpress(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      return apiRequest(getConn(ctx), "DELETE", "/users/me", undefined, {
+      return apiRequest(ctx, "DELETE", "users/me", undefined, {
         reassign: (input as Record<string, unknown>).reassign,
         force: "true",
       });

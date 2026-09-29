@@ -1,20 +1,20 @@
 import { setTimeout as sleep } from "node:timers/promises";
+import type { ActionContext, HttpMethod } from "runline";
 import * as t from "typebox";
 import { Check } from "typebox/value";
-import { authedFetch } from "../../_shared/authedFetch.js";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import {
   type SavedMedia,
   SEND_FILE_NOTE,
   writeMediaFile,
 } from "../../_shared/mediaFile.js";
-import { readBounded, readBoundedBytes, seg } from "../../_shared/provider.js";
+import { readBoundedBytes } from "../../_shared/provider.js";
+import { falCredential } from "./credentials.js";
 
-export type Ctx = { connection: { config: Record<string, unknown> } };
+export type Ctx = ActionContext;
 export const STRICT = { additionalProperties: false } as const;
 export const DEFAULT_TIMEOUT_MS = 300_000;
-const QUEUE_BASE = "https://queue.fal.run";
 const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
-const MAX_JSON_BYTES = 32 * 1024 * 1024;
 
 const receiptSchema = t.Object({
   request_id: t.String({ minLength: 1 }),
@@ -54,87 +54,77 @@ export function assertModelId(model: string): string {
 }
 
 /** Queue operations address the application, excluding its inference sub-path. */
-function queueUrl(model: string, suffix = ""): string {
+function queuePath(model: string, suffix = ""): string {
   const id = assertModelId(model);
   const parts = id.split("/");
   const count = parts[0] === "workflows" || parts[0] === "comfy" ? 3 : 2;
-  return `${QUEUE_BASE}/${suffix ? parts.slice(0, count).join("/") : id}${suffix}`;
+  return `${suffix ? parts.slice(0, count).join("/") : id}${suffix}`;
 }
 
-/** Keep validation field names and error types, without echoing model inputs. */
-export function explainFalError(status: number, body: unknown): string {
-  const data = object(body) ? body : {};
-  const detail = data.detail;
-  const message = Array.isArray(detail)
-    ? detail
-        .filter(object)
-        .map((entry) => {
-          const field = Array.isArray(entry.loc) ? entry.loc.join(".") : "body";
-          return `${field}: ${String(entry.msg ?? "invalid")} [${String(entry.type ?? "error")}]`;
-        })
-        .join("; ")
-    : typeof detail === "string"
-      ? detail
-      : typeof data.status === "string"
-        ? data.status
-        : "request failed";
-  const type =
-    typeof data.error_type === "string" ? ` [${data.error_type}]` : "";
-  return `fal ${status}: ${message.slice(0, 1000)}${type}`;
-}
-
-/** All credential-bearing calls use a fixed origin and refuse redirects. */
+/**
+ * All credential-bearing calls go through the queue target; the transport
+ * pins the origin and refuses redirects. Failures are reported by status
+ * alone, without echoing provider text.
+ */
 async function request(
   ctx: Ctx,
-  url: string,
-  init: RequestInit = {},
+  path: string,
+  init: { method?: HttpMethod; json?: unknown } = {},
 ): Promise<unknown> {
   const key = ctx.connection.config.apiKey;
-  if (typeof key !== "string" || !key.trim())
+  if (!ctx.credentials && (typeof key !== "string" || !key.trim()))
     throw new Error(
       "Missing FAL_KEY. Create a key at https://fal.ai/dashboard/keys.",
     );
-  const response = await authedFetch(url, {
-    ...init,
-    headers: {
-      authorization: `Key ${key.trim()}`,
-      accept: "application/json",
-      "content-type": "application/json",
-    },
-    signal: init.signal ?? AbortSignal.timeout(60_000),
+  return credentialJson(ctx, falCredential, "fal", {
+    target: "queue",
+    path,
+    method: init.method ?? "GET",
+    // Every queue call declares a JSON body type, even bodyless GETs.
+    headers: { "Content-Type": "application/json" },
+    ...(init.json !== undefined ? { body: JSON.stringify(init.json) } : {}),
   });
-  const text = await readBounded(
-    response,
-    MAX_JSON_BYTES,
-    "fal: response exceeds 32 MiB",
-  );
-  let body: unknown;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    throw new Error(`fal HTTP ${response.status}: non-JSON response`);
-  }
-  if (!response.ok) throw new Error(explainFalError(response.status, body));
-  return body;
+}
+
+/** The queue deadline stops the wait; the transport bounds the request itself. */
+function raceSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  // The transport settles the abandoned request on its own; its rejection is handled here.
+  promise.catch(() => {});
+  return new Promise<T>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 export async function submit(
   ctx: Ctx,
   model: string,
   input: Record<string, unknown>,
-  signal?: AbortSignal,
 ) {
   // A failed POST can have been accepted, so submissions are never retried here.
-  const receipt = await request(ctx, queueUrl(model), {
+  const receipt = await request(ctx, queuePath(model), {
     method: "POST",
-    body: JSON.stringify(input),
-    signal,
+    json: input,
   });
   if (!Check(receiptSchema, receipt))
     throw new Error(
       "fal: invalid submission receipt or no request id; do not resubmit automatically",
     );
-  seg(receipt.request_id, "request id", "fal");
+  pathSegment(receipt.request_id);
   return receipt;
 }
 
@@ -143,15 +133,13 @@ export async function status(
   model: string,
   requestId: string,
   logs = false,
-  signal?: AbortSignal,
 ) {
   const body = await request(
     ctx,
-    queueUrl(
+    queuePath(
       model,
-      `/requests/${seg(requestId, "request id", "fal")}/status${logs ? "?logs=1" : ""}`,
+      `/requests/${pathSegment(requestId)}/status${logs ? "?logs=1" : ""}`,
     ),
-    { signal },
   );
   if (!Check(statusSchema, body))
     throw new Error("fal: invalid queue status response");
@@ -162,12 +150,10 @@ export async function result(
   ctx: Ctx,
   model: string,
   requestId: string,
-  signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
   const body = await request(
     ctx,
-    queueUrl(model, `/requests/${seg(requestId, "request id", "fal")}`),
-    { signal },
+    queuePath(model, `/requests/${pathSegment(requestId)}`),
   );
   if (!object(body)) throw new Error("fal: expected an object result");
   return body;
@@ -176,7 +162,7 @@ export async function result(
 export async function cancel(ctx: Ctx, model: string, requestId: string) {
   const body = await request(
     ctx,
-    queueUrl(model, `/requests/${seg(requestId, "request id", "fal")}/cancel`),
+    queuePath(model, `/requests/${pathSegment(requestId)}/cancel`),
     { method: "PUT" },
   );
   if (!object(body) || body.status !== "CANCELLATION_REQUESTED")
@@ -194,17 +180,21 @@ export async function runModel(
   const signal = AbortSignal.timeout(timeoutMs);
   let requestId: string | undefined;
   try {
-    requestId = (await submit(ctx, model, input, signal)).request_id;
+    requestId = (await raceSignal(submit(ctx, model, input), signal))
+      .request_id;
     for (;;) {
       signal.throwIfAborted();
-      const current = await status(ctx, model, requestId, false, signal);
+      const current = await raceSignal(
+        status(ctx, model, requestId, false),
+        signal,
+      );
       if (current.status === "COMPLETED") {
         if (current.error || current.error_type)
           throw new Error(
             `fal: ${current.error ?? "generation failed"}${current.error_type ? ` [${current.error_type}]` : ""}`,
           );
         return {
-          output: await result(ctx, model, requestId, signal),
+          output: await raceSignal(result(ctx, model, requestId), signal),
           requestId,
         };
       }
@@ -268,7 +258,11 @@ export function collectMedia(
   return found;
 }
 
-/** Restrict automatic downloads to fal's CDN, including every redirect target. */
+/**
+ * Restrict automatic downloads to fal's CDN, including every redirect target.
+ * These reads carry no credential, so they do not use the broker:
+ * redirects are followed manually, each hop re-validated here.
+ */
 function mediaUrl(value: string): URL {
   const url = new URL(value);
   if (
@@ -398,5 +392,5 @@ export const saveDirSchema = t.String({
 });
 export const extraInputSchema = t.Record(t.String(), t.Unknown(), {
   description:
-    "Model-specific fields, overriding action defaults. See https://fal.ai/models/<model>/api. Media downloads support HTTPS fal.media URLs and data URIs, up to 512 MiB each; JSON responses are limited to 32 MiB.",
+    "Model-specific fields, overriding action defaults. See https://fal.ai/models/<model>/api. Media downloads support HTTPS fal.media URLs and data URIs, up to 512 MiB each; JSON responses are limited to 64 MiB.",
 });

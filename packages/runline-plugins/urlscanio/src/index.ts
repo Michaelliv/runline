@@ -1,34 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { urlscanioCredential } from "./credentials.js";
 
-const BASE = "https://urlscan.io/api/v1";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
+  query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, urlscanioCredential, "urlscanio", {
+    target: "api",
+    path,
     method,
-    headers: { "API-Key": apiKey, "Content-Type": "application/json" },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`urlscan.io error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function urlscanio(rl: RunlinePluginAPI) {
   rl.setName("urlscanio");
   rl.setVersion("0.1.0");
+  rl.setCredential(urlscanioCredential);
   rl.setConnectionSchema({
     apiKey: {
       type: "string",
@@ -37,9 +30,6 @@ export default function urlscanio(rl: RunlinePluginAPI) {
       env: "URLSCANIO_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("scan.perform", {
     access: "write",
@@ -65,7 +55,7 @@ export default function urlscanio(rl: RunlinePluginAPI) {
       if (p.tags)
         body.tags = (p.tags as string).split(",").map((t) => t.trim());
       if (p.customAgent) body.customAgent = p.customAgent;
-      return apiRequest(key(ctx), "POST", "/scan", body);
+      return apiRequest(ctx, "POST", "scan", body);
     },
   });
 
@@ -75,9 +65,9 @@ export default function urlscanio(rl: RunlinePluginAPI) {
     inputSchema: { scanId: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/result/${(input as Record<string, unknown>).scanId}`,
+        `result/${pathSegment((input as Record<string, unknown>).scanId)}`,
       );
     },
   });
@@ -94,9 +84,9 @@ export default function urlscanio(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = { size: p.limit ?? 100 };
       if (p.query) qs.q = p.query;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        "/search",
+        "search",
         undefined,
         qs,
       )) as Record<string, unknown>;

@@ -1,10 +1,11 @@
 import * as t from "typebox";
+import { MAX_TIMEOUT_MS } from "./credentials.js";
 
 export const STRICT = { additionalProperties: false } as const;
 export const text = t.String({ minLength: 1, pattern: "\\S" });
 export const timeout = t.Integer({
   minimum: 1000,
-  maximum: 3_600_000,
+  maximum: MAX_TIMEOUT_MS,
   default: 300_000,
   description:
     "Request deadline including the response body; does not cancel provider work.",

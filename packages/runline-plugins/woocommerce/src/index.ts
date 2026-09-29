@@ -1,48 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { woocommerceCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    consumerKey: c.consumerKey as string,
-    consumerSecret: c.consumerSecret as string,
-  };
-}
-
-async function apiRequest(
-  conn: ReturnType<typeof getConn>,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${conn.url}/wp-json/wc/v3${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, woocommerceCredential, "woocommerce", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${conn.consumerKey}:${conn.consumerSecret}`)}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`WooCommerce error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 function registerCrud(
   rl: RunlinePluginAPI,
   resource: string,
   plural: string,
-  conn: (ctx: {
-    connection: { config: Record<string, unknown> };
-  }) => ReturnType<typeof getConn>,
   createSchema: Record<
     string,
     { type: string; required: boolean; description?: string }
@@ -53,12 +32,7 @@ function registerCrud(
     description: `Create a ${resource}`,
     inputSchema: createSchema,
     async execute(input, ctx) {
-      return apiRequest(
-        conn(ctx),
-        "POST",
-        `/${plural}`,
-        input as Record<string, unknown>,
-      );
+      return apiRequest(ctx, "POST", plural, input as Record<string, unknown>);
     },
   });
 
@@ -68,9 +42,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        conn(ctx),
+        ctx,
         "GET",
-        `/${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -89,7 +63,7 @@ function registerCrud(
       if (p.limit) qs.per_page = p.limit;
       if (p.search) qs.search = p.search;
       if (p.status) qs.status = p.status;
-      return apiRequest(conn(ctx), "GET", `/${plural}`, undefined, qs);
+      return apiRequest(ctx, "GET", plural, undefined, qs);
     },
   });
 
@@ -103,9 +77,9 @@ function registerCrud(
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        conn(ctx),
+        ctx,
         "PUT",
-        `/${plural}/${p.id}`,
+        `${plural}/${pathSegment(p.id)}`,
         p.data as Record<string, unknown>,
       );
     },
@@ -117,9 +91,9 @@ function registerCrud(
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        conn(ctx),
+        ctx,
         "DELETE",
-        `/${plural}/${(input as Record<string, unknown>).id}`,
+        `${plural}/${pathSegment((input as Record<string, unknown>).id)}`,
         undefined,
         { force: "true" },
       );
@@ -130,6 +104,7 @@ function registerCrud(
 export default function woocommerce(rl: RunlinePluginAPI) {
   rl.setName("woocommerce");
   rl.setVersion("0.1.0");
+  rl.setCredential(woocommerceCredential);
   rl.setConnectionSchema({
     url: {
       type: "string",
@@ -151,7 +126,7 @@ export default function woocommerce(rl: RunlinePluginAPI) {
     },
   });
 
-  registerCrud(rl, "product", "products", getConn, {
+  registerCrud(rl, "product", "products", {
     name: { type: "string", required: true },
     type: {
       type: "string",
@@ -163,7 +138,7 @@ export default function woocommerce(rl: RunlinePluginAPI) {
     sku: { type: "string", required: false },
   });
 
-  registerCrud(rl, "order", "orders", getConn, {
+  registerCrud(rl, "order", "orders", {
     status: {
       type: "string",
       required: false,
@@ -179,7 +154,7 @@ export default function woocommerce(rl: RunlinePluginAPI) {
     payment_method: { type: "string", required: false },
   });
 
-  registerCrud(rl, "customer", "customers", getConn, {
+  registerCrud(rl, "customer", "customers", {
     email: { type: "string", required: true },
     first_name: { type: "string", required: false },
     last_name: { type: "string", required: false },

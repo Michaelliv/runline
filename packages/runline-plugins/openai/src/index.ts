@@ -17,14 +17,13 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
+import { credentialJson, multipartBody } from "../../_shared/credentials.js";
 import {
   readImageInput,
   SEND_FILE_NOTE,
   writeImageFile,
 } from "../../_shared/mediaFile.js";
-
-const ENDPOINT = "https://api.openai.com/v1/images/generations";
-const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
+import { openaiCredential } from "./credentials.js";
 
 /**
  * Newest GPT Image model; override per call or via the connection.
@@ -95,6 +94,7 @@ interface OpenAIImage {
 export default function openai(rl: RunlinePluginAPI) {
   rl.setName("openai");
   rl.setVersion("0.1.0");
+  rl.setCredential(openaiCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -125,7 +125,8 @@ export default function openai(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -160,7 +161,6 @@ export default function openai(rl: RunlinePluginAPI) {
         throw new Error("openai: prompt is required");
       }
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const model = resolveModel(p.model, ctx.connection.config);
 
       const body: Record<string, unknown> = {
@@ -179,19 +179,12 @@ export default function openai(rl: RunlinePluginAPI) {
       if (p.quality) body.quality = p.quality;
       if (p.style) body.style = p.style;
 
-      const res = await fetch(ENDPOINT, {
+      const data = (await credentialJson(ctx, openaiCredential, "openai", {
+        target: "api",
+        path: "generations",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        throw new Error(`OpenAI API error ${res.status}: ${await res.text()}`);
-      }
-
-      const data = (await res.json()) as { data?: OpenAIImage[] };
+        json: body,
+      })) as { data?: OpenAIImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) => ({
         ...writeImageFile({
@@ -221,7 +214,8 @@ export default function openai(rl: RunlinePluginAPI) {
       imagePath: {
         type: "string",
         required: false,
-        description: "Path to the source image file. Either this or imagePaths is required.",
+        description:
+          "Path to the source image file. Either this or imagePaths is required.",
       },
       imagePaths: {
         type: "array",
@@ -232,7 +226,8 @@ export default function openai(rl: RunlinePluginAPI) {
       saveDir: {
         type: "string",
         required: false,
-        description: "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
       },
       model: {
         type: "string",
@@ -271,7 +266,6 @@ export default function openai(rl: RunlinePluginAPI) {
         throw new Error("openai: imagePath (or imagePaths) is required");
       }
 
-      const apiKey = ctx.connection.config.apiKey as string;
       const model = resolveModel(p.model, ctx.connection.config);
 
       const form = new FormData();
@@ -282,19 +276,21 @@ export default function openai(rl: RunlinePluginAPI) {
       if (p.quality) form.append("quality", p.quality);
       for (const path of paths) {
         const img = readImageInput(path, "openai");
-        form.append("image[]", new Blob([img.bytes], { type: img.mimeType }), img.fileName);
+        form.append(
+          "image[]",
+          new Blob([img.bytes], { type: img.mimeType }),
+          img.fileName,
+        );
       }
 
-      const res = await fetch(EDIT_ENDPOINT, {
+      const { body: formBytes, contentType } = await multipartBody(form);
+      const data = (await credentialJson(ctx, openaiCredential, "openai", {
+        target: "api",
+        path: "edits",
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: form,
-      });
-      if (!res.ok) {
-        throw new Error(`OpenAI API error ${res.status}: ${await res.text()}`);
-      }
-
-      const data = (await res.json()) as { data?: OpenAIImage[] };
+        body: formBytes,
+        headers: { "Content-Type": contentType },
+      })) as { data?: OpenAIImage[] };
       const stamp = Date.now();
       const images = (data.data ?? []).map((d, i) => ({
         ...writeImageFile({

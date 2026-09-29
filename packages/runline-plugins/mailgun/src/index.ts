@@ -1,8 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { mailgunCredential, mailgunRegion } from "./credentials.js";
 
 export default function mailgun(rl: RunlinePluginAPI) {
   rl.setName("mailgun");
   rl.setVersion("0.1.0");
+  rl.setCredential(mailgunCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -61,30 +64,21 @@ export default function mailgun(rl: RunlinePluginAPI) {
         unknown
       >;
       const cfg = ctx.connection.config;
-      const apiKey = cfg.apiKey as string;
-      const apiDomain = (cfg.apiDomain as string) ?? "api.mailgun.net";
-      const emailDomain = cfg.emailDomain as string;
 
-      const form = new URLSearchParams();
-      form.set("to", to as string);
-      form.set("from", from as string);
-      form.set("subject", subject as string);
-      if (text) form.set("text", text as string);
-      if (html) form.set("html", html as string);
-      if (cc) form.set("cc", cc as string);
-      if (bcc) form.set("bcc", bcc as string);
-
-      const res = await fetch(
-        `https://${apiDomain}/v3/${emailDomain}/messages`,
-        {
-          method: "POST",
-          headers: { Authorization: `Basic ${btoa(`api:${apiKey}`)}` },
-          body: form,
+      return credentialJson(ctx, mailgunCredential, "mailgun", {
+        target: mailgunRegion(cfg),
+        path: `${pathSegment(cfg.emailDomain)}/messages`,
+        method: "POST",
+        form: {
+          to,
+          from,
+          subject,
+          text: text || undefined,
+          html: html || undefined,
+          cc: cc || undefined,
+          bcc: bcc || undefined,
         },
-      );
-      if (!res.ok)
-        throw new Error(`Mailgun error ${res.status}: ${await res.text()}`);
-      return res.json();
+      });
     },
   });
 }

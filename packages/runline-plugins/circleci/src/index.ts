@@ -1,57 +1,42 @@
-import type { RunlinePluginAPI } from "runline";
-
-const BASE_URL = "https://circleci.com/api/v2";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  pathSegment,
+  pathSegments,
+} from "../../_shared/credentials.js";
+import { circleciCredential } from "./credentials.js";
 
 async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-
-  const opts: RequestInit = {
+  return credentialJson(ctx, circleciCredential, "circleci", {
+    target: "api",
+    path,
     method,
-    headers: {
-      "Circle-Token": token,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET") {
-    opts.body = JSON.stringify(body);
-  }
-
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`CircleCI API error ${res.status}: ${text}`);
-  }
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginateAll(
-  token: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown[]> {
   const results: unknown[] = [];
   const q = { ...qs };
 
   while (true) {
-    const data = (await apiRequest(
-      token,
-      "GET",
-      endpoint,
-      undefined,
-      q,
-    )) as Record<string, unknown>;
+    const data = (await apiRequest(ctx, "GET", path, undefined, q)) as Record<
+      string,
+      unknown
+    >;
     const items = (data.items as unknown[]) ?? [];
     results.push(...items);
     if (!data.next_page_token) break;
@@ -60,19 +45,10 @@ async function paginateAll(
   return results;
 }
 
-function getToken(ctx: {
-  connection: { config: Record<string, unknown> };
-}): string {
-  return ctx.connection.config.apiKey as string;
-}
-
-function encodeSlug(slug: string): string {
-  return slug.replace(/\//g, "%2F");
-}
-
 export default function circleci(rl: RunlinePluginAPI) {
   rl.setName("circleci");
   rl.setVersion("0.1.0");
+  rl.setCredential(circleciCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -110,9 +86,9 @@ export default function circleci(rl: RunlinePluginAPI) {
         pipelineNumber: number;
       };
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "GET",
-        `/project/${vcs}/${encodeSlug(projectSlug)}/pipeline/${pipelineNumber}`,
+        `project/${pathSegment(vcs)}/${pathSegments(projectSlug)}/pipeline/${pathSegment(pipelineNumber)}`,
       );
     },
   });
@@ -147,15 +123,14 @@ export default function circleci(rl: RunlinePluginAPI) {
         string,
         unknown
       >;
-      const token = getToken(ctx);
-      const endpoint = `/project/${vcs}/${encodeSlug(projectSlug as string)}/pipeline`;
+      const endpoint = `project/${pathSegment(vcs)}/${pathSegments(projectSlug)}/pipeline`;
       const qs: Record<string, unknown> = {};
       if (branch) qs.branch = branch;
 
       if (limit) {
         qs.limit = limit;
         const data = (await apiRequest(
-          token,
+          ctx,
           "GET",
           endpoint,
           undefined,
@@ -163,7 +138,7 @@ export default function circleci(rl: RunlinePluginAPI) {
         )) as Record<string, unknown>;
         return ((data.items as unknown[]) ?? []).slice(0, limit as number);
       }
-      return paginateAll(token, endpoint, qs);
+      return paginateAll(ctx, endpoint, qs);
     },
   });
 
@@ -197,9 +172,9 @@ export default function circleci(rl: RunlinePluginAPI) {
       if (branch) body.branch = branch;
       if (tag) body.tag = tag;
       return apiRequest(
-        getToken(ctx),
+        ctx,
         "POST",
-        `/project/${vcs}/${encodeSlug(projectSlug as string)}/pipeline`,
+        `project/${pathSegment(vcs)}/${pathSegments(projectSlug)}/pipeline`,
         body,
       );
     },

@@ -1,40 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { securityScorecardCredential } from "./credentials.js";
 
-const BASE = "https://api.securityscorecard.io";
-
-async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}/${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, securityScorecardCredential, "securityScorecard", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Token ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(
-      `SecurityScorecard error ${res.status}: ${await res.text()}`,
-    );
-  const text = await res.text();
-  return text ? JSON.parse(text) : {};
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function securityScorecard(rl: RunlinePluginAPI) {
   rl.setName("securityScorecard");
   rl.setVersion("0.1.0");
+  rl.setCredential(securityScorecardCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -45,9 +32,6 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     },
   });
 
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
-
   // ── Company ─────────────────────────────────────────
 
   rl.registerAction("company.getScorecard", {
@@ -56,9 +40,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     inputSchema: { domain: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `companies/${(input as Record<string, unknown>).domain}`,
+        `companies/${pathSegment((input as Record<string, unknown>).domain)}`,
       );
     },
   });
@@ -73,9 +57,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `companies/${p.domain}/factors`,
+        `companies/${pathSegment(p.domain)}/factors`,
       )) as Record<string, unknown>;
       let entries = (data.entries ?? []) as unknown[];
       if (p.limit) entries = entries.slice(0, p.limit as number);
@@ -106,9 +90,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       if (p.from) qs.from = p.from;
       if (p.to) qs.to = p.to;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `companies/${p.domain}/history/factors/score`,
+        `companies/${pathSegment(p.domain)}/history/factors/score`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -128,9 +112,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `companies/${p.domain}/score-plans/by-target/${p.targetScore}`,
+        `companies/${pathSegment(p.domain)}/score-plans/by-target/${pathSegment(p.targetScore)}`,
       )) as Record<string, unknown>;
       return data.entries;
     },
@@ -144,9 +128,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     inputSchema: { industry: { type: "string", required: true } },
     async execute(input, ctx) {
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `industries/${(input as Record<string, unknown>).industry}/score`,
+        `industries/${pathSegment((input as Record<string, unknown>).industry)}/score`,
       );
     },
   });
@@ -167,7 +151,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "POST", "portfolios", {
+      return apiRequest(ctx, "POST", "portfolios", {
         name: p.name,
         description: p.description,
         privacy: p.privacy,
@@ -180,7 +164,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     description: "List all portfolios",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const data = (await apiRequest(key(ctx), "GET", "portfolios")) as Record<
+      const data = (await apiRequest(ctx, "GET", "portfolios")) as Record<
         string,
         unknown
       >;
@@ -200,9 +184,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     inputSchema: { portfolioId: { type: "string", required: true } },
     async execute(input, ctx) {
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `portfolios/${(input as Record<string, unknown>).portfolioId}`,
+        `portfolios/${pathSegment((input as Record<string, unknown>).portfolioId)}`,
       );
       return { success: true };
     },
@@ -218,9 +202,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       return apiRequest(
-        key(ctx),
+        ctx,
         "PUT",
-        `portfolios/${p.portfolioId}/companies/${p.domain}`,
+        `portfolios/${pathSegment(p.portfolioId)}/companies/${pathSegment(p.domain)}`,
       );
     },
   });
@@ -235,9 +219,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       await apiRequest(
-        key(ctx),
+        ctx,
         "DELETE",
-        `portfolios/${p.portfolioId}/companies/${p.domain}`,
+        `portfolios/${pathSegment(p.portfolioId)}/companies/${pathSegment(p.domain)}`,
       );
       return { success: true };
     },
@@ -253,9 +237,9 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `portfolios/${p.portfolioId}/companies`,
+        `portfolios/${pathSegment(p.portfolioId)}/companies`,
       )) as Record<string, unknown>;
       let entries = (data.entries ?? []) as unknown[];
       if (p.limit) entries = entries.slice(0, p.limit as number);
@@ -276,7 +260,7 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return apiRequest(key(ctx), "POST", "invitations", {
+      return apiRequest(ctx, "POST", "invitations", {
         email: p.email,
         first_name: p.firstName,
         last_name: p.lastName,
@@ -322,7 +306,12 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
       else body.portfolio_id = p.portfolioId;
       if (p.format) body.format = p.format;
       if (p.branding) body.branding = p.branding;
-      return apiRequest(key(ctx), "POST", `reports/${p.reportType}`, body);
+      return apiRequest(
+        ctx,
+        "POST",
+        `reports/${pathSegment(p.reportType)}`,
+        body,
+      );
     },
   });
 
@@ -331,11 +320,10 @@ export default function securityScorecard(rl: RunlinePluginAPI) {
     description: "List recent reports",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const data = (await apiRequest(
-        key(ctx),
-        "GET",
-        "reports/recent",
-      )) as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "GET", "reports/recent")) as Record<
+        string,
+        unknown
+      >;
       let entries = (data.entries ?? []) as unknown[];
       if ((input as Record<string, unknown>)?.limit)
         entries = entries.slice(

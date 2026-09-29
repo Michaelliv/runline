@@ -1,15 +1,17 @@
+import type { ActionContext } from "runline";
 import * as t from "typebox";
-import { authedFetch } from "./authedFetch.js";
-import { readBounded } from "./provider.js";
+import { errorIdentifier, failureMessage } from "./credentials.js";
+
+export { pathSegment } from "./credentials.js";
 
 /**
- * Shared helpers for plugins that talk to the Shift cloud API
- * (shiftWork, shiftPages, shiftTranscription, shiftObjects, shiftCrm,
- * shiftBwm, shiftOcr, shiftAtlas). One base URL, one bearer-auth
- * transport, and the common TypeBox schema builders.
+ * Shared helpers for plugins that talk to the Shift cloud API: one base
+ * URL, the common TypeBox schema builders, and the Shift error envelope.
+ * Every request carrying a Shift API key signs through the declared
+ * credential in shiftCredentials.ts.
  */
 
-export type Ctx = { connection: { config: Record<string, unknown> } };
+export type Ctx = ActionContext;
 
 export const STRICT_OBJECT = { additionalProperties: false } as const;
 export const STRICT_UPDATE_OBJECT = {
@@ -56,88 +58,26 @@ export function baseUrl(): string {
   return `${SHIFT_API_URL}/`;
 }
 
-/** Default deadline; endpoints that hold the request open pass their own. */
-export const SHIFT_REQUEST_TIMEOUT_MS = 60_000;
-const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
-
 /**
- * The transport for every request carrying a Shift API key. Redirects are
- * refused so the key never reaches another host; one deadline covers the
- * whole exchange including the body, in place of any caller signal; the
- * text body is read with a ceiling and returned buffered, so JSON and text
- * callers consume it as usual.
+ * A failed response, read as a Shift error envelope when it is one: the
+ * service's `code` (else its `type`) and the offending `param`.
  */
-export async function shiftFetch(
-  input: string | URL,
-  init: RequestInit = {},
-  timeoutMs = SHIFT_REQUEST_TIMEOUT_MS,
-): Promise<Response> {
-  const response = await authedFetch(input, {
-    ...init,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  const text = await readBounded(
-    response,
-    MAX_RESPONSE_BYTES,
-    "Shift API response exceeds 16 MiB",
-  );
-  return new Response(text || null, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
-}
-
-export function apiKey(ctx: Ctx): string {
-  const key = ctx.connection.config.apiKey;
-  if (typeof key !== "string" || !key) {
-    throw new Error("Shift Labs apiKey is required");
+export async function shiftError(
+  plugin: string,
+  response: Response,
+): Promise<Error> {
+  let code: string | undefined;
+  let param: string | undefined;
+  try {
+    const error = ((await response.json()) as { error?: unknown }).error;
+    if (typeof error === "string") code = errorIdentifier(error);
+    else if (error && typeof error === "object") {
+      const shaped = error as Record<string, unknown>;
+      code = errorIdentifier(shaped.code) ?? errorIdentifier(shaped.type);
+      param = errorIdentifier(shaped.param);
+    }
+  } catch {
+    // Not an error envelope: the status alone.
   }
-  return key;
-}
-
-export async function request<T>(
-  ctx: Ctx,
-  path: string,
-  init: RequestInit = {},
-  timeoutMs = SHIFT_REQUEST_TIMEOUT_MS,
-): Promise<T> {
-  const headers = new Headers(init.headers);
-  headers.set("authorization", `Bearer ${apiKey(ctx)}`);
-
-  if (init.body && !headers.has("content-type")) {
-    headers.set("content-type", "application/json");
-  }
-
-  const response = await shiftFetch(
-    new URL(path, baseUrl()),
-    { ...init, headers },
-    timeoutMs,
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Shift Labs API error ${response.status}: ${await response.text()}`,
-    );
-  }
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
-}
-
-export function pathSegment(value: string): string {
-  return encodeURIComponent(value);
-}
-
-export function listParams(input: unknown): URLSearchParams {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(
-    (input ?? {}) as Record<string, unknown>,
-  )) {
-    if (value !== undefined) params.set(key, String(value));
-  }
-  return params;
-}
-
-export function withQuery(path: string, params: URLSearchParams): string {
-  const query = params.toString();
-  return query ? `${path}?${query}` : path;
+  return new Error(failureMessage(plugin, response.status, { code, param }));
 }

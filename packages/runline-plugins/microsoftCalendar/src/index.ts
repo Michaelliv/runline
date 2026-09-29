@@ -6,23 +6,64 @@
  * Graph delegated scopes: Calendars.Read.
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
-import { graphRequest, microsoftSetupHelp, userBase } from "../../_shared/microsoftAuth.js";
+import {
+  graphRequest,
+  microsoftCredential,
+  microsoftSetupHelp,
+  userBase,
+} from "../../_shared/microsoftAuth.js";
 
 const NAME = "microsoftCalendar";
 const SCOPES = ["https://graph.microsoft.com/Calendars.Read"];
 type Ctx = ActionContext;
 
+/** A Graph collection answer; items pass through to the caller unchanged. */
+interface GraphList {
+  value: unknown[];
+}
+
 export default function microsoftCalendar(rl: RunlinePluginAPI): void {
   rl.setName(NAME);
   rl.setVersion("1.0.0");
+  rl.setCredential(microsoftCredential(NAME, SCOPES));
 
   rl.setConnectionSchema({
-    authMethod: { type: "string", required: false, description: "delegated or appOnly; legacy configs infer the method from existing credentials" },
-    tenantId: { type: "string", required: false, env: "MS_GRAPH_TENANT_ID", description: "Entra tenant id (app-only) or omit for OAuth /common" },
-    clientId: { type: "string", required: false, env: "MS_GRAPH_CLIENT_ID", description: "App (client) id" },
-    clientSecret: { type: "string", required: false, env: "MS_GRAPH_CLIENT_SECRET", description: "Client secret VALUE" },
-    refreshToken: { type: "string", required: false, env: "MICROSOFTCALENDAR_REFRESH_TOKEN", description: "OAuth2 refresh token (set by the login flow)" },
-    userUpn: { type: "string", required: false, env: "MS_GRAPH_USER_UPN", description: "App-only only: target user UPN" },
+    authMethod: {
+      type: "string",
+      required: false,
+      description:
+        "delegated or appOnly; legacy configs infer the method from existing credentials",
+    },
+    tenantId: {
+      type: "string",
+      required: false,
+      env: "MS_GRAPH_TENANT_ID",
+      description: "Entra tenant id (app-only) or omit for OAuth /common",
+    },
+    clientId: {
+      type: "string",
+      required: false,
+      env: "MS_GRAPH_CLIENT_ID",
+      description: "App (client) id",
+    },
+    clientSecret: {
+      type: "string",
+      required: false,
+      env: "MS_GRAPH_CLIENT_SECRET",
+      description: "Client secret VALUE",
+    },
+    refreshToken: {
+      type: "string",
+      required: false,
+      env: "MICROSOFTCALENDAR_REFRESH_TOKEN",
+      description: "OAuth2 refresh token (set by the login flow)",
+    },
+    userUpn: {
+      type: "string",
+      required: false,
+      env: "MS_GRAPH_USER_UPN",
+      description: "App-only only: target user UPN",
+    },
   });
 
   rl.setOAuth({
@@ -37,19 +78,31 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     description:
       "List calendar events in a date range. Returns [{id,subject,start,end,location,organizer,attendees}].",
     inputSchema: {
-      start: { type: "string", required: true, description: "ISO start datetime, e.g. 2026-05-01T00:00:00Z" },
+      start: {
+        type: "string",
+        required: true,
+        description: "ISO start datetime, e.g. 2026-05-01T00:00:00Z",
+      },
       end: { type: "string", required: true, description: "ISO end datetime" },
       top: { type: "number", required: false, default: 50 },
     },
-    async execute(input: any, ctx: Ctx) {
+    async execute(input, ctx: Ctx) {
+      const p = input as { start: string; end: string; top?: number };
       const qs = new URLSearchParams({
-        startDateTime: input.start,
-        endDateTime: input.end,
-        $top: String(input.top ?? 50),
-        $select: "id,subject,start,end,location,organizer,attendees,isAllDay,webLink",
+        startDateTime: p.start,
+        endDateTime: p.end,
+        $top: String(p.top ?? 50),
+        $select:
+          "id,subject,start,end,location,organizer,attendees,isAllDay,webLink",
         $orderby: "start/dateTime",
       });
-      const r = await graphRequest(ctx, NAME, SCOPES, "GET", `${userBase(ctx)}/calendarView?${qs}`);
+      const r = await graphRequest<GraphList>(
+        ctx,
+        NAME,
+        SCOPES,
+        "GET",
+        `${userBase(ctx)}/calendarView?${qs}`,
+      );
       return r.value;
     },
   });
@@ -58,8 +111,15 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     access: "read",
     description: "Get one calendar event by id (full details incl. body).",
     inputSchema: { id: { type: "string", required: true } },
-    async execute(input: any, ctx: Ctx) {
-      return graphRequest(ctx, NAME, SCOPES, "GET", `${userBase(ctx)}/events/${encodeURIComponent(input.id)}`);
+    async execute(input, ctx: Ctx) {
+      const p = input as { id: string };
+      return graphRequest(
+        ctx,
+        NAME,
+        SCOPES,
+        "GET",
+        `${userBase(ctx)}/events/${encodeURIComponent(p.id)}`,
+      );
     },
   });
 }

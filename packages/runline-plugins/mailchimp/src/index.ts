@@ -1,46 +1,33 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { mailchimpCredential } from "./credentials.js";
 
-async function apiRequest(
-  apiKey: string,
-  method: string,
+/** One Mailchimp call: every endpoint is a path beneath the account's /3.0/. */
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const dc = apiKey.split("-").pop();
-  const url = new URL(`https://${dc}.api.mailchimp.com/3.0${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, mailchimpCredential, "mailchimp", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`anystring:${apiKey}`)}`,
-      Accept: "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    (opts.headers as Record<string, string>)["Content-Type"] =
-      "application/json";
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Mailchimp API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function mailchimp(rl: RunlinePluginAPI) {
   rl.setName("mailchimp");
   rl.setVersion("0.1.0");
+  rl.setCredential(mailchimpCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -50,10 +37,14 @@ export default function mailchimp(rl: RunlinePluginAPI) {
         "Mailchimp API key (includes datacenter suffix, e.g. xxx-us21)",
       env: "MAILCHIMP_API_KEY",
     },
+    server: {
+      type: "string",
+      required: false,
+      description:
+        "Datacenter prefix (e.g. us21); defaults to the API key's suffix",
+      env: "MAILCHIMP_SERVER",
+    },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   // ── Member ──────────────────────────────────────────
 
@@ -130,7 +121,7 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       if (p.ipOpt) body.ip_opt = p.ipOpt;
       if (p.timestampSignup) body.timestamp_signup = p.timestampSignup;
       if (p.timestampOpt) body.timestamp_opt = p.timestampOpt;
-      return apiRequest(key(ctx), "POST", `/lists/${p.listId}/members`, body);
+      return api(ctx, "POST", `lists/${pathSegment(p.listId)}/members`, body);
     },
   });
 
@@ -164,10 +155,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if (fields) qs.fields = fields;
       if (excludeFields) qs.exclude_fields = excludeFields;
-      return apiRequest(
-        key(ctx),
+      return api(
+        ctx,
         "GET",
-        `/lists/${listId}/members/${email}`,
+        `lists/${pathSegment(listId)}/members/${pathSegment(email)}`,
         undefined,
         qs,
       );
@@ -222,10 +213,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       if (p.sinceLastChanged) qs.since_last_changed = p.sinceLastChanged;
       if (p.beforeLastChanged) qs.before_last_changed = p.beforeLastChanged;
       if (p.beforeTimestampOpt) qs.before_timestamp_opt = p.beforeTimestampOpt;
-      const data = (await apiRequest(
-        key(ctx),
+      const data = (await api(
+        ctx,
         "GET",
-        `/lists/${p.listId}/members`,
+        `lists/${pathSegment(p.listId)}/members`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -273,10 +264,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       if (p.timestampOpt) body.timestamp_opt = p.timestampOpt;
       if (p.skipMergeValidation)
         qs.skip_merge_validation = p.skipMergeValidation;
-      return apiRequest(
-        key(ctx),
+      return api(
+        ctx,
         "PUT",
-        `/lists/${p.listId}/members/${p.email}`,
+        `lists/${pathSegment(p.listId)}/members/${pathSegment(p.email)}`,
         body,
         Object.keys(qs).length > 0 ? qs : undefined,
       );
@@ -292,10 +283,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { listId, email } = input as Record<string, unknown>;
-      await apiRequest(
-        key(ctx),
+      await api(
+        ctx,
         "POST",
-        `/lists/${listId}/members/${email}/actions/delete-permanent`,
+        `lists/${pathSegment(listId)}/members/${pathSegment(email)}/actions/delete-permanent`,
       );
       return { success: true };
     },
@@ -329,10 +320,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
         tags: (tags as string[]).map((t) => ({ name: t, status: "active" })),
       };
       if (isSyncing) body.is_syncing = isSyncing;
-      await apiRequest(
-        key(ctx),
+      await api(
+        ctx,
         "POST",
-        `/lists/${listId}/members/${email}/tags`,
+        `lists/${pathSegment(listId)}/members/${pathSegment(email)}/tags`,
         body,
       );
       return { success: true };
@@ -361,10 +352,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
         tags: (tags as string[]).map((t) => ({ name: t, status: "inactive" })),
       };
       if (isSyncing) body.is_syncing = isSyncing;
-      await apiRequest(
-        key(ctx),
+      await api(
+        ctx,
         "POST",
-        `/lists/${listId}/members/${email}/tags`,
+        `lists/${pathSegment(listId)}/members/${pathSegment(email)}/tags`,
         body,
       );
       return { success: true };
@@ -389,10 +380,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       const { listId, categoryId, count } = input as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (count) qs.count = count;
-      const data = (await apiRequest(
-        key(ctx),
+      const data = (await api(
+        ctx,
         "GET",
-        `/lists/${listId}/interest-categories/${categoryId}/interests`,
+        `lists/${pathSegment(listId)}/interest-categories/${pathSegment(categoryId)}/interests`,
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -407,10 +398,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
     description: "Get a campaign",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(
-        key(ctx),
+      return api(
+        ctx,
         "GET",
-        `/campaigns/${(input as { campaignId: string }).campaignId}`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}`,
       );
     },
   });
@@ -483,10 +474,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
       if (p.beforeSendTime) qs.before_send_time = p.beforeSendTime;
       if (p.sortField) qs.sort_field = p.sortField;
       if (p.sortDirection) qs.sort_dir = p.sortDirection;
-      const data = (await apiRequest(
-        key(ctx),
+      const data = (await api(
+        ctx,
         "GET",
-        "/campaigns",
+        "campaigns",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -499,10 +490,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
     description: "Send a campaign",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
-      await apiRequest(
-        key(ctx),
+      await api(
+        ctx,
         "POST",
-        `/campaigns/${(input as { campaignId: string }).campaignId}/actions/send`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}/actions/send`,
       );
       return { success: true };
     },
@@ -513,10 +504,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
     description: "Replicate a campaign",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(
-        key(ctx),
+      return api(
+        ctx,
         "POST",
-        `/campaigns/${(input as { campaignId: string }).campaignId}/actions/replicate`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}/actions/replicate`,
       );
     },
   });
@@ -526,10 +517,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
     description: "Create a resend to non-openers",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
-      return apiRequest(
-        key(ctx),
+      return api(
+        ctx,
         "POST",
-        `/campaigns/${(input as { campaignId: string }).campaignId}/actions/create-resend`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}/actions/create-resend`,
       );
     },
   });
@@ -539,10 +530,10 @@ export default function mailchimp(rl: RunlinePluginAPI) {
     description: "Delete a campaign",
     inputSchema: { campaignId: { type: "string", required: true } },
     async execute(input, ctx) {
-      await apiRequest(
-        key(ctx),
+      await api(
+        ctx,
         "DELETE",
-        `/campaigns/${(input as { campaignId: string }).campaignId}`,
+        `campaigns/${pathSegment((input as { campaignId: string }).campaignId)}`,
       );
       return { success: true };
     },

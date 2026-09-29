@@ -127,7 +127,7 @@ export async function nearby(
 /** A venue's static page plus its live status; the live half is best-effort. */
 export async function venue(slug: string, lat: number, lon: number) {
   const params = new URLSearchParams({ lat: String(lat), lon: String(lon) });
-  const name = seg(slug, "slug");
+  const name = seg(slug);
   const [staticPage, dynamic] = await Promise.all([
     http(
       CONSUMER,
@@ -168,7 +168,7 @@ export async function assortment(
   const params = new URLSearchParams({ language });
   return http(
     CONSUMER,
-    `/consumer-api/consumer-assortment/v1/venues/slug/${seg(slug, "slug")}/assortment?${params}`,
+    `/consumer-api/consumer-assortment/v1/venues/slug/${seg(slug)}/assortment?${params}`,
   );
 }
 

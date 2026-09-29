@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { pathSegment } from "../../_shared/credentials.js";
 import { type QueryResult, records } from "./queryResult.js";
 import { api, type Ctx } from "./shared.js";
 
@@ -76,7 +77,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
       return api(
         ctx as Ctx,
         "GET",
-        `/sobjects/${sObject}/${(input as { id: string }).id}`,
+        `/sobjects/${sObject}/${pathSegment((input as { id: string }).id)}`,
       );
     },
   });
@@ -87,7 +88,12 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
     inputSchema: t.Object({ id: t.String(), data: Data }),
     async execute(input, ctx) {
       const p = input as { id: string; data: Record<string, unknown> };
-      await api(ctx as Ctx, "PATCH", `/sobjects/${sObject}/${p.id}`, p.data);
+      await api(
+        ctx as Ctx,
+        "PATCH",
+        `/sobjects/${sObject}/${pathSegment(p.id)}`,
+        p.data,
+      );
       return { success: true, id: p.id };
     },
   });
@@ -100,7 +106,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
       await api(
         ctx as Ctx,
         "DELETE",
-        `/sobjects/${sObject}/${(input as { id: string }).id}`,
+        `/sobjects/${sObject}/${pathSegment((input as { id: string }).id)}`,
       );
       return { success: true };
     },
@@ -147,7 +153,7 @@ function registerSObject(rl: RunlinePluginAPI, sObject: string) {
       return api(
         ctx as Ctx,
         "PATCH",
-        `/sobjects/${sObject}/${p.externalIdField}/${p.externalIdValue}`,
+        `/sobjects/${sObject}/${pathSegment(p.externalIdField)}/${pathSegment(p.externalIdValue)}`,
         p.data,
       );
     },
@@ -165,7 +171,12 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ sObject: t.String(), data: Data }),
     async execute(input, ctx) {
       const p = input as { sObject: string; data: Record<string, unknown> };
-      return api(ctx as Ctx, "POST", `/sobjects/${p.sObject}`, p.data);
+      return api(
+        ctx as Ctx,
+        "POST",
+        `/sobjects/${pathSegment(p.sObject)}`,
+        p.data,
+      );
     },
   });
 
@@ -175,7 +186,11 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ sObject: t.String(), id: t.String() }),
     async execute(input, ctx) {
       const p = input as { sObject: string; id: string };
-      return api(ctx as Ctx, "GET", `/sobjects/${p.sObject}/${p.id}`);
+      return api(
+        ctx as Ctx,
+        "GET",
+        `/sobjects/${pathSegment(p.sObject)}/${pathSegment(p.id)}`,
+      );
     },
   });
 
@@ -189,7 +204,12 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
         id: string;
         data: Record<string, unknown>;
       };
-      await api(ctx as Ctx, "PATCH", `/sobjects/${p.sObject}/${p.id}`, p.data);
+      await api(
+        ctx as Ctx,
+        "PATCH",
+        `/sobjects/${pathSegment(p.sObject)}/${pathSegment(p.id)}`,
+        p.data,
+      );
       return { success: true };
     },
   });
@@ -200,7 +220,11 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ sObject: t.String(), id: t.String() }),
     async execute(input, ctx) {
       const p = input as { sObject: string; id: string };
-      await api(ctx as Ctx, "DELETE", `/sobjects/${p.sObject}/${p.id}`);
+      await api(
+        ctx as Ctx,
+        "DELETE",
+        `/sobjects/${pathSegment(p.sObject)}/${pathSegment(p.id)}`,
+      );
       return { success: true };
     },
   });
@@ -213,7 +237,7 @@ export function registerGenericSObjectActions(rl: RunlinePluginAPI) {
       return api(
         ctx as Ctx,
         "GET",
-        `/sobjects/${(input as { sObject: string }).sObject}/describe`,
+        `/sobjects/${pathSegment((input as { sObject: string }).sObject)}/describe`,
       );
     },
   });

@@ -1,44 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { egoiCredential } from "./credentials.js";
 
-const BASE_URL = "https://api.egoiapp.com";
-
-async function apiRequest(
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, egoiCredential, "egoi", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Apikey: apiKey,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`E-goi API error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 async function paginate(
-  apiKey: string,
+  ctx: ActionContext,
   endpoint: string,
   qs: Record<string, unknown> = {},
   limit?: number,
@@ -49,7 +32,7 @@ async function paginate(
   let data: unknown[];
   do {
     const res = (await apiRequest(
-      apiKey,
+      ctx,
       "GET",
       endpoint,
       undefined,
@@ -66,6 +49,7 @@ async function paginate(
 export default function egoi(rl: RunlinePluginAPI) {
   rl.setName("egoi");
   rl.setVersion("0.1.0");
+  rl.setCredential(egoiCredential);
 
   rl.setConnectionSchema({
     apiKey: {
@@ -75,9 +59,6 @@ export default function egoi(rl: RunlinePluginAPI) {
       env: "EGOI_API_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.apiKey as string;
 
   rl.registerAction("contact.create", {
     access: "write",
@@ -129,18 +110,18 @@ export default function egoi(rl: RunlinePluginAPI) {
       if (status) base.status = status;
       const body: Record<string, unknown> = { base, extra: extraFields ?? [] };
       const data = (await apiRequest(
-        key(ctx),
+        ctx,
         "POST",
-        `/lists/${listId}/contacts`,
+        `lists/${pathSegment(listId)}/contacts`,
         body,
       )) as Record<string, unknown>;
       const contactId = data.contact_id;
       if (tagIds && Array.isArray(tagIds)) {
         for (const tag of tagIds) {
           await apiRequest(
-            key(ctx),
+            ctx,
             "POST",
-            `/lists/${listId}/contacts/actions/attach-tag`,
+            `lists/${pathSegment(listId)}/contacts/actions/attach-tag`,
             {
               tag_id: tag,
               contacts: [contactId],
@@ -149,9 +130,9 @@ export default function egoi(rl: RunlinePluginAPI) {
         }
       }
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/lists/${listId}/contacts/${contactId}`,
+        `lists/${pathSegment(listId)}/contacts/${pathSegment(contactId)}`,
       );
     },
   });
@@ -175,15 +156,15 @@ export default function egoi(rl: RunlinePluginAPI) {
       >;
       if (contactId)
         return apiRequest(
-          key(ctx),
+          ctx,
           "GET",
-          `/lists/${listId}/contacts/${contactId}`,
+          `lists/${pathSegment(listId)}/contacts/${pathSegment(contactId)}`,
         );
       if (email)
         return apiRequest(
-          key(ctx),
+          ctx,
           "GET",
-          `/lists/${listId}/contacts`,
+          `lists/${pathSegment(listId)}/contacts`,
           undefined,
           { email: email as string },
         );
@@ -201,8 +182,8 @@ export default function egoi(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { listId, limit } = (input ?? {}) as Record<string, unknown>;
       return paginate(
-        key(ctx),
-        `/lists/${listId}/contacts`,
+        ctx,
+        `lists/${pathSegment(listId)}/contacts`,
         {},
         limit as number | undefined,
       );
@@ -258,17 +239,17 @@ export default function egoi(rl: RunlinePluginAPI) {
       if (status) base.status = status;
       const body: Record<string, unknown> = { base, extra: extraFields ?? [] };
       await apiRequest(
-        key(ctx),
+        ctx,
         "PATCH",
-        `/lists/${listId}/contacts/${contactId}`,
+        `lists/${pathSegment(listId)}/contacts/${pathSegment(contactId)}`,
         body,
       );
       if (tagIds && Array.isArray(tagIds)) {
         for (const tag of tagIds) {
           await apiRequest(
-            key(ctx),
+            ctx,
             "POST",
-            `/lists/${listId}/contacts/actions/attach-tag`,
+            `lists/${pathSegment(listId)}/contacts/actions/attach-tag`,
             {
               tag_id: tag,
               contacts: [contactId],
@@ -277,9 +258,9 @@ export default function egoi(rl: RunlinePluginAPI) {
         }
       }
       return apiRequest(
-        key(ctx),
+        ctx,
         "GET",
-        `/lists/${listId}/contacts/${contactId}`,
+        `lists/${pathSegment(listId)}/contacts/${pathSegment(contactId)}`,
       );
     },
   });

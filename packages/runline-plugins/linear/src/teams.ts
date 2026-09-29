@@ -4,7 +4,6 @@ import {
   bindGetAction,
   bindListAction,
   gql,
-  key,
   requireUnscoped,
   TEAM_FIELDS,
   USER_FIELDS,
@@ -100,7 +99,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
         unknown
       >;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: TeamCreateInput!, $copySettingsFromTeamId: String) { teamCreate(input: $input, copySettingsFromTeamId: $copySettingsFromTeamId) { success team { ${TEAM_FIELDS} } } }`,
         {
           input: fields,
@@ -168,7 +167,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "team.update");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: TeamUpdateInput!) { teamUpdate(id: $id, input: $input) { success team { ${TEAM_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -190,7 +189,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
       // under a scoped connection (SHFT-1644).
       const { teamId, limit } = input as { teamId: string; limit?: number };
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($id: String!, $first: Int) {
           team(id: $id) { members(first: $first) { nodes { ${USER_FIELDS} } } }
         }`,

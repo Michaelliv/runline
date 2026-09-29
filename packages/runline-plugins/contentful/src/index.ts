@@ -1,30 +1,22 @@
-import type { RunlinePluginAPI } from "runline";
+import type { ActionContext, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { contentfulCredential } from "./credentials.js";
 
-async function apiRequest(
-  host: string,
-  token: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`https://${host}${endpoint}`);
-  url.searchParams.set("access_token", token);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const res = await fetch(url.toString(), {
-    headers: { Accept: "application/json" },
+  return credentialJson(ctx, contentfulCredential, "contentful", {
+    target: "api",
+    path,
+    query: qs,
   });
-  if (!res.ok)
-    throw new Error(`Contentful API error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 async function paginateAll(
-  host: string,
-  token: string,
-  endpoint: string,
+  ctx: ActionContext,
+  path: string,
   qs?: Record<string, unknown>,
   limit?: number,
 ): Promise<unknown[]> {
@@ -32,7 +24,7 @@ async function paginateAll(
   let skip = 0;
   const size = 100;
   while (true) {
-    const data = (await apiRequest(host, token, endpoint, {
+    const data = (await apiRequest(ctx, path, {
       ...qs,
       skip,
       limit: size,
@@ -46,21 +38,14 @@ async function paginateAll(
   return results;
 }
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const cfg = ctx.connection.config;
-  const isPreview = cfg.source === "preview";
-  return {
-    host: isPreview ? "preview.contentful.com" : "cdn.contentful.com",
-    token: (isPreview
-      ? cfg.previewAccessToken
-      : cfg.deliveryAccessToken) as string,
-    spaceId: cfg.spaceId as string,
-  };
+function spaceOf(ctx: ActionContext): string {
+  return pathSegment(ctx.connection.config.spaceId);
 }
 
 export default function contentful(rl: RunlinePluginAPI) {
   rl.setName("contentful");
   rl.setVersion("0.1.0");
+  rl.setCredential(contentfulCredential);
 
   rl.setConnectionSchema({
     spaceId: {
@@ -95,8 +80,7 @@ export default function contentful(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get space details",
     async execute(_input, ctx) {
-      const { host, token, spaceId } = getConn(ctx);
-      return apiRequest(host, token, `/spaces/${spaceId}`);
+      return apiRequest(ctx, `spaces/${spaceOf(ctx)}`);
     },
   });
 
@@ -119,11 +103,9 @@ export default function contentful(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { environmentId, contentTypeId } = input as Record<string, string>;
-      const { host, token, spaceId } = getConn(ctx);
       return apiRequest(
-        host,
-        token,
-        `/spaces/${spaceId}/environments/${environmentId}/content_types/${contentTypeId}`,
+        ctx,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/content_types/${pathSegment(contentTypeId)}`,
       );
     },
   });
@@ -143,11 +125,9 @@ export default function contentful(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { environmentId, entryId } = input as Record<string, string>;
-      const { host, token, spaceId } = getConn(ctx);
       return apiRequest(
-        host,
-        token,
-        `/spaces/${spaceId}/environments/${environmentId}/entries/${entryId}`,
+        ctx,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/entries/${pathSegment(entryId)}`,
       );
     },
   });
@@ -182,16 +162,14 @@ export default function contentful(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const { environmentId, contentType, query, select, order, limit } =
         (input ?? {}) as Record<string, unknown>;
-      const { host, token, spaceId } = getConn(ctx);
       const qs: Record<string, unknown> = {};
       if (contentType) qs.content_type = contentType;
       if (query) qs.query = query;
       if (select) qs.select = select;
       if (order) qs.order = order;
       return paginateAll(
-        host,
-        token,
-        `/spaces/${spaceId}/environments/${environmentId}/entries`,
+        ctx,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/entries`,
         qs,
         limit as number | undefined,
       );
@@ -213,11 +191,9 @@ export default function contentful(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { environmentId, assetId } = input as Record<string, string>;
-      const { host, token, spaceId } = getConn(ctx);
       return apiRequest(
-        host,
-        token,
-        `/spaces/${spaceId}/environments/${environmentId}/assets/${assetId}`,
+        ctx,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/assets/${pathSegment(assetId)}`,
       );
     },
   });
@@ -235,11 +211,9 @@ export default function contentful(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { environmentId, limit } = (input ?? {}) as Record<string, unknown>;
-      const { host, token, spaceId } = getConn(ctx);
       return paginateAll(
-        host,
-        token,
-        `/spaces/${spaceId}/environments/${environmentId}/assets`,
+        ctx,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/assets`,
         undefined,
         limit as number | undefined,
       );
@@ -261,11 +235,9 @@ export default function contentful(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { environmentId, limit } = (input ?? {}) as Record<string, unknown>;
-      const { host, token, spaceId } = getConn(ctx);
       return paginateAll(
-        host,
-        token,
-        `/spaces/${spaceId}/environments/${environmentId}/locales`,
+        ctx,
+        `spaces/${spaceOf(ctx)}/environments/${pathSegment(environmentId)}/locales`,
         undefined,
         limit as number | undefined,
       );

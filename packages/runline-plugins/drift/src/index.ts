@@ -1,38 +1,27 @@
-import type { RunlinePluginAPI } from "runline";
-
-const BASE_URL = "https://driftapi.com";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { driftCredential } from "./credentials.js";
 
 async function apiRequest(
-  token: string,
-  method: string,
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, driftCredential, "drift", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok)
-    throw new Error(`Drift API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function drift(rl: RunlinePluginAPI) {
   rl.setName("drift");
   rl.setVersion("0.1.0");
+  rl.setCredential(driftCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -42,9 +31,6 @@ export default function drift(rl: RunlinePluginAPI) {
       env: "DRIFT_ACCESS_TOKEN",
     },
   });
-
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   rl.registerAction("contact.create", {
     access: "write",
@@ -59,7 +45,7 @@ export default function drift(rl: RunlinePluginAPI) {
       const attrs: Record<string, unknown> = { email };
       if (name) attrs.name = name;
       if (phone) attrs.phone = phone;
-      const data = (await apiRequest(tok(ctx), "POST", "/contacts", {
+      const data = (await apiRequest(ctx, "POST", "contacts", {
         attributes: attrs,
       })) as Record<string, unknown>;
       return data.data;
@@ -74,9 +60,9 @@ export default function drift(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        `/contacts/${(input as { contactId: string }).contactId}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       )) as Record<string, unknown>;
       return data.data;
     },
@@ -101,9 +87,9 @@ export default function drift(rl: RunlinePluginAPI) {
       if (name) attrs.name = name;
       if (phone) attrs.phone = phone;
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "PATCH",
-        `/contacts/${contactId}`,
+        `contacts/${pathSegment(contactId)}`,
         { attributes: attrs },
       )) as Record<string, unknown>;
       return data.data;
@@ -118,9 +104,9 @@ export default function drift(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       await apiRequest(
-        tok(ctx),
+        ctx,
         "DELETE",
-        `/contacts/${(input as { contactId: string }).contactId}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       );
       return { success: true };
     },
@@ -131,9 +117,9 @@ export default function drift(rl: RunlinePluginAPI) {
     description: "List all custom contact attributes",
     async execute(_input, ctx) {
       const data = (await apiRequest(
-        tok(ctx),
+        ctx,
         "GET",
-        "/contacts/attributes",
+        "contacts/attributes",
       )) as Record<string, unknown>;
       return (data.data as Record<string, unknown>).properties;
     },

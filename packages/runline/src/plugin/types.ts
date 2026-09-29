@@ -1,6 +1,8 @@
 import type { TSchema } from "typebox";
 import type { OAuth2Definition } from "../auth/types.js";
 import type { ConnectionUpdate } from "../connections/types.js";
+import type { CredentialBroker } from "../credentials/transport.js";
+import type { CredentialDeclaration } from "../credentials/types.js";
 
 export interface InputField {
   type: "string" | "number" | "boolean" | "object" | "array";
@@ -69,6 +71,13 @@ export interface ActionContext {
    * engine). Absent when the embedder passed none.
    */
   context?: unknown;
+  /**
+   * Authenticated requests signed by the host, present when the embedder
+   * holds this connection's credentials elsewhere and the plugin declares
+   * its credential. A plugin given one sends through it and signs nothing
+   * itself: its connection config then carries public settings only.
+   */
+  credentials?: CredentialBroker;
   log: {
     info(msg: string): void;
     warn(msg: string): void;
@@ -144,6 +153,9 @@ export interface PluginDef {
   connectionConfigSchema?: ConnectionSchema;
   /** OAuth2 config for `runline auth <plugin>`. */
   oauth?: OAuthConfig;
+  /** How a connection's config becomes what its requests are signed with;
+   *  present on plugins whose requests go through the credential registry. */
+  credential?: CredentialDeclaration;
   /** @internal */
   initHooks?: Array<(config: Record<string, unknown>) => void>;
 }

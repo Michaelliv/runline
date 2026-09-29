@@ -1,35 +1,30 @@
-import type { RunlinePluginAPI } from "runline";
-
-const BASE_URL = "https://api.linkedin.com";
+import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import { credentialOk, jsonAnswer } from "../../_shared/credentials.js";
+import { linkedinCredential } from "./credentials.js";
 
 async function apiRequest(
-  token: string,
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const isAbsolute = endpoint.startsWith("http");
-  const url = isAbsolute ? endpoint : `${BASE_URL}/rest${endpoint}`;
-  const opts: RequestInit = {
+  const res = await credentialOk(ctx, linkedinCredential, "linkedin", {
+    target: "api",
+    path,
     method,
     headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
       "X-Restli-Protocol-Version": "2.0.0",
       "LinkedIn-Version": "202504",
-      "Content-Type": "application/json",
     },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET")
-    opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
   if (res.status === 201) {
     return { urn: res.headers.get("x-restli-id") };
   }
-  if (!res.ok)
-    throw new Error(`LinkedIn API error ${res.status}: ${await res.text()}`);
   if (res.status === 204) return { success: true };
-  return res.json();
+  return jsonAnswer(res);
 }
 
 // LinkedIn "little text" format escaping
@@ -40,6 +35,7 @@ function escapeText(text: string): string {
 export default function linkedin(rl: RunlinePluginAPI) {
   rl.setName("linkedin");
   rl.setVersion("0.1.0");
+  rl.setCredential(linkedinCredential);
 
   rl.setConnectionSchema({
     accessToken: {
@@ -49,9 +45,6 @@ export default function linkedin(rl: RunlinePluginAPI) {
       env: "LINKEDIN_ACCESS_TOKEN",
     },
   });
-
-  const tok = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   rl.registerAction("post.create", {
     access: "write",
@@ -132,7 +125,7 @@ export default function linkedin(rl: RunlinePluginAPI) {
         body.commentary = escapedText;
       }
 
-      return apiRequest(tok(ctx), "POST", "/posts", body);
+      return apiRequest(ctx, "POST", "posts", body);
     },
   });
 }

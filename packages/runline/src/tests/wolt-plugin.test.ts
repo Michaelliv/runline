@@ -58,6 +58,7 @@ interface Call {
   url: string;
   method: string;
   auth: string | null;
+  headers: Headers;
   redirect: RequestRedirect | undefined;
   body: string;
 }
@@ -72,6 +73,7 @@ function mock(routes: Route[]) {
       url,
       method: init?.method ?? "GET",
       auth: new Headers(init?.headers).get("authorization"),
+      headers: new Headers(init?.headers),
       redirect: init?.redirect,
       body: init?.body ? String(init.body) : "",
     });
@@ -368,7 +370,7 @@ describe("wolt plugin surface", () => {
       accessTokenExpiresAt: 1,
     });
     let grants = 0;
-    mock([
+    const calls = mock([
       [
         "/v1/wauth2/access_token",
         () => {
@@ -389,19 +391,29 @@ describe("wolt plugin surface", () => {
     ]);
     assert.equal(grants, 1, "parallel actions must share one refresh");
     assert.equal((await handle.read()).config.refreshToken, "refresh-2");
+    // The grant goes out as the mobile app, bound to the stored device token.
+    const grant = calls.find((c) => c.url.includes("access_token"));
+    assert.equal(grant?.headers.get("platform"), "Android");
+    assert.equal(grant?.headers.get("x-wolt-visitor-id"), "visitor-1");
+    const form = new URLSearchParams(grant?.body);
+    assert.equal(form.get("grant_type"), "refresh_token");
+    assert.equal(form.get("refresh_token"), "refresh-1");
+    assert.equal(form.get("device_token"), "device-1");
+    for (const call of calls.filter((c) => !c.url.includes("access_token")))
+      assert.equal(call.auth, "Bearer fresh");
   });
 
   it("refuses path-climbing order ids", async () => {
     const { ctx } = await context({ allowOrdering: true });
     const calls = mock([["purchase_tracking", { order_details: {} }]]);
-    for (const id of ["..", "../../v1/user/me", "a/b", "  ", "?x=1"]) {
+    for (const id of ["..", "../../v1/user/me", "a/b", "  "]) {
       await assert.rejects(
         () =>
           action("order.status").execute(
             { order_id: id },
             ctx,
           ) as Promise<unknown>,
-        /invalid order_id/,
+        { code: "request_not_allowed" },
       );
     }
     assert.equal(calls.length, 0);
@@ -709,6 +721,31 @@ describe("wolt plugin surface", () => {
         ) as Promise<unknown>,
       /expired or already used/,
     );
+  });
+
+  it("runs the owner login only locally: under a host that keeps the grant, it refuses", async () => {
+    const { ctx } = await context({ refreshToken: undefined });
+    ctx.credentials = {
+      request: async () => new Response(null),
+      probe: async () => ({ outcome: "unverified" }),
+    };
+    const calls = mock([["/v1/pages/search", { sections: [] }]]);
+    for (const [name, input] of [
+      ["account.requestEmailCode", { email: "a@b.io" }],
+      ["account.redeemLink", { link: "https://wolt.com/login?token=abc123" }],
+      ["account.requestSmsCode", { phone: "0500000000" }],
+      ["account.submitCode", { code: "1234" }],
+      ["account.submitConfirmation", { code: "1234" }],
+      ["account.refresh", {}],
+    ] as const)
+      await assert.rejects(
+        () => action(name).execute(input, ctx) as Promise<unknown>,
+        { code: "unsupported_operation" },
+      );
+    assert.equal(calls.length, 0);
+    // The anonymous catalogue carries no credential, so it still answers.
+    await action("venue.search").execute({ query: "sushi" }, ctx);
+    assert.equal(calls.length, 1);
   });
 
   it("refuses to act on an authed action without a stored login", async () => {
