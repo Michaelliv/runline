@@ -96,18 +96,23 @@ describe("graphql", () => {
     );
   });
 
-  it("refuses a plain-HTTP endpoint, and a public header that claims Authorization", async () => {
-    capture({});
-    for (const config of [
-      { endpoint: "http://api.example.com/graphql" },
-      {
-        endpoint: "https://api.example.com/graphql",
-        headers: { Authorization: "Bearer leaked" },
-      },
-    ])
+  it("refuses a plain-HTTP endpoint, and a public header that claims Authorization, before any request", async () => {
+    const seen = capture({});
+    for (const [config, code] of [
+      [{ endpoint: "http://api.example.com/graphql" }, "invalid_credentials"],
+      [
+        {
+          endpoint: "https://api.example.com/graphql",
+          headers: { Authorization: "Bearer leaked" },
+        },
+        "invalid_definition",
+      ],
+    ] as const)
       await assert.rejects(
         run(graphql, "graphql", "query", { query: "{ x }" }, config),
+        { code },
       );
+    assert.equal(seen.length, 0);
   });
 });
 
@@ -147,6 +152,7 @@ describe("facebookGraph", () => {
         run(facebookGraph, "facebookGraph", "request", input, {
           accessToken: "fb",
         }),
+        { code: "request_not_allowed" },
       );
     assert.equal(seen.length, 0);
   });
