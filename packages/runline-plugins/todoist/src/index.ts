@@ -10,7 +10,7 @@ function api(
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
   return credentialJson(ctx, todoistCredential, "todoist", {
-    target: "rest",
+    target: "api",
     path: endpoint.replace(/^\//, ""),
     method,
     query: qs,
@@ -18,21 +18,37 @@ function api(
   });
 }
 
-function quickAdd(
+/** API v1's largest page. */
+const PAGE = 200;
+
+/**
+ * Every item of a v1 cursor-paginated list, as the flat array the REST v2
+ * list endpoints answered with. `limit` stops early once that many are in.
+ */
+async function listAll(
   ctx: ActionContext,
-  body: Record<string, unknown>,
-): Promise<unknown> {
-  return credentialJson(ctx, todoistCredential, "todoist", {
-    target: "sync",
-    path: "quick/add",
-    method: "POST",
-    json: body,
-  });
+  endpoint: string,
+  qs: Record<string, unknown> = {},
+  limit?: number,
+  key: "results" | "items" = "results",
+): Promise<unknown[]> {
+  const all: unknown[] = [];
+  let cursor: string | null | undefined;
+  do {
+    const page = (await api(ctx, "GET", endpoint, undefined, {
+      ...qs,
+      limit: limit ? Math.min(limit - all.length, PAGE) : PAGE,
+      ...(cursor ? { cursor } : {}),
+    })) as Record<string, unknown> & { next_cursor?: string | null };
+    all.push(...((page[key] as unknown[] | undefined) ?? []));
+    cursor = page.next_cursor;
+  } while (cursor && (!limit || all.length < limit));
+  return limit ? all.slice(0, limit) : all;
 }
 
 export default function todoist(rl: RunlinePluginAPI) {
   rl.setName("todoist");
-  rl.setVersion("0.1.0");
+  rl.setVersion("1.0.0");
   rl.setCredential(todoistCredential);
   rl.setConnectionSchema({
     apiToken: {
@@ -99,29 +115,47 @@ export default function todoist(rl: RunlinePluginAPI) {
 
   rl.registerAction("task.list", {
     access: "read",
-    description: "List tasks",
+    description:
+      "List active tasks, by project/section/parent/label or by a Todoist filter query",
     inputSchema: {
       projectId: { type: "string", required: false },
       sectionId: { type: "string", required: false },
+      parentId: { type: "string", required: false },
       label: { type: "string", required: false },
-      filter: { type: "string", required: false },
+      filter: {
+        type: "string",
+        required: false,
+        description:
+          'Todoist filter query, e.g. "today | overdue"; not combined with the fields above',
+      },
+      lang: {
+        type: "string",
+        required: false,
+        description: "Language of the filter query (default English)",
+      },
       limit: { type: "number", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
+      const limit = p.limit as number | undefined;
+      if (p.filter) {
+        if (p.projectId || p.sectionId || p.parentId || p.label)
+          throw new Error(
+            "todoist: filter cannot be combined with projectId, sectionId, parentId or label; put them in the query",
+          );
+        return listAll(
+          ctx,
+          "/tasks/filter",
+          { query: p.filter, ...(p.lang ? { lang: p.lang } : {}) },
+          limit,
+        );
+      }
       const qs: Record<string, unknown> = {};
       if (p.projectId) qs.project_id = p.projectId;
       if (p.sectionId) qs.section_id = p.sectionId;
+      if (p.parentId) qs.parent_id = p.parentId;
       if (p.label) qs.label = p.label;
-      if (p.filter) qs.filter = p.filter;
-      const data = (await api(
-        ctx,
-        "GET",
-        "/tasks",
-        undefined,
-        qs,
-      )) as unknown[];
-      return p.limit ? data.slice(0, p.limit as number) : data;
+      return listAll(ctx, "/tasks", qs, limit);
     },
   });
 
@@ -205,13 +239,82 @@ export default function todoist(rl: RunlinePluginAPI) {
       },
       note: { type: "string", required: false },
       reminder: { type: "string", required: false },
+      autoReminder: {
+        type: "boolean",
+        required: false,
+        description:
+          "Add the user's default reminder when the task has a due time (API v1 no longer does so on its own)",
+      },
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
       const body: Record<string, unknown> = { text: p.text };
       if (p.note) body.note = p.note;
       if (p.reminder) body.reminder = p.reminder;
-      return quickAdd(ctx, body);
+      if (p.autoReminder !== undefined) body.auto_reminder = p.autoReminder;
+      return api(ctx, "POST", "/tasks/quick", body);
+    },
+  });
+
+  rl.registerAction("task.move", {
+    access: "write",
+    description:
+      "Move a task to another project, section or parent task (exactly one)",
+    inputSchema: {
+      id: { type: "string", required: true },
+      projectId: { type: "string", required: false },
+      sectionId: { type: "string", required: false },
+      parentId: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const body: Record<string, unknown> = {};
+      if (p.projectId) body.project_id = p.projectId;
+      if (p.sectionId) body.section_id = p.sectionId;
+      if (p.parentId) body.parent_id = p.parentId;
+      if (Object.keys(body).length !== 1)
+        throw new Error(
+          "todoist: task.move takes exactly one of projectId, sectionId or parentId",
+        );
+      return api(ctx, "POST", `/tasks/${pathSegment(p.id)}/move`, body);
+    },
+  });
+
+  rl.registerAction("task.listCompleted", {
+    access: "read",
+    description:
+      "List tasks completed in a time window (at most about 3 months wide)",
+    inputSchema: {
+      since: {
+        type: "string",
+        required: true,
+        description: "ISO datetime, e.g. 2026-05-01T00:00:00Z",
+      },
+      until: { type: "string", required: true, description: "ISO datetime" },
+      projectId: { type: "string", required: false },
+      sectionId: { type: "string", required: false },
+      parentId: { type: "string", required: false },
+      filter: {
+        type: "string",
+        required: false,
+        description: "Todoist filter query the completed tasks must match",
+      },
+      limit: { type: "number", required: false },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const qs: Record<string, unknown> = { since: p.since, until: p.until };
+      if (p.projectId) qs.project_id = p.projectId;
+      if (p.sectionId) qs.section_id = p.sectionId;
+      if (p.parentId) qs.parent_id = p.parentId;
+      if (p.filter) qs.filter_query = p.filter;
+      return listAll(
+        ctx,
+        "/tasks/completed/by_completion_date",
+        qs,
+        p.limit as number | undefined,
+        "items",
+      );
     },
   });
 
@@ -260,7 +363,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "List all projects",
     inputSchema: {},
     async execute(_input, ctx) {
-      return api(ctx, "GET", "/projects");
+      return listAll(ctx, "/projects");
     },
   });
 
@@ -332,9 +435,8 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Get project collaborators",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      return api(
+      return listAll(
         ctx,
-        "GET",
         `/projects/${pathSegment((input as Record<string, unknown>).id)}/collaborators`,
       );
     },
@@ -381,7 +483,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       const qs: Record<string, unknown> = {};
       if ((input as Record<string, unknown>)?.projectId)
         qs.project_id = (input as Record<string, unknown>).projectId;
-      return api(ctx, "GET", "/sections", undefined, qs);
+      return listAll(ctx, "/sections", qs);
     },
   });
 
@@ -418,15 +520,20 @@ export default function todoist(rl: RunlinePluginAPI) {
 
   rl.registerAction("comment.create", {
     access: "write",
-    description: "Create a comment on a task",
+    description: "Create a comment on a task or on a project (exactly one)",
     inputSchema: {
-      taskId: { type: "string", required: true },
+      taskId: { type: "string", required: false },
+      projectId: { type: "string", required: false },
       content: { type: "string", required: true },
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
+      if (!p.taskId === !p.projectId)
+        throw new Error(
+          "todoist: comment.create takes exactly one of taskId or projectId",
+        );
       return api(ctx, "POST", "/comments", {
-        task_id: p.taskId,
+        ...(p.taskId ? { task_id: p.taskId } : { project_id: p.projectId }),
         content: p.content,
       });
     },
@@ -447,17 +554,21 @@ export default function todoist(rl: RunlinePluginAPI) {
 
   rl.registerAction("comment.list", {
     access: "read",
-    description: "List comments",
+    description: "List the comments of a task or of a project (exactly one)",
     inputSchema: {
       taskId: { type: "string", required: false },
       projectId: { type: "string", required: false },
     },
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
+      if (!p.taskId === !p.projectId)
+        throw new Error(
+          "todoist: comment.list takes exactly one of taskId or projectId",
+        );
       const qs: Record<string, unknown> = {};
       if (p.taskId) qs.task_id = p.taskId;
       if (p.projectId) qs.project_id = p.projectId;
-      return api(ctx, "GET", "/comments", undefined, qs);
+      return listAll(ctx, "/comments", qs);
     },
   });
 
@@ -529,7 +640,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "List all labels",
     inputSchema: {},
     async execute(_input, ctx) {
-      return api(ctx, "GET", "/labels");
+      return listAll(ctx, "/labels");
     },
   });
 
