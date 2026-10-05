@@ -116,7 +116,7 @@ Status values: `pending`, `in-progress`, `done`.
 | `medium` | done | Annotated 3 actions: 2 read (`publication.list`, `me`) and 1 write (`post.create`). |
 | `messagebird` | done | Annotated 2 actions: 1 read (`balance.get`) and 1 write (`sms.send`) because it sends SMS messages. |
 | `metabase` | done | Annotated 10 actions: 9 read (question/alert/database/metric get/list/fields/results actions) and 1 write (`database.add`). `question.getResults` is read despite POST because it runs/retrieves query results. |
-| `microsoftCalendar` | done | Annotated 2 actions: 2 read (`calendar.list`, `event.get`). |
+| `microsoftCalendar` | done | Annotated 13 actions: 7 read (`calendar.list`, `calendar.listCalendars`, `calendar.getSchedule`, `calendar.findMeetingTimes`, `event.list`, `event.get`, `event.listInstances`) and 6 write (`event.create`, `event.update`, `event.delete`, `event.cancel`, `event.respond`, `event.forward`). `calendar.getSchedule` and `calendar.findMeetingTimes` are POST-backed but classified read because they only query availability. |
 | `microsoftFiles` | done | Annotated 5 actions: 3 read (`files.search`, `files.list`, `files.get`) and 2 write (`files.upload`, `folder.create`). |
 | `microsoftMail` | done | Annotated 4 actions: 2 read (`mail.list`, `mail.get`) and 2 write (`mail.send`, `mail.draft`). |
 | `misp` | done | Annotated 44 actions: 20 read (get/list/search actions across attributes, events, feeds, galaxies, noticelists, objects, organisations, tags, users, warninglists) and 24 write (create/update/delete, publish/unpublish, tag/feed enable/disable, membership/tag mutations). POST-based restSearch actions are read because they query data. |
