@@ -118,7 +118,7 @@ Status values: `pending`, `in-progress`, `done`.
 | `metabase` | done | Annotated 10 actions: 9 read (question/alert/database/metric get/list/fields/results actions) and 1 write (`database.add`). `question.getResults` is read despite POST because it runs/retrieves query results. |
 | `microsoftCalendar` | done | Annotated 2 actions: 2 read (`calendar.list`, `event.get`). |
 | `microsoftFiles` | done | Annotated 5 actions: 3 read (`files.search`, `files.list`, `files.get`) and 2 write (`files.upload`, `folder.create`). |
-| `microsoftMail` | done | Annotated 4 actions: 2 read (`mail.list`, `mail.get`) and 2 write (`mail.send`, `mail.draft`). |
+| `microsoftMail` | done | Annotated 11 actions: 4 read (`mail.list`, `mail.get`, `attachment.list`, `attachment.get`) and 7 write (`mail.send`, `mail.draft`, `draft.send`, `mail.reply`, `mail.forward`, `attachment.add`, `attachment.delete`). `attachment.get` is read: with `savePath` it writes a local file without changing the mailbox. |
 | `misp` | done | Annotated 44 actions: 20 read (get/list/search actions across attributes, events, feeds, galaxies, noticelists, objects, organisations, tags, users, warninglists) and 24 write (create/update/delete, publish/unpublish, tag/feed enable/disable, membership/tag mutations). POST-based restSearch actions are read because they query data. |
 | `mocean` | done | Annotated 2 actions: 2 write (`sms.send`, `voice.send`) because they send SMS messages and initiate voice calls. |
 | `monday` | done | Annotated 18 actions: 7 read (board/column/group/item get/list/search actions) and 11 write (board/column/group/item create/archive/delete/move/update/comment/column value mutations). |
