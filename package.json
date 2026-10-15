@@ -8,7 +8,8 @@
   "scripts": {
     "build": "bun --filter runline build && bun --filter pi-runline build",
     "test": "bun run --filter '*' test",
-    "check": "bunx @biomejs/biome check .",
+    "check": "bunx @biomejs/biome check . && bun run lint:access",
+    "lint:access": "bun scripts/lint-plugin-access.ts",
     "typecheck": "bun run --filter '*' typecheck",
     "format": "bunx @biomejs/biome format --write .",
     "build:steel-page-bundle": "bun run scripts/build-steel-page-bundle.ts"
