@@ -33,7 +33,7 @@ describe("signed-grant upload", () => {
       seen = { url: String(input), init };
       return new Response(null, { status: 200 });
     }) as typeof fetch;
-    await putThroughGrant(grant, file, "audio/mpeg", bytes.byteLength);
+    await putThroughGrant(grant, file, "audio/mpeg");
     assert.equal(seen?.url, grant.url);
     assert.equal(seen?.init?.method, "PUT");
     const headers = new Headers(seen?.init?.headers);
@@ -57,7 +57,6 @@ describe("signed-grant upload", () => {
       { ...grant, headers: { "content-type": "application/octet-stream" } },
       file,
       "audio/mpeg",
-      bytes.byteLength,
     );
     assert.equal(headers?.get("content-type"), "application/octet-stream");
   });
@@ -66,13 +65,7 @@ describe("signed-grant upload", () => {
     globalThis.fetch = (async () =>
       new Response(null, { status: 403 })) as typeof fetch;
     await assert.rejects(
-      putThroughGrant(
-        grant,
-        file,
-        "audio/mpeg",
-        bytes.byteLength,
-        "Media upload",
-      ),
+      putThroughGrant(grant, file, "audio/mpeg", "Media upload"),
       /Media upload failed: HTTP 403/,
     );
   });

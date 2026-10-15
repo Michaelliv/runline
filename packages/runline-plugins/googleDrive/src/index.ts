@@ -54,9 +54,10 @@
  * (Buffer) vs a path (streamed).
  */
 
-import { createReadStream, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, statSync, writeFileSync } from "node:fs";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { standardBase64 } from "../../_shared/base64.js";
 import { jsonAnswer, pathSegment } from "../../_shared/credentials.js";
 import {
   googleCredential,
@@ -71,6 +72,7 @@ import {
   StringOrStringArray,
   stringEnum,
 } from "../../_shared/googleSchemas.js";
+import { readLocalFile } from "../../_shared/localFile.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -209,15 +211,18 @@ async function paginateAll(
  * mimeType. For resumable uploads we keep paths as paths so we can
  * stream instead of buffering 500 MB in memory.
  */
-function resolveContent(p: Record<string, unknown>): {
+async function resolveContent(p: Record<string, unknown>): Promise<{
   buffer?: Buffer;
   path?: string;
   size: number;
   mimeType?: string;
   fileName?: string;
-} {
+}> {
   if (typeof p.contentBase64 === "string") {
-    const buf = Buffer.from(p.contentBase64, "base64");
+    const base64 = standardBase64(p.contentBase64);
+    if (base64 === undefined)
+      throw new Error("googleDrive: contentBase64 is not valid base64");
+    const buf = Buffer.from(base64, "base64");
     return {
       buffer: buf,
       size: buf.byteLength,
@@ -241,9 +246,14 @@ function resolveContent(p: Record<string, unknown>): {
     const BUFFER_THRESHOLD = 5 * 1024 * 1024;
     const fileName = (p.name as string | undefined) ?? p.contentPath.split("/").pop();
     if (stat.size <= BUFFER_THRESHOLD) {
+      const buffer = await readLocalFile(p.contentPath, {
+        subject: "googleDrive: contentPath",
+        maxBytes: BUFFER_THRESHOLD,
+        oversize: "googleDrive: contentPath grew while reading; retry the upload",
+      });
       return {
-        buffer: readFileSync(p.contentPath),
-        size: stat.size,
+        buffer,
+        size: buffer.byteLength,
         mimeType: p.mimeType as string | undefined,
         fileName,
       };
@@ -566,7 +576,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      const content = resolveContent(p);
+      const content = await resolveContent(p);
       const metadata: Record<string, unknown> = {
         name: content.fileName ?? "Untitled",
         parents: [resolveParent(p.folderId as string, p.driveId as string)],
@@ -873,7 +883,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       // Step 1: upload new bytes if provided. Drive requires PATCH on
       // the upload endpoint for content replacement.
       if (hasBytes) {
-        const c = resolveContent(p);
+        const c = await resolveContent(p);
         const mimeType = c.mimeType ?? (p.mimeType as string) ?? "application/octet-stream";
         if (c.buffer) {
           const url = new URL(`${API_BASE}/upload/drive/v3/files/${pathSegment(fileId)}`);
@@ -1893,11 +1903,6 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       ] as const) {
         if (p[k] !== undefined) body[k] = p[k];
       }
-      if (Object.keys(body).length === 0) {
-        throw new Error(
-          "googleDrive.revision.update: pass at least one of keepForever / published / publishAuto / publishedOutsideDomain.",
-        );
-      }
       return driveRequest(
         ctx,
         "PATCH",
@@ -2133,9 +2138,6 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       if (p.transferOwnership) qs.transferOwnership = true;
       if (p.removeExpiration) qs.removeExpiration = true;
       if (p.useDomainAdminAccess) qs.useDomainAdminAccess = true;
-      if (Object.keys(body).length === 0 && !qs.removeExpiration) {
-        throw new Error("googleDrive.permission.update: pass at least one of role / expirationTime / removeExpiration.");
-      }
       return driveRequest(ctx, "PATCH", `/drive/v3/files/${pathSegment(p.fileId)}/permissions/${pathSegment(p.permissionId)}`, body, qs);
     },
   });

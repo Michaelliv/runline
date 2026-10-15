@@ -186,7 +186,7 @@ export default function together(rl: RunlinePluginAPI) {
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("together: prompt is required");
       }
-      const img = readImageInput(p.imagePath, "together");
+      const img = await readImageInput(p.imagePath, "together");
 
       const model = p.model ?? "black-forest-labs/FLUX.1-kontext-pro";
 

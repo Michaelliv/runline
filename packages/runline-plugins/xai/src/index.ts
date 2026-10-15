@@ -157,7 +157,7 @@ export default function xai(rl: RunlinePluginAPI) {
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("xai: prompt is required");
       }
-      const img = readImageInput(p.imagePath, "xai");
+      const img = await readImageInput(p.imagePath, "xai");
 
       const model = p.model ?? EDIT_MODEL;
 

@@ -1,6 +1,6 @@
 import type { ActionContext } from "runline";
 import * as t from "typebox";
-import { errorIdentifier, failureMessage } from "./credentials.js";
+import { errorIdentifier, responseFailed } from "./credentials.js";
 
 export { pathSegment } from "./credentials.js";
 
@@ -62,22 +62,17 @@ export function baseUrl(): string {
  * A failed response, read as a Shift error envelope when it is one: the
  * service's `code` (else its `type`) and the offending `param`.
  */
-export async function shiftError(
-  plugin: string,
-  response: Response,
-): Promise<Error> {
-  let code: string | undefined;
-  let param: string | undefined;
-  try {
-    const error = ((await response.json()) as { error?: unknown }).error;
-    if (typeof error === "string") code = errorIdentifier(error);
-    else if (error && typeof error === "object") {
-      const shaped = error as Record<string, unknown>;
-      code = errorIdentifier(shaped.code) ?? errorIdentifier(shaped.type);
-      param = errorIdentifier(shaped.param);
-    }
-  } catch {
-    // Not an error envelope: the status alone.
-  }
-  return new Error(failureMessage(plugin, response.status, { code, param }));
+export function shiftError(plugin: string, response: Response) {
+  return responseFailed(plugin, response, (body) => {
+    const error =
+      body && typeof body === "object"
+        ? (body as { error?: unknown }).error
+        : undefined;
+    if (!error || typeof error !== "object") return { code: error };
+    const shaped = error as Record<string, unknown>;
+    return {
+      code: errorIdentifier(shaped.code) ?? shaped.type,
+      param: shaped.param,
+    };
+  });
 }

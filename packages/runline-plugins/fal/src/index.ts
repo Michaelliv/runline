@@ -175,7 +175,7 @@ export default function fal(rl: RunlinePluginAPI): void {
     inputSchema: editSchema,
     async execute(input, ctx) {
       const p = input as t.Static<typeof editSchema>;
-      const image = readImageInput(p.imagePath, "fal");
+      const image = await readImageInput(p.imagePath, "fal");
       const key = p.imageInputKey ?? "image_url";
       return generate(
         ctx,

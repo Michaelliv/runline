@@ -104,7 +104,6 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
         created.upload,
         fields.path,
         contentType,
-        sizeBytes,
         "Media upload",
       );
 
