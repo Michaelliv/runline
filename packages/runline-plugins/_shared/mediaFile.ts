@@ -94,7 +94,7 @@ const EXT_MIME: Record<string, string> = {
 };
 
 export interface LoadedImage {
-  bytes: Buffer;
+  bytes: Buffer<ArrayBuffer>;
   base64: string;
   mimeType: string;
   dataUri: string;

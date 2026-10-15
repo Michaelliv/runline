@@ -120,6 +120,7 @@ export {
   loadPluginsFromConfig,
 } from "./plugin/loader.js";
 export { PluginRegistry, registry } from "./plugin/registry.js";
+export { connectionFields } from "./plugin/schema.js";
 export type {
   ActionAccess,
   ActionContext,
