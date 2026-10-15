@@ -6,6 +6,7 @@ import typesafe from "../../../runline-plugins/typesafe/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { helpInputs } from "../plugin/schema.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -21,9 +22,7 @@ function build(): PluginDef {
 const plugin = build();
 
 function action(name: string) {
-  const found = plugin.actions.find((a) => a.name === name);
-  assert.ok(found, `expected typesafe.${name} to be registered`);
-  return found;
+  return getAction(plugin, name);
 }
 
 function ctx(config: Record<string, unknown> = {}): ActionContext {
@@ -50,7 +49,7 @@ interface Seen {
 
 function mock(payload: unknown, status = 200): { calls: Seen[] } {
   const calls: Seen[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({
       url: String(input),
       auth: new Headers(init?.headers).get("authorization"),
@@ -60,7 +59,7 @@ function mock(payload: unknown, status = 200): { calls: Seen[] } {
       status,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
   return { calls };
 }
 
@@ -158,9 +157,9 @@ describe("typesafe plugin surface", () => {
   });
 
   it("rejects malformed questions before any request", async () => {
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("must not call the API");
-    }) as typeof fetch;
+    });
     const invalid: Array<[string, unknown]> = [
       ["evaluate", { state: "s", questions: [] }],
       ["evaluate", { state: "s", questions: [{ id: "a", type: "choice" }] }],
@@ -353,7 +352,10 @@ describe("typesafe plugin surface", () => {
     // duplicate and dropped "__proto__" from the criteria entirely.
     assert.deepEqual(Object.keys(calls[0].body.questions ?? {}), ["toString"]);
     assert.deepEqual(
-      Object.keys((calls[0].body.questions?.toString.criteria ?? {}) as object),
+      Object.keys(
+        new Map(Object.entries(calls[0].body.questions ?? {})).get("toString")
+          ?.criteria ?? {},
+      ),
       ["__proto__", "constructor"],
     );
   });
@@ -397,7 +399,7 @@ describe("typesafe plugin surface", () => {
     // always be replayed, so every transient server status is retried.
     for (const status of [429, 500, 503, 529]) {
       let attempts = 0;
-      globalThis.fetch = (async () => {
+      stubFetch(async () => {
         attempts++;
         if (attempts === 1) {
           return new Response("{}", {
@@ -406,7 +408,7 @@ describe("typesafe plugin surface", () => {
           });
         }
         return new Response(JSON.stringify(NOUL_ANSWER), { status: 200 });
-      }) as typeof fetch;
+      });
       await action("noul").execute(
         { state: "s", instructions: "Urgent?" },
         ctx({ maxRetries: 2 }),
@@ -415,10 +417,10 @@ describe("typesafe plugin surface", () => {
     }
 
     let attempts = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       attempts++;
       return new Response("{}", { status: 422 });
-    }) as typeof fetch;
+    });
     await assert.rejects(
       () =>
         action("noul").execute(
@@ -443,9 +445,9 @@ describe("typesafe plugin surface", () => {
   });
 
   it("serves the design guide offline, whole or by topic", async () => {
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("guide must not hit the network");
-    }) as typeof fetch;
+    });
     const all = (await action("guide").execute({}, ctx())) as Record<
       string,
       unknown

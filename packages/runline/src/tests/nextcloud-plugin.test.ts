@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import nextcloud from "../../../runline-plugins/nextcloud/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -44,7 +45,7 @@ function capture(
   reply: () => Response = () => new Response(null, { status: 201 }),
 ) {
   const seen: Seen[] = [];
-  globalThis.fetch = (async (url, init) => {
+  stubFetch(async (url, init) => {
     const headers = new Headers(init?.headers);
     seen.push({
       url: String(url),
@@ -56,7 +57,7 @@ function capture(
         : undefined,
     });
     return reply();
-  }) as typeof fetch;
+  });
   return seen;
 }
 

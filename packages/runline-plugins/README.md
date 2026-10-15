@@ -10,7 +10,7 @@ Organizational. The plugins are their own compilation unit (one `tsc --noCheck` 
 
 1. Create `packages/runline-plugins/<name>/src/index.ts`
 2. Export a default function that receives a `RunlinePluginAPI` (see the [monorepo README](../../README.md#writing-a-plugin))
-3. Add `access: "read"` or `access: "write"` to every action. Use `write` for mutations, sends, uploads, executions, triggers, imports, deploys, config changes, local file writes, and ambiguous external side effects.
+3. Add `access: "read"` or `access: "write"` to every action. Use `write` for mutations, sends, uploads, executions, triggers, imports, deploys, config changes, local file writes, and ambiguous external side effects. `bun run check` enforces the label (`scripts/lint-plugin-access.ts`): every action declares one, and an action whose verb mutates (`create`, `update`, `delete`, `send`, …) is `write`.
 4. `bun --filter runline build` — the plugin is picked up automatically
 
 The plugin loader discovers entries by walking `dist/plugins/*/src/index.js`.

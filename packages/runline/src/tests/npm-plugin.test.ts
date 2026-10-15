@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import npm from "../../../runline-plugins/npm/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -34,7 +35,7 @@ function capture() {
     type: string | null;
     body?: string;
   }> = [];
-  globalThis.fetch = (async (url, init) => {
+  stubFetch(async (url, init) => {
     const headers = new Headers(init?.headers);
     seen.push({
       url: String(url),
@@ -46,7 +47,7 @@ function capture() {
         : undefined,
     });
     return Response.json({});
-  }) as typeof fetch;
+  });
   return seen;
 }
 

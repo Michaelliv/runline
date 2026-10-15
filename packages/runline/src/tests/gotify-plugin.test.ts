@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import gotify from "../../../runline-plugins/gotify/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -16,13 +17,13 @@ describe("gotify", () => {
     const action = resolve().actions.find((a) => a.name === "message.delete");
     assert.ok(action);
     const seen: Array<{ url: string; key: string | null }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         key: new Headers(init?.headers).get("x-gotify-key"),
       });
       return new Response(null, { status: 204 });
-    }) as typeof fetch;
+    });
     const ctx: ActionContext = {
       connection: {
         name: "g",

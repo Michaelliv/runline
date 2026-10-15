@@ -4,6 +4,7 @@ import { Check } from "typebox/value";
 import shiftPages from "../../../runline-plugins/shiftPages/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -31,12 +32,6 @@ function makeShiftPages(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected shiftPages.${name} to be registered`);
-  return action;
-}
-
 function ctx(): ActionContext {
   return {
     connection: {
@@ -54,14 +49,14 @@ function ctx(): ActionContext {
 }
 
 function mockShift(assertRequest: (input: URL, init?: RequestInit) => unknown) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const data = assertRequest(input as URL, init);
     if (data === null) return new Response(null, { status: 204 });
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("shiftPages plugin", () => {
@@ -250,10 +245,10 @@ describe("shiftPages plugin", () => {
   it("enforces one content field per page type before calling the API", async () => {
     const action = getAction(makeShiftPages(), "page.create");
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetchCalls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
 
     const base = { slug: "page", title: "Page" };
     for (const [input, expected] of [

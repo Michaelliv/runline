@@ -19,6 +19,7 @@ import { shiftTranscriptionCredential } from "../../../runline-plugins/shiftTran
 import shiftWork from "../../../runline-plugins/shiftWork/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -44,7 +45,7 @@ const ctx: ActionContext = {
 };
 
 function reply(response: Response) {
-  globalThis.fetch = (async () => response) as unknown as typeof fetch;
+  stubFetch(async () => response);
 }
 
 describe("Shift requests", () => {
@@ -101,10 +102,10 @@ describe("Shift requests", () => {
 
   it("refuse a route outside the Shift API's /v1 surface before any IO", async () => {
     let calls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       calls++;
       return Response.json({});
-    }) as unknown as typeof fetch;
+    });
     for (const path of [
       "/pages/org/slug",
       "v1/issues",
@@ -132,16 +133,18 @@ describe("Shift targets that hold requests open", () => {
   });
 
   it("abort a stalled exchange at the target's declared deadline", async () => {
-    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) =>
-      new Response(
-        new ReadableStream({
-          start(controller) {
-            init?.signal?.addEventListener("abort", () =>
-              controller.error(init.signal?.reason),
-            );
-          },
-        }),
-      )) as typeof fetch;
+    stubFetch(
+      async (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () =>
+                controller.error(init.signal?.reason),
+              );
+            },
+          }),
+        ),
+    );
     await assert.rejects(
       shiftRequest(
         ctx,
@@ -156,17 +159,19 @@ describe("Shift targets that hold requests open", () => {
 
   it("bound the response body at the target's declared ceiling", async () => {
     let cancelled = false;
-    globalThis.fetch = (async () =>
-      new Response(
-        new ReadableStream({
-          pull(controller) {
-            controller.enqueue(new Uint8Array(1024));
-          },
-          cancel() {
-            cancelled = true;
-          },
-        }),
-      )) as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.enqueue(new Uint8Array(1024));
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+        ),
+    );
     await assert.rejects(
       shiftRequest(
         ctx,

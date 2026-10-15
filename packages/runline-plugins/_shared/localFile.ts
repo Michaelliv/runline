@@ -18,7 +18,7 @@ export async function readLocalFile(
     /** The error when the file exceeds `maxBytes`, with the caller's remedy. */
     oversize: string;
   },
-): Promise<Buffer> {
+): Promise<Buffer<ArrayBuffer>> {
   const { subject } = options;
   let file: Awaited<ReturnType<typeof open>>;
   try {

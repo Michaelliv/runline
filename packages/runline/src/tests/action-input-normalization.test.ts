@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import gmail from "../../../runline-plugins/gmail/src/index.js";
 import { dropUndefined, normalizeActionInput } from "../plugin/schema.js";
 import { Runline } from "../sdk.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 describe("action input normalization", () => {
   it("drops undefined-valued keys at every depth of plain objects", () => {
@@ -38,10 +39,10 @@ describe("action input normalization", () => {
   it("lets neither execution nor actions.check count an undefined field as given", async () => {
     const originalFetch = globalThis.fetch;
     let fetched = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetched++;
       return Response.json({ id: "x" });
-    }) as typeof fetch;
+    });
     try {
       const rl = Runline.create({
         plugins: [gmail],

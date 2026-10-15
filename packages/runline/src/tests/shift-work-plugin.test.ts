@@ -4,6 +4,7 @@ import { Check } from "typebox/value";
 import shiftWork from "../../../runline-plugins/shiftWork/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -49,12 +50,6 @@ function makeShiftWork(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected shiftWork.${name} to be registered`);
-  return action;
-}
-
 function ctx(): ActionContext {
   return {
     connection: {
@@ -72,13 +67,13 @@ function ctx(): ActionContext {
 }
 
 function mockShift(assertRequest: (input: URL, init?: RequestInit) => unknown) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const data = assertRequest(input as URL, init);
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("shiftWork plugin", () => {
@@ -175,10 +170,10 @@ describe("shiftWork plugin", () => {
     assert.deepEqual(report, create);
 
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetchCalls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
 
     // report inherits create's pre-flight invariants.
     await assert.rejects(
@@ -387,10 +382,10 @@ describe("shiftWork plugin", () => {
   it("rejects cloud domain invariants before calling the API", async () => {
     const plugin = makeShiftWork();
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetchCalls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
 
     await assert.rejects(
       () =>
@@ -430,10 +425,10 @@ describe("shiftWork plugin", () => {
   it("rejects nested Issues without a Project before calling the API", async () => {
     const action = getAction(makeShiftWork(), "issue.create");
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetchCalls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
 
     await assert.rejects(
       () =>

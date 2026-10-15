@@ -18,6 +18,7 @@
   "scripts": {
     "build": "echo 'no build'",
     "test": "echo 'no tests'",
+    "typecheck": "tsc",
     "lint": "biome check extensions/",
     "lint:fix": "biome check --write extensions/"
   },
@@ -30,5 +31,9 @@
     "@sinclair/typebox": "*"
   },
   "author": "michaelliv",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.8.0"
+  }
 }

@@ -179,7 +179,7 @@ export default function cortex(rl: RunlinePluginAPI) {
         pap = 2,
         message,
       } = input as Record<string, unknown>;
-      const entityData = {
+      const entityData: Record<string, unknown> = {
         _type: entityType,
         ...(data as Record<string, unknown>),
       };

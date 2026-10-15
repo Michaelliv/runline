@@ -136,10 +136,11 @@ describe("staticCredential", () => {
     const targets = {
       api: { baseUrl: "https://api.example/", methods: ["GET" as const] },
     };
-    for (const local of [
+    const locals: Array<Record<string, string>> = [
       { key: "apiKey" },
       { key: "a", token: "t", extra: "x" },
-    ])
+    ];
+    for (const local of locals)
       assert.throws(
         () =>
           staticCredential({

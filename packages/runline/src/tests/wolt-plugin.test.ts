@@ -7,6 +7,7 @@ import { MemoryConnectionProvider } from "../connections/memory.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { isTypedInputSchema } from "../plugin/schema.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -22,9 +23,7 @@ function build(): PluginDef {
 const plugin = build();
 
 function action(name: string) {
-  const found = plugin.actions.find((a) => a.name === name);
-  assert.ok(found, `expected wolt.${name} to be registered`);
-  return found;
+  return getAction(plugin, name);
 }
 
 const CONNECTED = {
@@ -67,7 +66,7 @@ type Route = [string, unknown | (() => unknown)];
 
 function mock(routes: Route[]) {
   const calls: Call[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push({
       url,
@@ -87,7 +86,7 @@ function mock(routes: Route[]) {
       });
     }
     return new Response(JSON.stringify({ unrouted: url }), { status: 404 });
-  }) as typeof fetch;
+  });
   return calls;
 }
 
@@ -265,9 +264,9 @@ describe("wolt plugin surface", () => {
   });
 
   it("rejects malformed and unknown input before any request", () => {
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("must not reach the network");
-    }) as typeof fetch;
+    });
     const invalid: Array<[string, unknown]> = [
       ["venue.search", {}],
       ["venue.search", { query: "x", surprise: 1 }],

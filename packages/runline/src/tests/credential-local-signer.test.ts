@@ -18,6 +18,7 @@ import type {
   SecretPlacement,
 } from "../credentials/types.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -84,13 +85,13 @@ function context(config: Record<string, unknown>): ActionContext {
 
 function capture() {
   const seen: Array<{ url: string; authorization: string | null }> = [];
-  globalThis.fetch = (async (url: string, init: RequestInit) => {
+  stubFetch(async (url, init) => {
     seen.push({
       url: String(url),
-      authorization: new Headers(init.headers).get("authorization"),
+      authorization: new Headers(init?.headers).get("authorization"),
     });
     return Response.json({ ok: true });
-  }) as unknown as typeof fetch;
+  });
   return seen;
 }
 
@@ -230,11 +231,13 @@ describe("the local signer signs static keys from flat config", () => {
 
   it("refuses a redirect, and the error carries no secret", async () => {
     const declare = declaration(bearer, { secret: { field: "apiKey" } });
-    globalThis.fetch = (async () =>
-      new Response(null, {
-        status: 302,
-        headers: { location: "https://evil.example/" },
-      })) as unknown as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://evil.example/" },
+        }),
+    );
     await assert.rejects(
       credentialBroker(context({ apiKey: "sk-1" }), declare).request({
         target: "api",

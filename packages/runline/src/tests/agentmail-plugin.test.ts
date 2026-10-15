@@ -9,6 +9,7 @@ import agentMail from "../../../runline-plugins/agentMail/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { helpInputs, validateTypedInput } from "../plugin/schema.js";
 import type { ActionContext, TypedInputSchema } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -29,9 +30,7 @@ const ctx: ActionContext = {
   async updateConnection() {},
 };
 function action(name: string) {
-  const found = plugin.actions.find((a) => a.name === name);
-  assert.ok(found, name);
-  return found;
+  return getAction(plugin, name);
 }
 async function run(name: string, input: unknown = {}, context = ctx) {
   return action(name).execute(input, context);
@@ -43,14 +42,14 @@ function valid(name: string, input: unknown) {
 }
 function mock(response: unknown = {}) {
   const calls: { url: URL; init: RequestInit; body: unknown }[] = [];
-  globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (url: RequestInfo | URL, init?: RequestInit) => {
     calls.push({
       url: new URL(String(url)),
       init: init ?? {},
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
     });
     return response instanceof Response ? response : Response.json(response);
-  }) as typeof fetch;
+  });
   return calls;
 }
 const header = (init: RequestInit, name: string) =>

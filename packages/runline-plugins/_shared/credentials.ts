@@ -608,7 +608,7 @@ export function pathWithin(
 /** FormData as the buffered bytes the transport accepts, with its boundary. */
 export async function multipartBody(
   form: FormData,
-): Promise<{ body: Uint8Array; contentType: string }> {
+): Promise<{ body: Uint8Array<ArrayBuffer>; contentType: string }> {
   const response = new Response(form);
   const contentType = response.headers.get("content-type");
   if (!contentType) throw new AuthError("request_not_allowed");

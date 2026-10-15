@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import vercel from "../../../runline-plugins/vercel/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -33,12 +34,6 @@ function makeVercel(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected vercel.${name} to be registered`);
-  return action;
-}
-
 function ctx(config: Record<string, unknown> = {}): ActionContext {
   return {
     connection: {
@@ -58,7 +53,7 @@ function mockVercel(
     body?: unknown;
   }) => unknown,
 ) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     assert.equal(url.origin, "https://api.vercel.com");
     assert.equal(
@@ -71,7 +66,7 @@ function mockVercel(
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("vercel plugin action surface", () => {
@@ -253,11 +248,13 @@ describe("vercel plugin REST actions", () => {
 
   it("reports a failure by status alone, without the provider's message", async () => {
     const action = getAction(makeVercel(), "project.get");
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ error: { message: "nope" } }), {
-        status: 403,
-        headers: { "content-type": "application/json" },
-      })) as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: { message: "nope" } }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+    );
 
     await assert.rejects(action.execute({ id: "missing" }, ctx()), {
       message: "vercel: request failed (HTTP 403)",

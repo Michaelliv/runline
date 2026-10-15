@@ -32,6 +32,7 @@
     "prepublishOnly": "bun run build",
     "dev": "bun run src/main.ts",
     "test": "bun test src/tests",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "format": "bunx @biomejs/biome format --write src/",
     "lint": "bunx @biomejs/biome lint src/",
     "check": "bunx @biomejs/biome check src/"

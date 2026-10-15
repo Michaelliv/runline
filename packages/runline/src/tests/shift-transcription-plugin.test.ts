@@ -7,6 +7,7 @@ import { Check } from "typebox/value";
 import shiftTranscription from "../../../runline-plugins/shiftTranscription/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -30,12 +31,6 @@ function makeShiftTranscription(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected shiftTranscription.${name} to be registered`);
-  return action;
-}
-
 function ctx(): ActionContext {
   return {
     connection: {
@@ -53,13 +48,13 @@ function ctx(): ActionContext {
 }
 
 function mockShift(assertRequest: (input: URL, init?: RequestInit) => unknown) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const data = assertRequest(input as URL, init);
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("shiftTranscription plugin", () => {
@@ -162,10 +157,7 @@ describe("shiftTranscription plugin", () => {
     await writeFile(media, "media-bytes");
 
     const calls: string[] = [];
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       calls.push(`${init?.method ?? "GET"} ${url}`);
       if (url.endsWith("/v1/services/transcription/assets")) {
@@ -208,7 +200,7 @@ describe("shiftTranscription plugin", () => {
         return Response.json({ id: "job_1", status: "queued" });
       }
       throw new Error(`unexpected request: ${url}`);
-    }) as typeof fetch;
+    });
 
     assert.deepEqual(
       await action.execute(
@@ -250,10 +242,10 @@ describe("shiftTranscription plugin", () => {
     await truncate(oversized, 5 * 1024 * 1024 * 1024 + 1);
 
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetchCalls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
 
     await assert.rejects(
       () => action.execute({ path: empty }, ctx()),
@@ -313,10 +305,7 @@ describe("shiftTranscription plugin", () => {
       "transcription.transcript",
     );
 
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/jobs/job_1/artifacts/txt/download")) {
         assert.equal(init?.method, "POST");
@@ -334,7 +323,7 @@ describe("shiftTranscription plugin", () => {
         return new Response("Speaker 1: hello world\n");
       }
       throw new Error(`unexpected request: ${url}`);
-    }) as typeof fetch;
+    });
 
     assert.deepEqual(await action.execute({ id: "job_1" }, ctx()), {
       format: "txt",
@@ -349,7 +338,7 @@ describe("shiftTranscription plugin", () => {
     );
     let downloadFetches = 0;
 
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    stubFetch(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/jobs/job_1/artifacts/json/download")) {
         return Response.json({
@@ -367,7 +356,7 @@ describe("shiftTranscription plugin", () => {
       }
       downloadFetches += 1;
       throw new Error(`unexpected request: ${url}`);
-    }) as typeof fetch;
+    });
 
     assert.deepEqual(
       await action.execute({ id: "job_1", format: "json" }, ctx()),
@@ -403,14 +392,14 @@ describe("shiftTranscription plugin", () => {
       },
     };
 
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    stubFetch(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/jobs/job_1/artifacts/txt/download")) {
         return Response.json(grant);
       }
       if (url === grant.download.url) return new Response(content);
       throw new Error(`unexpected request: ${url}`);
-    }) as typeof fetch;
+    });
 
     assert.deepEqual(await action.execute({ id: "job_1" }, ctx()), {
       format: "txt",

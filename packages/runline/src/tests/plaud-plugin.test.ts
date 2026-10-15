@@ -25,6 +25,7 @@ import {
 import { CredentialRegistry } from "../credentials/registry.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, OAuthConfig } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const nativeFetch = globalThis.fetch;
 afterEach(() => {
@@ -33,16 +34,13 @@ afterEach(() => {
 function mock(
   handler: (url: string, init: RequestInit) => Response | Promise<Response>,
 ) {
-  globalThis.fetch = (async (url, init) =>
-    handler(String(url), init ?? {})) as typeof fetch;
+  stubFetch(async (url, init) => handler(String(url), init ?? {}));
 }
 const { api, resolve } = createPluginAPI("test");
 plaud(api);
 const plugin = resolve();
 function action(name: string) {
-  const result = plugin.actions.find((a) => a.name === name);
-  assert.ok(result);
-  return result;
+  return getAction(plugin, name);
 }
 async function context(config: Record<string, unknown> = {}) {
   const store = new MemoryConnectionProvider([
