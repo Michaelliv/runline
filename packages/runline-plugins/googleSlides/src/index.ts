@@ -28,6 +28,7 @@ import {
   googleCredential,
   googleDownload,
   googleJsonRequest,
+  googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
   Id,
@@ -100,37 +101,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   rl.setVersion("0.1.0");
   rl.setCredential(googleCredential("googleSlides", SCOPES));
 
-  rl.setOAuth({
-    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-    tokenUrl: "https://oauth2.googleapis.com/token",
-    scopes: SCOPES,
-    authParams: { access_type: "offline", prompt: "consent" },
-    setupHelp: [
-      "You need a Google Cloud OAuth client. Takes ~5 minutes, one time.",
-      "",
-      "1. Create or pick a Google Cloud project:",
-      "     https://console.cloud.google.com/projectcreate",
-      "",
-      "2. Enable the Google Slides API:",
-      "     https://console.cloud.google.com/apis/library/slides.googleapis.com",
-      "",
-      "3. Configure the OAuth consent screen:",
-      "     https://console.cloud.google.com/apis/credentials/consent",
-      "     • Audience: External",
-      "",
-      "4. Add yourself as a test user:",
-      "     https://console.cloud.google.com/auth/audience",
-      "",
-      "5. Create the OAuth client:",
-      "     https://console.cloud.google.com/apis/credentials",
-      "     • + Create credentials → OAuth client ID",
-      "     • Application type: Web application",
-      "     • Authorized redirect URIs → + Add URI: {{redirectUri}}",
-      "",
-      "6. Paste the Client ID and Client Secret below, or export",
-      "   GOOGLE_SLIDES_CLIENT_ID and GOOGLE_SLIDES_CLIENT_SECRET.",
-    ],
-  });
+  rl.setOAuth(googleOAuth("googleSlides", SCOPES, "GOOGLE_SLIDES"));
 
   rl.setConnectionSchema({
     authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },

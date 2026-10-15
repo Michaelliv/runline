@@ -1,13 +1,10 @@
 /**
  * Google Calendar plugin for runline.
  *
- * Authentication mirrors the gmail plugin: OAuth2 user flow, seeded
- * once via `runline auth googleCalendar`. The connection stores
- * `clientId`, `clientSecret`, `refreshToken`, plus cached
- * `accessToken` + `accessTokenExpiresAt`. Token refresh is lazy —
- * when the cached token is missing or within 60 s of expiry the
- * plugin hits `https://oauth2.googleapis.com/token` and persists
- * the new token via `ctx.updateConnection`.
+ * Authentication mirrors the gmail plugin: the Google grant's OAuth2
+ * user flow, seeded once via `runline auth googleCalendar`, with the
+ * access token refreshed lazily (60 s skew) and cached on the
+ * connection as the grant's.
  *
  * Surface area:
  *
@@ -32,7 +29,11 @@ import rrulePkg from "rrule";
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { pathSegment } from "../../_shared/credentials.js";
-import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
+import {
+  googleCredential,
+  googleJsonRequest,
+  googleOAuth,
+} from "../../_shared/googleAuth.js";
 import {
   Id,
   NonEmptyString,
@@ -633,37 +634,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
   rl.setVersion("0.1.0");
   rl.setCredential(googleCredential("googleCalendar", SCOPES));
 
-  rl.setOAuth({
-    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-    tokenUrl: "https://oauth2.googleapis.com/token",
-    scopes: SCOPES,
-    authParams: { access_type: "offline", prompt: "consent" },
-    setupHelp: [
-      "You need a Google Cloud OAuth client. Takes ~5 minutes, one time.",
-      "",
-      "1. Create or pick a Google Cloud project:",
-      "     https://console.cloud.google.com/projectcreate",
-      "",
-      "2. Enable the Google Calendar API:",
-      "     https://console.cloud.google.com/apis/library/calendar-json.googleapis.com",
-      "",
-      "3. Configure the OAuth consent screen (first time only):",
-      "     https://console.cloud.google.com/apis/credentials/consent",
-      "     • Audience: External",
-      "",
-      "4. Add yourself as a test user:",
-      "     https://console.cloud.google.com/auth/audience",
-      "",
-      "5. Create the OAuth client:",
-      "     https://console.cloud.google.com/apis/credentials",
-      "     • + Create credentials → OAuth client ID",
-      "     • Application type: Web application",
-      "     • Authorized redirect URIs → + Add URI: {{redirectUri}}",
-      "",
-      "6. Paste the Client ID and Client Secret below, or export",
-      "   GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET.",
-    ],
-  });
+  rl.setOAuth(googleOAuth("googleCalendar", SCOPES, "GOOGLE_CALENDAR"));
 
   rl.setConnectionSchema({
     authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },

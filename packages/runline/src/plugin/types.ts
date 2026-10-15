@@ -124,6 +124,14 @@ interface OAuthSetupOptions {
   /** Scopes to request on the consent screen. */
   scopes: string[];
   /**
+   * The grant this plugin's consent belongs to, shared by every plugin
+   * declaring the same id (`google`, `microsoft`): one provider, one OAuth
+   * client, one person's consent. A host may hold one connection for the
+   * whole grant and ask for the union of its plugins' scopes. The plugin's
+   * credential declares the same id, so its tokens are the grant's.
+   */
+  grant?: string;
+  /**
    * Provider-fixed loopback callback (`http://localhost:<port>/<path>`),
    * replacing Runline's default `http://127.0.0.1:47823/callback`. Use only
    * when the provider validates redirects against a URI it published.

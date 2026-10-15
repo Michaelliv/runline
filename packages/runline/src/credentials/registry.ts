@@ -245,6 +245,10 @@ function validateMethod(method: CredentialMethod): void {
       ![401, 403].includes(auth.rejectionStatus)
     )
       throw new AuthError("invalid_definition");
+    if (auth.grant !== undefined) {
+      identifier(auth.grant);
+      if (auth.renewal !== "refresh") throw new AuthError("invalid_definition");
+    }
     if (
       auth.scopes &&
       (!Array.isArray(auth.scopes) ||

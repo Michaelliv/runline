@@ -1,14 +1,11 @@
 /**
  * Gmail plugin for runline.
  *
- * Authentication: OAuth2 user flow, seeded once via
- * `runline auth gmail`. The connection stores `clientId`,
- * `clientSecret`, `refreshToken`, plus cached `accessToken` +
- * `accessTokenExpiresAt`. When the cached token is missing or
- * within 60 s of expiry, the plugin refreshes against
- * `https://oauth2.googleapis.com/token` and persists the new
- * token via `ctx.updateConnection`. File-level locking inside
- * runline core keeps concurrent refreshes safe.
+ * Authentication: the Google grant's OAuth2 user flow, seeded once
+ * via `runline auth gmail`, or a service account. The connection
+ * stores `clientId`, `clientSecret` and `refreshToken`; the access
+ * token is refreshed lazily (60 s skew) and cached on the connection
+ * as the grant's, so every Google plugin sharing it signs with it.
  *
  * This plugin deliberately doesn't depend on nodemailer or
  * mailparser. MIME building is a minimal hand-rolled encoder
@@ -26,7 +23,11 @@ import * as t from "typebox";
 import { DownloadedFile, standardBase64 } from "../../_shared/base64.js";
 import { renderEmailJsx } from "../../_shared/emailJsx.js";
 import { pathSegment } from "../../_shared/credentials.js";
-import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
+import {
+  googleCredential,
+  googleJsonRequest,
+  googleOAuth,
+} from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
   Id,
@@ -767,60 +768,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.setVersion("0.1.0");
   rl.setCredential(googleCredential("gmail", SCOPES));
 
-  rl.setOAuth({
-    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-    tokenUrl: "https://oauth2.googleapis.com/token",
-    scopes: SCOPES,
-    // access_type=offline + prompt=consent are both required to
-    // make Google return a refresh token. Without them, repeat
-    // logins skip the refresh_token field in the response.
-    authParams: { access_type: "offline", prompt: "consent" },
-    setupHelp: [
-      "You need a Google Cloud OAuth client. Takes ~5 minutes, one time.",
-      "Do the steps in order — skipping step 4 causes a 403 when you log in.",
-      "",
-      "1. Create a Google Cloud project (or pick an existing one):",
-      "     https://console.cloud.google.com/projectcreate",
-      "   Make sure the new project is selected in the top navigation dropdown.",
-      "",
-      "2. Enable the Gmail API for that project:",
-      "     https://console.cloud.google.com/apis/library/gmail.googleapis.com",
-      "   Click 'Enable'.",
-      "",
-      "3. Configure the OAuth consent screen (first time only):",
-      "     https://console.cloud.google.com/apis/credentials/consent",
-      "   Click 'Get started' and fill in:",
-      "     • App name: runline (or whatever)",
-      "     • User support email: your email",
-      "     • Audience: External",
-      "     • Developer contact: your email",
-      "   You can skip the Scopes screen — runline declares scopes at auth time.",
-      "",
-      "4. Add yourself as a test user (required — External apps in Testing mode",
-      "   only allow authentication from addresses on this list):",
-      "     https://console.cloud.google.com/auth/audience",
-      "   Under 'Test users', click '+ Add users' and enter the Gmail address",
-      "   you'll use to log in. Consent and refresh tokens expire every 7 days",
-      "   while the app is in Testing mode.",
-      "",
-      "5. Create the OAuth client:",
-      "     https://console.cloud.google.com/apis/credentials",
-      "     • + Create credentials → OAuth client ID",
-      "     • Application type: Web application",
-      "     • Name: runline (or whatever)",
-      "     • Authorized redirect URIs → + Add URI:",
-      "         {{redirectUri}}",
-      "     • Click Create, then copy the Client ID and Client Secret from the",
-      "       dialog — the secret is only shown once.",
-      "",
-      "6. Paste them below (or re-run with --client-id / --client-secret,",
-      "   or export GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET).",
-      "",
-      "During login you'll see a 'Google hasn't verified this app' warning.",
-      "Click 'Advanced → Go to runline (unsafe)' to continue — this is",
-      "expected for apps in Testing mode.",
-    ],
-  });
+  rl.setOAuth(googleOAuth("gmail", SCOPES, "GMAIL"));
 
   rl.setConnectionSchema({
     authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
