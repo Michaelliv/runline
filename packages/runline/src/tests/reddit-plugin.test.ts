@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import reddit from "../../../runline-plugins/reddit/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -29,13 +30,13 @@ function run(
 describe("reddit without a token", () => {
   it("reads public listings unsigned from www.reddit.com", async () => {
     const seen: Array<{ url: string; auth: string | null }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         auth: new Headers(init?.headers).get("authorization"),
       });
       return Response.json({ data: { children: [] } });
-    }) as typeof fetch;
+    });
     await run("post.list", { subreddit: "node", category: "new" });
     assert.deepEqual(seen, [
       {
@@ -46,9 +47,9 @@ describe("reddit without a token", () => {
   });
 
   it("refuses a write before any request", async () => {
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("no request expected");
-    }) as typeof fetch;
+    });
     await assert.rejects(run("post.delete", { postId: "abc" }), {
       code: "request_not_allowed",
     });
@@ -58,14 +59,14 @@ describe("reddit without a token", () => {
 describe("reddit with a token", () => {
   it("sends a write's parameters as a form body, never in the URL", async () => {
     const seen: Array<{ url: string; type: string | null; body: string }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         type: new Headers(init?.headers).get("content-type"),
         body: String(init?.body),
       });
       return Response.json({ json: { data: { things: [{ data: {} }] } } });
-    }) as typeof fetch;
+    });
     await run(
       "comment.create",
       { postId: "abc", text: "hello there" },

@@ -16,8 +16,9 @@ import { readLocalFile } from "../../../runline-plugins/_shared/localFile.js";
 import { readImageInput } from "../../../runline-plugins/_shared/mediaFile.js";
 import googleDrive from "../../../runline-plugins/googleDrive/src/index.js";
 import microsoftFiles from "../../../runline-plugins/microsoftFiles/src/index.js";
-import { createPluginAPI } from "../plugin/api.js";
-import type { ActionContext, RunlinePluginAPI } from "../plugin/types.js";
+import { createPluginAPI, type RunlinePluginAPI } from "../plugin/api.js";
+import type { ActionContext } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const dir = mkdtempSync(join(tmpdir(), "plugin-input-test-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -57,9 +58,7 @@ describe("caller-supplied base64 in upload actions", () => {
   ) => {
     const { api, resolve } = createPluginAPI(name);
     register(api);
-    const found = resolve().actions.find((a) => a.name === path);
-    assert.ok(found, path);
-    return found;
+    return getAction(resolve(), path);
   };
   const ctx = {
     connection: { name: "t", plugin: "t", config: {} },
@@ -69,10 +68,10 @@ describe("caller-supplied base64 in upload actions", () => {
   it("refuses invalid base64 before any request instead of uploading corrupt bytes", async () => {
     const originalFetch = globalThis.fetch;
     let fetched = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetched++;
       return Response.json({});
-    }) as typeof fetch;
+    });
     try {
       await assert.rejects(
         () =>

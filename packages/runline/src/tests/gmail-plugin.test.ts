@@ -6,6 +6,7 @@ import gmail, {
   encodeEmail,
 } from "../../../runline-plugins/gmail/src/index.js";
 import { Runline } from "../sdk.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const gmailActions = Runline.create({ plugins: [gmail] }).actions();
 
@@ -79,18 +80,20 @@ const gmailValidInputs: Record<string, Record<string, unknown>> = {
 describe("gmail plugin send errors", () => {
   it("nudges agents to check sent mail with Gmail actions before retrying", async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          error: {
-            code: 429,
-            message:
-              "Too many requests: User-rate limit exceeded (Mail sending)",
-            errors: [{ reason: "userRateLimitExceeded" }],
-          },
-        }),
-        { status: 429, headers: { "Content-Type": "application/json" } },
-      )) as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 429,
+              message:
+                "Too many requests: User-rate limit exceeded (Mail sending)",
+              errors: [{ reason: "userRateLimitExceeded" }],
+            },
+          }),
+          { status: 429, headers: { "Content-Type": "application/json" } },
+        ),
+    );
 
     try {
       const rl = Runline.create({
@@ -426,10 +429,10 @@ describe("gmail plugin TypeBox schemas", () => {
   it("rejects SHFT-545 inputs in the execution engine before fetching", async () => {
     const originalFetch = globalThis.fetch;
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetchCalls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
 
     try {
       const rl = Runline.create({

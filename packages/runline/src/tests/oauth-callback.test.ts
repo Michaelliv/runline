@@ -8,6 +8,7 @@ import {
   runOAuth,
 } from "../core/oauth.js";
 import type { OAuthConfig } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const nativeFetch = globalThis.fetch;
 afterEach(() => {
@@ -36,14 +37,14 @@ function callback(state: string, values: Record<string, string>): string {
 describe("local OAuth callback lifecycle", () => {
   it("listens before opening the browser and ignores unbound errors before a valid callback", async () => {
     let requests = 0;
-    globalThis.fetch = (async (_url, init) => {
+    stubFetch(async (_url, init) => {
       requests++;
       assert.equal(
         new URLSearchParams(String(init?.body)).get("code"),
         "accepted-code",
       );
       return Response.json({ access_token: "issued" });
-    }) as typeof fetch;
+    });
     let visit: Promise<void> | undefined;
     const tokens = await runOAuth(config, {
       ...credentials,
@@ -87,14 +88,14 @@ describe("local OAuth callback lifecycle", () => {
           }
         : { ...config, scopes: ["read"] };
       let calls = 0;
-      globalThis.fetch = (async (url, init) => {
+      stubFetch(async (url, init) => {
         calls++;
         assert.equal(String(url), config.tokenUrl);
         const fields = new URLSearchParams(String(init?.body));
         assert.equal(fields.get("client_id"), "client");
         assert.equal(fields.get("client_secret"), "secret");
         return Response.json({ access_token: "issued" });
-      }) as typeof fetch;
+      });
       let visit: Promise<void> | undefined;
       const options: RunOAuthOptions = {
         ...credentials,
@@ -130,9 +131,9 @@ describe("local OAuth callback lifecycle", () => {
   });
 
   it("redacts provider errors after state validation without exchanging a code", async () => {
-    globalThis.fetch = (async (_url, _init): Promise<Response> => {
+    stubFetch(async (_url, _init): Promise<Response> => {
       throw new Error("must not exchange");
-    }) as typeof fetch;
+    });
     let visit: Promise<void> | undefined;
     await assert.rejects(
       runOAuth(config, {
@@ -177,9 +178,9 @@ describe("local OAuth callback lifecycle", () => {
       oauthCallback({ ...config, redirectUri: "http://[::1]:9/cb" }).path,
       "/cb",
     );
-    globalThis.fetch = (async (_url, _init): Promise<Response> => {
+    stubFetch(async (_url, _init): Promise<Response> => {
       throw new Error("must not exchange");
-    }) as typeof fetch;
+    });
     const exchange = {
       clientId: "client",
       code: "c",

@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import steel from "../../../runline-plugins/steel/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -78,12 +79,6 @@ function makeSteel(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected steel.${name} to be registered`);
-  return action;
-}
-
 function ctx(config: Record<string, unknown> = {}): ActionContext {
   return {
     connection: {
@@ -103,7 +98,7 @@ function mockSteel(
     body?: unknown;
   }) => unknown,
 ) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     assert.equal(url.origin, "https://api.steel.dev");
     const headers = new Headers(init?.headers);
@@ -125,7 +120,7 @@ function mockSteel(
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("steel plugin action surface", () => {
@@ -332,11 +327,13 @@ describe("steel plugin REST actions", () => {
 
   it("reports a failed request by its status", async () => {
     const action = getAction(makeSteel(), "session.get");
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ error: "nope" }), {
-        status: 401,
-        headers: { "content-type": "application/json" },
-      })) as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "nope" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+    );
     await assert.rejects(action.execute({ id: "missing" }, ctx()), {
       message: "steel: request failed (HTTP 401)",
     });
@@ -345,12 +342,12 @@ describe("steel plugin REST actions", () => {
   it("addresses a session file path segment by segment", async () => {
     const action = getAction(makeSteel(), "sessionFile.download");
     const urls: string[] = [];
-    globalThis.fetch = (async (url: RequestInfo | URL) => {
+    stubFetch(async (url: RequestInfo | URL) => {
       urls.push(String(url));
       return new Response("csv,data", {
         headers: { "content-type": "text/csv" },
       });
-    }) as typeof fetch;
+    });
     assert.equal(
       await action.execute(
         { sessionId: "s 1", path: "/files/dir/a b.csv" },

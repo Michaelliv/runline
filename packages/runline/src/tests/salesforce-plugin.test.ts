@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import salesforce from "../../../runline-plugins/salesforce/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -14,12 +15,6 @@ function makeSalesforce(): PluginDef {
   const { api, resolve } = createPluginAPI("salesforce");
   salesforce(api);
   return resolve();
-}
-
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected salesforce.${name} to be registered`);
-  return action;
 }
 
 /** A connection whose updates land in its config, as the CLI stores them. */
@@ -70,7 +65,7 @@ describe("salesforce plugin", () => {
     const plugin = makeSalesforce();
     const seen: Array<{ url: string; method?: string; auth: string | null }> =
       [];
-    globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         method: init?.method,
@@ -88,7 +83,7 @@ describe("salesforce plugin", () => {
         });
       }
       return Response.json({ records: [{ Id: "001", Name: "Acme" }] });
-    }) as typeof fetch;
+    });
 
     const context = ctx({
       loginUrl: "https://example.my.salesforce.com",
@@ -125,7 +120,7 @@ describe("salesforce plugin", () => {
   it("returns Salesforce pagination metadata and fetches next pages on the instance alone", async () => {
     const plugin = makeSalesforce();
     const urls: string[] = [];
-    globalThis.fetch = (async (url: string | URL) => {
+    stubFetch(async (url) => {
       urls.push(String(url));
       if (String(url).includes("/query?q=")) {
         return Response.json({
@@ -140,7 +135,7 @@ describe("salesforce plugin", () => {
         done: true,
         records: [{ Id: "002" }, { Id: "003" }],
       });
-    }) as typeof fetch;
+    });
 
     const context = ctx({
       instanceUrl: "https://example.my.salesforce.com",
@@ -182,7 +177,7 @@ describe("salesforce plugin", () => {
       auth: string | null;
       body: string;
     }> = [];
-    globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         method: init?.method,
@@ -190,7 +185,7 @@ describe("salesforce plugin", () => {
         body: new TextDecoder().decode(init?.body as Uint8Array),
       });
       return new Response(null, { status: 204 });
-    }) as typeof fetch;
+    });
 
     const result = await getAction(plugin, "account.update").execute(
       { id: "001 x", data: { Name: "Acme" } },
@@ -213,10 +208,10 @@ describe("salesforce plugin", () => {
   it("reads the OAuth identity from the instance's userinfo endpoint", async () => {
     const plugin = makeSalesforce();
     const urls: string[] = [];
-    globalThis.fetch = (async (url: string | URL) => {
+    stubFetch(async (url) => {
       urls.push(String(url));
       return Response.json({ user_id: "005" });
-    }) as typeof fetch;
+    });
     const result = await getAction(plugin, "auth.identity").execute(
       {},
       ctx({

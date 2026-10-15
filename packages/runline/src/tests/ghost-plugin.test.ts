@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import ghost from "../../../runline-plugins/ghost/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -32,7 +33,7 @@ function run(action: string, input: Record<string, unknown>) {
 describe("ghost", () => {
   it("signs every request with a fresh Admin API JWT on the unversioned admin base", async () => {
     const seen: Array<{ url: string; method?: string; auth: string }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         method: init?.method,
@@ -41,7 +42,7 @@ describe("ghost", () => {
       return Response.json({
         posts: [{ id: "p 1", updated_at: "2024-01-01T00:00:00.000Z" }],
       });
-    }) as typeof fetch;
+    });
     await run("post.update", { postId: "p 1", title: "New" });
     assert.deepEqual(
       seen.map(({ url, method }) => [url, method]),
@@ -65,10 +66,10 @@ describe("ghost", () => {
 
   it("reads a post by an encoded slug", async () => {
     const seen: string[] = [];
-    globalThis.fetch = (async (url) => {
+    stubFetch(async (url) => {
       seen.push(String(url));
       return Response.json({ posts: [{}] });
-    }) as typeof fetch;
+    });
     await run("post.get", { slug: "a b" });
     assert.deepEqual(seen, [
       "https://blog.example.com/ghost/api/admin/posts/slug/a%20b/",

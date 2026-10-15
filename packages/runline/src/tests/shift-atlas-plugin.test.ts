@@ -4,6 +4,7 @@ import { Check } from "typebox/value";
 import shiftAtlas from "../../../runline-plugins/shiftAtlas/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -55,12 +56,6 @@ function makeShiftAtlas(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected shiftAtlas.${name} to be registered`);
-  return action;
-}
-
 function ctx(): ActionContext {
   return {
     connection: {
@@ -78,14 +73,14 @@ function ctx(): ActionContext {
 }
 
 function mockShift(assertRequest: (input: URL, init?: RequestInit) => unknown) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const data = assertRequest(input as URL, init);
     if (data === null) return new Response(null, { status: 204 });
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("shiftAtlas plugin", () => {
