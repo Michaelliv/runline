@@ -23,6 +23,7 @@
 
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { DownloadedFile, standardBase64 } from "../../_shared/base64.js";
 import { renderEmailJsx } from "../../_shared/emailJsx.js";
 import { pathSegment } from "../../_shared/credentials.js";
 import { googleCredential, googleJsonRequest } from "../../_shared/googleAuth.js";
@@ -53,8 +54,10 @@ interface EmailAttachmentInput {
   name?: string;
   filename?: string;
   mimeType?: string;
-  /** Base64-encoded file contents, or a Drive download-like object. */
-  contentBase64: string | { contentBase64?: unknown };
+  /** Base64-encoded file contents, or a download result carrying them. */
+  contentBase64:
+    | string
+    | { contentBase64?: unknown; name?: unknown; mimeType?: unknown };
 }
 
 interface NormalizedAttachment {
@@ -162,24 +165,6 @@ function foldedBase64ByteLength(length: number): number {
   return length === 0 ? 0 : length + Math.floor((length - 1) / 76) * CRLF.length;
 }
 
-function normalizeMimeBase64(value: string, index: number): string {
-  const compact = value.replace(/\s+/g, "");
-  if (!/^[A-Za-z0-9+/=_-]*$/.test(compact)) {
-    throw new Error(
-      `gmail: attachment ${index} contentBase64 contains invalid base64 characters`,
-    );
-  }
-
-  const standard = compact.replace(/-/g, "+").replace(/_/g, "/");
-  const remainder = standard.length % 4;
-  if (remainder === 1) {
-    throw new Error(
-      `gmail: attachment ${index} contentBase64 has invalid base64 length`,
-    );
-  }
-  return remainder === 0 ? standard : `${standard}${"=".repeat(4 - remainder)}`;
-}
-
 function foldBase64(encoded: string): string {
   let folded = "";
   for (let i = 0; i < encoded.length; i += 76) {
@@ -234,10 +219,25 @@ function normalizeAttachment(
     );
   }
 
+  const normalized = standardBase64(contentBase64);
+  if (normalized === undefined) {
+    throw new Error(
+      `gmail: attachment ${index} contentBase64 is not valid base64`,
+    );
+  }
+  // A download result passed as contentBase64 names its own file and type.
+  const result = typeof content === "object" && content ? content : {};
+  const named = (value: unknown) =>
+    typeof value === "string" && value ? value : undefined;
   return {
-    name: input.name ?? input.filename ?? `attachment-${index + 1}`,
-    mimeType: input.mimeType ?? "application/octet-stream",
-    contentBase64: normalizeMimeBase64(contentBase64, index),
+    name:
+      input.name ??
+      input.filename ??
+      named(result.name) ??
+      `attachment-${index + 1}`,
+    mimeType:
+      input.mimeType ?? named(result.mimeType) ?? "application/octet-stream",
+    contentBase64: normalized,
   };
 }
 
@@ -594,12 +594,6 @@ async function replyToMessage(
   messageId: string,
   p: Record<string, unknown>,
 ): Promise<unknown> {
-  if (p.replyToSenderOnly && p.replyToRecipientsOnly) {
-    throw new Error(
-      "gmail: replyToSenderOnly and replyToRecipientsOnly are mutually exclusive",
-    );
-  }
-
   // Render before any network round-trip so malformed jsx fails
   // without spending Gmail API calls.
   const { text, html } = await resolveBody(p);
@@ -697,10 +691,7 @@ const MetadataHeaders = t.Array(t.String());
 const LabelIds = t.Array(NonEmptyString, { minItems: 1 });
 const MaxResults = t.Integer({ minimum: 1, maximum: 500 });
 
-const AttachmentContent = t.Union([
-  t.String(),
-  t.Object({ contentBase64: t.String() }, strict),
-]);
+const AttachmentContent = t.Union([t.String(), DownloadedFile]);
 const Attachment = t.Object(
   {
     name: t.Optional(t.String()),

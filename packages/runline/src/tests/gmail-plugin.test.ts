@@ -272,7 +272,7 @@ describe("gmail plugin TypeBox schemas", () => {
     assert.equal(accepts("message.send", { ...base, content: "hello" }), false);
     assert.equal(accepts("message.send", { ...base, text: "" }), false);
     assert.equal(accepts("message.send", { ...base, text: "   " }), false);
-    // html was removed in favor of jsx; the strict schema rejects it.
+    // jsx is the only HTML input; the strict schema rejects html.
     assert.equal(accepts("message.send", { ...base, html: "<p>x</p>" }), false);
     assert.equal(accepts("message.send", { ...base, attachments: [] }), false);
   });
@@ -533,6 +533,33 @@ describe("gmail plugin MIME encoding", () => {
     assert.ok(raw.length > 0);
   });
 
+  it("attaches a googleDrive.file.download result unedited, named by it", () => {
+    const download = {
+      name: "report.csv",
+      mimeType: "text/csv",
+      size: 5,
+      contentBase64: Buffer.from("a,b\n1").toString("base64"),
+    };
+    assert.equal(
+      accepts("message.send", {
+        to: "recipient@example.com",
+        subject: "Drive",
+        attachments: [{ contentBase64: download }],
+      }),
+      true,
+    );
+    const message = Buffer.from(
+      encodeEmail({
+        to: "recipient@example.com",
+        subject: "Drive",
+        attachments: [{ contentBase64: download }],
+      }),
+      "base64url",
+    ).toString("utf8");
+    assert.match(message, /Content-Type: text\/csv; name="report.csv"/);
+    assert.match(message, /filename="report.csv"/);
+  });
+
   it("normalizes base64url attachment content into MIME-safe base64", () => {
     const bytes = Buffer.from([251, 255, 254, 250, 239, 190]);
     const raw = encodeEmail({
@@ -554,7 +581,7 @@ describe("gmail plugin MIME encoding", () => {
     assert.doesNotMatch(message, /-__-/);
   });
 
-  it("throws a clear error for invalid attachment base64 characters", () => {
+  it("throws a clear error for invalid attachment base64", () => {
     assert.throws(
       () =>
         encodeEmail({
@@ -568,7 +595,7 @@ describe("gmail plugin MIME encoding", () => {
             },
           ],
         }),
-      /gmail: attachment 0 contentBase64 contains invalid base64 characters/,
+      /gmail: attachment 0 contentBase64 is not valid base64/,
     );
   });
 

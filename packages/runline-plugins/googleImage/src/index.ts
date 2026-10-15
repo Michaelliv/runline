@@ -182,7 +182,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("googleImage: prompt is required");
       }
-      const img = readImageInput(p.imagePath, "googleImage");
+      const img = await readImageInput(p.imagePath, "googleImage");
 
       const model = p.model ?? "gemini-2.5-flash-image";
       const data = await generateContent(ctx, model, {

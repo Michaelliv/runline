@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { readLocalFile } from "../../_shared/localFile.js";
 import {
   type Ctx,
   pathSegment,
@@ -76,7 +76,12 @@ async function documentFromPath(
   const sizeBytes = await statUploadFile(path, SIGNED_UPLOAD_MAX_BYTES);
 
   if (sizeBytes <= MAX_INLINE_BYTES) {
-    const url = `data:${mediaType};base64,${(await readFile(path)).toString("base64")}`;
+    const bytes = await readLocalFile(path, {
+      subject: "File",
+      maxBytes: MAX_INLINE_BYTES,
+      oversize: "File grew past the inline limit while reading; retry",
+    });
+    const url = `data:${mediaType};base64,${bytes.toString("base64")}`;
     return imageType
       ? { type: "image", url }
       : { type: "document", url, name: basename(path) };
@@ -95,7 +100,7 @@ async function documentFromPath(
       filename: basename(path),
     }),
   });
-  await putThroughGrant(created.upload, path, mediaType, sizeBytes);
+  await putThroughGrant(created.upload, path, mediaType);
   await request(
     ctx,
     `/v1/services/objects/objects/${pathSegment(created.object.id)}/complete`,

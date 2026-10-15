@@ -9,9 +9,10 @@
  * available (same pattern as googleDrive/googleSlides).
  */
 import { randomUUID } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
+import { readLocalFile } from "./localFile.js";
 
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
@@ -100,24 +101,26 @@ export interface LoadedImage {
   fileName: string;
 }
 
+/** Larger than any provider accepts inline; a data URI past it only fails remotely. */
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+
 /**
  * Read a local image for an `image.edit` call: bytes + base64 + mime
- * (from the extension) + a `data:` URI for JSON APIs. Throws with the
- * plugin's name when the file can't be read so errors point at the
- * right tool.
+ * (from the extension) + a `data:` URI for JSON APIs. Errors carry the
+ * plugin's name so they point at the right tool.
  */
-export function readImageInput(imagePath: string, pluginName: string): LoadedImage {
+export async function readImageInput(
+  imagePath: string,
+  pluginName: string,
+): Promise<LoadedImage> {
   if (typeof imagePath !== "string" || imagePath.trim().length === 0) {
     throw new Error(`${pluginName}: imagePath is required`);
   }
-  let bytes: Buffer;
-  try {
-    bytes = readFileSync(imagePath);
-  } catch (err) {
-    throw new Error(
-      `${pluginName}: cannot read image at ${imagePath} — ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
+  const bytes = await readLocalFile(imagePath, {
+    subject: `${pluginName}: imagePath`,
+    maxBytes: MAX_IMAGE_BYTES,
+    oversize: `${pluginName}: imagePath exceeds ${MAX_IMAGE_BYTES / (1024 * 1024)} MiB`,
+  });
   const ext = extname(imagePath).slice(1).toLowerCase();
   const mimeType = EXT_MIME[ext] ?? "image/png";
   const base64 = bytes.toString("base64");

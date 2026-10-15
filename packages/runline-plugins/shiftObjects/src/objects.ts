@@ -149,7 +149,6 @@ export function registerObjectActions(rl: RunlinePluginAPI) {
         created.upload,
         fields.path,
         contentType,
-        sizeBytes,
         "Object upload",
       );
 
