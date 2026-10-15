@@ -30,10 +30,31 @@ export function credentialBroker(
   };
 }
 
-/** Everything a stored token was issued under. A config whose selection
- *  hashes differently can no longer use tokens issued for this one. */
+/**
+ * Everything a stored token was issued under. A config whose selection
+ * hashes differently can no longer use tokens issued for this one. A
+ * token of a declared grant was issued under the grant — its method,
+ * client and token endpoint (Microsoft's names the tenant) — not the
+ * plugin that asked, so every plugin of the grant hashes alike and shares
+ * it; any other token is the whole selection's, scopes and targets included.
+ */
 function authorityOf(selection: CredentialSelection): string {
-  return createHash("sha256").update(JSON.stringify(selection)).digest("hex");
+  const { type, method, application } = selection;
+  const auth = Object.hasOwn(type.methods, method)
+    ? type.methods[method].authentication
+    : undefined;
+  const issuedUnder =
+    auth?.kind === "oauth2" && auth.grant !== undefined
+      ? {
+          grant: auth.grant,
+          method,
+          application,
+          endpoint: auth.definition.refresh,
+        }
+      : selection;
+  return createHash("sha256")
+    .update(JSON.stringify(issuedUnder))
+    .digest("hex");
 }
 
 /**

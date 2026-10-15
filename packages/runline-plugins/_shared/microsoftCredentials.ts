@@ -7,6 +7,19 @@ import {
 } from "runline";
 import { grantSchema, pathSegment } from "./credentials.js";
 
+/** The grant every Microsoft Graph plugin's delegated consent belongs to. */
+export const MICROSOFT_GRANT = "microsoft";
+
+/** A tenant's OAuth endpoint on the Microsoft identity platform. */
+export function microsoftEndpoint(
+  tenant: string,
+  leg: "authorize" | "token",
+): string {
+  if (!/^[a-zA-Z0-9.-]+$/.test(tenant))
+    throw new AuthError("invalid_credentials");
+  return `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/${leg}`;
+}
+
 export type MicrosoftAuthConfig = {
   authMethod?: "delegated" | "appOnly";
   tenantId?: string;
@@ -81,11 +94,8 @@ export function microsoftCredentialType(
   plugin: string,
   scopes: string[],
 ): CredentialType {
-  const tenant = cfg.tenantId || "common";
-  if (!/^[a-zA-Z0-9.-]+$/.test(tenant))
-    throw new AuthError("invalid_credentials");
   const endpoint = {
-    url: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+    url: microsoftEndpoint(cfg.tenantId || "common", "token"),
     clientAuthentication: "client_secret_post" as const,
   };
   const methods = Object.fromEntries(
@@ -121,10 +131,9 @@ export function microsoftCredentialType(
             authentication: {
               kind: "oauth2" as const,
               field: "grant",
-              renewal:
-                method === "delegated"
-                  ? ("refresh" as const)
-                  : ("clientCredentials" as const),
+              ...(method === "delegated"
+                ? { renewal: "refresh" as const, grant: MICROSOFT_GRANT }
+                : { renewal: "clientCredentials" as const }),
               definition: {
                 id: "microsoft.oauth",
                 provider: "microsoft",

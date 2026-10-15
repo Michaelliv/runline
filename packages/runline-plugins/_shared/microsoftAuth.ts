@@ -3,11 +3,14 @@ import {
   downloadResource,
   type ActionContext,
   type HttpMethod,
+  type OAuthConfig,
 } from "runline";
 import { credentialBroker } from "./credentialAdapter.js";
 import { jsonAnswer, requestFailed } from "./credentials.js";
 import {
+  MICROSOFT_GRANT,
   microsoftCredential,
+  microsoftEndpoint,
   microsoftUserBase,
   type MicrosoftAuthConfig,
 } from "./microsoftCredentials.js";
@@ -108,8 +111,27 @@ export async function microsoftDownload(value: unknown): Promise<Response> {
   });
 }
 
-/** Setup help shown by the OAuth wizard for all Microsoft plugins. */
-export function microsoftSetupHelp(apiName: string): string[] {
+/**
+ * A Microsoft Graph plugin's OAuth declaration: the multi-tenant endpoints,
+ * `offline_access` for a refresh token, the grant every Graph plugin
+ * shares, and setup steps naming the Graph permissions it needs
+ * (`permissions`, e.g. "Calendars.Read").
+ */
+export function microsoftOAuth(
+  scopes: string[],
+  permissions: string,
+): OAuthConfig {
+  return {
+    grant: MICROSOFT_GRANT,
+    authUrl: microsoftEndpoint("common", "authorize"),
+    tokenUrl: microsoftEndpoint("common", "token"),
+    scopes: [...scopes, "offline_access"],
+    setupHelp: setupHelp(permissions),
+  };
+}
+
+/** The OAuth wizard's steps for a Microsoft plugin. */
+function setupHelp(permissions: string): string[] {
   return [
     `You need a Microsoft Entra (Azure AD) app registration. One-time, ~5 minutes.`,
     "",
@@ -118,7 +140,7 @@ export function microsoftSetupHelp(apiName: string): string[] {
     "2. Add a Web redirect URI (Authentication → Add platform → Web):",
     "     {{redirectUri}}",
     "3. Certificates & secrets → New client secret → copy the VALUE (not the Secret ID).",
-    `4. API permissions → Add → Microsoft Graph → Delegated → add the ${apiName} scopes,`,
+    `4. API permissions → Add → Microsoft Graph → Delegated → add the ${permissions} scopes,`,
     "   then 'Grant admin consent'.",
     "5. Paste the Application (client) ID and the client secret VALUE below.",
   ];
