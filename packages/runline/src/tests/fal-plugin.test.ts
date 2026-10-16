@@ -8,6 +8,7 @@ import { Check } from "typebox/value";
 import fal from "../../../runline-plugins/fal/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -34,9 +35,7 @@ function build(): PluginDef {
 const plugin = build();
 
 function action(name: string) {
-  const found = plugin.actions.find((a) => a.name === name);
-  assert.ok(found, `expected fal.${name} to be registered`);
-  return found;
+  return getAction(plugin, name);
 }
 
 function ctx(config: Record<string, unknown> = {}): ActionContext {
@@ -69,7 +68,7 @@ function mockQueue(
   opts: { statusError?: { error: string; error_type?: string } } = {},
 ): Call[] {
   const calls: Call[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     calls.push({
@@ -111,7 +110,7 @@ function mockQueue(
       cancel_url: "https://queue.fal.run/x/requests/req-1/cancel",
       queue_position: 0,
     });
-  }) as typeof fetch;
+  });
   return calls;
 }
 
@@ -385,11 +384,9 @@ describe("fal queue lifecycle", () => {
   });
 
   it("reports an already-completed cancellation by status alone, without provider text", async () => {
-    globalThis.fetch = (async () =>
-      Response.json(
-        { status: "ALREADY_COMPLETED" },
-        { status: 400 },
-      )) as typeof fetch;
+    stubFetch(async () =>
+      Response.json({ status: "ALREADY_COMPLETED" }, { status: 400 }),
+    );
     await assert.rejects(
       () =>
         action("queue.cancel").execute(
@@ -466,7 +463,7 @@ describe("fal validation and edge cases", () => {
 
   it("rejects malformed status responses", async () => {
     for (const body of [null, {}, { status: "UNKNOWN" }]) {
-      globalThis.fetch = (async () => Response.json(body)) as typeof fetch;
+      stubFetch(async () => Response.json(body));
       await assert.rejects(
         () =>
           action("queue.status").execute(
@@ -502,14 +499,14 @@ describe("fal validation and edge cases", () => {
     }
     const calls = mockQueue(IMAGE_OUTPUT);
     const queueFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+    stubFetch(async (url: RequestInfo | URL, init?: RequestInit) => {
       if (String(url).includes("v3.fal.media"))
         return new Response(null, {
           status: 302,
           headers: { location: "http://127.0.0.1/private" },
         });
       return queueFetch(url, init);
-    }) as typeof fetch;
+    });
     await assert.rejects(
       () => action("image.create").execute({ prompt: "x" }, ctx()),
       /fal.media URL/,
@@ -521,7 +518,7 @@ describe("fal validation and edge cases", () => {
     mockQueue(IMAGE_OUTPUT);
     const queueFetch = globalThis.fetch;
     let downloads = 0;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+    stubFetch(async (url: RequestInfo | URL, init?: RequestInit) => {
       if (String(url).includes("v3.fal.media")) {
         downloads++;
         assert.equal(new Headers(init?.headers).get("authorization"), null);
@@ -533,7 +530,7 @@ describe("fal validation and edge cases", () => {
           : new Response(PNG_1X1, { headers: { "content-type": "image/png" } });
       }
       return queueFetch(url, init);
-    }) as typeof fetch;
+    });
     await action("image.create").execute({ prompt: "x", saveDir: dir }, ctx());
     assert.equal(downloads, 2);
   });
@@ -547,10 +544,11 @@ describe("fal validation and edge cases", () => {
       ],
     });
     const queueFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) =>
+    stubFetch(async (url: RequestInfo | URL, init?: RequestInit) =>
       String(url).endsWith("bad.png")
         ? new Response(null, { status: 404 })
-        : queueFetch(url, init)) as typeof fetch;
+        : queueFetch(url, init),
+    );
     const out = (await action("image.create").execute(
       { prompt: "x", saveDir: dir },
       ctx(),
@@ -562,12 +560,13 @@ describe("fal validation and edge cases", () => {
   it("rejects oversized downloads before reading their body", async () => {
     mockQueue(IMAGE_OUTPUT);
     const queueFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) =>
+    stubFetch(async (url: RequestInfo | URL, init?: RequestInit) =>
       String(url).includes("v3.fal.media")
         ? new Response(PNG_1X1, {
             headers: { "content-length": String(513 * 1024 * 1024) },
           })
-        : queueFetch(url, init)) as typeof fetch;
+        : queueFetch(url, init),
+    );
     await assert.rejects(
       () => action("image.create").execute({ prompt: "x" }, ctx()),
       /512 MiB.*req-1/,
@@ -581,12 +580,12 @@ describe("fal polling and response safety", () => {
     const queueFetch = globalThis.fetch;
     const states = ["IN_QUEUE", "IN_PROGRESS", "COMPLETED"];
     let polls = 0;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+    stubFetch(async (url: RequestInfo | URL, init?: RequestInit) => {
       if (String(url).endsWith("/status"))
         return Response.json({ status: states[polls++] });
       if (String(url).endsWith("/requests/req-1")) assert.equal(polls, 3);
       return queueFetch(url, init);
-    }) as typeof fetch;
+    });
     await action("image.create").execute({ prompt: "x", saveDir: dir }, ctx());
     assert.equal(polls, 3);
     assert.equal(calls.filter((c) => c.method === "POST").length, 1);
@@ -597,7 +596,7 @@ describe("fal polling and response safety", () => {
     const queueFetch = globalThis.fetch;
     const chunk = new Uint8Array(1024 * 1024);
     let cancelled = false;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) =>
+    stubFetch(async (url: RequestInfo | URL, init?: RequestInit) =>
       String(url).includes("v3.fal.media")
         ? new Response(
             new ReadableStream({
@@ -609,7 +608,8 @@ describe("fal polling and response safety", () => {
               },
             }),
           )
-        : queueFetch(url, init)) as typeof fetch;
+        : queueFetch(url, init),
+    );
     await assert.rejects(
       () => action("image.create").execute({ prompt: "x" }, ctx()),
       /512 MiB/,
@@ -618,8 +618,7 @@ describe("fal polling and response safety", () => {
   });
 
   it("refuses redirected API responses even when the fetch hook ignores redirect:error", async () => {
-    globalThis.fetch = (async () =>
-      new Response(null, { status: 302 })) as typeof fetch;
+    stubFetch(async () => new Response(null, { status: 302 }));
     await assert.rejects(
       () =>
         action("queue.submit").execute(
@@ -633,10 +632,11 @@ describe("fal polling and response safety", () => {
   it("retains the request id on result failures without resubmitting", async () => {
     const calls = mockQueue(IMAGE_OUTPUT);
     const queueFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) =>
+    stubFetch(async (url: RequestInfo | URL, init?: RequestInit) =>
       String(url).endsWith("/requests/req-1")
         ? new Response("gateway down", { status: 503 })
-        : queueFetch(url, init)) as typeof fetch;
+        : queueFetch(url, init),
+    );
     await assert.rejects(
       () =>
         action("run").execute(
@@ -660,10 +660,10 @@ describe("fal failure reporting", () => {
 
   it("rejects a malformed submit receipt without polling", async () => {
     let calls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       calls++;
       return Response.json({});
-    }) as typeof fetch;
+    });
     await assert.rejects(
       () =>
         action("queue.submit").execute(
@@ -680,10 +680,11 @@ describe("fal failure reporting", () => {
       images: [{ url: `data:image/png;base64,${PNG_1X1.toString("base64")}` }],
     });
     const queueFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) =>
+    stubFetch(async (url: RequestInfo | URL, init?: RequestInit) =>
       String(url).startsWith("data:")
         ? originalFetch(url, init)
-        : queueFetch(url, init)) as typeof fetch;
+        : queueFetch(url, init),
+    );
     const output = (await action("image.create").execute(
       { prompt: "x", saveDir: dir },
       ctx(),
@@ -692,7 +693,7 @@ describe("fal failure reporting", () => {
   });
 
   it("aborts a stalled status request and retains its request id", async () => {
-    globalThis.fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+    stubFetch(async (_url: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST")
         return Response.json({ request_id: "stalled" });
       return new Promise<Response>((_resolve, reject) => {
@@ -702,7 +703,7 @@ describe("fal failure reporting", () => {
           { once: true },
         );
       });
-    }) as typeof fetch;
+    });
     await assert.rejects(
       () =>
         action("run").execute(
@@ -723,19 +724,21 @@ describe("fal failure reporting", () => {
   });
 
   it("reports validation failures by status alone, without echoing field detail", async () => {
-    globalThis.fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          detail: [
-            {
-              loc: ["body", "prompt"],
-              msg: "Field required",
-              type: "missing",
-            },
-          ],
-        }),
-        { status: 422, headers: { "content-type": "application/json" } },
-      )) as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            detail: [
+              {
+                loc: ["body", "prompt"],
+                msg: "Field required",
+                type: "missing",
+              },
+            ],
+          }),
+          { status: 422, headers: { "content-type": "application/json" } },
+        ),
+    );
 
     await assert.rejects(
       () =>
@@ -748,14 +751,16 @@ describe("fal failure reporting", () => {
   });
 
   it("reports infrastructure failures by status alone too", async () => {
-    globalThis.fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          detail: "Request timed out",
-          error_type: "request_timeout",
-        }),
-        { status: 504, headers: { "content-type": "application/json" } },
-      )) as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            detail: "Request timed out",
+            error_type: "request_timeout",
+          }),
+          { status: 504, headers: { "content-type": "application/json" } },
+        ),
+    );
 
     await assert.rejects(
       () =>
@@ -768,7 +773,7 @@ describe("fal failure reporting", () => {
   });
 
   it("reports a failed download rather than claiming success with fewer files", async () => {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    stubFetch(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("v3.fal.media"))
         return new Response("nope", { status: 404 });
@@ -785,7 +790,7 @@ describe("fal failure reporting", () => {
         response_url: "r",
         cancel_url: "c",
       });
-    }) as typeof fetch;
+    });
 
     await assert.rejects(
       () => action("image.create").execute({ prompt: "x" }, ctx()),
@@ -794,7 +799,7 @@ describe("fal failure reporting", () => {
   });
 
   it("points at queue.result when it gives up waiting, because the work continues", async () => {
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    stubFetch(async (input: RequestInfo | URL) => {
       const url = String(input);
       const json = (p: unknown) =>
         new Response(JSON.stringify(p), {
@@ -809,7 +814,7 @@ describe("fal failure reporting", () => {
         response_url: "r",
         cancel_url: "c",
       });
-    }) as typeof fetch;
+    });
 
     await assert.rejects(
       () =>

@@ -1,6 +1,6 @@
 {
   "name": "runline",
-  "version": "0.34.0",
+  "version": "0.35.0",
   "description": "Code mode for agents \u2014 turn any API or command into a callable action",
   "type": "module",
   "main": "dist/index.js",
@@ -32,6 +32,7 @@
     "prepublishOnly": "bun run build",
     "dev": "bun run src/main.ts",
     "test": "bun test src/tests",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "format": "bunx @biomejs/biome format --write src/",
     "lint": "bunx @biomejs/biome lint src/",
     "check": "bunx @biomejs/biome check src/"

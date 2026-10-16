@@ -300,6 +300,12 @@ export interface CredentialCall {
   headers?: Record<string, string>;
   /** COPY and MOVE: the destination path beneath the same target. */
   destination?: string;
+  /**
+   * The provider's deduplication key, for a target that declares
+   * `idempotency`: the transport sets the declared header itself and
+   * refuses the request on any other target or method.
+   */
+  idempotencyKey?: string;
 }
 
 /** Parameters as `a=1&b=2`: arrays repeat the key; null and undefined are skipped. */
@@ -352,6 +358,9 @@ export function credentialRequest(
     ...(call.destination !== undefined
       ? { destination: call.destination }
       : {}),
+    ...(call.idempotencyKey !== undefined
+      ? { idempotencyKey: call.idempotencyKey }
+      : {}),
   });
 }
 
@@ -397,8 +406,8 @@ export function errorIdentifier(value: unknown): string | undefined {
 /**
  * How a failed request reads: its HTTP status when the status is the
  * failure, and the identifiers a provider returns for correcting the call
- * — its error `code` and the offending `param`. A failed response's body
- * is never read into it: that is where a provider may echo the credential.
+ * — its error `code` and the offending `param`. No free text from a failed
+ * response reaches it: that is where a provider may echo the credential.
  */
 export function failureMessage(
   plugin: string,
@@ -461,6 +470,48 @@ export function graphqlFailed(plugin: string, errors: unknown): Error {
 /** A failed request, reported by status alone. */
 export function requestFailed(plugin: string, status: number): Error {
   return new Error(failureMessage(plugin, status));
+}
+
+/** What a provider's error envelope names, before it is reduced to identifiers. */
+export interface ErrorEnvelope {
+  code?: unknown;
+  /** One field path, or several (joined in order). */
+  param?: unknown;
+}
+
+/**
+ * A failed response by its status and the identifiers its error envelope
+ * names. `read` picks the code and param out of the parsed JSON body, in
+ * the provider's own shape; only what `errorIdentifier` accepts is kept,
+ * so a provider's messages never reach the error. A body that is not JSON
+ * reports the status alone. The status rides on the error for callers
+ * that branch on it.
+ */
+export async function responseFailed(
+  plugin: string,
+  response: Response,
+  read: (body: unknown) => ErrorEnvelope,
+): Promise<Error & { status: number }> {
+  let envelope: ErrorEnvelope = {};
+  try {
+    envelope = read(JSON.parse(await response.text()));
+  } catch {
+    envelope = {};
+  }
+  const params = (
+    Array.isArray(envelope.param) ? envelope.param : [envelope.param]
+  )
+    .map(identifierOf)
+    .filter((param): param is string => param !== undefined);
+  return Object.assign(
+    new Error(
+      failureMessage(plugin, response.status, {
+        code: identifierOf(envelope.code),
+        param: params.length ? params.join(", ") : undefined,
+      }),
+    ),
+    { status: response.status },
+  );
 }
 
 /** A request that must succeed, for callers that read the Response itself (headers, text, bytes). */
@@ -557,7 +608,7 @@ export function pathWithin(
 /** FormData as the buffered bytes the transport accepts, with its boundary. */
 export async function multipartBody(
   form: FormData,
-): Promise<{ body: Uint8Array; contentType: string }> {
+): Promise<{ body: Uint8Array<ArrayBuffer>; contentType: string }> {
   const response = new Response(form);
   const contentType = response.headers.get("content-type");
   if (!contentType) throw new AuthError("request_not_allowed");

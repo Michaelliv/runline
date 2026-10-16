@@ -41,6 +41,7 @@ import type { CredentialDeclaration } from "../credentials/types.js";
 import { createPluginAPI, type PluginFunction } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
 import { Runline } from "../sdk.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -88,9 +89,9 @@ function action(plugin: PluginFunction, name: string) {
 }
 
 function refuseNetwork() {
-  globalThis.fetch = (async () => {
+  stubFetch(async () => {
     throw new Error("a brokered plugin must not reach the network itself");
-  }) as unknown as typeof fetch;
+  });
 }
 
 describe("the engine hands actions the embedder's broker", () => {

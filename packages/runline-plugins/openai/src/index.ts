@@ -275,7 +275,7 @@ export default function openai(rl: RunlinePluginAPI) {
       if (p.size) form.append("size", p.size);
       if (p.quality) form.append("quality", p.quality);
       for (const path of paths) {
-        const img = readImageInput(path, "openai");
+        const img = await readImageInput(path, "openai");
         form.append(
           "image[]",
           new Blob([img.bytes], { type: img.mimeType }),

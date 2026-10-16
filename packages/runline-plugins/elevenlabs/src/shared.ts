@@ -1,16 +1,14 @@
-import { constants } from "node:fs";
-import { open } from "node:fs/promises";
 import { basename } from "node:path";
 import { type ActionContext, AuthError } from "runline";
 import * as t from "typebox";
 import { Check } from "typebox/value";
 import { credentialBroker } from "../../_shared/credentialAdapter.js";
 import {
-  errorIdentifier,
-  failureMessage,
   multipartBody,
   pathSegment,
+  responseFailed,
 } from "../../_shared/credentials.js";
+import { readLocalFile } from "../../_shared/localFile.js";
 import { SEND_FILE_NOTE, writeMediaFile } from "../../_shared/mediaFile.js";
 import { obj, readBounded, readBoundedBytes } from "../../_shared/provider.js";
 import { elevenlabsCredential } from "./credentials.js";
@@ -86,7 +84,8 @@ async function request<T>(
     );
     requestId = response.headers.get("request-id");
     // Both JSON and audio errors use the provider's JSON error envelope.
-    if (!response.ok) await json(response);
+    if (!response.ok)
+      throw await responseFailed("elevenlabs", response, errorEnvelope);
     return await consume(response);
   } catch (error) {
     // The request id and retry guidance join the message; a transport
@@ -101,6 +100,23 @@ async function request<T>(
   }
 }
 
+/**
+ * The error envelope's `detail`: a status code (or a bare code string), or
+ * the validation entries whose `loc` paths name the offending fields.
+ */
+function errorEnvelope(body: unknown) {
+  const detail = obj(body).detail;
+  return {
+    code: typeof detail === "string" ? detail : obj(detail).status,
+    param: Array.isArray(detail)
+      ? detail.map((entry) => {
+          const loc = obj(entry).loc;
+          return Array.isArray(loc) ? loc.join(".") : loc;
+        })
+      : undefined,
+  };
+}
+
 async function json(response: Response, limit = JSON_LIMIT): Promise<unknown> {
   const text = await readBounded(
     response,
@@ -111,28 +127,7 @@ async function json(response: Response, limit = JSON_LIMIT): Promise<unknown> {
   try {
     body = text ? JSON.parse(text) : null;
   } catch {
-    if (!response.ok)
-      throw new Error(failureMessage("elevenlabs", response.status));
     throw new Error("elevenlabs: non-JSON response");
-  }
-  if (!response.ok) {
-    // The error `status` code and the offending field paths, never the
-    // provider's messages or the validated input.
-    const detail = obj(body).detail;
-    const params = Array.isArray(detail)
-      ? detail
-          .map((v) => {
-            const loc = obj(v).loc;
-            return errorIdentifier(Array.isArray(loc) ? loc.join(".") : loc);
-          })
-          .filter((param): param is string => param !== undefined)
-      : [];
-    throw new Error(
-      failureMessage("elevenlabs", response.status, {
-        code: errorIdentifier(obj(detail).status) ?? errorIdentifier(detail),
-        param: params.length ? params.join(", ") : undefined,
-      }),
-    );
   }
   if (body === null || typeof body !== "object")
     throw new Error("elevenlabs: expected a JSON object or array");
@@ -387,31 +382,16 @@ export async function voiceForm(input: {
   return form;
 }
 
-/** Bound uploads before allocating; read through the same handle to avoid stat/read races. */
+const UPLOAD_RULE =
+  "elevenlabs: each input must be a nonempty regular file of at most 25 MiB";
+
+/** A local upload as one form part, bounded and read by the shared reader. */
 export async function appendFile(form: FormData, field: string, path: string) {
-  // Nonblocking open lets fstat reject FIFOs without waiting for a writer.
-  const file = await open(path, constants.O_RDONLY | constants.O_NONBLOCK);
-  try {
-    const stat = await file.stat();
-    if (!stat.isFile() || stat.size === 0 || stat.size > 25 * 1024 * 1024)
-      throw new Error(
-        "elevenlabs: each input must be a nonempty regular file of at most 25 MiB",
-      );
-    const bytes = Buffer.alloc(stat.size);
-    let offset = 0;
-    while (offset < bytes.length) {
-      const { bytesRead } = await file.read(
-        bytes,
-        offset,
-        bytes.length - offset,
-        offset,
-      );
-      if (!bytesRead)
-        throw new Error("elevenlabs: input file changed while reading");
-      offset += bytesRead;
-    }
-    form.append(field, new Blob([bytes]), basename(path));
-  } finally {
-    await file.close();
-  }
+  const bytes = await readLocalFile(path, {
+    subject: `elevenlabs: ${field}`,
+    maxBytes: 25 * 1024 * 1024,
+    oversize: UPLOAD_RULE,
+  });
+  if (!bytes.length) throw new Error(UPLOAD_RULE);
+  form.append(field, new Blob([bytes]), basename(path));
 }

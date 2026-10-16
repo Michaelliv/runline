@@ -148,6 +148,16 @@ export type CredentialAuthentication =
       /** Explicit renewal strategy, never inferred from available secrets. */
       renewal: "refresh" | "clientCredentials" | "jwtBearer" | "password";
       scopes?: string[];
+      /**
+       * The grant a refresh-renewed token belongs to, shared by every
+       * plugin declaring the same id. Its access tokens depend on the
+       * grant's client and token endpoint, not on the plugin that asked:
+       * the provider answers a refresh with every scope the grant holds
+       * (Google requests none; Microsoft returns every scope consented for
+       * the resource). One cached token then serves each of its plugins.
+       * Only with `renewal: "refresh"`.
+       */
+      grant?: string;
       /** Defaults to 401. A 403 must be explicitly documented by the provider. */
       rejectionStatus?: 401 | 403;
     };

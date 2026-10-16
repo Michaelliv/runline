@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import affinity from "../../../runline-plugins/affinity/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -18,9 +19,7 @@ function build() {
 const plugin = build();
 
 function action(name: string) {
-  const found = plugin.actions.find((a) => a.name === name);
-  assert.ok(found, `expected affinity.${name} to be registered`);
-  return found;
+  return getAction(plugin, name);
 }
 
 function context(): ActionContext {
@@ -38,10 +37,10 @@ function context(): ActionContext {
 
 function wire(response: unknown) {
   const urls: string[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
+  stubFetch(async (input: RequestInfo | URL) => {
     urls.push(String(input));
     return Response.json(response);
-  }) as typeof fetch;
+  });
   return urls;
 }
 

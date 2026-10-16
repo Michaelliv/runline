@@ -6,8 +6,8 @@
  * read execution history. Fills the gap left by googleDrive/googleSheets/etc.,
  * which don't reach the Apps Script project surface.
  *
- * Auth: shared Google OAuth client family (or a service account), via
- * _shared/googleAuth.ts — same model as googleDrive.
+ * Auth: the Google grant (or a service account), via _shared/googleAuth.ts —
+ * same model as googleDrive.
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import * as t from "typebox";
@@ -15,6 +15,7 @@ import { pathSegment } from "../../_shared/credentials.js";
 import {
   googleCredential,
   googleJsonRequest,
+  googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
   Id,
@@ -89,6 +90,9 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.setName("googleAppsScript");
   rl.setVersion("1.0.0");
   rl.setCredential(googleCredential("googleAppsScript", SCOPES));
+  rl.setOAuth(
+    googleOAuth("googleAppsScript", SCOPES, "GOOGLE_APPS_SCRIPT"),
+  );
 
   rl.setConnectionSchema({
     authMethod: {

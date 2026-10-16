@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import fxmacrodata from "../../../runline-plugins/fxmacrodata/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -14,9 +15,7 @@ type Seen = { url: string; key: string | null };
 function action(name: string) {
   const { api, resolve } = createPluginAPI("fxmacrodata");
   fxmacrodata(api);
-  const found = resolve().actions.find((a) => a.name === name);
-  assert.ok(found, `no action ${name}`);
-  return found;
+  return getAction(resolve(), name);
 }
 
 function context(config: Record<string, unknown> = {}): ActionContext {
@@ -30,14 +29,14 @@ function context(config: Record<string, unknown> = {}): ActionContext {
 /** Answers each request in turn with the next response, recording it. */
 function wire(...responses: Array<() => Response>): Seen[] {
   const seen: Seen[] = [];
-  globalThis.fetch = (async (url, init) => {
+  stubFetch(async (url, init) => {
     seen.push({
       url: String(url),
       key: new Headers(init?.headers).get("x-api-key"),
     });
     const next = responses[Math.min(seen.length, responses.length) - 1];
     return next();
-  }) as typeof fetch;
+  });
   return seen;
 }
 

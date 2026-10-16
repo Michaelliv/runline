@@ -4,6 +4,7 @@ import linear from "../../../runline-plugins/linear/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { isTypedInputSchema, validateTypedInput } from "../plugin/schema.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch, typedSchema } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -109,12 +110,6 @@ function makeLinear(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected linear.${name} to be registered`);
-  return action;
-}
-
 function ctx(config: Record<string, unknown> = {}): ActionContext {
   return {
     connection: {
@@ -160,7 +155,7 @@ function mockLinearSequence(
   opts: MockOpts = {},
 ) {
   let i = 0;
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     assert.equal(String(input), "https://api.linear.app/graphql");
     assert.equal(init?.method, "POST");
     // The credential transport signs with a Headers instance.
@@ -200,7 +195,7 @@ function mockLinearSequence(
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("linear plugin action surface", () => {
@@ -211,9 +206,8 @@ describe("linear plugin action surface", () => {
   });
 
   it("describes issue.get issueId as the required parameter for UUIDs or identifiers", () => {
-    const action = getAction(makeLinear(), "issue.get");
     assert.equal(
-      action.inputSchema?.properties?.issueId?.description,
+      typedSchema(makeLinear(), "issue.get").properties?.issueId?.description,
       "Required parameter name. Pass either the Linear issue UUID or issue identifier, e.g. 'THE-154'.",
     );
   });
@@ -238,9 +232,9 @@ describe("linear scoped-availability notes match behaviour", () => {
   it("carries the note on exactly the actions a scoped connection cannot run", async () => {
     const plugin = makeLinear();
     // Any action that gets past the scope gate hits fetch; stop it there.
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("linear-test: reached the network");
-    }) as typeof fetch;
+    });
 
     const scoped = ctx({
       apiKey: "lin_notes",
@@ -410,8 +404,8 @@ describe("linear plugin cycle actions", () => {
     const action = getAction(plugin, "team.cyclesDeleteAll");
     assert.match(String(action.description), /^DESTRUCTIVE:/);
     assert.ok(
-      isTypedInputSchema(action.inputSchema) &&
-        "teamId" in (action.inputSchema.properties ?? {}),
+      "teamId" in
+        (typedSchema(plugin, "team.cyclesDeleteAll").properties ?? {}),
       "the parameter must be named teamId so the blast radius is obvious",
     );
   });
@@ -915,9 +909,9 @@ describe("linear plugin scoped issue access", () => {
   // only to the broker; a directory read for one call must not answer another.
   it("never answers one brokered connection from another's label directory", async () => {
     const action = getAction(makeLinear(), "issue.list");
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("a brokered plugin must not reach the network itself");
-    }) as unknown as typeof fetch;
+    });
     const brokerFor = (labelId: string, seen: unknown[]) => ({
       async request(input: { body?: string | Uint8Array }) {
         const body = JSON.parse(String(input.body)) as {
@@ -1442,9 +1436,9 @@ describe("linear issue.list pagination and cycle hydration", () => {
   });
 
   it("documents pagination on the limit input", () => {
-    const action = getAction(makeLinear(), "issue.list");
     const description = String(
-      action.inputSchema?.properties?.limit?.description ?? "",
+      typedSchema(makeLinear(), "issue.list").properties?.limit?.description ??
+        "",
     );
     assert.match(description, /pageInfo/);
   });

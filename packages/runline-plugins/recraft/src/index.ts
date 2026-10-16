@@ -201,7 +201,7 @@ export default function recraft(rl: RunlinePluginAPI) {
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("recraft: prompt is required");
       }
-      const img = readImageInput(p.imagePath, "recraft");
+      const img = await readImageInput(p.imagePath, "recraft");
 
       const form = new FormData();
       form.append(

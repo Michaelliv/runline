@@ -1,7 +1,7 @@
 /**
  * Microsoft Outlook calendar plugin for runline (Microsoft Graph).
  *
- * Auth: shared "microsoft" OAuth family (delegated → /me) or app-only
+ * Auth: the "microsoft" grant (delegated → /me) or app-only
  * (tenantId/clientId/clientSecret + userUpn). See _shared/microsoftAuth.ts.
  * Graph delegated scopes: Calendars.Read.
  */
@@ -9,7 +9,7 @@ import type { ActionContext, RunlinePluginAPI } from "runline";
 import {
   graphRequest,
   microsoftCredential,
-  microsoftSetupHelp,
+  microsoftOAuth,
   userBase,
 } from "../../_shared/microsoftAuth.js";
 
@@ -66,12 +66,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     },
   });
 
-  rl.setOAuth({
-    authUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    scopes: [...SCOPES, "offline_access"],
-    setupHelp: microsoftSetupHelp("Calendars.Read"),
-  });
+  rl.setOAuth(microsoftOAuth(SCOPES, "Calendars.Read"));
 
   rl.registerAction("calendar.list", {
     access: "read",

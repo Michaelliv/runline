@@ -1,6 +1,6 @@
 {
   "name": "pi-runline",
-  "version": "0.34.0",
+  "version": "0.35.0",
   "description": "Code mode for pi",
   "type": "commonjs",
   "keywords": [
@@ -18,11 +18,12 @@
   "scripts": {
     "build": "echo 'no build'",
     "test": "echo 'no tests'",
+    "typecheck": "tsc",
     "lint": "biome check extensions/",
     "lint:fix": "biome check --write extensions/"
   },
   "dependencies": {
-    "runline": "0.34.0"
+    "runline": "0.35.0"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
@@ -30,5 +31,9 @@
     "@sinclair/typebox": "*"
   },
   "author": "michaelliv",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.8.0"
+  }
 }

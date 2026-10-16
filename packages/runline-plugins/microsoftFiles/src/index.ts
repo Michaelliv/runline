@@ -1,13 +1,14 @@
 /**
  * Microsoft OneDrive / SharePoint files plugin for runline (Microsoft Graph).
  *
- * Auth: shared "microsoft" OAuth family (delegated → /me/drive) or app-only
+ * Auth: the "microsoft" grant (delegated → /me/drive) or app-only
  * (tenantId/clientId/clientSecret + userUpn → /users/{upn}/drive). Optionally
  * target a SharePoint document library with siteId/driveId. See
  * _shared/microsoftAuth.ts. Graph delegated scopes: Files.ReadWrite.All,
  * Sites.ReadWrite.All (use the .Read.* variants if you only need reads).
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
+import { standardBase64 } from "../../_shared/base64.js";
 import {
   jsonAnswer,
   pathSegment,
@@ -20,7 +21,7 @@ import {
   microsoftCredential,
   microsoftDownload,
   microsoftDriveBase,
-  microsoftSetupHelp,
+  microsoftOAuth,
 } from "../../_shared/microsoftAuth.js";
 
 const NAME = "microsoftFiles";
@@ -122,12 +123,9 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
     },
   });
 
-  rl.setOAuth({
-    authUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    scopes: [...SCOPES, "offline_access"],
-    setupHelp: microsoftSetupHelp("Files.ReadWrite.All, Sites.ReadWrite.All"),
-  });
+  rl.setOAuth(
+    microsoftOAuth(SCOPES, "Files.ReadWrite.All, Sites.ReadWrite.All"),
+  );
 
   rl.registerAction("files.search", {
     access: "read",
@@ -234,7 +232,10 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
     },
     async execute(input, ctx: Ctx) {
       const { path, base64 } = input as { path: string; base64: string };
-      const bytes = Buffer.from(base64, "base64");
+      const content = standardBase64(base64);
+      if (content === undefined)
+        throw new Error(`${NAME}: base64 is not valid base64`);
+      const bytes = Buffer.from(content, "base64");
       const res = await binaryFetch(
         ctx,
         "PUT",

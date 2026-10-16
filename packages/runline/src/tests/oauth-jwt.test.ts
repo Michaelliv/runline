@@ -6,6 +6,7 @@ import { acquireOAuth2JwtToken } from "../auth/oauth2.js";
 import type { OAuth2Definition } from "../auth/types.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
   modulusLength: 2048,
@@ -134,11 +135,11 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 /** Serve token issuance through `issue`; every Drive read answers 200.
  *  Any other destination — a credential's own token_uri included — fails. */
 function serve(issue: (init: RequestInit) => Response) {
-  globalThis.fetch = (async (url, init) => {
+  stubFetch(async (url, init) => {
     if (String(url) === TOKEN_URL) return issue(init ?? {});
     assert.ok(String(url).startsWith("https://www.googleapis.com/drive/v3/"));
     return Response.json({});
-  }) as typeof fetch;
+  });
 }
 
 /** The bearer a Drive read through the local signer carries. */
@@ -148,11 +149,11 @@ async function bearerFor(
 ): Promise<string | null> {
   let bearer: string | null = null;
   const served = globalThis.fetch;
-  globalThis.fetch = (async (url, init) => {
+  stubFetch(async (url, init) => {
     if (String(url) !== TOKEN_URL)
       bearer = new Headers(init?.headers).get("authorization");
     return served(url, init);
-  }) as typeof fetch;
+  });
   try {
     await googleResponse(
       await context(store),

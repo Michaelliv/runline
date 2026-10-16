@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import airtable from "../../../runline-plugins/airtable/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -26,10 +27,10 @@ const ctx: ActionContext = {
 describe("airtable record.search", () => {
   it("sends sort as Airtable's indexed field/direction parameters", async () => {
     const urls: URL[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
+    stubFetch(async (input: RequestInfo | URL) => {
       urls.push(new URL(String(input)));
       return Response.json({ records: [] });
-    }) as typeof fetch;
+    });
 
     await action("record.search").execute(
       {

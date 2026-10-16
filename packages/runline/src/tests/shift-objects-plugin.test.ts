@@ -7,6 +7,7 @@ import { Check } from "typebox/value";
 import shiftObjects from "../../../runline-plugins/shiftObjects/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -31,12 +32,6 @@ function makeShiftObjects(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected shiftObjects.${name} to be registered`);
-  return action;
-}
-
 function ctx(): ActionContext {
   return {
     connection: {
@@ -54,13 +49,13 @@ function ctx(): ActionContext {
 }
 
 function mockShift(assertRequest: (input: URL, init?: RequestInit) => unknown) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const data = assertRequest(input as URL, init);
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("shiftObjects plugin", () => {
@@ -90,10 +85,7 @@ describe("shiftObjects plugin", () => {
     await writeFile(file, "image-bytes");
 
     const calls: string[] = [];
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       calls.push(`${init?.method ?? "GET"} ${url}`);
       if (url.endsWith("/v1/services/objects/objects")) {
@@ -129,7 +121,7 @@ describe("shiftObjects plugin", () => {
         });
       }
       throw new Error(`unexpected request: ${url}`);
-    }) as typeof fetch;
+    });
 
     assert.deepEqual(
       await action.execute({ path: file, sessionId: "sess_1" }, ctx()),
@@ -145,10 +137,10 @@ describe("shiftObjects plugin", () => {
     await writeFile(empty, "");
 
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetchCalls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
 
     await assert.rejects(
       () => action.execute({ path: empty }, ctx()),
@@ -195,10 +187,7 @@ describe("shiftObjects plugin", () => {
       expiresAt: "2026-07-20T12:05:00.000Z",
     };
 
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/objects/object_1/download")) {
         assert.equal(init?.method, "POST");
@@ -206,7 +195,7 @@ describe("shiftObjects plugin", () => {
       }
       if (url === grant.url) return new Response("image-bytes");
       throw new Error(`unexpected request: ${url}`);
-    }) as typeof fetch;
+    });
 
     assert.deepEqual(await action.execute({ id: "object_1" }, ctx()), grant);
     assert.deepEqual(

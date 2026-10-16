@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import autopilot from "../../../runline-plugins/autopilot/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -28,8 +29,7 @@ const ctx: ActionContext = {
 };
 
 function reply(status: number) {
-  globalThis.fetch = (async () =>
-    new Response(status === 200 ? "{}" : null, { status })) as typeof fetch;
+  stubFetch(async () => new Response(status === 200 ? "{}" : null, { status }));
 }
 
 describe("autopilot contactList.exists", () => {

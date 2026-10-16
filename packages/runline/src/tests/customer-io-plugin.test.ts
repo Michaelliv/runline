@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import customerIo from "../../../runline-plugins/customerIo/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -18,13 +19,13 @@ describe("customerIo App API", () => {
     );
     assert.ok(action);
     const seen: Array<{ url: string; auth: string | null }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         auth: new Headers(init?.headers).get("authorization"),
       });
       return Response.json({ metric: {} });
-    }) as typeof fetch;
+    });
     const ctx: ActionContext = {
       connection: {
         name: "cio",
@@ -58,9 +59,9 @@ describe("customerIo region", () => {
     customerIo(api);
     const action = resolve().actions.find((a) => a.name === "campaign.list");
     assert.ok(action);
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("no request expected");
-    }) as typeof fetch;
+    });
     const ctx: ActionContext = {
       connection: {
         name: "cio",
