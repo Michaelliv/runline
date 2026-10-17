@@ -196,11 +196,11 @@ export function nextOffset(answer: Answer, offset: number): number | undefined {
   if (pagination === undefined || pagination === null) return undefined;
   if (!isRecord(pagination)) throw invalidAnswer("pagination is not an object");
   const more = pagination.has_more;
-  if (more === undefined || more === null || more === false) return undefined;
-  if (more !== true)
+  if (typeof more !== "boolean")
     throw invalidAnswer("pagination.has_more is not a boolean");
+  if (!more) return undefined;
   const next = pagination.next_offset;
-  if (typeof next !== "number" || !Number.isInteger(next) || next <= offset)
+  if (typeof next !== "number" || !Number.isSafeInteger(next) || next <= offset)
     throw invalidAnswer("pagination.next_offset does not advance");
   return next;
 }

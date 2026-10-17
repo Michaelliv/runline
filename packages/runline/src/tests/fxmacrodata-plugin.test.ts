@@ -198,6 +198,12 @@ describe("fxmacrodata pagination", () => {
   for (const [name, pagination] of [
     ["a next_offset that does not advance", { has_more: true, next_offset: 0 }],
     ["a missing next_offset", { has_more: true }],
+    [
+      "a next_offset outside the safe integer range",
+      { has_more: true, next_offset: Number.MAX_SAFE_INTEGER + 1 },
+    ],
+    ["a missing has_more", {}],
+    ["a null has_more", { has_more: null }],
     ["a has_more that is not a boolean", { has_more: "yes" }],
     ["a pagination that is not an object", [1]],
   ] as const)
