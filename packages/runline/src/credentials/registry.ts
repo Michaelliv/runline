@@ -7,6 +7,7 @@ import {
   providerHeaders,
   providerParameters,
 } from "../auth/token.js";
+import { isAwsScope } from "./aws.js";
 import {
   bounded,
   HTTP_METHODS,
@@ -73,6 +74,28 @@ export const OAuthGrantSchema = t.Object(
   { additionalProperties: false },
 );
 
+/** Stored shape of an AWS access key; a session's carries its token. */
+export const AwsAccessKeySchema = t.Object(
+  {
+    accessKeyId: t.String({ minLength: 1 }),
+    secretAccessKey: t.String({ minLength: 1 }),
+    sessionToken: t.Optional(t.String({ minLength: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+/** Stored shape of an assumed role's session. */
+export const AwsSessionSchema = t.Object(
+  {
+    accessKeyId: t.String({ minLength: 1 }),
+    secretAccessKey: t.String({ minLength: 1 }),
+    sessionToken: t.String({ minLength: 1 }),
+    expiresAt: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+    revision: t.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
 /** The shape of a strict object schema, as the registry inspects it. */
 type ObjectSchema = {
   type?: string;
@@ -80,6 +103,42 @@ type ObjectSchema = {
   properties?: Record<string, { type?: string }>;
   required?: string[];
 };
+
+/** Whether two strict object schemas store the same fields, alike required. */
+function sameShape(actual: unknown, expected: ObjectSchema): boolean {
+  const shape = actual as ObjectSchema | undefined;
+  const describe = (schema: ObjectSchema) =>
+    JSON.stringify([
+      schema.type,
+      schema.additionalProperties,
+      Object.entries(schema.properties ?? {})
+        .map(([name, field]) => [name, field.type])
+        .sort(),
+      [...(schema.required ?? [])].sort(),
+    ]);
+  return !!shape && describe(shape) === describe(expected);
+}
+
+/**
+ * A SigV4 method stores exactly an access key in its field and, when it
+ * assumes a role, an optional session in a field of its own.
+ */
+function validateAwsSigV4(
+  auth: Extract<CredentialAuthentication, { kind: "awsSigV4" }>,
+  schema: ObjectSchema,
+): void {
+  if (!sameShape(schema.properties?.[auth.field], AwsAccessKeySchema))
+    throw new AuthError("invalid_definition");
+  if (auth.assumeRole === undefined) return;
+  const session = auth.assumeRole.sessionField;
+  identifier(session);
+  if (
+    session === auth.field ||
+    !sameShape(schema.properties?.[session], AwsSessionSchema) ||
+    schema.required?.includes(session)
+  )
+    throw new AuthError("invalid_definition");
+}
 
 function identifier(value: string): void {
   if (typeof value !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(value))
@@ -229,6 +288,7 @@ function validateMethod(method: CredentialMethod): void {
       schema.properties[auth.field],
       Object.keys(method.targets ?? {}),
     );
+  else if (auth.kind === "awsSigV4") validateAwsSigV4(auth, schema);
   else if (auth.kind === "oauth2") {
     identifier(auth.definition.id);
     identifier(auth.definition.provider);
@@ -314,6 +374,13 @@ function validateMethod(method: CredentialMethod): void {
     identifier(name);
     const injected = injectedHeaders(auth, name);
     targetBase(target);
+    // A SigV4 target names what it is signed for; no other target may.
+    if (
+      auth.kind === "awsSigV4"
+        ? !isAwsScope(target.aws)
+        : target.aws !== undefined
+    )
+      throw new AuthError("invalid_definition");
     if (
       !Array.isArray(target.methods) ||
       !target.methods.length ||
@@ -336,12 +403,14 @@ function validateMethod(method: CredentialMethod): void {
       if (injected.includes(header) || TRANSPORT_HEADERS.includes(header))
         throw new AuthError("invalid_definition");
     }
-    // A socket URL carries only query parameters: no header, body or
-    // bearer can sign it, and nothing is sent through it by the transport.
+    // A socket URL carries only query parameters: no header, body,
+    // bearer or request signature can sign it, and nothing is sent
+    // through it by the transport.
     if (
       target.socket !== undefined &&
       (target.socket !== true ||
         auth.kind === "oauth2" ||
+        auth.kind === "awsSigV4" ||
         target.allowedHeaders !== undefined ||
         target.idempotency !== undefined ||
         target.resumableUpload !== undefined ||

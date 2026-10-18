@@ -415,6 +415,46 @@ The credential kit is exported from `runline` for every plugin, bundled or custo
 | `jsonAnswer` / `jsonOrAcknowledged` | Read a successful answer; an empty or 204 answer is `{ success: true }`. |
 | `multipartBody` | Buffer `FormData` into the bytes and boundary the transport accepts. |
 | `refuseUnderHost` | Refuse an owner-login step when a host keeps the credential. |
+| `awsCredential(spec)` / `awsTarget(service, region)` | Declare an AWS connection: an access key (`accessKeyId`, `secretAccessKey`, a session's `sessionToken`), or with `roleArn` a role it assumes, signing with the role's sessions. Targets are regional service endpoints, each signed for its service and region. |
+| `awsJson` / `awsQuery` | Call an AWS JSON-protocol service by operation (`AmazonSSM.SendCommand`), or a Query-protocol service by action (`DescribeInstances`), its XML answer read as data. |
+| `awsFailed` / `awsList` / `parseAwsXml` / `awsEndpoint` / `awsRegion` | Report a failed AWS call by status and AWS error code; read an XML list's `item` or `member` entries; parse AWS XML; build and validate endpoints and regions. |
+
+An AWS plugin declares its credential the same way, and signs through SigV4:
+
+```typescript
+import {
+  awsCredential,
+  awsJson,
+  awsRegion,
+  awsTarget,
+  type RunlinePluginAPI,
+} from "runline";
+import * as t from "typebox";
+
+// An access key, or with `roleArn` in the connection a role it assumes.
+const credential = awsCredential({
+  id: "aws",
+  targets: (config) => ({
+    ssm: awsTarget("ssm", awsRegion(config.region ?? "us-east-1")),
+  }),
+});
+
+export default function fleet(rl: RunlinePluginAPI) {
+  rl.setName("fleet");
+  rl.setCredential(credential);
+  rl.registerAction("instances.list", {
+    access: "read",
+    description: "Instances managed by Systems Manager.",
+    inputSchema: t.Object({}, { additionalProperties: false }),
+    execute: (_input, ctx) =>
+      awsJson(ctx, credential, "fleet", {
+        target: "ssm",
+        operation: "AmazonSSM.DescribeInstanceInformation",
+        version: "1.1",
+      }),
+  });
+}
+```
 
 See [Host-signed requests](#host-signed-requests) for the declaration model itself: authentication kinds, placements and targets.
 
@@ -521,15 +561,16 @@ const rl = Runline.create({
 });
 ```
 
-The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application and JWT identity — never with anything the plugin's process sends.
+The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application, JWT identity and AWS role — never with anything the plugin's process sends.
 
-Each method's `authentication.field` names the one config field a host stores the secret in. There are three kinds:
+Each method's `authentication.field` names the one config field a host stores the secret in. There are four kinds:
 
 | kind | stored shape | sent as |
 |---|---|---|
 | `none` | nothing | unsigned, still held to the method's targets: the method of a connection without an optional credential |
 | `static` | its named `parts`, each a string, `optionalParts` allowed to be absent (`staticSecretSchema(parts, optionalParts)`) | each part through its `placements` |
 | `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection by its declared `renewal`: a refresh token, client credentials, a JWT bearer assertion (`jwtIdentity`), or the resource owner's username and password (`resourceOwner`, under the endpoint's own `fields` names) |
+| `awsSigV4` | an `AwsAccessKeySchema` key: `accessKeyId`, `secretAccessKey`, and a session's `sessionToken` | AWS Signature Version 4 for each target's declared `aws: { service, region }`. With `assumeRole: { sessionField }`, the key only assumes the binding's `awsRole` through STS; requests sign with the role's session (`AwsSessionSchema`, in `sessionField`), renewed five minutes before it expires |
 
 A static placement is one of:
 
@@ -555,6 +596,8 @@ A target with `socket: true` is a `wss://` endpoint, such as a browser's CDP soc
 A target may allow the WebDAV methods `MKCOL`, `COPY` and `MOVE`. A `COPY` or `MOVE` names its `destination`, a path beneath the same target checked as `path` is, and the transport alone sends it as the absolute `Destination` header; a caller never sets that header.
 
 A target that the provider holds open longer, or answers larger, than the transport defaults declares its own `timeoutMs` or `maxResponseBytes`; the host caps both with `maxTargetTimeoutMs` and `maxTargetResponseBytes` on `CredentialTransport`.
+
+Every target of an `awsSigV4` method names the service and region it is signed for, and no other method's target may; none is a socket. SigV4 owns `Authorization`, `X-Amz-Date`, `X-Amz-Security-Token` and `X-Amz-Content-Sha256`, and refuses a presigned URL's `X-Amz-*` query parameters; the query goes out in the canonical encoding it was signed in. An STS refusal of the key itself (`InvalidClientTokenId`, `SignatureDoesNotMatch`, an expired session token) is `reconnect_required`; any other refusal to assume the role is `provider_rejected`. Signing locally, an `assumeRole` connection keeps its session in the flat field `awsSession`, bound to the key and role it was issued for.
 
 ## CLI Reference
 

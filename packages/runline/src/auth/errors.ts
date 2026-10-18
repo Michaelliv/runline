@@ -10,9 +10,9 @@ const messages = {
   binding_changed: "Credential binding identity changed",
   unsupported_operation: "Authentication operation is not supported",
   invalid_response: "Invalid provider response",
-  request_failed: "OAuth token request failed; provider outcome may be unknown",
-  provider_rejected: "OAuth provider rejected the token request",
-  reconnect_required: "OAuth grant is invalid; reconnect the account",
+  request_failed: "Token request failed; provider outcome may be unknown",
+  provider_rejected: "Provider rejected the token request",
+  reconnect_required: "Credential is no longer valid; reconnect the account",
 } as const;
 
 export type AuthErrorCode = keyof typeof messages;
