@@ -7,7 +7,13 @@
 import * as t from "typebox";
 import { AuthError } from "../auth/errors.js";
 import type { ActionContext } from "../plugin/types.js";
-import { awsEndpoint, awsErrorCode, awsRole, parseAwsXml } from "./aws.js";
+import {
+  awsEndpoint,
+  awsErrorCode,
+  awsProfileName,
+  awsRole,
+  parseAwsXml,
+} from "./aws.js";
 import {
   credentialRequest,
   errorIdentifier,
@@ -105,7 +111,9 @@ export function awsCredential(spec: AwsCredentialSpec): CredentialDeclaration {
   return (config) => {
     const targets = spec.targets(config);
     const probe = spec.probe ? { probe: spec.probe } : {};
-    const awsProfile = configString(config.awsProfile);
+    const profile = configString(config.awsProfile);
+    const awsProfile =
+      profile === undefined ? undefined : awsProfileName(profile);
     const roleArn = configString(config.roleArn);
     const externalId = configString(config.roleExternalId);
     const durationSeconds = configInteger(config.roleDurationSeconds);
