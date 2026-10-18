@@ -427,7 +427,10 @@ export class CredentialTransport {
     let snapshot: ConnectionConfig;
     try {
       snapshot = await binding.connection.read();
-    } catch {
+    } catch (error) {
+      // A store's own error can carry anything; an AuthError is already
+      // sanitized and says what is wrong with the credential itself.
+      if (error instanceof AuthError) throw error;
       throw new AuthError("credential_store_failed");
     }
     return boundSnapshot(binding, method, snapshot);

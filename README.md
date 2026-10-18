@@ -415,7 +415,7 @@ The credential kit is exported from `runline` for every plugin, bundled or custo
 | `jsonAnswer` / `jsonOrAcknowledged` | Read a successful answer; an empty or 204 answer is `{ success: true }`. |
 | `multipartBody` | Buffer `FormData` into the bytes and boundary the transport accepts. |
 | `refuseUnderHost` | Refuse an owner-login step when a host keeps the credential. |
-| `awsCredential(spec)` / `awsTarget(service, region)` | Declare an AWS connection: an access key (`accessKeyId`, `secretAccessKey`, a session's `sessionToken`), or with `roleArn` a role it assumes, signing with the role's sessions. Targets are regional service endpoints, each signed for its service and region. |
+| `awsCredential(spec)` / `awsTarget(service, region)` | Declare an AWS connection: an access key (`accessKeyId`, `secretAccessKey`, a session's `sessionToken`) or, signing locally, an AWS CLI profile (`awsProfile`, e.g. an SSO login) in its place; with `roleArn`, a role that key assumes, signing with the role's sessions. Targets are regional service endpoints, each signed for its service and region. |
 | `awsJson` / `awsQuery` | Call an AWS JSON-protocol service by operation (`AmazonSSM.SendCommand`), or a Query-protocol service by action (`DescribeInstances`), its XML answer read as data. |
 | `awsFailed` / `awsList` / `parseAwsXml` / `awsEndpoint` / `awsRegion` | Report a failed AWS call by status and AWS error code; read an XML list's `item` or `member` entries; parse AWS XML; build and validate endpoints and regions. |
 
@@ -597,7 +597,7 @@ A target may allow the WebDAV methods `MKCOL`, `COPY` and `MOVE`. A `COPY` or `M
 
 A target that the provider holds open longer, or answers larger, than the transport defaults declares its own `timeoutMs` or `maxResponseBytes`; the host caps both with `maxTargetTimeoutMs` and `maxTargetResponseBytes` on `CredentialTransport`.
 
-Every target of an `awsSigV4` method names the service and region it is signed for, and no other method's target may; none is a socket. SigV4 owns `Authorization`, `X-Amz-Date`, `X-Amz-Security-Token` and `X-Amz-Content-Sha256`, and refuses a presigned URL's `X-Amz-*` query parameters; the query goes out in the canonical encoding it was signed in. An STS refusal of the key itself (`InvalidClientTokenId`, `SignatureDoesNotMatch`, an expired session token) is `reconnect_required`; any other refusal to assume the role is `provider_rejected`. Signing locally, an `assumeRole` connection keeps its session in the flat field `awsSession`, bound to the key and role it was issued for.
+Every target of an `awsSigV4` method names the service and region it is signed for, and no other method's target may; none is a socket. SigV4 owns `Authorization`, `X-Amz-Date`, `X-Amz-Security-Token` and `X-Amz-Content-Sha256`, and refuses a presigned URL's `X-Amz-*` query parameters; the query goes out in the canonical encoding it was signed in. An STS refusal of the key itself (`InvalidClientTokenId`, `SignatureDoesNotMatch`, an expired session token) is `reconnect_required`; any other refusal to assume the role is `provider_rejected`. Signing locally, an `assumeRole` connection keeps its session in the flat field `awsSession`, bound to the key and role it was issued for. A selection's `awsProfile` (local signing only, ignored by hosts, like `localSecret`) takes the key from an AWS CLI profile through `aws configure export-credentials`, held until five minutes before it expires; a CLI with no login is `reconnect_required`, mended by `aws sso login`.
 
 ## CLI Reference
 

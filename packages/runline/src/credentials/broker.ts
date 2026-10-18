@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { AuthError } from "../auth/errors.js";
 import type { ActionContext } from "../plugin/types.js";
+import { awsProfileKey } from "./aws.js";
 import { CredentialRegistry } from "./registry.js";
 import { type CredentialBroker, CredentialTransport } from "./transport.js";
 import type {
@@ -147,7 +148,7 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
   const auth = definition.methods[method].authentication;
   const identity = { name: ctx.connection.name, plugin: ctx.connection.plugin };
   const expected = authorityOf(selection);
-  const project = (current: Readonly<Record<string, unknown>>) => {
+  const project = async (current: Readonly<Record<string, unknown>>) => {
     if (authorityOf(declaration(current)) !== expected)
       throw new AuthError("binding_changed");
     if (auth.kind === "none") return {};
@@ -160,9 +161,9 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
       return secret ? { [auth.field]: secret } : {};
     }
     if (auth.kind === "awsSigV4") {
-      const key = staticSecret(current, selection.localSecret, [
-        "sessionToken",
-      ]);
+      const key = selection.awsProfile
+        ? await awsProfileKey(selection.awsProfile)
+        : staticSecret(current, selection.localSecret, ["sessionToken"]);
       const cached = current.awsSession as
         | (AwsSession & { binding?: string })
         | undefined;
@@ -209,9 +210,9 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
         : createHash("sha256").update(JSON.stringify(tokens)).digest("hex");
     return { [auth.field]: { tokens, revision } };
   };
-  const snapshot = () => ({
+  const snapshot = async () => ({
     ...identity,
-    config: project(ctx.connection.config),
+    config: await project(ctx.connection.config),
   });
   const binding: CredentialBinding = {
     type: definition.id,
@@ -230,7 +231,7 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
       async update(change) {
         const flatten = writeBack(auth, expected);
         await ctx.updateConnection(async (current) => {
-          const projected = project(current);
+          const projected = await project(current);
           const patch =
             typeof change === "function" ? await change(projected) : change;
           return patch ? flatten(patch, current) : undefined;

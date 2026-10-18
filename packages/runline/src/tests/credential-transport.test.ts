@@ -1622,6 +1622,30 @@ describe("constrained credential transport", () => {
     assert.equal((h.store.list()[0].config.grant as OAuthGrant).revision, "r1");
   });
 
+  it("masks a store's read failure, but keeps a credential's own AuthError, before any IO", async () => {
+    let calls = 0;
+    const h = await harness(
+      mock(() => {
+        calls++;
+        return Response.json({});
+      }),
+    );
+    for (const [failure, code] of [
+      [new Error("private-vault-detail"), "credential_store_failed"],
+      [new AuthError("reconnect_required"), "reconnect_required"],
+    ] as const) {
+      h.binding.connection.read = async () => {
+        throw failure;
+      };
+      await assert.rejects(
+        h.transport.request(h.binding, request),
+        (error: unknown) =>
+          errorCode(code)(error) && !String(error).includes("private"),
+      );
+    }
+    assert.equal(calls, 0);
+  });
+
   it("rejects a changed identity returned after issuance rather than replaying with it", async () => {
     let calls = 0;
     const h = await harness(
