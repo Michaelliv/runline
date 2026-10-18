@@ -68,32 +68,51 @@ export function awsAccessKey(value: unknown): AwsAccessKey {
 /** An AWS CLI profile name, as `~/.aws/config` section names allow it. */
 const PROFILE = /^[\w+=,.@-]{1,64}$/;
 
+/** A profile name from config; anything else is refused before the CLI runs. */
+export function awsProfileName(value: unknown): string {
+  if (typeof value !== "string" || !PROFILE.test(value))
+    throw new AuthError("invalid_credentials");
+  return value;
+}
+
 /** A profile's key is used until this long before it expires. */
 const PROFILE_KEY_MARGIN_MS = 5 * 60_000;
 
-/** Profile keys this process holds, until each nears its expiry. */
-const profileKeys = new Map<
-  string,
-  { key: AwsAccessKey; expiresAt: number | undefined }
->();
+interface ProfileKey {
+  key: AwsAccessKey;
+  expiresAt: number | undefined;
+}
 
 /**
- * The access key of an AWS CLI profile, as the CLI resolves it: an SSO
- * login, an assumed role, or a key in `~/.aws/credentials`, through
- * `aws configure export-credentials` (the `credential_process` contract).
- * Held until five minutes before it expires. A CLI that cannot produce
- * one (no login, an expired SSO session) is reconnect_required: the
- * profile needs `aws sso login` again.
+ * Each profile's key as this process holds it: settled while it lasts,
+ * or still in flight, so concurrent callers share one CLI run.
  */
-export async function awsProfileKey(profile: string): Promise<AwsAccessKey> {
-  if (!PROFILE.test(profile)) throw new AuthError("invalid_credentials");
-  const held = profileKeys.get(profile);
-  if (
-    held &&
-    (held.expiresAt === undefined ||
-      held.expiresAt > Date.now() + PROFILE_KEY_MARGIN_MS)
-  )
-    return held.key;
+const profileKeys = new Map<string, Promise<ProfileKey>>();
+
+/** A key a provider issued: one that cannot sign is a malformed answer. */
+function issuedKey(value: unknown): AwsAccessKey {
+  try {
+    return awsAccessKey(value);
+  } catch {
+    throw new AuthError("invalid_response");
+  }
+}
+
+/**
+ * Why the CLI produced no key: it is not installed, it ran out of time,
+ * it answered more than a key, or it refused (no login, or an expired
+ * SSO session, which `aws sso login` mends).
+ */
+function cliFailure(error: { code?: unknown; killed?: boolean }): AuthError {
+  if (error.code === "ENOENT") return new AuthError("invalid_credentials");
+  if (error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER")
+    return new AuthError("invalid_response");
+  if (error.killed) return new AuthError("request_failed");
+  return new AuthError("reconnect_required");
+}
+
+/** One CLI run: the profile's key, as `credential_process` defines it. */
+async function exportProfileKey(profile: string): Promise<ProfileKey> {
   const stdout = await new Promise<string>((resolve, reject) => {
     execFile(
       "aws",
@@ -106,16 +125,7 @@ export async function awsProfileKey(profile: string): Promise<AwsAccessKey> {
         "process",
       ],
       { timeout: 30_000, maxBuffer: 64 * 1024 },
-      (error, out) =>
-        error
-          ? reject(
-              new AuthError(
-                (error as { code?: unknown }).code === "ENOENT"
-                  ? "invalid_credentials"
-                  : "reconnect_required",
-              ),
-            )
-          : resolve(out),
+      (error, out) => (error ? reject(cliFailure(error)) : resolve(out)),
     );
   });
   let exported: Record<string, unknown>;
@@ -133,15 +143,46 @@ export async function awsProfileKey(profile: string): Promise<AwsAccessKey> {
     (expiresAt !== undefined && !Number.isSafeInteger(expiresAt))
   )
     throw new AuthError("invalid_response");
-  const key = awsAccessKey({
-    accessKeyId: exported.AccessKeyId,
-    secretAccessKey: exported.SecretAccessKey,
-    ...(exported.SessionToken === undefined
-      ? {}
-      : { sessionToken: exported.SessionToken }),
+  return {
+    key: issuedKey({
+      accessKeyId: exported.AccessKeyId,
+      secretAccessKey: exported.SecretAccessKey,
+      ...(exported.SessionToken === undefined
+        ? {}
+        : { sessionToken: exported.SessionToken }),
+    }),
+    expiresAt,
+  };
+}
+
+/**
+ * The access key of an AWS CLI profile, as the CLI resolves it: an SSO
+ * login, an assumed role, or a key in `~/.aws/credentials`, through
+ * `aws configure export-credentials` (the `credential_process` contract).
+ * Held until five minutes before it expires; however many callers find
+ * it missing or stale, one CLI run serves them all, and a failed run is
+ * not held.
+ */
+export async function awsProfileKey(name: string): Promise<AwsAccessKey> {
+  const profile = awsProfileName(name);
+  for (;;) {
+    const held = profileKeys.get(profile);
+    if (!held) break;
+    const { key, expiresAt } = await held;
+    if (
+      expiresAt === undefined ||
+      expiresAt > Date.now() + PROFILE_KEY_MARGIN_MS
+    )
+      return key;
+    // Stale: refresh it, unless another caller already started to.
+    if (profileKeys.get(profile) === held) break;
+  }
+  const exporting = exportProfileKey(profile);
+  profileKeys.set(profile, exporting);
+  exporting.catch(() => {
+    if (profileKeys.get(profile) === exporting) profileKeys.delete(profile);
   });
-  profileKeys.set(profile, { key, expiresAt });
-  return key;
+  return (await exporting).key;
 }
 
 /** `arn:<partition>:iam::<account>:role/<path/name>`, as IAM allows it. */
@@ -319,16 +360,11 @@ export async function assumeAwsRole(
     expiresAt <= now
   )
     throw new AuthError("invalid_response");
-  let session: AwsAccessKey;
-  try {
-    session = awsAccessKey({
-      accessKeyId: result.AccessKeyId,
-      secretAccessKey: result.SecretAccessKey,
-      sessionToken: result.SessionToken,
-    });
-  } catch {
-    throw new AuthError("invalid_response");
-  }
+  const session = issuedKey({
+    accessKeyId: result.AccessKeyId,
+    secretAccessKey: result.SecretAccessKey,
+    sessionToken: result.SessionToken,
+  });
   return {
     accessKeyId: session.accessKeyId,
     secretAccessKey: session.secretAccessKey,

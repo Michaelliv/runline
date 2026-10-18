@@ -637,7 +637,10 @@ while [ "$1" != "--profile" ]; do shift; done
 case "$2" in
   signed-in) echo '{"Version":1,"AccessKeyId":"ASIAPROFILE","SecretAccessKey":"profile-secret","SessionToken":"profile-token","Expiration":"${expiration}"}' ;;
   for-role) echo '{"Version":1,"AccessKeyId":"ASIAROLEBASE","SecretAccessKey":"role-base-secret","SessionToken":"role-base-token","Expiration":"${expiration}"}' ;;
+  concurrent) sleep 0.3; echo '{"Version":1,"AccessKeyId":"ASIASHARED","SecretAccessKey":"shared-secret","SessionToken":"shared-token","Expiration":"${expiration}"}' ;;
   malformed) echo 'not json' ;;
+  bad-key) echo '{"Version":1,"AccessKeyId":"ASIA BAD","SecretAccessKey":"s"}' ;;
+  huge) head -c 100000 /dev/zero | tr '\\0' 'x' ;;
   *) echo "Error loading SSO Token: Token for $2 does not exist" >&2; exit 255 ;;
 esac
 `,
@@ -682,6 +685,31 @@ esac
     }
   });
 
+  it("runs the CLI once for concurrent callers that find no key", async () => {
+    const cli = fakeCli();
+    const calls = aws();
+    const original = globalThis.fetch;
+    globalThis.fetch = calls.fetch;
+    try {
+      await Promise.all(
+        Array.from({ length: 3 }, () =>
+          brokerFor(local({ awsProfile: "concurrent" }), fleet).request({
+            target: "ssm",
+            path: "",
+          }),
+        ),
+      );
+      assert.equal(cli.runs(), 1);
+      assert.deepEqual(
+        calls.api.map((sent) => sent.headers.get("x-amz-security-token")),
+        ["shared-token", "shared-token", "shared-token"],
+      );
+    } finally {
+      globalThis.fetch = original;
+      cli.restore();
+    }
+  });
+
   it("assumes a role with the profile's key", async () => {
     const cli = fakeCli();
     const calls = aws();
@@ -720,7 +748,8 @@ esac
       for (const [awsProfile, code] of [
         ["signed-out", "reconnect_required"],
         ["malformed", "invalid_response"],
-        ["has space", "invalid_credentials"],
+        ["bad-key", "invalid_response"],
+        ["huge", "invalid_response"],
       ] as const)
         await assert.rejects(
           brokerFor(local({ awsProfile }), fleet).request({
@@ -729,7 +758,19 @@ esac
           }),
           errorCode(code),
         );
-      assert.equal(cli.runs(), 2);
+      assert.equal(cli.runs(), 4);
+      // A failed run is not held: asking again runs the CLI again.
+      await assert.rejects(
+        brokerFor(local({ awsProfile: "signed-out" }), fleet).request({
+          target: "ssm",
+          path: "",
+        }),
+        errorCode("reconnect_required"),
+      );
+      assert.equal(cli.runs(), 5);
+      assert.throws(() => fleet({ awsProfile: "has space" }), {
+        code: "invalid_credentials",
+      });
       process.env.PATH = "/nonexistent";
       await assert.rejects(
         brokerFor(local({ awsProfile: "no-cli" }), fleet).request({
