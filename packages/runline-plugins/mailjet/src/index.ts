@@ -1,5 +1,9 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { configFlag, credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  configFlag,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { mailjetCredential } from "./credentials.js";
 
 /** A comma-separated address list as Send API recipients. */

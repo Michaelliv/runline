@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the X-Access-Token header to Dropcontact's one API origin. */
 export const dropcontactCredential = staticCredential({

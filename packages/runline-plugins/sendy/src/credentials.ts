@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /**
  * An API key, added by the transport as the api_key field of every form

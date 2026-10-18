@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** The team secret, which SIGNL4 takes as the webhook's path segment. */
 export const signl4Credential = staticCredential({

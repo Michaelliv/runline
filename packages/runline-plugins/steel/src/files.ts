@@ -1,6 +1,5 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, pathSegments, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { pathSegment, pathSegments } from "../../_shared/credentials.js";
 import { api } from "./shared.js";
 
 function fileSchema() {

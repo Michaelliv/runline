@@ -18,11 +18,14 @@
  * or parsed `payload` tree for format=full).
  */
 
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import * as t from "typebox";
 import { DownloadedFile, standardBase64 } from "../../_shared/base64.js";
 import { renderEmailJsx } from "../../_shared/emailJsx.js";
-import { pathSegment } from "../../_shared/credentials.js";
 import {
   googleCredential,
   googleJsonRequest,

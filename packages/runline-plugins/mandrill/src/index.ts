@@ -1,5 +1,8 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { mandrillCredential } from "./credentials.js";
 
 /** Every Mandrill call is a JSON POST to `<endpoint>.json`. */

@@ -1,9 +1,11 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
+  type HttpMethod,
   pathSegment,
   pathWithin,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { kobotoolboxCredential } from "./credentials.js";
 
 function apiRequest(

@@ -1,12 +1,13 @@
 import {
   type ActionContext,
   AuthError,
+  credentialBroker,
   downloadResource,
   type HttpMethod,
+  jsonAnswer,
   type OAuthConfig,
+  requestFailed,
 } from "runline";
-import { credentialBroker } from "./credentialAdapter.js";
-import { jsonAnswer, requestFailed } from "./credentials.js";
 import {
   GOOGLE_GRANT,
   GOOGLE_TOKEN_URL,

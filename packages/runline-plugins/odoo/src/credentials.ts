@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /**
  * The user's password or API key, which Odoo's JSON-RPC takes as the third

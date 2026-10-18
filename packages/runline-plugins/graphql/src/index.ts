@@ -1,5 +1,9 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson, graphqlFailed } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  graphqlFailed,
+  type RunlinePluginAPI,
+} from "runline";
 import { endpoint, graphqlCredential, publicHeaders } from "./credentials.js";
 
 /** One GraphQL request to the configured endpoint; `errors` in the answer is a failure. */

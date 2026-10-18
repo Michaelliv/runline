@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /**
  * An OAuth2 access token, sent as `Authorization: Zoho-oauthtoken …` to the

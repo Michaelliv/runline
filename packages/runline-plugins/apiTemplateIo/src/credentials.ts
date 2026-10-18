@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the X-API-KEY header to APITemplate.io's one origin. */
 export const apiTemplateIoCredential = staticCredential({

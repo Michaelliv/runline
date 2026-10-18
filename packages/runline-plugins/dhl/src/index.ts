@@ -1,5 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, type RunlinePluginAPI } from "runline";
 import { dhlCredential } from "./credentials.js";
 
 export default function dhl(rl: RunlinePluginAPI) {

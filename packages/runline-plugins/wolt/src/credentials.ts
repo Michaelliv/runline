@@ -1,5 +1,8 @@
-import type { CredentialDeclaration, CredentialTarget } from "runline";
-import { grantSchema } from "../../_shared/credentials.js";
+import {
+  type CredentialDeclaration,
+  type CredentialTarget,
+  grantSchema,
+} from "runline";
 
 export const RESTAURANT = "restaurant-api.wolt.com";
 export const CONSUMER = "consumer-api.wolt.com";

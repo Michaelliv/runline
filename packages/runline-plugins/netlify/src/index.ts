@@ -1,10 +1,12 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
   credentialOk,
+  type HttpMethod,
   jsonAnswer,
   pathSegment,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { netlifyCredential } from "./credentials.js";
 
 function apiRequest(

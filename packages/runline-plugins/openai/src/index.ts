@@ -16,8 +16,7 @@
  *   // images[0].path -> "/tmp/openai-image-….png"
  */
 
-import type { RunlinePluginAPI } from "runline";
-import { credentialJson, multipartBody } from "../../_shared/credentials.js";
+import { credentialJson, multipartBody, type RunlinePluginAPI } from "runline";
 import {
   readImageInput,
   SEND_FILE_NOTE,

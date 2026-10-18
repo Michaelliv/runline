@@ -1,10 +1,12 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
   credentialRequest,
+  type HttpMethod,
   pathSegment,
   requestFailed,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { autopilotCredential } from "./credentials.js";
 
 function apiRequest(

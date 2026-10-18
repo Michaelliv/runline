@@ -1,11 +1,13 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
   credentialOk,
+  type HttpMethod,
   jsonAnswer,
   pathSegment,
   pathWithin,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { ciscoWebexCredential } from "./credentials.js";
 
 function apiRequest(

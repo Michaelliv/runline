@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** The API key as the Basic password with an empty username. */
 export const lemlistCredential = staticCredential({

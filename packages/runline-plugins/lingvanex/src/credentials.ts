@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key as a bearer to Lingvanex's one translate endpoint. */
 export const lingvanexCredential = staticCredential({

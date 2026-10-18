@@ -1,9 +1,11 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
+  type HttpMethod,
   pathSegment,
+  type RunlinePluginAPI,
   slashEncodedSegment,
-} from "../../_shared/credentials.js";
+} from "runline";
 import { gitlabCredential } from "./credentials.js";
 
 /** A GitLab API call; a DELETE carries a body where GitLab needs one (file deletes). */

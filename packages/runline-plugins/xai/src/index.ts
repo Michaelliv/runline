@@ -9,8 +9,7 @@
  * the API does the math.
  */
 
-import type { RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, type RunlinePluginAPI } from "runline";
 import {
   readImageInput,
   SEND_FILE_NOTE,

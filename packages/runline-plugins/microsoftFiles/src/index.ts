@@ -7,14 +7,15 @@
  * _shared/microsoftAuth.ts. Graph delegated scopes: Files.ReadWrite.All,
  * Sites.ReadWrite.All (use the .Read.* variants if you only need reads).
  */
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { standardBase64 } from "../../_shared/base64.js";
 import {
+  type ActionContext,
   jsonAnswer,
   pathSegment,
   pathSegments,
   requestFailed,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
+import { standardBase64 } from "../../_shared/base64.js";
 import {
   graphRequest,
   graphResponse,

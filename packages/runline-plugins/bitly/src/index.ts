@@ -1,5 +1,10 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegments } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegments,
+  type RunlinePluginAPI,
+} from "runline";
 import { bitlyCredential } from "./credentials.js";
 
 function apiRequest(

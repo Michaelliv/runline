@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A personal API token, sent as the auth_token query parameter. */
 export const beeminderCredential = staticCredential({

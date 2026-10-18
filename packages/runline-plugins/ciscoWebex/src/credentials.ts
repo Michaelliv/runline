@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A user or bot access token, sent as a bearer to Webex's one API origin. */
 export const ciscoWebexCredential = staticCredential({

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key in the API-Key header, to Pushcut's one API origin. */
 export const pushcutCredential = staticCredential({

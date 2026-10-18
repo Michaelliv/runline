@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A personal API token, sent in the Circle-Token header to CircleCI's API. */
 export const circleciCredential = staticCredential({

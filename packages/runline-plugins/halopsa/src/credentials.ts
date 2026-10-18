@@ -1,13 +1,11 @@
 import {
   AuthError,
+  configChoice,
   type CredentialDeclaration,
   type CredentialType,
-} from "runline";
-import {
-  configChoice,
   grantSchema,
   httpsBase,
-} from "../../_shared/credentials.js";
+} from "runline";
 
 /**
  * A client-credentials OAuth grant: the token comes from the configured

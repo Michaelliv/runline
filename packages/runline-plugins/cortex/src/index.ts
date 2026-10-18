@@ -1,5 +1,10 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { cortexCredential, MAX_WAIT_SECONDS } from "./credentials.js";
 
 function apiRequest(

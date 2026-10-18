@@ -3,14 +3,12 @@ import {
   AuthError,
   type CredentialDeclaration,
   type CredentialType,
-  downloadResource,
-  type OAuth2Definition,
-} from "runline";
-import {
   credentialOk,
+  downloadResource,
   grantSchema,
+  type OAuth2Definition,
   pathSegment,
-} from "../../_shared/credentials.js";
+} from "runline";
 
 const BASE = "https://platform.plaud.ai/developer/api";
 

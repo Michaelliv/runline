@@ -10,8 +10,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import * as t from "typebox";
-import { credentialBroker } from "../../../runline-plugins/_shared/credentialAdapter.js";
-import { grantSchema } from "../../../runline-plugins/_shared/credentials.js";
 import { googleCredential } from "../../../runline-plugins/_shared/googleAuth.js";
 import { microsoftCredential } from "../../../runline-plugins/_shared/microsoftAuth.js";
 import gmail from "../../../runline-plugins/gmail/src/index.js";
@@ -26,6 +24,8 @@ import googleTasks from "../../../runline-plugins/googleTasks/src/index.js";
 import microsoftCalendar from "../../../runline-plugins/microsoftCalendar/src/index.js";
 import microsoftFiles from "../../../runline-plugins/microsoftFiles/src/index.js";
 import microsoftMail from "../../../runline-plugins/microsoftMail/src/index.js";
+import { credentialBroker } from "../credentials/broker.js";
+import { grantSchema } from "../credentials/plugin.js";
 import { CredentialRegistry } from "../credentials/registry.js";
 import type {
   CredentialDeclaration,

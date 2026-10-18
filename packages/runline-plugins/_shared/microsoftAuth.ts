@@ -1,12 +1,13 @@
 import {
-  AuthError,
-  downloadResource,
   type ActionContext,
+  AuthError,
+  credentialBroker,
+  downloadResource,
   type HttpMethod,
+  jsonAnswer,
   type OAuthConfig,
+  requestFailed,
 } from "runline";
-import { credentialBroker } from "./credentialAdapter.js";
-import { jsonAnswer, requestFailed } from "./credentials.js";
 import {
   MICROSOFT_GRANT,
   microsoftCredential,

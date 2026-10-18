@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** The API version header every HighLevel request carries. */
 export const HIGHLEVEL_VERSION = "2021-07-28";

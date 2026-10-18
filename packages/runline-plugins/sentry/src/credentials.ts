@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /**
  * An auth token, sent as a bearer beneath /api/0/ of sentry.io or the

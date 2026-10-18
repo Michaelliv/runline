@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /**
  * A REST API token, sent as `Authorization: Token token={key}` to

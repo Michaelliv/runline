@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the X-API-KEY header to LoneScale's public API. */
 export const lonescaleCredential = staticCredential({

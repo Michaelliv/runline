@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import * as t from "typebox";
-import { credentialBroker } from "../../../runline-plugins/_shared/credentialAdapter.js";
+import { credentialBroker } from "../credentials/broker.js";
 import { staticSecretSchema } from "../credentials/registry.js";
 import type {
   CredentialDeclaration,

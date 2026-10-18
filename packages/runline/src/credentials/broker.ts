@@ -1,15 +1,15 @@
 import { createHash } from "node:crypto";
-import {
-  AuthError,
-  CredentialRegistry,
-  CredentialTransport,
-  type ActionContext,
-  type CredentialBinding,
-  type CredentialBroker,
-  type CredentialDeclaration,
-  type CredentialSelection,
-  type OAuthGrant,
-} from "runline";
+import { AuthError } from "../auth/errors.js";
+import type { ActionContext } from "../plugin/types.js";
+import { CredentialRegistry } from "./registry.js";
+import { type CredentialBroker, CredentialTransport } from "./transport.js";
+import type {
+  CredentialBinding,
+  CredentialDeclaration,
+  CredentialSelection,
+  LocalSecretSource,
+  OAuthGrant,
+} from "./types.js";
 
 /**
  * Where one action call's authenticated requests go: the host's broker
@@ -52,9 +52,7 @@ function authorityOf(selection: CredentialSelection): string {
           endpoint: auth.definition.refresh,
         }
       : selection;
-  return createHash("sha256")
-    .update(JSON.stringify(issuedUnder))
-    .digest("hex");
+  return createHash("sha256").update(JSON.stringify(issuedUnder)).digest("hex");
 }
 
 /**
@@ -71,19 +69,30 @@ function staticSecret(
 ): Record<string, string> | undefined {
   if (!sources) return undefined;
   const secret: Record<string, string> = {};
-  sources: for (const [key, source] of Object.entries(sources)) {
-    let joined = "";
-    for (const part of "concat" in source ? source.concat : [source]) {
-      const value = "value" in part ? part.value : current[part.field];
-      if (typeof value !== "string") {
-        if (optional.includes(key)) continue sources;
-        return undefined;
-      }
-      joined += value;
-    }
-    secret[key] = joined;
+  for (const [key, source] of Object.entries(sources)) {
+    const joined = joinedPart(current, source);
+    if (joined !== undefined) secret[key] = joined;
+    else if (!optional.includes(key)) return undefined;
   }
   return secret;
+}
+
+/**
+ * One part of a static secret: its field or fixed value, or the pieces it
+ * concatenates joined in order. Absent when any field it reads is missing
+ * or not a string.
+ */
+function joinedPart(
+  current: Readonly<Record<string, unknown>>,
+  source: LocalSecretSource,
+): string | undefined {
+  let joined = "";
+  for (const part of "concat" in source ? source.concat : [source]) {
+    const value = "value" in part ? part.value : current[part.field];
+    if (typeof value !== "string") return undefined;
+    joined += value;
+  }
+  return joined;
 }
 
 /**

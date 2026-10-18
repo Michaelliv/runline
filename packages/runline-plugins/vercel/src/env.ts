@@ -1,6 +1,5 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { pathSegment } from "../../_shared/credentials.js";
 import { TEAM_INPUT_SCHEMA, api } from "./shared.js";
 
 const targetSchema = t.Union([t.String(), t.Array(t.String())], {

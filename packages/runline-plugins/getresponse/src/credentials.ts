@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /**
  * An API key, sent as `X-Auth-Token: api-key {key}` to GetResponse's v3

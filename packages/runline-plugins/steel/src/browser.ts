@@ -1,6 +1,5 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { pathSegment } from "../../_shared/credentials.js";
 import { SESSION_OPTIONS_SCHEMA, api, compactRecord, socketUrl } from "./shared.js";
 
 const SCRAPE_SCHEMA = {

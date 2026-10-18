@@ -20,9 +20,12 @@
  * normalize ISO input via `Date.toISOString()` when detected.
  */
 
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import * as t from "typebox";
-import { pathSegment } from "../../_shared/credentials.js";
 import {
   googleCredential,
   googleJsonRequest,

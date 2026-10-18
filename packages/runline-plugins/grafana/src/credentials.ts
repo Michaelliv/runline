@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /**
  * A service-account token or API key, sent as a bearer to the connection's

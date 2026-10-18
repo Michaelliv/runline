@@ -14,8 +14,7 @@
  * style if you've set one up.
  */
 
-import type { RunlinePluginAPI } from "runline";
-import { credentialJson, multipartBody } from "../../_shared/credentials.js";
+import { credentialJson, multipartBody, type RunlinePluginAPI } from "runline";
 import {
   readImageInput,
   SEND_FILE_NOTE,

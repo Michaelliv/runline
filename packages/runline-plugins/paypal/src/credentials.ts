@@ -1,5 +1,4 @@
-import { type CredentialDeclaration } from "runline";
-import { configChoice, grantSchema } from "../../_shared/credentials.js";
+import { configChoice, type CredentialDeclaration, grantSchema } from "runline";
 
 /**
  * A client-credentials OAuth grant against the environment's own token

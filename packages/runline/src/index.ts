@@ -64,7 +64,40 @@ export {
   oauthCallback,
   runOAuth,
 } from "./core/oauth.js";
+export { credentialBroker } from "./credentials/broker.js";
 export { downloadResource } from "./credentials/http.js";
+export type {
+  CredentialCall,
+  EmptyAnswer,
+  ErrorEnvelope,
+  StaticCredentialSpec,
+} from "./credentials/plugin.js";
+export {
+  answerFailed,
+  configChoice,
+  configFlag,
+  credentialJson,
+  credentialOk,
+  credentialRequest,
+  credentialSocketUrl,
+  errorIdentifier,
+  failureMessage,
+  grantSchema,
+  graphqlFailed,
+  hostLabel,
+  httpsBase,
+  jsonAnswer,
+  jsonOrAcknowledged,
+  multipartBody,
+  pathSegment,
+  pathSegments,
+  pathWithin,
+  refuseUnderHost,
+  requestFailed,
+  responseFailed,
+  slashEncodedSegment,
+  staticCredential,
+} from "./credentials/plugin.js";
 export {
   CredentialRegistry,
   OAuthGrantSchema,

@@ -1,4 +1,4 @@
-import { configChoice, staticCredential } from "../../_shared/credentials.js";
+import { configChoice, staticCredential } from "runline";
 
 /**
  * An authentication key, sent as `Authorization: DeepL-Auth-Key {key}` to

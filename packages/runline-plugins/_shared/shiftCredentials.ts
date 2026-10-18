@@ -2,9 +2,10 @@ import {
   type ActionContext,
   AuthError,
   type CredentialDeclaration,
+  credentialRequest,
   type HttpMethod,
+  staticCredential,
 } from "runline";
-import { credentialRequest, staticCredential } from "./credentials.js";
 import { SHIFT_API_URL, shiftError } from "./shiftCloud.js";
 
 export interface ShiftCredentialOptions {

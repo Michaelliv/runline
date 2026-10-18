@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A personal API key in the api-key header, to Stackby's one API origin. */
 export const stackbyCredential = staticCredential({

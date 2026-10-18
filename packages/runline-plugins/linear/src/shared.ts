@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  graphqlFailed,
+  type RunlinePluginAPI,
+} from "runline";
 import * as t from "typebox";
-import { credentialJson, graphqlFailed } from "../../_shared/credentials.js";
 import { linearCredential } from "./credentials.js";
 
 export type Ctx = ActionContext;

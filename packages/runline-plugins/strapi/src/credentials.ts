@@ -1,14 +1,12 @@
 import {
+  configChoice,
   type CredentialDeclaration,
   type CredentialTarget,
   type CredentialType,
-} from "runline";
-import {
-  configChoice,
   grantSchema,
   httpsBase,
   staticCredential,
-} from "../../_shared/credentials.js";
+} from "runline";
 
 /** The Strapi major version the connection names, v4 when absent. */
 export function strapiVersion(

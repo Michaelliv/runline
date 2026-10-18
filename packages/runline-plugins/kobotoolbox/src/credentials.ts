@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** An API token, sent as `Authorization: Token …` to the server in config. */
 export const kobotoolboxCredential = staticCredential({

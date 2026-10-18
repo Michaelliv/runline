@@ -1,4 +1,4 @@
-import { hostLabel, staticCredential } from "../../_shared/credentials.js";
+import { hostLabel, staticCredential } from "runline";
 
 /** An OAuth2 access token, sent as a bearer to the company's own realm path on
  *  Intuit's production or sandbox host, chosen by the sandbox flag. */

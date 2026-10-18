@@ -1,4 +1,4 @@
-import { hostLabel, staticCredential } from "../../_shared/credentials.js";
+import { hostLabel, staticCredential } from "runline";
 
 /**
  * The API key in Freshworks' `Token token=` Authorization scheme, sent to

@@ -1,5 +1,10 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialOk, jsonAnswer } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialOk,
+  type HttpMethod,
+  jsonAnswer,
+  type RunlinePluginAPI,
+} from "runline";
 import { linkedinCredential } from "./credentials.js";
 
 async function apiRequest(

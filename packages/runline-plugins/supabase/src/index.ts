@@ -1,5 +1,10 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { supabaseCredential } from "./credentials.js";
 
 /** A table's rows, answered back as written (`Prefer: return=representation`). */

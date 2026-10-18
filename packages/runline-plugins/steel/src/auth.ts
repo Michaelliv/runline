@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /**
  * A Steel API key: the steel-api-key header on the REST API, and the

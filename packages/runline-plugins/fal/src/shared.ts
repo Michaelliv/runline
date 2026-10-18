@@ -1,8 +1,12 @@
 import { setTimeout as sleep } from "node:timers/promises";
-import type { ActionContext, HttpMethod } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+} from "runline";
 import * as t from "typebox";
 import { Check } from "typebox/value";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import {
   type SavedMedia,
   SEND_FILE_NOTE,

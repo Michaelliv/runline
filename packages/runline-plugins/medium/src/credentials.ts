@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An integration token, sent as a bearer to Medium's one API origin. */
 export const mediumCredential = staticCredential({

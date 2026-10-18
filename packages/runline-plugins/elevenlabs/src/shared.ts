@@ -1,13 +1,14 @@
 import { basename } from "node:path";
-import { type ActionContext, AuthError } from "runline";
-import * as t from "typebox";
-import { Check } from "typebox/value";
-import { credentialBroker } from "../../_shared/credentialAdapter.js";
 import {
+  type ActionContext,
+  AuthError,
+  credentialBroker,
   multipartBody,
   pathSegment,
   responseFailed,
-} from "../../_shared/credentials.js";
+} from "runline";
+import * as t from "typebox";
+import { Check } from "typebox/value";
 import { readLocalFile } from "../../_shared/localFile.js";
 import { SEND_FILE_NOTE, writeMediaFile } from "../../_shared/mediaFile.js";
 import { obj, readBounded, readBoundedBytes } from "../../_shared/provider.js";

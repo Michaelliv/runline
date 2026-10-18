@@ -1,5 +1,9 @@
-import { type ActionContext, AuthError, type HttpMethod } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  AuthError,
+  credentialJson,
+  type HttpMethod,
+} from "runline";
 import { salesforceCredential } from "./credentials.js";
 
 export const DEFAULT_API_VERSION = "v59.0";

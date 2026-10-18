@@ -1,8 +1,7 @@
-import type { ActionContext } from "runline";
+import { type ActionContext, errorIdentifier, responseFailed } from "runline";
 import * as t from "typebox";
-import { errorIdentifier, responseFailed } from "./credentials.js";
 
-export { pathSegment } from "./credentials.js";
+export { pathSegment } from "runline";
 
 /**
  * Shared helpers for plugins that talk to the Shift cloud API: one base

@@ -1,4 +1,4 @@
-import { configChoice, staticCredential } from "../../_shared/credentials.js";
+import { configChoice, staticCredential } from "runline";
 
 const REGIONS = ["us", "eu"] as const;
 const ORIGINS = {
