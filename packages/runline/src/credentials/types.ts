@@ -226,6 +226,13 @@ export interface CredentialSelection {
   /** The role an `assumeRole` method's sessions are issued for. */
   awsRole?: AwsRole;
   /**
+   * The AWS CLI profile whose credentials an `awsSigV4` method's key
+   * comes from, read through the CLI when this process signs with its
+   * own connection: an SSO login, with no key stored anywhere. Hosts that
+   * store the key ignore it, as they ignore `localSecret`.
+   */
+  awsProfile?: string;
+  /**
    * How a process signing with its own flat connection config (the CLI)
    * assembles a static secret: each of its parts, from a named config
    * field, a fixed value, or the two joined in order

@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { XMLParser } from "fast-xml-parser";
 import { AuthError } from "../auth/errors.js";
 import { sendResource } from "./http.js";
@@ -62,6 +63,85 @@ export function awsAccessKey(value: unknown): AwsAccessKey {
       ? {}
       : { sessionToken: secret(key.sessionToken) }),
   };
+}
+
+/** An AWS CLI profile name, as `~/.aws/config` section names allow it. */
+const PROFILE = /^[\w+=,.@-]{1,64}$/;
+
+/** A profile's key is used until this long before it expires. */
+const PROFILE_KEY_MARGIN_MS = 5 * 60_000;
+
+/** Profile keys this process holds, until each nears its expiry. */
+const profileKeys = new Map<
+  string,
+  { key: AwsAccessKey; expiresAt: number | undefined }
+>();
+
+/**
+ * The access key of an AWS CLI profile, as the CLI resolves it: an SSO
+ * login, an assumed role, or a key in `~/.aws/credentials`, through
+ * `aws configure export-credentials` (the `credential_process` contract).
+ * Held until five minutes before it expires. A CLI that cannot produce
+ * one (no login, an expired SSO session) is reconnect_required: the
+ * profile needs `aws sso login` again.
+ */
+export async function awsProfileKey(profile: string): Promise<AwsAccessKey> {
+  if (!PROFILE.test(profile)) throw new AuthError("invalid_credentials");
+  const held = profileKeys.get(profile);
+  if (
+    held &&
+    (held.expiresAt === undefined ||
+      held.expiresAt > Date.now() + PROFILE_KEY_MARGIN_MS)
+  )
+    return held.key;
+  const stdout = await new Promise<string>((resolve, reject) => {
+    execFile(
+      "aws",
+      [
+        "configure",
+        "export-credentials",
+        "--profile",
+        profile,
+        "--format",
+        "process",
+      ],
+      { timeout: 30_000, maxBuffer: 64 * 1024 },
+      (error, out) =>
+        error
+          ? reject(
+              new AuthError(
+                (error as { code?: unknown }).code === "ENOENT"
+                  ? "invalid_credentials"
+                  : "reconnect_required",
+              ),
+            )
+          : resolve(out),
+    );
+  });
+  let exported: Record<string, unknown>;
+  try {
+    exported = JSON.parse(stdout);
+  } catch {
+    throw new AuthError("invalid_response");
+  }
+  const expiresAt =
+    exported.Expiration === undefined
+      ? undefined
+      : Date.parse(String(exported.Expiration));
+  if (
+    exported.Version !== 1 ||
+    (expiresAt !== undefined && !Number.isSafeInteger(expiresAt))
+  )
+    throw new AuthError("invalid_response");
+  const key = awsAccessKey({
+    accessKeyId: exported.AccessKeyId,
+    secretAccessKey: exported.SecretAccessKey,
+    ...(exported.SessionToken === undefined
+      ? {}
+      : { sessionToken: exported.SessionToken }),
+  });
+  profileKeys.set(profile, { key, expiresAt });
+  return key;
 }
 
 /** `arn:<partition>:iam::<account>:role/<path/name>`, as IAM allows it. */

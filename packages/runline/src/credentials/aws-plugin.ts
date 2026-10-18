@@ -91,6 +91,9 @@ function configString(value: unknown): string | undefined {
  *   `roleDurationSeconds` shape each session request.
  * - `stsRegion`, else `region`, else `us-east-1`, is where sessions are
  *   requested.
+ * - `awsProfile` names an AWS CLI profile (an SSO login) whose key this
+ *   process signs with in place of a stored one; a host that stores the
+ *   key ignores it.
  */
 export function awsCredential(spec: AwsCredentialSpec): CredentialDeclaration {
   const key = { credential: AwsAccessKeySchema };
@@ -102,6 +105,7 @@ export function awsCredential(spec: AwsCredentialSpec): CredentialDeclaration {
   return (config) => {
     const targets = spec.targets(config);
     const probe = spec.probe ? { probe: spec.probe } : {};
+    const awsProfile = configString(config.awsProfile);
     const roleArn = configString(config.roleArn);
     const externalId = configString(config.roleExternalId);
     const durationSeconds = configInteger(config.roleDurationSeconds);
@@ -130,7 +134,7 @@ export function awsCredential(spec: AwsCredentialSpec): CredentialDeclaration {
           },
         },
       },
-      localSecret,
+      ...(awsProfile === undefined ? { localSecret } : { awsProfile }),
       ...(roleArn === undefined
         ? { method: "accessKey" }
         : {

@@ -8,6 +8,16 @@
  */
 
 import assert from "node:assert/strict";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import * as t from "typebox";
 import { AuthError } from "../auth/errors.js";
@@ -606,6 +616,132 @@ describe("awsCredential declares an AWS connection", () => {
       assert.ok(signedBy(calls.api.at(-1) as Sent, KEY, "ssm"));
     } finally {
       globalThis.fetch = original;
+    }
+  });
+});
+
+describe("awsCredential signs locally from an AWS CLI profile", () => {
+  /**
+   * An `aws` executable on PATH answering `configure export-credentials`
+   * per profile, as the real CLI does, and counting its runs.
+   */
+  function fakeCli() {
+    const dir = mkdtempSync(join(tmpdir(), "runline-aws-cli-"));
+    const runs = join(dir, "runs");
+    const expiration = new Date(Date.now() + 3_600_000).toISOString();
+    writeFileSync(
+      join(dir, "aws"),
+      `#!/bin/sh
+echo run >> "${runs}"
+while [ "$1" != "--profile" ]; do shift; done
+case "$2" in
+  signed-in) echo '{"Version":1,"AccessKeyId":"ASIAPROFILE","SecretAccessKey":"profile-secret","SessionToken":"profile-token","Expiration":"${expiration}"}' ;;
+  for-role) echo '{"Version":1,"AccessKeyId":"ASIAROLEBASE","SecretAccessKey":"role-base-secret","SessionToken":"role-base-token","Expiration":"${expiration}"}' ;;
+  malformed) echo 'not json' ;;
+  *) echo "Error loading SSO Token: Token for $2 does not exist" >&2; exit 255 ;;
+esac
+`,
+    );
+    chmodSync(join(dir, "aws"), 0o755);
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${path}`;
+    return {
+      runs: () =>
+        existsSync(runs)
+          ? readFileSync(runs, "utf8").split("\n").length - 1
+          : 0,
+      restore: () => {
+        process.env.PATH = path;
+        rmSync(dir, { recursive: true, force: true });
+      },
+    };
+  }
+
+  it("signs with the profile's key, read from the CLI once while it lasts", async () => {
+    const cli = fakeCli();
+    const calls = aws();
+    const original = globalThis.fetch;
+    globalThis.fetch = calls.fetch;
+    try {
+      const ctx = local({ awsProfile: "signed-in" });
+      const declared = fleet(ctx.connection.config);
+      assert.equal(declared.awsProfile, "signed-in");
+      assert.equal(declared.localSecret, undefined);
+      for (let i = 0; i < 2; i++)
+        await brokerFor(ctx, fleet).request({ target: "ssm", path: "" });
+      const key = {
+        accessKeyId: "ASIAPROFILE",
+        secretAccessKey: "profile-secret",
+        sessionToken: "profile-token",
+      };
+      for (const sent of calls.api) assert.ok(signedBy(sent, key, "ssm"));
+      assert.equal(cli.runs(), 1);
+    } finally {
+      globalThis.fetch = original;
+      cli.restore();
+    }
+  });
+
+  it("assumes a role with the profile's key", async () => {
+    const cli = fakeCli();
+    const calls = aws();
+    const original = globalThis.fetch;
+    globalThis.fetch = calls.fetch;
+    try {
+      const ctx = local({ awsProfile: "for-role", roleArn: ROLE.roleArn });
+      await brokerFor(ctx, fleet).request({ target: "ssm", path: "" });
+      assert.ok(
+        signedBy(
+          calls.sts[0],
+          {
+            accessKeyId: "ASIAROLEBASE",
+            secretAccessKey: "role-base-secret",
+            sessionToken: "role-base-token",
+          },
+          "sts",
+        ),
+      );
+      assert.equal(
+        calls.api[0].headers.get("x-amz-security-token"),
+        "session-token-1",
+      );
+    } finally {
+      globalThis.fetch = original;
+      cli.restore();
+    }
+  });
+
+  it("asks for a reconnect when the CLI has no login, and refuses what it cannot use", async () => {
+    const cli = fakeCli();
+    const calls = aws();
+    const original = globalThis.fetch;
+    globalThis.fetch = calls.fetch;
+    try {
+      for (const [awsProfile, code] of [
+        ["signed-out", "reconnect_required"],
+        ["malformed", "invalid_response"],
+        ["has space", "invalid_credentials"],
+      ] as const)
+        await assert.rejects(
+          brokerFor(local({ awsProfile }), fleet).request({
+            target: "ssm",
+            path: "",
+          }),
+          errorCode(code),
+        );
+      assert.equal(cli.runs(), 2);
+      process.env.PATH = "/nonexistent";
+      await assert.rejects(
+        brokerFor(local({ awsProfile: "no-cli" }), fleet).request({
+          target: "ssm",
+          path: "",
+        }),
+        errorCode("invalid_credentials"),
+      );
+      assert.equal(calls.api.length + calls.sts.length, 0);
+    } finally {
+      globalThis.fetch = original;
+      cli.restore();
     }
   });
 });
