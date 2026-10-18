@@ -4,6 +4,8 @@ import type { ActionContext } from "../plugin/types.js";
 import { CredentialRegistry } from "./registry.js";
 import { type CredentialBroker, CredentialTransport } from "./transport.js";
 import type {
+  AwsSession,
+  CredentialAuthentication,
   CredentialBinding,
   CredentialDeclaration,
   CredentialSelection,
@@ -57,11 +59,11 @@ function authorityOf(selection: CredentialSelection): string {
 }
 
 /**
- * A static secret's structured shape, from the flat fields and fixed values
- * the declaration names, joined in order where a part concatenates them.
- * Absent when a required part's field is missing, so the transport refuses
- * it as invalid_credentials before any IO; a missing optional part is left
- * out, refusing only the targets that place it.
+ * A stored secret's structured shape (a static secret's parts, or an AWS
+ * access key) from the flat fields and fixed values the declaration
+ * names, joined in order where a part concatenates them. Absent when a
+ * required part's field is missing, so the transport refuses it as
+ * invalid_credentials before any IO; a missing optional part is left out.
  */
 function staticSecret(
   current: Readonly<Record<string, unknown>>,
@@ -97,6 +99,43 @@ function joinedPart(
 }
 
 /**
+ * How an issued credential is stored flat: an OAuth grant as its token
+ * fields, a role session as `awsSession`, each stamped with the authority
+ * (`expected`) it was issued under. Only those two are ever renewed and
+ * written back.
+ */
+function writeBack(
+  auth: CredentialAuthentication,
+  expected: string,
+): (
+  patch: Record<string, unknown>,
+  current: Readonly<Record<string, unknown>>,
+) => Record<string, unknown> {
+  if (auth.kind === "awsSigV4" && auth.assumeRole) {
+    const { sessionField } = auth.assumeRole;
+    return (patch) => {
+      const session = patch[sessionField] as AwsSession | undefined;
+      if (!session?.sessionToken) throw new AuthError("invalid_credentials");
+      return { awsSession: { ...session, binding: expected } };
+    };
+  }
+  if (auth.kind !== "oauth2") throw new AuthError("invalid_definition");
+  return (patch, current) => {
+    const grant = patch[auth.field] as OAuthGrant | undefined;
+    if (!grant?.tokens.accessToken) throw new AuthError("invalid_credentials");
+    return {
+      accessToken: grant.tokens.accessToken,
+      accessTokenExpiresAt: grant.tokens.expiresAt,
+      refreshToken: grant.tokens.refreshToken ?? current.refreshToken,
+      authTokenScope: grant.tokens.scope,
+      authTokenType: grant.tokens.tokenType,
+      authTokenRevision: grant.revision,
+      authTokenBinding: expected,
+    };
+  };
+}
+
+/**
  * This process signing with its own connection. Flat CLI/env storage is a
  * projection, not a second token cache or refresh engine.
  */
@@ -119,6 +158,29 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
         auth.optionalParts ?? [],
       );
       return secret ? { [auth.field]: secret } : {};
+    }
+    if (auth.kind === "awsSigV4") {
+      const key = staticSecret(current, selection.localSecret, [
+        "sessionToken",
+      ]);
+      const cached = current.awsSession as
+        | (AwsSession & { binding?: string })
+        | undefined;
+      const sessionField = auth.assumeRole?.sessionField;
+      return {
+        ...(key ? { [auth.field]: key } : {}),
+        ...(sessionField && cached?.binding === expected
+          ? {
+              [sessionField]: {
+                accessKeyId: cached.accessKeyId,
+                secretAccessKey: cached.secretAccessKey,
+                sessionToken: cached.sessionToken,
+                expiresAt: cached.expiresAt,
+                revision: cached.revision,
+              },
+            }
+          : {}),
+      };
     }
     const compatible =
       current.authTokenBinding === undefined ||
@@ -160,30 +222,18 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
     ...(selection.resourceOwner
       ? { resourceOwner: selection.resourceOwner }
       : {}),
+    ...(selection.awsRole ? { awsRole: selection.awsRole } : {}),
     connection: {
       async read() {
         return snapshot();
       },
       async update(change) {
-        // Only an OAuth grant is ever renewed and written back.
-        if (auth.kind !== "oauth2") throw new AuthError("invalid_definition");
+        const flatten = writeBack(auth, expected);
         await ctx.updateConnection(async (current) => {
           const projected = project(current);
           const patch =
             typeof change === "function" ? await change(projected) : change;
-          if (!patch) return;
-          const grant = patch[auth.field] as OAuthGrant;
-          if (!grant?.tokens.accessToken)
-            throw new AuthError("invalid_credentials");
-          return {
-            accessToken: grant.tokens.accessToken,
-            accessTokenExpiresAt: grant.tokens.expiresAt,
-            refreshToken: grant.tokens.refreshToken ?? current.refreshToken,
-            authTokenScope: grant.tokens.scope,
-            authTokenType: grant.tokens.tokenType,
-            authTokenRevision: grant.revision,
-            authTokenBinding: expected,
-          };
+          return patch ? flatten(patch, current) : undefined;
         });
         return snapshot();
       },

@@ -9,6 +9,7 @@ import {
 } from "../auth/oauth2.js";
 import type { OAuthRuntimeOptions, OAuthTokens } from "../auth/types.js";
 import type { ConnectionConfig } from "../plugin/types.js";
+import { assumeAwsRole, awsAccessKey } from "./aws.js";
 import { sendResource } from "./http.js";
 import {
   bodyFields,
@@ -23,6 +24,7 @@ import {
   pointerSlot,
   refuseCredentialParams,
   resourceUrl,
+  secret,
   TARGET_RESPONSE_LIMIT_BYTES,
   TARGET_TIMEOUT_LIMIT_MS,
   TRANSPORT_HEADERS,
@@ -34,7 +36,10 @@ import {
   OAuthGrantSchema,
   validateCredential,
 } from "./registry.js";
+import { canonicalQuery, signSigV4 } from "./sigv4.js";
 import type {
+  AwsScope,
+  AwsSession,
   CredentialAuthentication,
   CredentialBinding,
   CredentialMethod,
@@ -148,6 +153,7 @@ function pinBinding(selection: CredentialBinding): CredentialBinding {
     application: structuredClone(selection.application),
     jwtIdentity: structuredClone(selection.jwtIdentity),
     resourceOwner: structuredClone(selection.resourceOwner),
+    awsRole: structuredClone(selection.awsRole),
     connection: {
       read: selection.connection.read.bind(selection.connection),
       update: selection.connection.update.bind(selection.connection),
@@ -161,18 +167,6 @@ function fresh(grant: OAuthGrant | undefined): boolean {
     (grant.tokens.expiresAt === undefined ||
       grant.tokens.expiresAt > Date.now() + 60_000)
   );
-}
-
-function secret(value: unknown): string {
-  if (
-    typeof value !== "string" ||
-    !value ||
-    [...value].some(
-      (char) => char.charCodeAt(0) <= 32 || char.charCodeAt(0) > 126,
-    )
-  )
-    throw new AuthError("invalid_credentials");
-  return value;
 }
 
 /**
@@ -211,11 +205,53 @@ function basicCredentials(username: string, password: string): string {
 
 /** One outgoing request, as a signer may change it. */
 interface Outgoing {
+  method: HttpMethod;
   headers: Headers;
   url: URL;
   body?: Buffer;
   /** The target's base path, beneath which a path part is inserted. */
   base: string;
+}
+
+/** Renewal leaves a role session this long before it expires. */
+const AWS_SESSION_MARGIN_MS = 5 * 60_000;
+
+function awsSessionFrom(
+  auth: Extract<CredentialAuthentication, { kind: "awsSigV4" }>,
+  config: Readonly<Record<string, unknown>>,
+): AwsSession | undefined {
+  const field = auth.assumeRole?.sessionField;
+  return field === undefined ? undefined : (config[field] as AwsSession);
+}
+
+function awsSessionFresh(session: AwsSession | undefined): boolean {
+  return !!session && session.expiresAt > Date.now() + AWS_SESSION_MARGIN_MS;
+}
+
+/**
+ * Signs with AWS SigV4 for `scope`, at the moment of sending, with a key
+ * checked before any IO. The query goes out in the canonical encoding it
+ * was signed in, so AWS decodes exactly the parameters that were signed.
+ */
+function sigV4(stored: unknown, scope: AwsScope): Signer {
+  const key = awsAccessKey(stored);
+  return ({ method, headers, url, body }) => {
+    url.search = canonicalQuery(url.searchParams);
+    const added = signSigV4(
+      {
+        method,
+        host: url.host,
+        path: url.pathname,
+        query: url.searchParams,
+        headers: [...headers],
+        body,
+      },
+      key,
+      scope,
+      new Date(),
+    );
+    for (const [name, value] of Object.entries(added)) headers.set(name, value);
+  };
 }
 
 /**
@@ -397,38 +433,39 @@ export class CredentialTransport {
     return boundSnapshot(binding, method, snapshot);
   }
 
-  private async renew(
+  /**
+   * Issue a short-lived credential into `field` under the connection's
+   * update ownership. A credential another caller committed meanwhile is
+   * `usable` and kept; otherwise one is issued, validated as stored, and
+   * committed. Answers what the committed connection holds.
+   */
+  private async commitIssued<T>(
     binding: CredentialBinding,
     method: CredentialMethod,
-    observedRevision?: string,
-    rejected = false,
-  ): Promise<OAuthGrant> {
-    const auth = method.authentication;
-    if (auth.kind !== "oauth2") throw new AuthError("invalid_definition");
+    renewal: {
+      field: string;
+      read(config: Readonly<Record<string, unknown>>): T | undefined;
+      usable(previous: T | undefined): boolean;
+      issue(
+        previous: T | undefined,
+        config: Readonly<Record<string, unknown>>,
+      ): Promise<T>;
+    },
+  ): Promise<T> {
     let callbackError: unknown;
     let committed: ConnectionConfig;
     try {
       committed = await binding.connection.update(async (current) => {
         try {
           validateCredential(method, current);
-          const previous = grantFrom(method, current);
-          if (
-            (fresh(previous) && !rejected) ||
-            (previous &&
-              previous.revision !== observedRevision &&
-              previous.tokens.accessToken &&
-              (previous.tokens.expiresAt === undefined ||
-                previous.tokens.expiresAt > Date.now()))
-          )
-            return;
-          const tokens = await this.issue(auth, binding, previous);
+          const previous = renewal.read(current);
+          if (renewal.usable(previous)) return;
           const patch = {
-            [auth.field]: { tokens, revision: randomUUID() },
+            [renewal.field]: await renewal.issue(previous, current),
           };
           const next = { ...current, ...patch };
           validateCredential(method, next);
-          grantFrom(method, next);
-          secret(tokens.accessToken);
+          renewal.read(next);
           return patch;
         } catch (error) {
           callbackError = error;
@@ -439,9 +476,64 @@ export class CredentialTransport {
       if (error === callbackError && error instanceof AuthError) throw error;
       throw new AuthError("credential_store_failed");
     }
-    const grant = grantFrom(method, boundSnapshot(binding, method, committed));
-    if (!grant) throw new AuthError("invalid_credentials");
-    return grant;
+    const issued = renewal.read(boundSnapshot(binding, method, committed));
+    if (issued === undefined) throw new AuthError("invalid_credentials");
+    return issued;
+  }
+
+  private renew(
+    binding: CredentialBinding,
+    method: CredentialMethod,
+    observedRevision?: string,
+    rejected = false,
+  ): Promise<OAuthGrant> {
+    const auth = method.authentication;
+    if (auth.kind !== "oauth2") throw new AuthError("invalid_definition");
+    return this.commitIssued(binding, method, {
+      field: auth.field,
+      read: (config) => grantFrom(method, config),
+      usable: (previous) =>
+        (fresh(previous) && !rejected) ||
+        (!!previous &&
+          previous.revision !== observedRevision &&
+          !!previous.tokens.accessToken &&
+          (previous.tokens.expiresAt === undefined ||
+            previous.tokens.expiresAt > Date.now())),
+      issue: async (previous) => {
+        const tokens = await this.issue(auth, binding, previous);
+        secret(tokens.accessToken);
+        return { tokens, revision: randomUUID() };
+      },
+    });
+  }
+
+  /** A role session for the binding's `awsRole`, assumed with the stored key. */
+  private renewAwsSession(
+    binding: CredentialBinding,
+    method: CredentialMethod,
+    observedRevision?: string,
+  ): Promise<AwsSession> {
+    const auth = method.authentication;
+    if (auth.kind !== "awsSigV4" || !auth.assumeRole)
+      throw new AuthError("invalid_definition");
+    const role = binding.awsRole;
+    if (!role) throw new AuthError("invalid_credentials");
+    return this.commitIssued(binding, method, {
+      field: auth.assumeRole.sessionField,
+      read: (config) => awsSessionFrom(auth, config),
+      usable: (previous) =>
+        awsSessionFresh(previous) ||
+        (!!previous &&
+          previous.revision !== observedRevision &&
+          previous.expiresAt > Date.now()),
+      issue: async (_previous, config) => ({
+        ...(await assumeAwsRole(awsAccessKey(config[auth.field]), role, {
+          fetch: this.options.fetch,
+          timeoutMs: this.options.timeoutMs,
+        })),
+        revision: randomUUID(),
+      }),
+    });
   }
 
   /** New tokens by the method's declared renewal, from what the binding supplies. */
@@ -587,6 +679,7 @@ export class CredentialTransport {
     let { sign, grant } = await this.authorize(binding, method, input.target);
     const send = async (signer: Signer) => {
       const outgoing: Outgoing = {
+        method: verb,
         headers: new Headers(headers),
         url: new URL(url),
         body,
@@ -644,6 +737,7 @@ export class CredentialTransport {
     );
     const { sign } = await this.authorize(binding, method, input.target);
     const outgoing: Outgoing = {
+      method: "GET",
       headers: new Headers(),
       url,
       base: targetBase(target).pathname,
@@ -684,6 +778,17 @@ export class CredentialTransport {
     const config = await this.read(binding, method);
     const auth = method.authentication;
     if (auth.kind === "none") return { sign: () => {} };
+    if (auth.kind === "awsSigV4") {
+      const scope = targetOf(method, target)?.aws;
+      if (!scope) throw new AuthError("invalid_definition");
+      if (!auth.assumeRole) return { sign: sigV4(config[auth.field], scope) };
+      const stored = awsSessionFrom(auth, config);
+      const session =
+        stored && awsSessionFresh(stored)
+          ? stored
+          : await this.renewAwsSession(binding, method, stored?.revision);
+      return { sign: sigV4(session, scope) };
+    }
     if (auth.kind === "static")
       return {
         sign: placeStatic(

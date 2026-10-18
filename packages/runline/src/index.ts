@@ -64,6 +64,16 @@ export {
   oauthCallback,
   runOAuth,
 } from "./core/oauth.js";
+export { awsEndpoint, awsRegion, parseAwsXml } from "./credentials/aws.js";
+export type { AwsCredentialSpec } from "./credentials/aws-plugin.js";
+export {
+  awsCredential,
+  awsFailed,
+  awsJson,
+  awsList,
+  awsQuery,
+  awsTarget,
+} from "./credentials/aws-plugin.js";
 export { brokerFor } from "./credentials/broker.js";
 export { downloadResource } from "./credentials/http.js";
 export type {
@@ -99,6 +109,8 @@ export {
   staticCredential,
 } from "./credentials/plugin.js";
 export {
+  AwsAccessKeySchema,
+  AwsSessionSchema,
   CredentialRegistry,
   OAuthGrantSchema,
   OAuthTokensSchema,
@@ -114,6 +126,10 @@ export type {
 } from "./credentials/transport.js";
 export { CredentialTransport } from "./credentials/transport.js";
 export type {
+  AwsAccessKey,
+  AwsRole,
+  AwsScope,
+  AwsSession,
   CredentialAuthentication,
   CredentialBinding,
   CredentialDeclaration,

@@ -59,6 +59,17 @@ export interface CredentialTarget {
    * `maxTargetResponseBytes`.
    */
   maxResponseBytes?: number;
+  /**
+   * The AWS service and region a SigV4 method signs this target's requests
+   * for. Every target of an `awsSigV4` method has one; no other target may.
+   */
+  aws?: AwsScope;
+}
+
+/** The service and region a SigV4 signature is scoped to. */
+export interface AwsScope {
+  service: string;
+  region: string;
 }
 
 /**
@@ -124,9 +135,9 @@ export type SecretPlacement = (
  * How a request is signed. `field` names the one top-level config field
  * holding the secret: for `static`, a record of the named `parts`
  * (`staticSecretSchema(parts)`), each sent through its placements; for
- * `oauth2`, a revisioned OAuthGrant. `none` signs nothing: the method of a
- * connection that holds no optional credential, still pinned to its
- * targets.
+ * `oauth2`, a revisioned OAuthGrant; for `awsSigV4`, an AWS access key.
+ * `none` signs nothing: the method of a connection that holds no optional
+ * credential, still pinned to its targets.
  */
 export type CredentialAuthentication =
   | { kind: "none" }
@@ -160,6 +171,21 @@ export type CredentialAuthentication =
       grant?: string;
       /** Defaults to 401. A 403 must be explicitly documented by the provider. */
       rejectionStatus?: 401 | 403;
+    }
+  | {
+      /**
+       * AWS Signature Version 4 with the access key in `field`
+       * (`AwsAccessKeySchema`): a long-lived key, or a session's, with its
+       * token.
+       */
+      kind: "awsSigV4";
+      field: string;
+      /**
+       * Sign with role sessions instead: the key in `field` assumes the
+       * binding's `awsRole` through STS, and the session, renewed before it
+       * expires, is held in `sessionField` (`AwsSessionSchema`).
+       */
+      assumeRole?: { sessionField: string };
     };
 
 export interface CredentialProbe {
@@ -187,7 +213,8 @@ export interface CredentialType {
 
 /**
  * What a connection signs with: the credential type and method, and the
- * OAuth application, JWT identity and resource owner its config supplies.
+ * OAuth application, JWT identity, resource owner and AWS role its config
+ * supplies.
  * Derived from the connection's config alone — never from action input.
  */
 export interface CredentialSelection {
@@ -196,6 +223,8 @@ export interface CredentialSelection {
   application?: OAuthApplication;
   jwtIdentity?: OAuthJwtIdentity;
   resourceOwner?: OAuthResourceOwner;
+  /** The role an `assumeRole` method's sessions are issued for. */
+  awsRole?: AwsRole;
   /**
    * How a process signing with its own flat connection config (the CLI)
    * assembles a static secret: each of its parts, from a named config
@@ -230,6 +259,39 @@ export interface CredentialBinding {
   application?: OAuthApplication;
   jwtIdentity?: OAuthJwtIdentity;
   resourceOwner?: OAuthResourceOwner;
+  awsRole?: AwsRole;
+}
+
+/**
+ * An IAM role and how its sessions are requested: from the connection's
+ * public config, never from action input.
+ */
+export interface AwsRole {
+  roleArn: string;
+  /** Names the session in CloudTrail; 2-64 of `[\w+=,.@-]`. */
+  sessionName: string;
+  /** The role trust policy's `sts:ExternalId`, when it requires one. */
+  externalId?: string;
+  /** 900 to 43200 seconds, within the role's maximum. STS defaults to 3600. */
+  durationSeconds?: number;
+  /** The region of the STS endpoint the session is requested from. */
+  region: string;
+}
+
+/** An AWS access key: long-lived, or a session's when it carries a token. */
+export interface AwsAccessKey {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+}
+
+/** A role session as stored: its key, when it expires, and its issuance. */
+export interface AwsSession extends AwsAccessKey {
+  sessionToken: string;
+  /** Milliseconds since epoch. */
+  expiresAt: number;
+  /** Changes on every issuance. */
+  revision: string;
 }
 
 /** Revision changes on every issuance, even when the provider repeats the token value. */
