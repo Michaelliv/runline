@@ -4,8 +4,8 @@ import {
   credentialRequest,
   type HttpMethod,
   pathSegment,
-  requestFailed,
   type RunlinePluginAPI,
+  requestFailed,
 } from "runline";
 import { autopilotCredential } from "./credentials.js";
 

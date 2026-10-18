@@ -1,8 +1,8 @@
 import {
   AuthError,
-  configChoice,
   type CredentialDeclaration,
   type CredentialType,
+  configChoice,
   grantSchema,
   httpsBase,
 } from "runline";

@@ -1,7 +1,7 @@
 import {
   type ActionContext,
   AuthError,
-  credentialBroker,
+  brokerFor,
   errorIdentifier,
   failureMessage,
   type HttpMethod,
@@ -42,7 +42,7 @@ function brokeredFetch(ctx: Ctx): BwmFetch {
     const url = new URL(input);
     if (url.origin !== SHIFT_API_URL)
       throw new AuthError("request_not_allowed");
-    return credentialBroker(ctx, shiftBwmCredential).request({
+    return brokerFor(ctx, shiftBwmCredential).request({
       target: "api",
       path: `${shiftPath(url.pathname)}${url.search}`,
       method: (init?.method ?? "GET") as HttpMethod,

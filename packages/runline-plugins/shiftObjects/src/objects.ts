@@ -1,12 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import {
-  enumSchema,
-  pathSegment,
-  STRICT_OBJECT,
-} from "../../_shared/shiftCloud.js";
+import { enumSchema, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
 import {
   GENERAL_MEDIA_TYPES,
   mediaTypeFromPath,

@@ -24,7 +24,7 @@ import googleTasks from "../../../runline-plugins/googleTasks/src/index.js";
 import microsoftCalendar from "../../../runline-plugins/microsoftCalendar/src/index.js";
 import microsoftFiles from "../../../runline-plugins/microsoftFiles/src/index.js";
 import microsoftMail from "../../../runline-plugins/microsoftMail/src/index.js";
-import { credentialBroker } from "../credentials/broker.js";
+import { brokerFor } from "../credentials/broker.js";
 import { grantSchema } from "../credentials/plugin.js";
 import { CredentialRegistry } from "../credentials/registry.js";
 import type {
@@ -102,7 +102,7 @@ function send(
   target: string,
   path: string,
 ) {
-  return credentialBroker(context, declaration).request({ target, path });
+  return brokerFor(context, declaration).request({ target, path });
 }
 
 const google = {

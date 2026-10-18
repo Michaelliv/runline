@@ -1,8 +1,8 @@
 import {
-  configChoice,
   type CredentialDeclaration,
   type CredentialTarget,
   type CredentialType,
+  configChoice,
   grantSchema,
   httpsBase,
   staticCredential,

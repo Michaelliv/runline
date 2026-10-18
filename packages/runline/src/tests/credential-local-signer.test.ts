@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import * as t from "typebox";
-import { credentialBroker } from "../credentials/broker.js";
+import { brokerFor } from "../credentials/broker.js";
 import { staticSecretSchema } from "../credentials/registry.js";
 import type {
   CredentialDeclaration,
@@ -142,9 +142,10 @@ describe("the local signer signs static keys from flat config", () => {
     ];
     for (const [declare, config, url, authorization] of cases) {
       const seen = capture();
-      const response = await credentialBroker(context(config), declare).request(
-        { target: "api", path: "items" },
-      );
+      const response = await brokerFor(context(config), declare).request({
+        target: "api",
+        path: "items",
+      });
       assert.equal(response.status, 200);
       assert.deepEqual(seen, [{ url, authorization }]);
     }
@@ -178,7 +179,7 @@ describe("the local signer signs static keys from flat config", () => {
     ];
     for (const [declare, config, authorization] of cases) {
       const seen = capture();
-      await credentialBroker(context(config), declare).request({
+      await brokerFor(context(config), declare).request({
         target: "api",
         path: "items",
       });
@@ -186,7 +187,7 @@ describe("the local signer signs static keys from flat config", () => {
     }
     const seen = capture();
     await assert.rejects(
-      credentialBroker(context({ apiKey: "k" }), cases[1][0]).request({
+      brokerFor(context({ apiKey: "k" }), cases[1][0]).request({
         target: "api",
         path: "items",
       }),
@@ -207,7 +208,7 @@ describe("the local signer signs static keys from flat config", () => {
     ]) {
       const seen = capture();
       await assert.rejects(
-        credentialBroker(context(config), declare).request({
+        brokerFor(context(config), declare).request({
           target: "api",
           path: "items",
         }),
@@ -220,7 +221,7 @@ describe("the local signer signs static keys from flat config", () => {
   it("a declaration without localSecret cannot sign a static key locally", async () => {
     const seen = capture();
     await assert.rejects(
-      credentialBroker(
+      brokerFor(
         context({ apiKey: "sk-1" }),
         declaration(bearer, undefined),
       ).request({ target: "api", path: "items" }),
@@ -239,7 +240,7 @@ describe("the local signer signs static keys from flat config", () => {
         }),
     );
     await assert.rejects(
-      credentialBroker(context({ apiKey: "sk-1" }), declare).request({
+      brokerFor(context({ apiKey: "sk-1" }), declare).request({
         target: "api",
         path: "items",
       }),

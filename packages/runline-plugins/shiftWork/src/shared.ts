@@ -6,7 +6,6 @@ export {
   enumDescription,
   enumSchema,
   idSchema,
-  pathSegment,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,

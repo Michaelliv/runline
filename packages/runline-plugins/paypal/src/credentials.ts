@@ -1,4 +1,4 @@
-import { configChoice, type CredentialDeclaration, grantSchema } from "runline";
+import { type CredentialDeclaration, configChoice, grantSchema } from "runline";
 
 /**
  * A client-credentials OAuth grant against the environment's own token

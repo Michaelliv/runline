@@ -6,6 +6,7 @@ import process from "node:process";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { discoverPlugins, loadPluginFromPath } from "../plugin/loader.js";
 import { Runline } from "../sdk.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalEnv = { ...process.env };
 
@@ -176,13 +177,13 @@ export default function ledger(api) {
     );
     const seen: Array<{ url: string; authorization: string | null }> = [];
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         authorization: new Headers(init?.headers).get("authorization"),
       });
       return Response.json({ id: "e 1", amount: 7 });
-    }) as typeof fetch;
+    });
     try {
       const rl = await Runline.fromProject(tempDir, { builtinDir });
       assert.ok(rl);

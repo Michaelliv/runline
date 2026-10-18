@@ -1,6 +1,6 @@
 import {
-  configChoice,
   type CredentialDeclaration,
+  configChoice,
   staticCredential,
 } from "runline";
 

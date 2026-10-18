@@ -21,7 +21,7 @@ import {
   oauthCallback,
   runOAuth,
 } from "../core/oauth.js";
-import { credentialBroker } from "../credentials/broker.js";
+import { brokerFor } from "../credentials/broker.js";
 import { CredentialRegistry } from "../credentials/registry.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, OAuthConfig } from "../plugin/types.js";
@@ -526,7 +526,7 @@ describe("native Plaud plugin", () => {
       });
     assert.equal(calls, 0);
     assert.deepEqual(
-      await credentialBroker((await context()).ctx, plaudCredential).probe(),
+      await brokerFor((await context()).ctx, plaudCredential).probe(),
       {
         outcome: "accepted",
         status: 200,

@@ -406,7 +406,7 @@ The credential kit is exported from `runline` for every plugin, bundled or custo
 | `grantSchema` | The stored shape of an OAuth method's revisioned grant, for plugins declaring `oauth2`. |
 | `credentialJson` / `credentialOk` / `credentialRequest` | Send one request through the declared credential: JSON answer, successful `Response`, or raw `Response`. `query`, `json`, `form`, `body`, `headers` and WebDAV `destination` are built for you. |
 | `credentialSocketUrl` | A signed (or host-relayed) URL for a declared `wss://` target. |
-| `credentialBroker(ctx, declaration)` | The broker one action call signs through: the host's, or the local signer. |
+| `brokerFor(ctx, declaration)` | The broker one action call signs through, for requests and probes the helpers above do not shape: the host's, or the local signer. |
 | `pathSegment` / `pathSegments` / `slashEncodedSegment` | Put caller input into a path as exactly one segment (or slash-separated segments); `..`, empty segments and separators are refused. |
 | `pathWithin` | Turn an API-returned next-page URL back into a path beneath the declared target, refusing anything outside it. |
 | `httpsBase` / `hostLabel` / `configChoice` / `configFlag` | Derive a target from public config, refusing anything that could send the credential to another host. |

@@ -1,7 +1,7 @@
 import {
   type ActionContext,
   AuthError,
-  credentialBroker,
+  brokerFor,
   downloadResource,
   type HttpMethod,
   jsonAnswer,
@@ -121,7 +121,7 @@ export async function googleResponse(
     }
     path = `${separator < 0 ? path : path.slice(0, separator)}?${params}`;
   }
-  return credentialBroker(ctx, googleCredential(plugin, scopes)).request({
+  return brokerFor(ctx, googleCredential(plugin, scopes)).request({
     target,
     path,
     method: (init.method ?? "GET") as HttpMethod,
@@ -164,7 +164,7 @@ export async function googleProbe(
   plugin: string,
   scopes: string[],
 ) {
-  return credentialBroker(ctx, googleCredential(plugin, scopes)).probe();
+  return brokerFor(ctx, googleCredential(plugin, scopes)).probe();
 }
 
 /** Only Google-issued thumbnail hosts; never attach credentials to signed URLs. */

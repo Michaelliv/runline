@@ -110,7 +110,9 @@ export async function statUploadFile(
   if (!file.isFile()) throw new Error(`${path} is not a file`);
   if (file.size === 0) throw new Error(`${label} is empty`);
   if (file.size > maxBytes) {
-    throw new Error(`${label} is larger than the ${maxBytes}-byte service limit`);
+    throw new Error(
+      `${label} is larger than the ${maxBytes}-byte service limit`,
+    );
   }
   return file.size;
 }

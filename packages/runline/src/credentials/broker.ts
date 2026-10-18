@@ -15,9 +15,10 @@ import type {
  * Where one action call's authenticated requests go: the host's broker
  * when it supplies one — the credentials then live with the host, and no
  * local signer is built — else this process signs with its own
- * connection, from the plugin's declaration.
+ * connection, from the plugin's declaration. Plugin-side: the host-side
+ * `credentialBroker` option is what supplies `ctx.credentials`.
  */
-export function credentialBroker(
+export function brokerFor(
   ctx: ActionContext,
   declaration: CredentialDeclaration,
 ): CredentialBroker {
@@ -32,7 +33,7 @@ export function credentialBroker(
 
 /**
  * Everything a stored token was issued under. A config whose selection
- * hashes differently can no longer use tokens issued for this one. A
+ * hashes differently cannot use tokens issued for this one. A
  * token of a declared grant was issued under the grant — its method,
  * client and token endpoint (Microsoft's names the tenant) — not the
  * plugin that asked, so every plugin of the grant hashes alike and shares

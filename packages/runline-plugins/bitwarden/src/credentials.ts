@@ -1,7 +1,7 @@
 import {
-  configChoice,
   type CredentialDeclaration,
   type CredentialTarget,
+  configChoice,
   grantSchema,
   httpsBase,
 } from "runline";

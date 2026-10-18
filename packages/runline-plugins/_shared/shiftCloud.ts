@@ -1,8 +1,6 @@
 import { type ActionContext, errorIdentifier, responseFailed } from "runline";
 import * as t from "typebox";
 
-export { pathSegment } from "runline";
-
 /**
  * Shared helpers for plugins that talk to the Shift cloud API: one base
  * URL, the common TypeBox schema builders, and the Shift error envelope.

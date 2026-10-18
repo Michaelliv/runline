@@ -64,7 +64,7 @@ export {
   oauthCallback,
   runOAuth,
 } from "./core/oauth.js";
-export { credentialBroker } from "./credentials/broker.js";
+export { brokerFor } from "./credentials/broker.js";
 export { downloadResource } from "./credentials/http.js";
 export type {
   CredentialCall,

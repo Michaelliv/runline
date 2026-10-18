@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   CRM_ACCESS_ROLE,
@@ -6,7 +6,6 @@ import {
   type CrmAccessGrant,
   enumSchema,
   idSchema,
-  pathSegment,
   request,
   STRICT_OBJECT,
 } from "./shared.js";

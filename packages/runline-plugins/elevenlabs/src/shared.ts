@@ -2,7 +2,7 @@ import { basename } from "node:path";
 import {
   type ActionContext,
   AuthError,
-  credentialBroker,
+  brokerFor,
   multipartBody,
   pathSegment,
   responseFailed,
@@ -74,7 +74,7 @@ async function request<T>(
       headers["content-type"] = multipart.contentType;
     }
     const response = await withDeadline(
-      credentialBroker(ctx, elevenlabsCredential).request({
+      brokerFor(ctx, elevenlabsCredential).request({
         target,
         path: path.replace(/^\//, ""),
         method: init.method ?? "GET",

@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   CRM_BASE,
@@ -6,7 +6,6 @@ import {
   type CrmImportRun,
   type CrmRecord,
   idSchema,
-  pathSegment,
   recordTypeSchema,
   request,
   STRICT_OBJECT,
