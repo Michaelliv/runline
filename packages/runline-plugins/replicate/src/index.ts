@@ -19,12 +19,13 @@
  */
 
 import { Buffer } from "node:buffer";
-import type { ActionContext, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
   pathSegments,
   pathWithin,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import {
   readImageInput,
   type SavedMedia,

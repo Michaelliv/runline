@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** An API key, sent as a bearer to the connection's own TheHive instance
  *  beneath /api/. The instance URL is public config and must be HTTPS. */

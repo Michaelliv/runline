@@ -1,4 +1,4 @@
-import { configFlag, staticCredential } from "../../_shared/credentials.js";
+import { configFlag, staticCredential } from "runline";
 
 /**
  * The vendor ID and auth code, added by the transport as the vendor_id and

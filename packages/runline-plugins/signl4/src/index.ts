@@ -1,5 +1,8 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { signl4Credential } from "./credentials.js";
 
 /** One alert event, posted as a form to the team's webhook. */

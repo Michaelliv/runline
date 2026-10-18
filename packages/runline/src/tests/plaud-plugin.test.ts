@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { TSchema } from "typebox";
 import { Check } from "typebox/value";
-import { credentialBroker } from "../../../runline-plugins/_shared/credentialAdapter.js";
 import plaud from "../../../runline-plugins/plaud/src/index.js";
 import {
   PLAUD_CREDENTIAL,
@@ -22,6 +21,7 @@ import {
   oauthCallback,
   runOAuth,
 } from "../core/oauth.js";
+import { brokerFor } from "../credentials/broker.js";
 import { CredentialRegistry } from "../credentials/registry.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, OAuthConfig } from "../plugin/types.js";
@@ -526,7 +526,7 @@ describe("native Plaud plugin", () => {
       });
     assert.equal(calls, 0);
     assert.deepEqual(
-      await credentialBroker((await context()).ctx, plaudCredential).probe(),
+      await brokerFor((await context()).ctx, plaudCredential).probe(),
       {
         outcome: "accepted",
         status: 200,

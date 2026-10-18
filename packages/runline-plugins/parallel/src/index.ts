@@ -12,8 +12,7 @@
  *   await parallel.search({ objective: "latest Israel construction permit reform" })
  *   await parallel.search({ search_queries: ["tel aviv office vacancy rate 2026"], processor: "pro" })
  */
-import type { RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, type RunlinePluginAPI } from "runline";
 import { DEFAULT_BASE, parallelCredential } from "./credentials.js";
 
 const NAME = "parallel";

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An OAuth2 app access token, sent as a bearer to Help Scout's v2 API. */
 export const helpscoutCredential = staticCredential({

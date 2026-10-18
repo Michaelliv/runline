@@ -1,5 +1,9 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { answerFailed, credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  answerFailed,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { telegramCredential } from "./credentials.js";
 
 /** A call to the Bot API method `name`; an answer that is not ok is a failure. */

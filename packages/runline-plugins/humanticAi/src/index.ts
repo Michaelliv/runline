@@ -1,5 +1,9 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  type RunlinePluginAPI,
+} from "runline";
 import { humanticAiCredential } from "./credentials.js";
 
 function apiRequest(

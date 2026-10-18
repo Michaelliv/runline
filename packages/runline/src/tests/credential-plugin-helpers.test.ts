@@ -1,8 +1,9 @@
 /**
- * The shared plugin side of the credential broker (`_shared/credentials.ts`):
- * one declaration factory for static keys, one way to turn public config
- * into an HTTPS target, one request path. Every migrated plugin uses these,
- * so a plugin cannot sign differently from its siblings.
+ * The public plugin side of the credential broker (`credentials/plugin.ts`,
+ * exported from `runline`): one declaration factory for static keys, one
+ * way to turn public config into an HTTPS target, one request path. Every
+ * plugin, bundled or custom, uses these, so a plugin cannot sign
+ * differently from its siblings.
  */
 
 import assert from "node:assert/strict";
@@ -23,7 +24,7 @@ import {
   pathWithin,
   slashEncodedSegment,
   staticCredential,
-} from "../../../runline-plugins/_shared/credentials.js";
+} from "../credentials/plugin.js";
 import { CredentialRegistry } from "../credentials/registry.js";
 import type {
   AuthenticatedRequest,
@@ -457,6 +458,10 @@ describe("answerFailed", () => {
       answerFailed("x", { code: "not a code", message: "line\none\t\u0000two" })
         .message,
       "x: request failed: line one two",
+    );
+    assert.equal(
+      answerFailed("x", { message: "next\u0085line\u009bescape" }).message,
+      "x: request failed: next line escape",
     );
     const long = answerFailed("x", { message: "a".repeat(1000) }).message;
     assert.equal(long, `x: request failed: ${"a".repeat(300)}…`);

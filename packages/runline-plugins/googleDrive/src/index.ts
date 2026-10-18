@@ -55,10 +55,14 @@
  */
 
 import { createReadStream, statSync, writeFileSync } from "node:fs";
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  jsonAnswer,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import * as t from "typebox";
 import { standardBase64 } from "../../_shared/base64.js";
-import { jsonAnswer, pathSegment } from "../../_shared/credentials.js";
 import {
   googleCredential,
   googleJsonRequest,

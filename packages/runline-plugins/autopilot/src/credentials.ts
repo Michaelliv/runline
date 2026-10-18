@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the autopilotapikey header to Autopilot's one origin. */
 export const autopilotCredential = staticCredential({

@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   cursorSchema,
@@ -7,7 +7,6 @@ import {
   ISSUE_SOURCE,
   ISSUE_STATUS,
   idSchema,
-  pathSegment,
   request,
   type ShiftIssue,
   type ShiftIssueDependency,

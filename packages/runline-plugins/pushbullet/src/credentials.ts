@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An access token in the Access-Token header, to Pushbullet's one API origin. */
 export const pushbulletCredential = staticCredential({

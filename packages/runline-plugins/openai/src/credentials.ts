@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as a bearer to OpenAI's images API base. */
 export const openaiCredential = staticCredential({

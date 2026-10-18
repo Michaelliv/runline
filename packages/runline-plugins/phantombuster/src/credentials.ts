@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the X-Phantombuster-Key header to the v2 API. */
 export const phantombusterCredential = staticCredential({

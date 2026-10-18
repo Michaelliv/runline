@@ -1,18 +1,19 @@
 import {
-  AuthError,
-  downloadResource,
   type ActionContext,
+  AuthError,
+  brokerFor,
+  downloadResource,
   type HttpMethod,
+  jsonAnswer,
   type OAuthConfig,
+  requestFailed,
 } from "runline";
-import { credentialBroker } from "./credentialAdapter.js";
-import { jsonAnswer, requestFailed } from "./credentials.js";
 import {
   MICROSOFT_GRANT,
+  type MicrosoftAuthConfig,
   microsoftCredential,
   microsoftEndpoint,
   microsoftUserBase,
-  type MicrosoftAuthConfig,
 } from "./microsoftCredentials.js";
 
 export type { MicrosoftAuthConfig } from "./microsoftCredentials.js";
@@ -30,7 +31,7 @@ export async function microsoftProbe(
   plugin: string,
   scopes: string[],
 ) {
-  return credentialBroker(ctx, microsoftCredential(plugin, scopes)).probe();
+  return brokerFor(ctx, microsoftCredential(plugin, scopes)).probe();
 }
 
 export async function graphResponse(
@@ -44,7 +45,7 @@ export async function graphResponse(
 ): Promise<Response> {
   if (!path.startsWith("/") || path.startsWith("//"))
     throw new AuthError("request_not_allowed");
-  return credentialBroker(ctx, microsoftCredential(plugin, scopes)).request({
+  return brokerFor(ctx, microsoftCredential(plugin, scopes)).request({
     target: "graph",
     path: path.slice(1),
     method: method as HttpMethod,

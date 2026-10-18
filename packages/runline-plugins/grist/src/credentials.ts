@@ -1,9 +1,4 @@
-import {
-  configChoice,
-  hostLabel,
-  httpsBase,
-  staticCredential,
-} from "../../_shared/credentials.js";
+import { configChoice, hostLabel, httpsBase, staticCredential } from "runline";
 
 /**
  * An API key, sent as a bearer to the plan's one API origin: docs.getgrist.com

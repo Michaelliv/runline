@@ -1,4 +1,4 @@
-import { hostLabel, staticCredential } from "../../_shared/credentials.js";
+import { hostLabel, staticCredential } from "runline";
 
 /** An agent API key as the Basic username, with the fixed dummy password "X",
  *  to the account's own Freshdesk subdomain. */

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, appended by the transport as the apikey query parameter. */
 export const humanticAiCredential = staticCredential({

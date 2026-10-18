@@ -1,9 +1,10 @@
-import { type CredentialDeclaration, type CredentialTarget } from "runline";
 import {
+  type CredentialDeclaration,
+  type CredentialTarget,
   configChoice,
   grantSchema,
   httpsBase,
-} from "../../_shared/credentials.js";
+} from "runline";
 
 /**
  * An organization API key (client id and secret), exchanged for a bearer

@@ -1,10 +1,12 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialOk,
+  type HttpMethod,
   jsonAnswer,
   jsonOrAcknowledged,
   pathSegment,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { bambooHrCredential } from "./credentials.js";
 
 async function apiRequest(

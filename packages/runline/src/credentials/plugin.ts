@@ -1,24 +1,23 @@
-import {
-  type ActionContext,
-  AuthError,
-  type CredentialDeclaration,
-  type CredentialProbe,
-  type CredentialTarget,
-  type HttpMethod,
-  type LocalSecretPart,
-  OAuthGrantSchema,
-  type SecretPlacement,
-  staticSecretSchema,
-} from "runline";
-import * as t from "typebox";
-import { credentialBroker } from "./credentialAdapter.js";
-
 /**
- * The plugin side of the credential broker, shared by every plugin: one
- * declaration factory for static keys, one stored grant shape for OAuth
- * methods, one way to turn public config into an HTTPS target, one
- * request path.
+ * The plugin side of the credential broker, public to every plugin —
+ * bundled or custom: one declaration factory for static keys, one stored
+ * grant shape for OAuth methods, one way to turn public config into an
+ * HTTPS target, one request path.
  */
+
+import * as t from "typebox";
+import { AuthError } from "../auth/errors.js";
+import type { ActionContext } from "../plugin/types.js";
+import { brokerFor } from "./broker.js";
+import { OAuthGrantSchema, staticSecretSchema } from "./registry.js";
+import type {
+  CredentialDeclaration,
+  CredentialProbe,
+  CredentialTarget,
+  HttpMethod,
+  LocalSecretPart,
+  SecretPlacement,
+} from "./types.js";
 
 /**
  * The stored shape of an OAuth method: one optional revisioned grant in the
@@ -345,7 +344,7 @@ export function credentialRequest(
           }
         : undefined;
   const payload = body?.body ?? call.body;
-  return credentialBroker(ctx, declaration).request({
+  return brokerFor(ctx, declaration).request({
     target: call.target,
     path: withQuery(call.path, call.query),
     method: call.method ?? "GET",
@@ -384,7 +383,7 @@ export async function credentialSocketUrl(
   declaration: CredentialDeclaration,
   call: { target: string; path: string; query?: Record<string, unknown> },
 ): Promise<string> {
-  const broker = credentialBroker(ctx, declaration);
+  const broker = brokerFor(ctx, declaration);
   if (!broker.socketUrl) throw new AuthError("unsupported_operation");
   return broker.socketUrl({
     target: call.target,
@@ -445,7 +444,7 @@ export function answerFailed(
   });
   const text =
     typeof detail.message === "string"
-      ? detail.message.replace(/[\u0000-\u001f\u007f\s]+/g, " ").trim()
+      ? detail.message.replace(/[\p{Cc}\s]+/gu, " ").trim()
       : "";
   const line = text.length > 300 ? `${text.slice(0, 300)}…` : text;
   return new Error(line ? `${head}: ${line}` : head);

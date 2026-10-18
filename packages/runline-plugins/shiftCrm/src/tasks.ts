@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   CRM_BASE,
@@ -10,7 +10,6 @@ import {
   idSchema,
   nullableTimestamp,
   paginationFields,
-  pathSegment,
   request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,

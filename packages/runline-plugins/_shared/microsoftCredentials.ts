@@ -4,8 +4,9 @@ import {
   type CredentialMethod,
   type CredentialProbe,
   type CredentialType,
+  grantSchema,
+  pathSegment,
 } from "runline";
-import { grantSchema, pathSegment } from "./credentials.js";
 
 /** The grant every Microsoft Graph plugin's delegated consent belongs to. */
 export const MICROSOFT_GRANT = "microsoft";

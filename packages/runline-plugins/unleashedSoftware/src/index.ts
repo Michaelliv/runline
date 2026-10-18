@@ -1,5 +1,9 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { unleashedSoftwareCredential } from "./credentials.js";
 
 /** An Unleashed read; Unleashed asks for a JSON Content-Type even on GET. */

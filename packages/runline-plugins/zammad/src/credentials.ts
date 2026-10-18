@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** An access token, sent as `Authorization: Token token={token}` to the
  *  connection's own Zammad instance beneath /api/v1/. The instance URL is

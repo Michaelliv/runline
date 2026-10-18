@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key as the Basic password, with an empty username, to Affinity's one origin. */
 export const affinityCredential = staticCredential({

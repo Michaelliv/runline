@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API token, sent as a bearer to Cloudflare's one API origin. */
 export const cloudflareCredential = staticCredential({

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key and secret, sent as the Api-Key and Api-Secret headers to Demio's one API origin. */
 export const demioCredential = staticCredential({

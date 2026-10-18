@@ -1,5 +1,9 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { answerFailed, credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  answerFailed,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { yourlsCredential } from "./credentials.js";
 
 async function apiRequest(

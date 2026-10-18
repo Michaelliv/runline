@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /**
  * An optional OAuth2 access token, sent as a bearer to oauth.reddit.com;

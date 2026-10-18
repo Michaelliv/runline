@@ -1,5 +1,8 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { twilioCredential } from "./credentials.js";
 
 /** A Twilio form call beneath the account; empty fields are left out. */

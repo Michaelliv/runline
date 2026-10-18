@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent raw (no scheme) on the Authorization header to Emelia's
  *  one GraphQL endpoint. */

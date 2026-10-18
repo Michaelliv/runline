@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** An API token, sent as a bearer to the instance's own /api/ (hosted Monica by default). */
 export const monicaCrmCredential = staticCredential({

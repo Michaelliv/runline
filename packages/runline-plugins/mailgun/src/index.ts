@@ -1,5 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import { credentialJson, pathSegment, type RunlinePluginAPI } from "runline";
 import { mailgunCredential, mailgunRegion } from "./credentials.js";
 
 export default function mailgun(rl: RunlinePluginAPI) {

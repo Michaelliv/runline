@@ -1,9 +1,11 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
+  type HttpMethod,
   pathSegment,
+  type RunlinePluginAPI,
   slashEncodedSegment,
-} from "../../_shared/credentials.js";
+} from "runline";
 import { travisciCredential } from "./credentials.js";
 
 function apiRequest(

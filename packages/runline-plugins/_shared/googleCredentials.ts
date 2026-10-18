@@ -4,9 +4,9 @@ import {
   type CredentialProbe,
   type CredentialTarget,
   type CredentialType,
+  grantSchema,
   type OAuthJwtIdentity,
 } from "runline";
-import { grantSchema } from "./credentials.js";
 
 /** The grant every Google plugin's consent belongs to. */
 export const GOOGLE_GRANT = "google";

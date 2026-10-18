@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An OAuth2 access or developer token, sent as a bearer to Box's API origin. */
 export const boxCredential = staticCredential({

@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   AUDIO_VIDEO_MEDIA_TYPES,
@@ -10,7 +10,6 @@ import {
 } from "../../_shared/shiftUpload.js";
 import {
   enumSchema,
-  pathSegment,
   request,
   STRICT_OBJECT,
   TRANSCRIPT_FORMAT,

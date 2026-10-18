@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   enumSchema,
@@ -7,7 +7,6 @@ import {
   PAGE_TYPE,
   PAGE_VISIBILITY,
   pageRenderUrl,
-  pathSegment,
   request,
   STRICT_OBJECT,
   timestampSchema,

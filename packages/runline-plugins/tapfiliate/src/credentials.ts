@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the Api-Key header to Tapfiliate's 1.6 API. */
 export const tapfiliateCredential = staticCredential({

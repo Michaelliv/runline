@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An account API key, sent as the Apikey header to E-goi's one API origin. */
 export const egoiCredential = staticCredential({

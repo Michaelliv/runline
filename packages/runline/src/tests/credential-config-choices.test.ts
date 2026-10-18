@@ -6,10 +6,6 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  configChoice,
-  configFlag,
-} from "../../../runline-plugins/_shared/credentials.js";
 import { bitwardenCredential } from "../../../runline-plugins/bitwarden/src/credentials.js";
 import { bubbleCredential } from "../../../runline-plugins/bubble/src/credentials.js";
 import { contentfulCredential } from "../../../runline-plugins/contentful/src/credentials.js";
@@ -21,6 +17,7 @@ import { homeAssistantCredential } from "../../../runline-plugins/homeAssistant/
 import { mailgunRegion } from "../../../runline-plugins/mailgun/src/credentials.js";
 import { paddleCredential } from "../../../runline-plugins/paddle/src/credentials.js";
 import { paypalCredential } from "../../../runline-plugins/paypal/src/credentials.js";
+import { configChoice, configFlag } from "../credentials/plugin.js";
 
 const refused = { code: "invalid_credentials" };
 

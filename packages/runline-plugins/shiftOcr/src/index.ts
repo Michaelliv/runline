@@ -1,12 +1,8 @@
 import { basename, extname } from "node:path";
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { readLocalFile } from "../../_shared/localFile.js";
-import {
-  type Ctx,
-  pathSegment,
-  STRICT_OBJECT,
-} from "../../_shared/shiftCloud.js";
+import { type Ctx, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
 import {
   putThroughGrant,
   SIGNED_UPLOAD_MAX_BYTES,

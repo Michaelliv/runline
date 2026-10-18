@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** A personal access or bot token, sent as a bearer to the configured server. */
 export const mattermostCredential = staticCredential({

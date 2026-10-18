@@ -322,67 +322,101 @@ runline exec 'return await github.repo.list({ owner: "torvalds" })' --json
 
 ## Writing a Plugin
 
-Plugins export a function that receives a `RunlinePluginAPI` and registers actions. Use TypeBox schemas by default for both connection config and action input schemas; Runline uses them for action discovery, `actions.check(...)`, and runtime validation before `execute` runs.
+Plugins export a function that receives a `RunlinePluginAPI` and registers actions. Use TypeBox schemas for both connection config and action input; Runline uses them for action discovery, `actions.check(...)`, and validation before `execute` runs.
+
+A plugin that calls an authenticated API **declares** its credential instead of building auth headers itself. The declaration says what the secret is, how it is placed, and the exact HTTPS targets it may be sent to; every request goes through `credentialJson` / `credentialRequest`, which sign it — through the host's broker when there is one, else locally from the connection config. The plugin never touches the secret, and nothing outside its declared targets can receive it.
 
 ```typescript
-import type { RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  pathSegment,
+  type RunlinePluginAPI,
+  staticCredential,
+} from "runline";
 import * as t from "typebox";
+
+// Bearer token from the connection's `apiKey`, sent only beneath this base.
+const credential = staticCredential({
+  id: "orders",
+  auth: { kind: "bearer" },
+  local: { secret: "apiKey" },
+  targets: {
+    api: { baseUrl: "https://api.orders.example/v1/", methods: ["GET", "POST"] },
+  },
+  probe: { target: "api", path: "me", method: "GET", acceptedStatuses: [200] },
+});
 
 export default function orders(rl: RunlinePluginAPI) {
   rl.setName("orders");
   rl.setVersion("1.0.0");
-
-  // Connection config — env vars override config.json values
-  rl.setConnectionSchema(t.Object({
-    apiKey: t.String({ env: "ORDERS_API_KEY" }),
-    baseUrl: t.String({ env: "ORDERS_BASE_URL" }),
-  }));
+  rl.setCredential(credential);
+  rl.setConnectionSchema(
+    t.Object({ apiKey: t.String({ env: "ORDERS_API_KEY" }) }),
+  );
 
   rl.registerAction("list", {
     access: "read",
-    description: "List orders for an organization",
-    inputSchema: t.Object({
-      orgId: t.String(),
-      status: t.Optional(t.String({ description: "open, closed, or all" })),
-      limit: t.Optional(t.Number()),
-    }),
+    description: "List an organization's orders, newest first.",
+    inputSchema: t.Object(
+      {
+        orgId: t.String({ minLength: 1, description: "Organization ID" }),
+        status: t.Optional(t.Union([t.Literal("open"), t.Literal("closed")])),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input, ctx) {
-      const { orgId, status, limit } = input as Record<string, unknown>;
-      const url = new URL(`${ctx.connection.config.baseUrl}/orgs/${orgId}/orders`);
-      if (status) url.searchParams.set("status", status as string);
-      if (limit) url.searchParams.set("limit", String(limit));
-
-      const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${ctx.connection.config.apiKey}` },
+      const { orgId, ...query } = input as { orgId: string };
+      return credentialJson(ctx, credential, "orders", {
+        target: "api",
+        path: `orgs/${pathSegment(orgId)}/orders`,
+        query,
       });
-      if (!res.ok) throw new Error(`Orders API ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 
   rl.registerAction("create", {
     access: "write",
-    description: "Create a new order",
-    inputSchema: t.Object({
-      orgId: t.String(),
-      customer: t.String(),
-      total: t.Number(),
-    }),
+    description: "Create an order. Returns the created order.",
+    inputSchema: t.Object(
+      {
+        orgId: t.String({ minLength: 1 }),
+        customer: t.String({ minLength: 1 }),
+        total: t.Number({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input, ctx) {
-      const res = await fetch(`${ctx.connection.config.baseUrl}/orders`, {
+      return credentialJson(ctx, credential, "orders", {
+        target: "api",
+        path: "orders",
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${ctx.connection.config.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(input),
+        json: input,
       });
-      if (!res.ok) throw new Error(`Orders API ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 }
 ```
+
+The credential kit is exported from `runline` for every plugin, bundled or custom:
+
+| Helper | Use |
+|---|---|
+| `staticCredential(spec)` | Declare a static secret: `bearer`, `apiKey` (named header, optional prefix), `queryKey`, `basic`, or the general form of named parts and placements. `local` names the flat config fields it signs from; `targets` may be a function of public config. |
+| `grantSchema` | The stored shape of an OAuth method's revisioned grant, for plugins declaring `oauth2`. |
+| `credentialJson` / `credentialOk` / `credentialRequest` | Send one request through the declared credential: JSON answer, successful `Response`, or raw `Response`. `query`, `json`, `form`, `body`, `headers` and WebDAV `destination` are built for you. |
+| `credentialSocketUrl` | A signed (or host-relayed) URL for a declared `wss://` target. |
+| `brokerFor(ctx, declaration)` | The broker one action call signs through, for requests and probes the helpers above do not shape: the host's, or the local signer. |
+| `pathSegment` / `pathSegments` / `slashEncodedSegment` | Put caller input into a path as exactly one segment (or slash-separated segments); `..`, empty segments and separators are refused. |
+| `pathWithin` | Turn an API-returned next-page URL back into a path beneath the declared target, refusing anything outside it. |
+| `httpsBase` / `hostLabel` / `configChoice` / `configFlag` | Derive a target from public config, refusing anything that could send the credential to another host. |
+| `responseFailed` / `requestFailed` / `failureMessage` / `errorIdentifier` | Report a failed response by status and identifier-shaped codes only: provider free text, where a secret may be echoed, never reaches the error. |
+| `answerFailed` / `graphqlFailed` | Report a failure inside a 2xx answer (`ok: false`, GraphQL `errors`) by code, field and a one-line message. |
+| `jsonAnswer` / `jsonOrAcknowledged` | Read a successful answer; an empty or 204 answer is `{ success: true }`. |
+| `multipartBody` | Buffer `FormData` into the bytes and boundary the transport accepts. |
+| `refuseUnderHost` | Refuse an owner-login step when a host keeps the credential. |
+
+See [Host-signed requests](#host-signed-requests) for the declaration model itself: authentication kinds, placements and targets.
 
 Custom plugins are discovered from the nearest project `.runline/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then the bundled built-ins named by configured connections. Project-local plugins win over same-named global or built-in plugins; duplicates discovered later are skipped and reported on stderr.
 

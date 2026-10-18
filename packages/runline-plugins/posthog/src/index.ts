@@ -1,5 +1,8 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { posthogCredential } from "./credentials.js";
 
 /** Every PostHog capture call is a JSON POST. */

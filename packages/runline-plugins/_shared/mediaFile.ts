@@ -58,10 +58,15 @@ export function writeMediaFile(opts: {
   stamp?: number;
 }): SavedMedia {
   const mimeType = opts.mimeType ?? "image/png";
-  const dir = (typeof opts.saveDir === "string" && opts.saveDir.trim()) || tmpdir();
+  const dir =
+    (typeof opts.saveDir === "string" && opts.saveDir.trim()) || tmpdir();
   const stamp = opts.stamp ?? Date.now();
-  if (!/^[\w-]+$/.test(opts.provider)) throw new Error("invalid media provider name");
-  const path = join(dir, `${opts.provider}-${stamp}-${opts.index}-${randomUUID()}.${extForMime(mimeType)}`);
+  if (!/^[\w-]+$/.test(opts.provider))
+    throw new Error("invalid media provider name");
+  const path = join(
+    dir,
+    `${opts.provider}-${stamp}-${opts.index}-${randomUUID()}.${extForMime(mimeType)}`,
+  );
   writeFileSync(path, opts.bytes, { flag: "wx", mode: 0o600 });
   return { path, mimeType, byteLength: opts.bytes.byteLength };
 }
@@ -79,7 +84,10 @@ export function writeImageFile(opts: {
   stamp?: number;
 }): SavedMedia {
   const { base64, ...rest } = opts;
-  return writeMediaFile({ ...rest, bytes: Buffer.from(base64 ?? "", "base64") });
+  return writeMediaFile({
+    ...rest,
+    bytes: Buffer.from(base64 ?? "", "base64"),
+  });
 }
 
 export const SEND_FILE_NOTE =

@@ -1,5 +1,8 @@
-import type { CredentialDeclaration } from "runline";
-import { configChoice, staticCredential } from "../../_shared/credentials.js";
+import {
+  type CredentialDeclaration,
+  configChoice,
+  staticCredential,
+} from "runline";
 
 const delivery = staticCredential({
   id: "contentful",

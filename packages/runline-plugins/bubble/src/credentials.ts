@@ -1,9 +1,4 @@
-import {
-  configChoice,
-  hostLabel,
-  httpsBase,
-  staticCredential,
-} from "../../_shared/credentials.js";
+import { configChoice, hostLabel, httpsBase, staticCredential } from "runline";
 
 /**
  * A Data API token, sent as a bearer to the app's own base: the app's

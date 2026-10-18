@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent in the X-Api-Key header to Clockify's one API origin. */
 export const clockifyCredential = staticCredential({
