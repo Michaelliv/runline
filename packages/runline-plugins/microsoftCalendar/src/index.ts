@@ -7,6 +7,13 @@
  * writes, Calendars.Read.Shared for findMeetingTimes. Each action asks only
  * for what it needs, so a connection consented before the write actions
  * existed keeps reading; the newer actions need a re-login.
+ *
+ * Shared calendars: most actions take an optional `user` (a mailbox address
+ * or id) and then work in that mailbox's calendars instead of the signed-in
+ * user's: /users/{user}/... with Calendars.Read.Shared for reads and
+ * Calendars.ReadWrite.Shared for writes. The mailbox owner must have shared
+ * the calendar (or made the user a delegate); app-only reaches any mailbox
+ * the app's application permissions allow.
  */
 import type { ActionContext, RunlinePluginAPI } from "runline";
 import {
@@ -15,6 +22,7 @@ import {
   microsoftSetupHelp,
   userBase,
 } from "../../_shared/microsoftAuth.js";
+import { pathSegment } from "../../_shared/credentials.js";
 
 const NAME = "microsoftCalendar";
 const READ_SCOPES = ["https://graph.microsoft.com/Calendars.Read"];
@@ -23,7 +31,11 @@ const WRITE_SCOPES = [
   "https://graph.microsoft.com/Calendars.ReadWrite",
 ];
 const SHARED_SCOPES = ["https://graph.microsoft.com/Calendars.Read.Shared"];
-const SCOPES = [...WRITE_SCOPES, ...SHARED_SCOPES];
+const SHARED_WRITE_SCOPES = [
+  ...SHARED_SCOPES,
+  "https://graph.microsoft.com/Calendars.ReadWrite.Shared",
+];
+const SCOPES = [...WRITE_SCOPES, ...SHARED_WRITE_SCOPES];
 type Ctx = ActionContext;
 
 /** A Graph collection answer; items pass through to the caller unchanged. */
@@ -140,12 +152,40 @@ function toEvent(p: EventInput): Record<string, unknown> {
   return e;
 }
 
-/** The events collection of the default calendar, or of one named calendar. */
-function eventsPath(ctx: Ctx, calendarId: string | undefined): string {
-  return calendarId
-    ? `${userBase(ctx)}/calendars/${encodeURIComponent(calendarId)}`
-    : userBase(ctx);
+/** The signed-in user's mailbox, or another user's shared one. */
+function mailbox(ctx: Ctx, user: string | undefined): string {
+  return user ? `/users/${pathSegment(user)}` : userBase(ctx);
 }
+
+/** Another user's calendar needs the .Shared scopes. */
+const readScopes = (user: string | undefined) =>
+  user ? SHARED_SCOPES : READ_SCOPES;
+const writeScopes = (user: string | undefined) =>
+  user ? SHARED_WRITE_SCOPES : WRITE_SCOPES;
+
+/** The events collection of the default calendar, or of one named calendar. */
+function eventsPath(
+  ctx: Ctx,
+  calendarId: string | undefined,
+  user: string | undefined,
+): string {
+  return calendarId
+    ? `${mailbox(ctx, user)}/calendars/${encodeURIComponent(calendarId)}`
+    : mailbox(ctx, user);
+}
+
+/** One event by id, in the user's mailbox or a shared one. */
+const eventPath = (ctx: Ctx, id: string, user: string | undefined) =>
+  `${mailbox(ctx, user)}/events/${encodeURIComponent(id)}`;
+
+const userField = {
+  user: {
+    type: "string",
+    required: false,
+    description:
+      "Mailbox address or id whose calendar to use, for a calendar shared with you or one you are a delegate of (default: your own)",
+  },
+} as const;
 
 const eventFields = {
   subject: { type: "string", required: false },
@@ -217,7 +257,7 @@ const eventFields = {
 
 export default function microsoftCalendar(rl: RunlinePluginAPI): void {
   rl.setName(NAME);
-  rl.setVersion("1.1.0");
+  rl.setVersion("1.2.0");
   rl.setCredential(microsoftCredential(NAME, SCOPES));
 
   rl.setConnectionSchema({
@@ -264,7 +304,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
     scopes: [...SCOPES, "offline_access"],
     setupHelp: microsoftSetupHelp(
-      "Calendars.Read, Calendars.ReadWrite and Calendars.Read.Shared",
+      "Calendars.Read, Calendars.ReadWrite, Calendars.Read.Shared and Calendars.ReadWrite.Shared",
     ),
   });
 
@@ -285,6 +325,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
         required: false,
         description: "A calendar from calendar.listCalendars (default calendar if omitted)",
       },
+      ...userField,
     },
     async execute(input, ctx: Ctx) {
       const p = input as {
@@ -292,6 +333,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
         end: string;
         top?: number;
         calendarId?: string;
+        user?: string;
       };
       const qs = new URLSearchParams({
         startDateTime: p.start,
@@ -303,9 +345,9 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
       const r = await graphRequest<GraphList>(
         ctx,
         NAME,
-        READ_SCOPES,
+        readScopes(p.user),
         "GET",
-        `${eventsPath(ctx, p.calendarId)}/calendarView?${qs}`,
+        `${eventsPath(ctx, p.calendarId, p.user)}/calendarView?${qs}`,
       );
       return r.value;
     },
@@ -314,18 +356,19 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
   rl.registerAction("calendar.listCalendars", {
     access: "read",
     description:
-      "List the user's calendars. Returns [{id,name,color,isDefaultCalendar,canEdit,owner}].",
-    inputSchema: {},
-    async execute(_input, ctx: Ctx) {
+      "List the user's calendars, or with user, the calendars of that mailbox you can see. Returns [{id,name,color,isDefaultCalendar,canEdit,owner}].",
+    inputSchema: { ...userField },
+    async execute(input, ctx: Ctx) {
+      const p = input as { user?: string };
       const qs = new URLSearchParams({
         $select: "id,name,color,isDefaultCalendar,canEdit,owner",
       });
       const r = await graphRequest<GraphList>(
         ctx,
         NAME,
-        READ_SCOPES,
+        readScopes(p.user),
         "GET",
-        `${userBase(ctx)}/calendars?${qs}`,
+        `${mailbox(ctx, p.user)}/calendars?${qs}`,
       );
       return r.value;
     },
@@ -521,6 +564,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
         description:
           "A calendar from calendar.listCalendars (default calendar if omitted)",
       },
+      ...userField,
     },
     async execute(input, ctx: Ctx) {
       const p = input as {
@@ -532,6 +576,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
         orderBy?: string;
         top?: number;
         calendarId?: string;
+        user?: string;
       };
       const filters: string[] = [];
       if (p.subject) filters.push(`contains(subject,${literal(p.subject)})`);
@@ -557,9 +602,9 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
       const r = await graphRequest<GraphList>(
         ctx,
         NAME,
-        READ_SCOPES,
+        readScopes(p.user),
         "GET",
-        `${eventsPath(ctx, p.calendarId)}/events?${qs}`,
+        `${eventsPath(ctx, p.calendarId, p.user)}/events?${qs}`,
       );
       return r.value;
     },
@@ -568,15 +613,15 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
   rl.registerAction("event.get", {
     access: "read",
     description: "Get one calendar event by id (full details incl. body).",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: { id: { type: "string", required: true }, ...userField },
     async execute(input, ctx: Ctx) {
-      const p = input as { id: string };
+      const p = input as { id: string; user?: string };
       return graphRequest(
         ctx,
         NAME,
-        READ_SCOPES,
+        readScopes(p.user),
         "GET",
-        `${userBase(ctx)}/events/${encodeURIComponent(p.id)}`,
+        eventPath(ctx, p.id, p.user),
       );
     },
   });
@@ -590,9 +635,16 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
       start: { type: "string", required: true, description: "ISO start" },
       end: { type: "string", required: true, description: "ISO end" },
       top: { type: "number", required: false, default: 50 },
+      ...userField,
     },
     async execute(input, ctx: Ctx) {
-      const p = input as { id: string; start: string; end: string; top?: number };
+      const p = input as {
+        id: string;
+        start: string;
+        end: string;
+        top?: number;
+        user?: string;
+      };
       const qs = new URLSearchParams({
         startDateTime: p.start,
         endDateTime: p.end,
@@ -602,9 +654,9 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
       const r = await graphRequest<GraphList>(
         ctx,
         NAME,
-        READ_SCOPES,
+        readScopes(p.user),
         "GET",
-        `${userBase(ctx)}/events/${encodeURIComponent(p.id)}/instances?${qs}`,
+        `${eventPath(ctx, p.id, p.user)}/instances?${qs}`,
       );
       return r.value;
     },
@@ -624,15 +676,16 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
         required: false,
         description: "A calendar from calendar.listCalendars (default calendar if omitted)",
       },
+      ...userField,
     },
     async execute(input, ctx: Ctx) {
-      const p = input as EventInput & { calendarId?: string };
+      const p = input as EventInput & { calendarId?: string; user?: string };
       const r = await graphRequest<{ id: string; webLink: string }>(
         ctx,
         NAME,
-        WRITE_SCOPES,
+        writeScopes(p.user),
         "POST",
-        `${eventsPath(ctx, p.calendarId)}/events`,
+        `${eventsPath(ctx, p.calendarId, p.user)}/events`,
         toEvent(p),
       );
       return { id: r.id, webLink: r.webLink };
@@ -643,15 +696,19 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     access: "write",
     description:
       "Change an event; only the fields given are changed. Attendees are notified of the change. Returns {id, webLink}.",
-    inputSchema: { id: { type: "string", required: true }, ...eventFields },
+    inputSchema: {
+      id: { type: "string", required: true },
+      ...eventFields,
+      ...userField,
+    },
     async execute(input, ctx: Ctx) {
-      const p = input as EventInput & { id: string };
+      const p = input as EventInput & { id: string; user?: string };
       const r = await graphRequest<{ id: string; webLink: string }>(
         ctx,
         NAME,
-        WRITE_SCOPES,
+        writeScopes(p.user),
         "PATCH",
-        `${userBase(ctx)}/events/${encodeURIComponent(p.id)}`,
+        eventPath(ctx, p.id, p.user),
         toEvent(p),
       );
       return { id: r.id, webLink: r.webLink };
@@ -662,15 +719,15 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     access: "write",
     description:
       "Delete an event from the calendar. An organizer's delete cancels it for attendees without a message; use event.cancel to send one. Returns {success}.",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: { id: { type: "string", required: true }, ...userField },
     async execute(input, ctx: Ctx) {
-      const p = input as { id: string };
+      const p = input as { id: string; user?: string };
       return graphRequest(
         ctx,
         NAME,
-        WRITE_SCOPES,
+        writeScopes(p.user),
         "DELETE",
-        `${userBase(ctx)}/events/${encodeURIComponent(p.id)}`,
+        eventPath(ctx, p.id, p.user),
       );
     },
   });
@@ -682,15 +739,16 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
     inputSchema: {
       id: { type: "string", required: true },
       comment: { type: "string", required: false },
+      ...userField,
     },
     async execute(input, ctx: Ctx) {
-      const p = input as { id: string; comment?: string };
+      const p = input as { id: string; comment?: string; user?: string };
       return graphRequest(
         ctx,
         NAME,
-        WRITE_SCOPES,
+        writeScopes(p.user),
         "POST",
-        `${userBase(ctx)}/events/${encodeURIComponent(p.id)}/cancel`,
+        `${eventPath(ctx, p.id, p.user)}/cancel`,
         p.comment === undefined ? {} : { comment: p.comment },
       );
     },
@@ -730,6 +788,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
         required: false,
         description: "Zone for proposedStart/End without an offset (default UTC)",
       },
+      ...userField,
     },
     async execute(input, ctx: Ctx) {
       const p = input as {
@@ -740,6 +799,7 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
         proposedStart?: string;
         proposedEnd?: string;
         timeZone?: string;
+        user?: string;
       };
       if (!(RESPONSES as readonly string[]).includes(p.response))
         throw new Error(
@@ -764,9 +824,9 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
       return graphRequest(
         ctx,
         NAME,
-        WRITE_SCOPES,
+        writeScopes(p.user),
         "POST",
-        `${userBase(ctx)}/events/${encodeURIComponent(p.id)}/${p.response}`,
+        `${eventPath(ctx, p.id, p.user)}/${p.response}`,
         {
           sendResponse: p.sendResponse ?? true,
           ...(p.comment === undefined ? {} : { comment: p.comment }),
@@ -795,17 +855,23 @@ export default function microsoftCalendar(rl: RunlinePluginAPI): void {
         description: "Recipient address(es)",
       },
       comment: { type: "string", required: false },
+      ...userField,
     },
     async execute(input, ctx: Ctx) {
-      const p = input as { id: string; to: string[] | string; comment?: string };
+      const p = input as {
+        id: string;
+        to: string[] | string;
+        comment?: string;
+        user?: string;
+      };
       if (!list(p.to).length)
         throw new Error(`${NAME}: event.forward needs at least one recipient`);
       return graphRequest(
         ctx,
         NAME,
-        WRITE_SCOPES,
+        writeScopes(p.user),
         "POST",
-        `${userBase(ctx)}/events/${encodeURIComponent(p.id)}/forward`,
+        `${eventPath(ctx, p.id, p.user)}/forward`,
         {
           toRecipients: recipients(p.to),
           ...(p.comment === undefined ? {} : { comment: p.comment }),

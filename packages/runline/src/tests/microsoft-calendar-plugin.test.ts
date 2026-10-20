@@ -300,4 +300,40 @@ describe("microsoftCalendar", () => {
     );
     assert.equal(seen.length, 1);
   });
+
+  it("works in another user's shared calendar", async () => {
+    const seen = capture((url) =>
+      url.includes("/calendars?") || url.includes("calendarView")
+        ? Response.json({ value: [] })
+        : Response.json({ id: "e1", webLink: "w" }),
+    );
+    const user = "dana@example.com";
+    await run("calendar.listCalendars", { user });
+    await run("calendar.list", {
+      user,
+      calendarId: "cal1",
+      start: "2026-01-01T00:00:00Z",
+      end: "2026-01-02T00:00:00Z",
+    });
+    await run("event.create", {
+      user,
+      subject: "Sync",
+      start: "2026-05-01T10:00:00Z",
+      end: "2026-05-01T10:30:00Z",
+    });
+    await run("event.update", { user, id: "e1", subject: "Sync 2" });
+    await run("event.respond", { user, id: "e1", response: "accept" });
+    assert.deepEqual(
+      seen.map((s) => [s.method, new URL(s.url).pathname.split("/v1.0")[1]]),
+      [
+        ["GET", "/users/dana%40example.com/calendars"],
+        ["GET", "/users/dana%40example.com/calendars/cal1/calendarView"],
+        ["POST", "/users/dana%40example.com/events"],
+        ["PATCH", "/users/dana%40example.com/events/e1"],
+        ["POST", "/users/dana%40example.com/events/e1/accept"],
+      ],
+    );
+    await assert.rejects(run("event.get", { user: "../me", id: "e1" }));
+    assert.equal(seen.length, 5);
+  });
 });
