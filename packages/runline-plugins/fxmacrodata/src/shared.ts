@@ -146,7 +146,11 @@ export function noticesOf(answer: Answer): string[] {
 
 /** A 200 whose body reports an error rather than data. */
 function failedAnswer(answer: Answer): Error | undefined {
-  if (typeof answer.error !== "string") return undefined;
+  if (typeof answer.error !== "string") {
+    if (answer.error != null || answer.detail != null)
+      return invalidAnswer("response contains an error");
+    return undefined;
+  }
   return answerFailed(NAME, {
     code: answer.code ?? answer.error,
     message: answer.detail ?? answer.message,
