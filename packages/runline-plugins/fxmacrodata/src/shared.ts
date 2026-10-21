@@ -108,7 +108,7 @@ function heldKey(ctx: ActionContext): string | undefined {
   return typeof key === "string" && key.trim() ? key.trim() : undefined;
 }
 
-/** Every string in `value` with the key replaced, should the API echo it. */
+/** Every string and object property name with the key replaced if echoed. */
 export function scrubbed<T>(value: T, key: string | undefined): T {
   if (!key) return value;
   if (typeof value === "string")
@@ -118,7 +118,7 @@ export function scrubbed<T>(value: T, key: string | undefined): T {
   if (isRecord(value))
     return Object.fromEntries(
       Object.entries(value).map(([name, entry]) => [
-        name,
+        scrubbed(name, key),
         scrubbed(entry, key),
       ]),
     ) as T;
