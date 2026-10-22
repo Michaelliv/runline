@@ -5,6 +5,7 @@ import { createPluginAPI } from "../plugin/api.js";
 import type { PluginDef } from "../plugin/types.js";
 
 const SHIFT_WORKERS_ACTIONS = [
+  "access.set",
   "app.create",
   "app.delete",
   "app.get",
@@ -16,6 +17,7 @@ const SHIFT_WORKERS_ACTIONS = [
   "app.suspend",
   "data.get",
   "deployment.create",
+  "egress.set",
   "logs.list",
   "preview.create",
   "secret.delete",

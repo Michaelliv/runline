@@ -242,6 +242,49 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
       request(ctx, `${app((input as { app: string }).app)}/data`),
   });
 
+  rl.registerAction("access.set", {
+    access: "write",
+    description:
+      "Make an application private (only callers sending a Shift Cloud key or token of this organization as a bearer) or public.",
+    inputSchema: t.Object({ app: App, private: t.Boolean() }, STRICT_OBJECT),
+    execute: (input, ctx) => {
+      const { app: name, private: isPrivate } = input as {
+        app: string;
+        private: boolean;
+      };
+      return request(ctx, `${app(name)}/access`, {
+        method: "PUT",
+        body: JSON.stringify({ private: isPrivate }),
+      });
+    },
+  });
+
+  rl.registerAction("egress.set", {
+    access: "write",
+    description:
+      "Restrict the internet hostnames an application may call (e.g. api.stripe.com, *.example.com), or lift the restriction with null.",
+    inputSchema: t.Object(
+      {
+        app: App,
+        hosts: t.Union([
+          t.Array(t.String({ minLength: 3, maxLength: 253 }), { maxItems: 50 }),
+          t.Null(),
+        ]),
+      },
+      STRICT_OBJECT,
+    ),
+    execute: (input, ctx) => {
+      const { app: name, hosts } = input as {
+        app: string;
+        hosts: string[] | null;
+      };
+      return request(ctx, `${app(name)}/egress`, {
+        method: "PUT",
+        body: JSON.stringify({ hosts }),
+      });
+    },
+  });
+
   rl.registerAction("usage.get", {
     access: "read",
     description:
