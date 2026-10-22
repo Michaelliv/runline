@@ -245,12 +245,38 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
   rl.registerAction("access.set", {
     access: "write",
     description:
-      "Who may reach an application. private: only callers sending a Shift Cloud key/token of this organization as a bearer. internal: no public address — only the internal gateway inside Shift's network. allowedIps: only these client CIDRs (null lifts). Fields left out keep their value.",
+      'Who may reach an application. allow: the callers a private app admits — {kind:"org",id}, {kind:"key",id} (one agent\'s key), {kind:"user",id|email} (default: this organization). private: only callers sending a Shift Cloud key/token of this organization as a bearer. internal: no public address — only the internal gateway inside Shift\'s network. allowedIps: only these client CIDRs (null lifts). Fields left out keep their value.',
     inputSchema: t.Object(
       {
         app: App,
         private: t.Optional(t.Boolean()),
         internal: t.Optional(t.Boolean()),
+        allow: t.Optional(
+          t.Union([
+            t.Array(
+              t.Union([
+                t.Object(
+                  { kind: t.Literal("org"), id: t.String({ minLength: 1 }) },
+                  STRICT_OBJECT,
+                ),
+                t.Object(
+                  { kind: t.Literal("key"), id: t.String({ minLength: 1 }) },
+                  STRICT_OBJECT,
+                ),
+                t.Object(
+                  {
+                    kind: t.Literal("user"),
+                    id: t.Optional(t.String()),
+                    email: t.Optional(t.String()),
+                  },
+                  STRICT_OBJECT,
+                ),
+              ]),
+              { minItems: 1, maxItems: 100 },
+            ),
+            t.Null(),
+          ]),
+        ),
         allowedIps: t.Optional(
           t.Union([
             t.Array(
@@ -273,6 +299,55 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
       return request(ctx, `${app(name)}/access`, {
         method: "PUT",
         body: JSON.stringify(access),
+      });
+    },
+  });
+
+  rl.registerAction("shareToken.create", {
+    access: "write",
+    description:
+      "Create a share token for one application (makes it private): anyone holding it may call the app with it as a bearer. Returned once; optional expiry; revocable.",
+    inputSchema: t.Object(
+      {
+        app: App,
+        name: t.String({ minLength: 1, maxLength: 100 }),
+        expiresInDays: t.Optional(t.Integer({ minimum: 1, maximum: 365 })),
+      },
+      STRICT_OBJECT,
+    ),
+    execute: (input, ctx) => {
+      const { app: name, ...body } = input as {
+        app: string;
+        name: string;
+        expiresInDays?: number;
+      };
+      return request(ctx, `${app(name)}/share-tokens`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    },
+  });
+
+  rl.registerAction("shareToken.list", {
+    access: "read",
+    description:
+      "An application's share tokens (names, expiry, revoked; never the token itself).",
+    inputSchema: t.Object({ app: App }, STRICT_OBJECT),
+    execute: (input, ctx) =>
+      request(ctx, `${app((input as { app: string }).app)}/share-tokens`),
+  });
+
+  rl.registerAction("shareToken.revoke", {
+    access: "write",
+    description: "Revoke a share token; it stops working within seconds.",
+    inputSchema: t.Object(
+      { app: App, id: t.String({ minLength: 1 }) },
+      STRICT_OBJECT,
+    ),
+    execute: (input, ctx) => {
+      const { app: name, id } = input as { app: string; id: string };
+      return request(ctx, `${app(name)}/share-tokens/${pathSegment(id)}`, {
+        method: "DELETE",
       });
     },
   });
