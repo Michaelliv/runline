@@ -211,6 +211,37 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
     },
   });
 
+  rl.registerAction("preview.create", {
+    access: "write",
+    description:
+      "Run a version (default: the newest) on the application's preview: one pod with its own data at <app>-<org>-preview, the live version untouched. Returns the preview url. Removed after 24 hours.",
+    inputSchema: t.Object(
+      {
+        app: App,
+        version: t.Optional(
+          t.Integer({ minimum: 1, description: "Version number" }),
+        ),
+      },
+      STRICT_OBJECT,
+    ),
+    execute: (input, ctx) => {
+      const { app: name, version } = input as { app: string; version?: number };
+      return request(ctx, `${app(name)}/preview`, {
+        method: "POST",
+        body: JSON.stringify({ version }),
+      });
+    },
+  });
+
+  rl.registerAction("data.get", {
+    access: "read",
+    description:
+      "What an application holds: its Durable Object instances (up to 200) and the bytes in its storage.",
+    inputSchema: t.Object({ app: App }, STRICT_OBJECT),
+    execute: (input, ctx) =>
+      request(ctx, `${app((input as { app: string }).app)}/data`),
+  });
+
   rl.registerAction("usage.get", {
     access: "read",
     description:
