@@ -245,16 +245,34 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
   rl.registerAction("access.set", {
     access: "write",
     description:
-      "Make an application private (only callers sending a Shift Cloud key or token of this organization as a bearer) or public.",
-    inputSchema: t.Object({ app: App, private: t.Boolean() }, STRICT_OBJECT),
+      "Who may reach an application. private: only callers sending a Shift Cloud key/token of this organization as a bearer. internal: no public address — only the internal gateway inside Shift's network. allowedIps: only these client CIDRs (null lifts). Fields left out keep their value.",
+    inputSchema: t.Object(
+      {
+        app: App,
+        private: t.Optional(t.Boolean()),
+        internal: t.Optional(t.Boolean()),
+        allowedIps: t.Optional(
+          t.Union([
+            t.Array(
+              t.String({ pattern: "^\\d{1,3}(\\.\\d{1,3}){3}/\\d{1,2}$" }),
+              { minItems: 1, maxItems: 50 },
+            ),
+            t.Null(),
+          ]),
+        ),
+      },
+      STRICT_OBJECT,
+    ),
     execute: (input, ctx) => {
-      const { app: name, private: isPrivate } = input as {
+      const { app: name, ...access } = input as {
         app: string;
-        private: boolean;
+        private?: boolean;
+        internal?: boolean;
+        allowedIps?: string[] | null;
       };
       return request(ctx, `${app(name)}/access`, {
         method: "PUT",
-        body: JSON.stringify({ private: isPrivate }),
+        body: JSON.stringify(access),
       });
     },
   });
