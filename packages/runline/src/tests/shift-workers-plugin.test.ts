@@ -9,6 +9,7 @@ const SHIFT_WORKERS_ACTIONS = [
   "app.delete",
   "app.get",
   "app.list",
+  "app.purge",
   "app.repair",
   "app.restore",
   "app.resume",
@@ -18,6 +19,8 @@ const SHIFT_WORKERS_ACTIONS = [
   "secret.delete",
   "secret.list",
   "secret.set",
+  "spendCap.set",
+  "usage.get",
   "version.list",
   "version.upload",
 ] as const;

@@ -211,6 +211,41 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
     },
   });
 
+  rl.registerAction("usage.get", {
+    access: "read",
+    description:
+      "This month's Workers usage and spend for the organization, per application, with the spend cap and whether it was reached.",
+    inputSchema: t.Object({}, STRICT_OBJECT),
+    execute: (_input, ctx) => request(ctx, `${BASE}/usage`),
+  });
+
+  rl.registerAction("spendCap.set", {
+    access: "write",
+    description:
+      "Set the organization's monthly Workers spend cap in USD (null removes it). Owners and admins are emailed at 50/80/100%; at the cap applications stop, data kept, until the cap is raised.",
+    inputSchema: t.Object(
+      { usd: t.Union([t.Number({ exclusiveMinimum: 0 }), t.Null()]) },
+      STRICT_OBJECT,
+    ),
+    execute: (input, ctx) =>
+      request(ctx, `${BASE}/spend-cap`, {
+        method: "PUT",
+        body: JSON.stringify({ usd: (input as { usd: number | null }).usd }),
+      }),
+  });
+
+  rl.registerAction("app.purge", {
+    access: "write",
+    description:
+      "Remove a deleted application for good now, with its data (skips the 30-day hold; cannot be undone).",
+    inputSchema: t.Object({ app: App }, STRICT_OBJECT),
+    execute: (input, ctx) =>
+      request(ctx, app((input as { app: string }).app), {
+        method: "DELETE",
+        query: { permanent: "true" },
+      }),
+  });
+
   rl.registerAction("logs.list", {
     access: "read",
     description:
