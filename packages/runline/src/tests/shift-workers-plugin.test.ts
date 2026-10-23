@@ -19,6 +19,7 @@ const SHIFT_WORKERS_ACTIONS = [
   "deployment.create",
   "egress.set",
   "logs.list",
+  "managers.set",
   "preview.create",
   "secret.delete",
   "secret.list",

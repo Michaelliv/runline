@@ -303,6 +303,52 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
     },
   });
 
+  rl.registerAction("managers.set", {
+    access: "write",
+    description:
+      'Who may manage an application (deploy, change, delete): {kind:"key",id} (an agent), {kind:"user",id|email}, {kind:"org",id}; null lets anyone with Workers write. Organization owners and admins always may. You must include yourself.',
+    inputSchema: t.Object(
+      {
+        app: App,
+        managers: t.Union([
+          t.Array(
+            t.Union([
+              t.Object(
+                { kind: t.Literal("org"), id: t.String({ minLength: 1 }) },
+                STRICT_OBJECT,
+              ),
+              t.Object(
+                { kind: t.Literal("key"), id: t.String({ minLength: 1 }) },
+                STRICT_OBJECT,
+              ),
+              t.Object(
+                {
+                  kind: t.Literal("user"),
+                  id: t.Optional(t.String()),
+                  email: t.Optional(t.String()),
+                },
+                STRICT_OBJECT,
+              ),
+            ]),
+            { minItems: 1, maxItems: 100 },
+          ),
+          t.Null(),
+        ]),
+      },
+      STRICT_OBJECT,
+    ),
+    execute: (input, ctx) => {
+      const { app: name, managers } = input as {
+        app: string;
+        managers: unknown[] | null;
+      };
+      return request(ctx, `${app(name)}/managers`, {
+        method: "PUT",
+        body: JSON.stringify({ managers }),
+      });
+    },
+  });
+
   rl.registerAction("shareToken.create", {
     access: "write",
     description:
