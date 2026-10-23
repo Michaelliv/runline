@@ -18,7 +18,11 @@ const GUIDE =
   "and its ES-module main file (export default { fetch }; Durable Object " +
   'classes extend DurableObject from "cloudflare:workers" and use ' +
   "this.ctx.storage.sql). Only local files are bundled, no npm packages. " +
-  "Secrets arrive as env bindings; console.log goes to the app's logs.";
+  "Secrets arrive as env bindings; console.log goes to the app's logs. " +
+  'An idle app sleeps (status "asleep", no pods, no CPU charge) until its ' +
+  "next request: allow 45 s for that first request (about 3 s normally, up " +
+  'to about 80 s if a node must start); on 503 "the application is ' +
+  'starting", retry after the Retry-After seconds, for up to 2 minutes.';
 
 const app = (name: string) => `${BASE}/apps/${pathSegment(name)}`;
 
@@ -420,6 +424,29 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
       return request(ctx, `${app(name)}/egress`, {
         method: "PUT",
         body: JSON.stringify({ hosts }),
+      });
+    },
+  });
+
+  rl.registerAction("sleep.set", {
+    access: "write",
+    description:
+      "When an idle application sleeps: after this many idle minutes (5 to 10080; default 15) it has no pods and costs no CPU, and its next request wakes it (about 3 s, up to about 80 s if a node must start). null keeps it always on (no cold starts, its two pods are charged all the time).",
+    inputSchema: t.Object(
+      {
+        app: App,
+        minutes: t.Union([t.Integer({ minimum: 5, maximum: 10080 }), t.Null()]),
+      },
+      STRICT_OBJECT,
+    ),
+    execute: (input, ctx) => {
+      const { app: name, minutes } = input as {
+        app: string;
+        minutes: number | null;
+      };
+      return request(ctx, `${app(name)}/sleep`, {
+        method: "PUT",
+        body: JSON.stringify({ minutes }),
       });
     },
   });

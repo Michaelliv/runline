@@ -27,6 +27,7 @@ const SHIFT_WORKERS_ACTIONS = [
   "shareToken.create",
   "shareToken.list",
   "shareToken.revoke",
+  "sleep.set",
   "spendCap.set",
   "usage.get",
   "version.list",
