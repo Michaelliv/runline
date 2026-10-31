@@ -8,7 +8,7 @@ import {
   PLAUD_OAUTH,
   PLAUD_PUBLIC_CLIENT_ID,
   PLAUD_REDIRECT_URI,
-  plaudRuntime,
+  plaudCredential,
 } from "../../../runline-plugins/plaud/src/shared.js";
 import {
   buildOAuth2AuthorizationUrl,
@@ -21,9 +21,11 @@ import {
   oauthCallback,
   runOAuth,
 } from "../core/oauth.js";
+import { brokerFor } from "../credentials/broker.js";
 import { CredentialRegistry } from "../credentials/registry.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, OAuthConfig } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const nativeFetch = globalThis.fetch;
 afterEach(() => {
@@ -32,16 +34,13 @@ afterEach(() => {
 function mock(
   handler: (url: string, init: RequestInit) => Response | Promise<Response>,
 ) {
-  globalThis.fetch = (async (url, init) =>
-    handler(String(url), init ?? {})) as typeof fetch;
+  stubFetch(async (url, init) => handler(String(url), init ?? {}));
 }
 const { api, resolve } = createPluginAPI("test");
 plaud(api);
 const plugin = resolve();
 function action(name: string) {
-  const result = plugin.actions.find((a) => a.name === name);
-  assert.ok(result);
-  return result;
+  return getAction(plugin, name);
 }
 async function context(config: Record<string, unknown> = {}) {
   const store = new MemoryConnectionProvider([
@@ -499,6 +498,12 @@ describe("native Plaud plugin", () => {
         message: "Invalid provider response",
       });
     }
+    for (const status of [200, 204]) {
+      mock(() => new Response(null, { status }));
+      await assert.rejects(execute("recording.get", { id: "id" }), {
+        code: "invalid_response",
+      });
+    }
   });
 
   it("pins destinations, rejects hostile recording IDs and uses the fixed probe", async () => {
@@ -520,11 +525,13 @@ describe("native Plaud plugin", () => {
         code: "request_not_allowed",
       });
     assert.equal(calls, 0);
-    const { binding, transport } = plaudRuntime((await context()).ctx);
-    assert.deepEqual(await transport.probe(binding), {
-      outcome: "accepted",
-      status: 200,
-    });
+    assert.deepEqual(
+      await brokerFor((await context()).ctx, plaudCredential).probe(),
+      {
+        outcome: "accepted",
+        status: 200,
+      },
+    );
     assert.equal(calls, 1);
     for (const id of ["a?b=c", "a#b", "with space"]) {
       mock((url) => {

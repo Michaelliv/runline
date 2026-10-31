@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   CRM_ACCESS_ROLE,
@@ -6,11 +6,8 @@ import {
   type CrmAccessGrant,
   enumSchema,
   idSchema,
-  listParams,
-  pathSegment,
   request,
   STRICT_OBJECT,
-  withQuery,
 } from "./shared.js";
 
 export function registerAccessActions(rl: RunlinePluginAPI) {
@@ -35,7 +32,8 @@ export function registerAccessActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ grants: CrmAccessGrant[] }>(
         ctx,
-        withQuery(`${CRM_BASE}/access`, listParams(input)),
+        `${CRM_BASE}/access`,
+        { query: input },
       );
       return body.grants;
     },

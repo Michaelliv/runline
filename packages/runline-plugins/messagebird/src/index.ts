@@ -1,32 +1,31 @@
-import type { RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  type RunlinePluginAPI,
+} from "runline";
+import { messagebirdCredential } from "./credentials.js";
 
-const BASE_URL = "https://rest.messagebird.com";
-
-async function apiRequest(
-  accessKey: string,
-  method: string,
-  endpoint: string,
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, messagebirdCredential, "messagebird", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `AccessKey ${accessKey}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0 && method !== "GET")
-    opts.body = JSON.stringify(body);
-  const res = await fetch(`${BASE_URL}${endpoint}`, opts);
-  if (!res.ok)
-    throw new Error(`MessageBird API error ${res.status}: ${await res.text()}`);
-  return res.json();
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function messagebird(rl: RunlinePluginAPI) {
   rl.setName("messagebird");
   rl.setVersion("0.1.0");
+  rl.setCredential(messagebirdCredential);
 
   rl.setConnectionSchema({
     accessKey: {
@@ -36,9 +35,6 @@ export default function messagebird(rl: RunlinePluginAPI) {
       env: "MESSAGEBIRD_ACCESS_KEY",
     },
   });
-
-  const key = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessKey as string;
 
   rl.registerAction("sms.send", {
     access: "write",
@@ -124,7 +120,7 @@ export default function messagebird(rl: RunlinePluginAPI) {
       ]) {
         if (p[k] !== undefined && p[k] !== null) body[k] = p[k];
       }
-      return apiRequest(key(ctx), "POST", "/messages", body);
+      return apiRequest(ctx, "POST", "messages", body);
     },
   });
 
@@ -132,7 +128,7 @@ export default function messagebird(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get current account balance",
     async execute(_input, ctx) {
-      return apiRequest(key(ctx), "GET", "/balance");
+      return apiRequest(ctx, "GET", "balance");
     },
   });
 }

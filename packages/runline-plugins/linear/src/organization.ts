@@ -1,12 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import {
-  gql,
-  key,
-  ORG_FIELDS,
-  requireUnscoped,
-  withScopedNote,
-} from "./shared.js";
+import { gql, ORG_FIELDS, requireUnscoped, withScopedNote } from "./shared.js";
 
 export function registerOrganizationActions(rl: RunlinePluginAPI) {
   rl.registerAction("org.get", {
@@ -15,10 +9,7 @@ export function registerOrganizationActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({}),
     async execute(_input, ctx) {
       requireUnscoped(ctx, "org.get");
-      const data = await gql(
-        key(ctx),
-        `query { organization { ${ORG_FIELDS} } }`,
-      );
+      const data = await gql(ctx, `query { organization { ${ORG_FIELDS} } }`);
       return data.organization;
     },
   });

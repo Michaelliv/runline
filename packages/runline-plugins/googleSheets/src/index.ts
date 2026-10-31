@@ -35,9 +35,17 @@
  * raw rows / objects and callers post-filter.
  */
 
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import * as t from "typebox";
-import { googleJsonRequest } from "../../_shared/googleAuth.js";
+import {
+  googleCredential,
+  googleJsonRequest,
+  googleOAuth,
+} from "../../_shared/googleAuth.js";
 import {
   Id,
   JsonValue,
@@ -150,19 +158,17 @@ async function sheetsRequest(
 // ─── A1 helpers ─────────────────────────────────────────────────
 
 /**
- * Encode a range like `Sheet1!A1:B5` for use in a URL. Google's
- * docs are explicit that the sheet-name portion needs URL-encoding
- * (for non-ASCII / spaces) but the range portion should not be, so
- * we split on `!` and encode only the left side. A bare sheet name
- * gets wrapped in single quotes so Sheets doesn't try to parse
- * something like `ABC` as an A1 range.
+ * A range like `Sheet1!A1:B5` as one encoded path segment, as Google's
+ * own clients send it. A bare sheet name is wrapped in single quotes so
+ * Sheets doesn't parse something like `ABC` as an A1 range.
  */
 function encodeA1(range: string): string {
-  if (range.includes("!")) {
-    const [sheet, ranges] = range.split("!");
-    return `${encodeURIComponent(sheet)}!${ranges}`;
-  }
-  return encodeURIComponent(`'${range}'`);
+  return pathSegment(range.includes("!") ? range : `'${range}'`);
+}
+
+/** A spreadsheet's API path, its ID one path segment. */
+function spreadsheetPath(spreadsheetId: unknown): string {
+  return `/v4/spreadsheets/${pathSegment(spreadsheetId)}`;
 }
 
 function columnNumberToLetter(n: number): string {
@@ -244,7 +250,7 @@ async function getValues(
   const res = (await sheetsRequest(
     ctx,
     "GET",
-    `/v4/spreadsheets/${spreadsheetId}/values/${encodeA1(range)}`,
+    `${spreadsheetPath(spreadsheetId)}/values/${encodeA1(range)}`,
     undefined,
     { valueRenderOption, dateTimeRenderOption },
   )) as { values?: string[][] };
@@ -258,7 +264,7 @@ async function getSheetProperties(
   const res = (await sheetsRequest(
     ctx,
     "GET",
-    `/v4/spreadsheets/${spreadsheetId}`,
+    spreadsheetPath(spreadsheetId),
     undefined,
     { fields: "sheets.properties" },
   )) as { sheets: Array<{ properties: SheetProperties }> };
@@ -291,7 +297,7 @@ async function batchValuesUpdate(
   return sheetsRequest(
     ctx,
     "POST",
-    `/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
+    `${spreadsheetPath(spreadsheetId)}/values:batchUpdate`,
     { data, valueInputOption },
   );
 }
@@ -304,7 +310,7 @@ async function spreadsheetBatchUpdate(
   return sheetsRequest(
     ctx,
     "POST",
-    `/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    `${spreadsheetPath(spreadsheetId)}:batchUpdate`,
     { requests },
   );
 }
@@ -509,40 +515,9 @@ function a1RangeToGridRange(
 export default function googleSheets(rl: RunlinePluginAPI) {
   rl.setName("googleSheets");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleSheets", SCOPES));
 
-  rl.setOAuth({
-    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-    tokenUrl: "https://oauth2.googleapis.com/token",
-    scopes: SCOPES,
-    authParams: { access_type: "offline", prompt: "consent" },
-    setupHelp: [
-      "You need a Google Cloud OAuth client. Takes ~5 minutes, one time.",
-      "",
-      "1. Create or pick a Google Cloud project:",
-      "     https://console.cloud.google.com/projectcreate",
-      "",
-      "2. Enable the Google Sheets API (and Drive API, required for",
-      "   spreadsheet.delete):",
-      "     https://console.cloud.google.com/apis/library/sheets.googleapis.com",
-      "     https://console.cloud.google.com/apis/library/drive.googleapis.com",
-      "",
-      "3. Configure the OAuth consent screen:",
-      "     https://console.cloud.google.com/apis/credentials/consent",
-      "     • Audience: External",
-      "",
-      "4. Add yourself as a test user:",
-      "     https://console.cloud.google.com/auth/audience",
-      "",
-      "5. Create the OAuth client:",
-      "     https://console.cloud.google.com/apis/credentials",
-      "     • + Create credentials → OAuth client ID",
-      "     • Application type: Web application",
-      "     • Authorized redirect URIs → + Add URI: {{redirectUri}}",
-      "",
-      "6. Paste the Client ID and Client Secret below, or export",
-      "   GOOGLE_SHEETS_CLIENT_ID and GOOGLE_SHEETS_CLIENT_SECRET.",
-    ],
-  });
+  rl.setOAuth(googleOAuth("googleSheets", SCOPES, "GOOGLE_SHEETS"));
 
   rl.setConnectionSchema({
     authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
@@ -648,7 +623,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       return sheetsRequest(
         ctx,
         "GET",
-        `/v4/spreadsheets/${p.spreadsheetId}`,
+        spreadsheetPath(p.spreadsheetId),
         undefined,
         qs,
       );
@@ -668,7 +643,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       await sheetsRequest(
         ctx,
         "DELETE",
-        `/drive/v3/files/${p.spreadsheetId}`,
+        `/drive/v3/files/${pathSegment(p.spreadsheetId)}`,
         undefined,
         undefined,
         "https://www.googleapis.com",
@@ -880,7 +855,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
           await sheetsRequest(
             ctx,
             "PUT",
-            `/v4/spreadsheets/${spreadsheetId}/values/${encodeA1(
+            `${spreadsheetPath(spreadsheetId)}/values/${encodeA1(
               `${sheetName}!A${headerRowIdx + 1}`,
             )}`,
             { range: `${sheetName}!A${headerRowIdx + 1}`, values: [headers] },
@@ -894,7 +869,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         return sheetsRequest(
           ctx,
           "POST",
-          `/v4/spreadsheets/${spreadsheetId}/values/${encodeA1(sheetName)}:append`,
+          `${spreadsheetPath(spreadsheetId)}/values/${encodeA1(sheetName)}:append`,
           { range: sheetName, values },
           { valueInputOption, insertDataOption: "INSERT_ROWS" },
         );
@@ -913,7 +888,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       return sheetsRequest(
         ctx,
         "PUT",
-        `/v4/spreadsheets/${spreadsheetId}/values/${encodeA1(targetRange)}`,
+        `${spreadsheetPath(spreadsheetId)}/values/${encodeA1(targetRange)}`,
         { range: targetRange, values },
         { valueInputOption },
       );
@@ -1086,14 +1061,14 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         await sheetsRequest(
           ctx,
           "POST",
-          `/v4/spreadsheets/${p.spreadsheetId}/values/${encodeA1(range)}:clear`,
+          `${spreadsheetPath(p.spreadsheetId)}/values/${encodeA1(range)}:clear`,
           {},
         );
         if (firstRow.length > 0) {
           await sheetsRequest(
             ctx,
             "PUT",
-            `/v4/spreadsheets/${p.spreadsheetId}/values/${encodeA1(`${sheetName}!1:1`)}`,
+            `${spreadsheetPath(p.spreadsheetId)}/values/${encodeA1(`${sheetName}!1:1`)}`,
             { range: `${sheetName}!1:1`, values: firstRow },
             { valueInputOption: "RAW" },
           );
@@ -1103,7 +1078,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       return sheetsRequest(
         ctx,
         "POST",
-        `/v4/spreadsheets/${p.spreadsheetId}/values/${encodeA1(range)}:clear`,
+        `${spreadsheetPath(p.spreadsheetId)}/values/${encodeA1(range)}:clear`,
         {},
       );
     },
@@ -1259,7 +1234,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       await sheetsRequest(
         ctx,
         "PUT",
-        `/v4/spreadsheets/${spreadsheetId}/values/${encodeA1(
+        `${spreadsheetPath(spreadsheetId)}/values/${encodeA1(
           `${sheetName}!${headerRowIdx + 1}:${headerRowIdx + 1}`,
         )}`,
         {
@@ -1287,7 +1262,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         await sheetsRequest(
           ctx,
           "POST",
-          `/v4/spreadsheets/${spreadsheetId}/values/${encodeA1(sheetName)}:append`,
+          `${spreadsheetPath(spreadsheetId)}/values/${encodeA1(sheetName)}:append`,
           { range: sheetName, values },
           { valueInputOption, insertDataOption: "INSERT_ROWS" },
         );
@@ -1298,7 +1273,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         await sheetsRequest(
           ctx,
           "PUT",
-          `/v4/spreadsheets/${spreadsheetId}/values/${encodeA1(targetRange)}`,
+          `${spreadsheetPath(spreadsheetId)}/values/${encodeA1(targetRange)}`,
           { range: targetRange, values },
           { valueInputOption },
         );

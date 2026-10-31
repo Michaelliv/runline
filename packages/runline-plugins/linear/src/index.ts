@@ -2,6 +2,7 @@ import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { registerAttachmentActions } from "./attachments.js";
 import { registerCommentActions } from "./comments.js";
+import { linearCredential } from "./credentials.js";
 import { registerCycleActions } from "./cycles.js";
 import { registerInitiativeActions } from "./initiatives.js";
 import { registerIssueActions } from "./issues.js";
@@ -17,6 +18,7 @@ import { registerWebhookActions } from "./webhooks.js";
 export default function linear(rl: RunlinePluginAPI) {
   rl.setName("linear");
   rl.setVersion("0.6.0");
+  rl.setCredential(linearCredential);
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({

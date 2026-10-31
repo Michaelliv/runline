@@ -6,6 +6,7 @@ import googleDocs from "../../../runline-plugins/googleDocs/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { isTypedInputSchema } from "../plugin/schema.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -17,12 +18,6 @@ function makeGoogleDocs(): PluginDef {
   const { api, resolve } = createPluginAPI("googleDocs");
   googleDocs(api);
   return resolve();
-}
-
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected googleDocs.${name} to be registered`);
-  return action;
 }
 
 function checkInput(
@@ -239,14 +234,14 @@ async function captureFetch(
   result: unknown = { documentId: "doc_1", replies: [{}] },
 ) {
   const calls: Array<{ url: string; init?: RequestInit; body?: unknown }> = [];
-  globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+  stubFetch(async (url, init) => {
     calls.push({
       url: String(url),
       init,
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
     });
     return Response.json(result);
-  }) as typeof fetch;
+  });
   return calls;
 }
 

@@ -5,13 +5,8 @@ import googleCalendar from "../../../runline-plugins/googleCalendar/src/index.js
 import googleContacts from "../../../runline-plugins/googleContacts/src/index.js";
 import type { RunlinePluginAPI } from "../plugin/api.js";
 import { createPluginAPI } from "../plugin/api.js";
-import { isTypedInputSchema } from "../plugin/schema.js";
-import type {
-  ActionContext,
-  ActionDef,
-  PluginDef,
-  TypedInputSchema,
-} from "../plugin/types.js";
+import type { ActionContext, ActionDef, PluginDef } from "../plugin/types.js";
+import { stubFetch, typedSchema } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -37,18 +32,9 @@ function action(plugin: PluginDef, name: string): ActionDef {
   return found;
 }
 
-function schema(plugin: PluginDef, name: string): TypedInputSchema {
-  const inputSchema = action(plugin, name).inputSchema;
-  assert.ok(
-    isTypedInputSchema(inputSchema),
-    `expected ${plugin.name}.${name} to use TypeBox`,
-  );
-  return inputSchema;
-}
-
 function assertValid(plugin: PluginDef, name: string, input: unknown): void {
   assert.equal(
-    Check(schema(plugin, name), input),
+    Check(typedSchema(plugin, name), input),
     true,
     `expected ${plugin.name}.${name} input to be valid: ${JSON.stringify(input)}`,
   );
@@ -56,7 +42,7 @@ function assertValid(plugin: PluginDef, name: string, input: unknown): void {
 
 function assertInvalid(plugin: PluginDef, name: string, input: unknown): void {
   assert.equal(
-    Check(schema(plugin, name), input),
+    Check(typedSchema(plugin, name), input),
     false,
     `expected ${plugin.name}.${name} input to be invalid: ${JSON.stringify(input)}`,
   );
@@ -134,7 +120,7 @@ function assertSchemaContracts(
   );
 
   for (const [name, fixture] of Object.entries(fixtures)) {
-    const actionSchema = schema(plugin, name);
+    const actionSchema = typedSchema(plugin, name);
     assert.equal(
       actionSchema.type,
       "object",
@@ -241,10 +227,10 @@ describe("Google Calendar TypeBox schemas", () => {
 
   it("sends an empty attendees array when clearing event guests", async () => {
     let body: unknown;
-    globalThis.fetch = (async (_url: string | URL, init?: RequestInit) => {
+    stubFetch(async (_url, init) => {
       body = init?.body ? JSON.parse(String(init.body)) : undefined;
       return Response.json({ id: "event-1" });
-    }) as typeof fetch;
+    });
 
     const context: ActionContext = {
       connection: {

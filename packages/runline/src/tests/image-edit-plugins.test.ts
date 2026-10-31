@@ -9,12 +9,9 @@ import recraft from "../../../runline-plugins/recraft/src/index.js";
 import replicate from "../../../runline-plugins/replicate/src/index.js";
 import together from "../../../runline-plugins/together/src/index.js";
 import xai from "../../../runline-plugins/xai/src/index.js";
-import { createPluginAPI } from "../plugin/api.js";
-import type {
-  ActionContext,
-  PluginDef,
-  RunlinePluginAPI,
-} from "../plugin/types.js";
+import { createPluginAPI, type RunlinePluginAPI } from "../plugin/api.js";
+import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -41,12 +38,6 @@ function makePlugin(
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected ${plugin.name}.${name} to be registered`);
-  return action;
-}
-
 function ctx(config: Record<string, unknown>): ActionContext {
   return {
     connection: { name: "test", plugin: "test", config },
@@ -56,6 +47,18 @@ function ctx(config: Record<string, unknown>): ActionContext {
 }
 
 const B64_RESULT = PNG_1X1.toString("base64");
+
+/** An edit upload travels as buffered multipart bytes; parse them back. */
+async function multipartForm(init?: RequestInit): Promise<FormData> {
+  const contentType = new Headers(init?.headers).get("content-type") ?? "";
+  assert.ok(
+    contentType.startsWith("multipart/form-data"),
+    `expected a multipart body, got ${contentType}`,
+  );
+  return new Response(init?.body as BodyInit, {
+    headers: { "content-type": contentType },
+  }).formData();
+}
 
 describe("image.edit is registered on every image plugin", () => {
   const plugins: Array<[string, (api: RunlinePluginAPI) => void]> = [
@@ -78,12 +81,9 @@ describe("image.edit is registered on every image plugin", () => {
 describe("openai image.edit", () => {
   it("POSTs multipart form to /v1/images/edits with image file and prompt", async () => {
     const action = getAction(makePlugin("openai", openai), "image.edit");
-    let seen: { url: string; form?: FormData } = { url: "" };
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
-      seen = { url: String(input), form: init?.body as FormData };
+    let seen: { url: string; init?: RequestInit } = { url: "" };
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      seen = { url: String(input), init };
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -91,7 +91,7 @@ describe("openai image.edit", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as typeof fetch;
+    });
 
     const result = (await action.execute(
       { prompt: "make the sky red", imagePath: sourcePath, saveDir: dir },
@@ -99,22 +99,19 @@ describe("openai image.edit", () => {
     )) as { images: Array<{ path: string }> };
 
     assert.equal(seen.url, "https://api.openai.com/v1/images/edits");
-    assert.ok(seen.form instanceof FormData);
-    assert.equal(seen.form?.get("prompt"), "make the sky red");
-    assert.equal(seen.form?.get("model"), "gpt-image-2.5-flare");
-    const file = seen.form?.get("image[]");
+    const form = await multipartForm(seen.init);
+    assert.equal(form.get("prompt"), "make the sky red");
+    assert.equal(form.get("model"), "gpt-image-2.5-flare");
+    const file = form.get("image[]");
     assert.ok(file instanceof Blob, "image[] should be a file part");
     assert.equal(result.images.length, 1);
   });
 
   it("prefers the per-call model, then the connection default", async () => {
     const action = getAction(makePlugin("openai", openai), "image.edit");
-    const seen: string[] = [];
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
-      seen.push(String((init?.body as FormData).get("model")));
+    const seen: RequestInit[] = [];
+    stubFetch(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(init ?? {});
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -122,7 +119,7 @@ describe("openai image.edit", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as typeof fetch;
+    });
 
     const base = { prompt: "x", imagePath: sourcePath, saveDir: dir };
     await action.execute(
@@ -134,17 +131,17 @@ describe("openai image.edit", () => {
       ctx({ apiKey: "sk-test", defaultModel: "gpt-image-2" }),
     );
 
-    assert.deepEqual(seen, ["gpt-image-2.5-sunburst", "gpt-image-2"]);
+    const models: string[] = [];
+    for (const init of seen)
+      models.push(String((await multipartForm(init)).get("model")));
+    assert.deepEqual(models, ["gpt-image-2.5-sunburst", "gpt-image-2"]);
   });
 
   it("forwards the 2.5-only quality and size values untouched", async () => {
     const action = getAction(makePlugin("openai", openai), "image.edit");
-    let form: FormData | undefined;
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
-      form = init?.body as FormData;
+    let captured: RequestInit | undefined;
+    stubFetch(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      captured = init;
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -152,7 +149,7 @@ describe("openai image.edit", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as typeof fetch;
+    });
 
     await action.execute(
       {
@@ -166,9 +163,10 @@ describe("openai image.edit", () => {
       ctx({ apiKey: "sk-test" }),
     );
 
-    assert.equal(form?.get("model"), "gpt-image-2.5-sunburst");
-    assert.equal(form?.get("quality"), "max");
-    assert.equal(form?.get("size"), "1536x864");
+    const form = await multipartForm(captured);
+    assert.equal(form.get("model"), "gpt-image-2.5-sunburst");
+    assert.equal(form.get("quality"), "max");
+    assert.equal(form.get("size"), "1536x864");
   });
 
   it("rejects when neither imagePath nor imagePaths is given", async () => {
@@ -184,10 +182,7 @@ describe("openai image.create", () => {
   // Captures the JSON body of each generations call and answers with one image.
   function captureBodies(): Record<string, unknown>[] {
     const bodies: Record<string, unknown>[] = [];
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (_input: RequestInfo | URL, init?: RequestInit) => {
       bodies.push(JSON.parse(String(init?.body)));
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
@@ -196,7 +191,7 @@ describe("openai image.create", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as typeof fetch;
+    });
     return bodies;
   }
 
@@ -321,10 +316,7 @@ describe("googleImage image.edit", () => {
     let body: {
       contents?: Array<{ parts?: Array<Record<string, unknown>> }>;
     } = {};
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (_input: RequestInfo | URL, init?: RequestInit) => {
       body = JSON.parse(String(init?.body));
       return new Response(
         JSON.stringify({
@@ -340,7 +332,7 @@ describe("googleImage image.edit", () => {
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
-    }) as typeof fetch;
+    });
 
     const result = (await action.execute(
       { prompt: "replace the label", imagePath: sourcePath, saveDir: dir },
@@ -360,11 +352,13 @@ describe("googleImage image.edit", () => {
       makePlugin("googleImage", googleImage),
       "image.edit",
     );
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ candidates: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })) as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ candidates: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
     await assert.rejects(
       () =>
         action.execute(
@@ -386,15 +380,12 @@ describe("xai image.edit", () => {
     } = {
       url: "",
     };
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      // The broker's transport sends a Headers instance and a buffered body.
       seen = {
         url: String(input),
-        contentType: (init?.headers as Record<string, string>)?.[
-          "Content-Type"
-        ],
+        contentType:
+          new Headers(init?.headers).get("content-type") ?? undefined,
         body: JSON.parse(String(init?.body)),
       };
       return new Response(
@@ -404,7 +395,7 @@ describe("xai image.edit", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as typeof fetch;
+    });
 
     await action.execute(
       { prompt: "make it night", imagePath: sourcePath, saveDir: dir },
@@ -420,14 +411,11 @@ describe("xai image.edit", () => {
 });
 
 describe("recraft image.edit", () => {
-  it("POSTs multipart form to /v1/images/imageToImage with strength", async () => {
+  it("POSTs a multipart form to /v1/images/imageToImage with strength", async () => {
     const action = getAction(makePlugin("recraft", recraft), "image.edit");
-    let seen: { url: string; form?: FormData } = { url: "" };
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
-      seen = { url: String(input), form: init?.body as FormData };
+    let seen: { url: string; init?: RequestInit } = { url: "" };
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+      seen = { url: String(input), init };
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
         {
@@ -435,7 +423,7 @@ describe("recraft image.edit", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as typeof fetch;
+    });
 
     await action.execute(
       { prompt: "winter", imagePath: sourcePath, strength: 0.4, saveDir: dir },
@@ -446,10 +434,10 @@ describe("recraft image.edit", () => {
       seen.url,
       "https://external.api.recraft.ai/v1/images/imageToImage",
     );
-    assert.ok(seen.form instanceof FormData);
-    assert.equal(seen.form?.get("prompt"), "winter");
-    assert.equal(seen.form?.get("strength"), "0.4");
-    assert.ok(seen.form?.get("image") instanceof Blob);
+    const form = await multipartForm(seen.init);
+    assert.equal(form.get("prompt"), "winter");
+    assert.equal(form.get("strength"), "0.4");
+    assert.ok(form.get("image") instanceof Blob, "image should be a file part");
   });
 });
 
@@ -457,10 +445,7 @@ describe("together image.edit", () => {
   it("sends image_url data URI to the generations endpoint with a Kontext default", async () => {
     const action = getAction(makePlugin("together", together), "image.edit");
     let body: Record<string, unknown> = {};
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (_input: RequestInfo | URL, init?: RequestInit) => {
       body = JSON.parse(String(init?.body));
       return new Response(
         JSON.stringify({ data: [{ b64_json: B64_RESULT }] }),
@@ -469,7 +454,7 @@ describe("together image.edit", () => {
           headers: { "content-type": "application/json" },
         },
       );
-    }) as typeof fetch;
+    });
 
     await action.execute(
       { prompt: "anime style", imagePath: sourcePath, saveDir: dir },
@@ -486,10 +471,7 @@ describe("replicate image.edit", () => {
   it("creates a prediction with input_image data URI and downloads the output", async () => {
     const action = getAction(makePlugin("replicate", replicate), "image.edit");
     let predictionBody: { input?: Record<string, unknown> } = {};
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("api.replicate.com")) {
         predictionBody = JSON.parse(String(init?.body));
@@ -513,7 +495,7 @@ describe("replicate image.edit", () => {
         status: 200,
         headers: { "content-type": "image/png" },
       });
-    }) as typeof fetch;
+    });
 
     const result = (await action.execute(
       { prompt: "remove the cat", imagePath: sourcePath, saveDir: dir },
@@ -532,10 +514,7 @@ describe("replicate image.edit", () => {
   it("sends array-valued image input when the key ends in _input", async () => {
     const action = getAction(makePlugin("replicate", replicate), "image.edit");
     let predictionBody: { input?: Record<string, unknown> } = {};
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("api.replicate.com")) {
         predictionBody = JSON.parse(String(init?.body));
@@ -552,7 +531,7 @@ describe("replicate image.edit", () => {
         status: 200,
         headers: { "content-type": "image/png" },
       });
-    }) as typeof fetch;
+    });
 
     await action.execute(
       {

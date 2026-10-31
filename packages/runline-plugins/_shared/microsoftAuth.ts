@@ -1,62 +1,29 @@
 import {
-  AuthError,
-  downloadResource,
   type ActionContext,
+  AuthError,
+  brokerFor,
+  downloadResource,
   type HttpMethod,
+  jsonAnswer,
+  type OAuthConfig,
+  requestFailed,
 } from "runline";
-import { credentialRuntime } from "./credentialAdapter.js";
 import {
-  microsoftCredentialType,
-  microsoftMethod,
-  microsoftUserBase,
+  MICROSOFT_GRANT,
   type MicrosoftAuthConfig,
+  microsoftCredential,
+  microsoftEndpoint,
+  microsoftUserBase,
 } from "./microsoftCredentials.js";
 
 export type { MicrosoftAuthConfig } from "./microsoftCredentials.js";
-export { microsoftDriveBase } from "./microsoftCredentials.js";
-
-export function isAppOnly(cfg: MicrosoftAuthConfig): boolean {
-  return microsoftMethod(cfg) === "appOnly";
-}
+export {
+  microsoftCredential,
+  microsoftDriveBase,
+} from "./microsoftCredentials.js";
 
 export function userBase(ctx: ActionContext): string {
   return microsoftUserBase(ctx.connection.config as MicrosoftAuthConfig);
-}
-
-function runtime(ctx: ActionContext, plugin: string, scopes: string[]) {
-  const cfg = ctx.connection.config as MicrosoftAuthConfig;
-  const method = microsoftMethod(cfg);
-  if (
-    method === "appOnly" &&
-    (!cfg.tenantId ||
-      ["common", "organizations", "consumers"].includes(cfg.tenantId))
-  )
-    throw new AuthError("invalid_credentials");
-  return credentialRuntime(
-    ctx,
-    microsoftCredentialType(cfg, plugin, scopes),
-    method,
-    (current) => {
-      const c = current as MicrosoftAuthConfig;
-      return [
-        microsoftMethod(c),
-        c.tenantId,
-        c.clientId,
-        c.clientSecret,
-        scopes,
-      ];
-    },
-  );
-}
-
-/** Compatibility token access uses the same grant runtime as resource requests. */
-export async function microsoftAccessToken(
-  ctx: ActionContext,
-  plugin: string,
-  scopes: string[],
-): Promise<string> {
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.accessToken(binding);
 }
 
 export async function microsoftProbe(
@@ -64,8 +31,7 @@ export async function microsoftProbe(
   plugin: string,
   scopes: string[],
 ) {
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.probe(binding);
+  return brokerFor(ctx, microsoftCredential(plugin, scopes)).probe();
 }
 
 export async function graphResponse(
@@ -79,8 +45,7 @@ export async function graphResponse(
 ): Promise<Response> {
   if (!path.startsWith("/") || path.startsWith("//"))
     throw new AuthError("request_not_allowed");
-  const { binding, transport } = runtime(ctx, plugin, scopes);
-  return transport.request(binding, {
+  return brokerFor(ctx, microsoftCredential(plugin, scopes)).request({
     target: "graph",
     path: path.slice(1),
     method: method as HttpMethod,
@@ -92,15 +57,19 @@ export async function graphResponse(
   });
 }
 
-/** JSON and binary requests share the same destination, renewal and replay policy. */
-export async function graphRequest(
+/**
+ * A Graph JSON request that must succeed; its answer is read by
+ * `jsonAnswer`. JSON and binary requests share the same destination,
+ * renewal and replay policy through `graphResponse`.
+ */
+export async function graphRequest<T = unknown>(
   ctx: ActionContext,
   plugin: string,
   scopes: string[],
   method: string,
   path: string,
   body?: unknown,
-): Promise<any> {
+): Promise<T> {
   const res = await graphResponse(
     ctx,
     plugin,
@@ -110,15 +79,8 @@ export async function graphRequest(
     body === undefined ? undefined : JSON.stringify(body),
     body === undefined ? undefined : "application/json",
   );
-  if (!res.ok)
-    throw new Error(`${plugin}: Graph request failed (HTTP ${res.status})`);
-  if (res.status === 204) return { success: true };
-  const text = await res.text();
-  try {
-    return text ? JSON.parse(text) : { success: true };
-  } catch {
-    throw new Error(`${plugin}: invalid Graph response`);
-  }
+  if (!res.ok) throw requestFailed(plugin, res.status);
+  return jsonAnswer<T>(res);
 }
 
 /** Graph-issued signed download URLs carry their own authority, never a bearer header. */
@@ -150,8 +112,27 @@ export async function microsoftDownload(value: unknown): Promise<Response> {
   });
 }
 
-/** Setup help shown by the OAuth wizard for all Microsoft plugins. */
-export function microsoftSetupHelp(apiName: string): string[] {
+/**
+ * A Microsoft Graph plugin's OAuth declaration: the multi-tenant endpoints,
+ * `offline_access` for a refresh token, the grant every Graph plugin
+ * shares, and setup steps naming the Graph permissions it needs
+ * (`permissions`, e.g. "Calendars.Read").
+ */
+export function microsoftOAuth(
+  scopes: string[],
+  permissions: string,
+): OAuthConfig {
+  return {
+    grant: MICROSOFT_GRANT,
+    authUrl: microsoftEndpoint("common", "authorize"),
+    tokenUrl: microsoftEndpoint("common", "token"),
+    scopes: [...scopes, "offline_access"],
+    setupHelp: setupHelp(permissions),
+  };
+}
+
+/** The OAuth wizard's steps for a Microsoft plugin. */
+function setupHelp(permissions: string): string[] {
   return [
     `You need a Microsoft Entra (Azure AD) app registration. One-time, ~5 minutes.`,
     "",
@@ -160,7 +141,7 @@ export function microsoftSetupHelp(apiName: string): string[] {
     "2. Add a Web redirect URI (Authentication → Add platform → Web):",
     "     {{redirectUri}}",
     "3. Certificates & secrets → New client secret → copy the VALUE (not the Secret ID).",
-    `4. API permissions → Add → Microsoft Graph → Delegated → add the ${apiName} scopes,`,
+    `4. API permissions → Add → Microsoft Graph → Delegated → add the ${permissions} scopes,`,
     "   then 'Grant admin consent'.",
     "5. Paste the Application (client) ID and the client secret VALUE below.",
   ];

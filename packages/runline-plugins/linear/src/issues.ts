@@ -9,7 +9,6 @@ import {
   ISSUE_FIELDS,
   ISSUE_LITE,
   issueHasScope,
-  key,
   LIST_INPUT_SCHEMA,
   type ListOpts,
   mergeIssueScopeFilter,
@@ -142,7 +141,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         fields.labelIds,
       );
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { ${ISSUE_FIELDS} } } }`,
         { input: fields },
       );
@@ -161,7 +160,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     }),
     async execute(input, ctx) {
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($id: String!) { issue(id: $id) { ${ISSUE_FIELDS} } }`,
         { id: (input as { issueId: string }).issueId },
       );
@@ -208,7 +207,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
         "IssueFilter",
       );
       const data = await gql(
-        key(ctx),
+        ctx,
         `query${argsDecl} { issues${argsCall} { nodes { ${ISSUE_LITE} } pageInfo { hasNextPage endCursor } } }`,
         vars,
       );
@@ -338,7 +337,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
           fields.labelIds,
         );
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { ${ISSUE_FIELDS} } } }`,
         { id: issueId, input: fields },
       );
@@ -361,7 +360,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       };
       await assertIssueInScope(ctx, issueId);
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $perm: Boolean) { issueDelete(id: $id, permanentlyDelete: $perm) { success } }`,
         { id: issueId, perm: permanentlyDelete ?? null },
       );
@@ -380,7 +379,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const { issueId, trash } = input as { issueId: string; trash?: boolean };
       await assertIssueInScope(ctx, issueId);
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $trash: Boolean) { issueArchive(id: $id, trash: $trash) { success } }`,
         { id: issueId, trash: trash ?? null },
       );
@@ -396,7 +395,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const issueId = (input as { issueId: string }).issueId;
       await assertIssueInScope(ctx, issueId);
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { issueUnarchive(id: $id) { success } }`,
         { id: issueId },
       );
@@ -442,7 +441,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const opts = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($term: String!, $first: Int, $filter: IssueFilter, $includeComments: Boolean, $includeArchived: Boolean, $teamId: String, $orderBy: PaginationOrderBy, $after: String, $before: String) {
           searchIssues(term: $term, first: $first, filter: $filter, includeComments: $includeComments, includeArchived: $includeArchived, teamId: $teamId, orderBy: $orderBy, after: $after, before: $before) {
             nodes { ${ISSUE_LITE} }
@@ -484,7 +483,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       };
       await assertIssueInScope(ctx, issueId);
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $labelId: String!) { issueAddLabel(id: $id, labelId: $labelId) { success } }`,
         { id: issueId, labelId },
       );
@@ -507,7 +506,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       await assertIssueInScope(ctx, issueId);
       await forbidScopeLabelRemoval(ctx, labelId);
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $labelId: String!) { issueRemoveLabel(id: $id, labelId: $labelId) { success } }`,
         { id: issueId, labelId },
       );
@@ -528,7 +527,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const { issueId, userId, userEmail } = input as Record<string, unknown>;
       await assertIssueInScope(ctx, String(issueId));
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $userId: String, $userEmail: String) {
           issueSubscribe(id: $id, userId: $userId, userEmail: $userEmail) { success }
         }`,
@@ -551,7 +550,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const { issueId, userId, userEmail } = input as Record<string, unknown>;
       await assertIssueInScope(ctx, String(issueId));
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $userId: String, $userEmail: String) {
           issueUnsubscribe(id: $id, userId: $userId, userEmail: $userEmail) { success }
         }`,
@@ -583,7 +582,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       await assertIssueInScope(ctx, String(fields.issueId));
       await assertIssueInScope(ctx, String(fields.relatedIssueId));
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: IssueRelationCreateInput!) { issueRelationCreate(input: $input) { success issueRelation { id type } } }`,
         { input: fields },
       );

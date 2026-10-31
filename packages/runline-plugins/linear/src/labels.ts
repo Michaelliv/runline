@@ -4,7 +4,6 @@ import {
   bindGetAction,
   bindListAction,
   gql,
-  key,
   LABEL_FIELDS,
   requireUnscoped,
   withScopedNote,
@@ -72,7 +71,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "label.create");
       const { replaceTeamLabels, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: IssueLabelCreateInput!, $replaceTeamLabels: Boolean) { issueLabelCreate(input: $input, replaceTeamLabels: $replaceTeamLabels) { success issueLabel { ${LABEL_FIELDS} } } }`,
         { input: fields, replaceTeamLabels: replaceTeamLabels ?? null },
       );
@@ -117,7 +116,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
         unknown
       >;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: IssueLabelUpdateInput!, $replaceTeamLabels: Boolean) { issueLabelUpdate(id: $id, input: $input, replaceTeamLabels: $replaceTeamLabels) { success issueLabel { ${LABEL_FIELDS} } } }`,
         { id, input: fields, replaceTeamLabels: replaceTeamLabels ?? null },
       );
@@ -133,7 +132,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "label.delete");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { issueLabelDelete(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );
@@ -151,7 +150,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "label.retire");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { issueLabelRetire(id: $id) { success issueLabel { ${LABEL_FIELDS} } } }`,
         { id: (input as { id: string }).id },
       );
@@ -167,7 +166,7 @@ export function registerLabelActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "label.restore");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { issueLabelRestore(id: $id) { success issueLabel { ${LABEL_FIELDS} } } }`,
         { id: (input as { id: string }).id },
       );

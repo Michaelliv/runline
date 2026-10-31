@@ -5,7 +5,6 @@ import {
   assertIssueInScope,
   COMMENT_FIELDS,
   gql,
-  key,
   requireUnscoped,
 } from "./shared.js";
 
@@ -42,7 +41,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
       const fields = input as Record<string, unknown>;
       await assertIssueInScope(ctx, String(fields.issueId));
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { ${COMMENT_FIELDS} } } }`,
         { input: fields },
       );
@@ -76,7 +75,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
       if (issueId) {
         await assertIssueInScope(ctx, issueId);
         const data = await gql(
-          key(ctx),
+          ctx,
           `query($id: String!, $first: Int) { issue(id: $id) { comments(first: $first) { nodes { ${COMMENT_FIELDS} } pageInfo { hasNextPage endCursor } } } }`,
           { id: issueId, first: limit },
         );
@@ -89,7 +88,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
       }
       requireUnscoped(ctx, "comment.list");
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($first: Int) { comments(first: $first) { nodes { ${COMMENT_FIELDS} } pageInfo { hasNextPage endCursor } } }`,
         { first: limit },
       );
@@ -104,7 +103,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
       const id = (input as { id: string }).id;
       await assertCommentInScope(ctx, id);
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($id: String!) { comment(id: $id) { ${COMMENT_FIELDS} } }`,
         { id },
       );
@@ -130,7 +129,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
       const { id, ...fields } = input as Record<string, unknown>;
       await assertCommentInScope(ctx, String(id));
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: CommentUpdateInput!) { commentUpdate(id: $id, input: $input) { success comment { ${COMMENT_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -145,7 +144,7 @@ export function registerCommentActions(rl: RunlinePluginAPI) {
       const id = (input as { id: string }).id;
       await assertCommentInScope(ctx, id);
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { commentDelete(id: $id) { success } }`,
         { id },
       );

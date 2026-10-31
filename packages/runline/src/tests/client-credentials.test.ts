@@ -6,6 +6,7 @@ import paypal from "../../../runline-plugins/paypal/src/index.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -46,7 +47,7 @@ for (const spec of [
       const action = resolve().actions.find((a) => a.name === spec.action);
       assert.ok(action);
       const calls: string[] = [];
-      globalThis.fetch = (async (url, init) => {
+      stubFetch(async (url, init) => {
         const headers = new Headers(init?.headers);
         if (String(url).includes("/token")) {
           assert.equal(init?.redirect, "error");
@@ -80,7 +81,7 @@ for (const spec of [
           });
         }
         return Response.json({ authorization: headers.get("authorization") });
-      }) as typeof fetch;
+      });
       const stores = ["alice", "bob"].map(
         (clientId) =>
           new MemoryConnectionProvider([
@@ -123,3 +124,53 @@ for (const spec of [
     });
   });
 }
+
+describe("bitwarden self-hosted", () => {
+  it("refuses a self-hosted connection without a domain instead of sending its client secret to the cloud", async () => {
+    const { api, resolve } = createPluginAPI("bitwarden");
+    bitwarden(api);
+    const action = resolve().actions.find((a) => a.name === "group.list");
+    assert.ok(action);
+    const requests: string[] = [];
+    stubFetch(async (url) => {
+      requests.push(String(url));
+      return Response.json({
+        access_token: "t",
+        expires_in: 3600,
+        data: [],
+      });
+    });
+    const invoke = async (config: Record<string, unknown>) => {
+      const store = new MemoryConnectionProvider([
+        {
+          name: "account",
+          plugin: "bitwarden",
+          config: {
+            clientId: "organization.id",
+            clientSecret: "secret",
+            ...config,
+          },
+        },
+      ]);
+      const handle = await store.resolve({ plugin: "bitwarden" });
+      const connection = await handle.read();
+      const ctx: ActionContext = {
+        connection,
+        log: { info() {}, warn() {}, error() {} },
+        async updateConnection(change) {
+          connection.config = (await handle.update(change)).config;
+        },
+      };
+      return action.execute({}, ctx);
+    };
+    // The same store and fetch serve a cloud connection, so the refusal
+    // below is the missing domain's.
+    assert.deepEqual(await invoke({}), []);
+    assert.equal(requests.length, 2);
+    requests.length = 0;
+    await assert.rejects(invoke({ environment: "selfHosted" }), {
+      code: "invalid_credentials",
+    });
+    assert.deepEqual(requests, []);
+  });
+});

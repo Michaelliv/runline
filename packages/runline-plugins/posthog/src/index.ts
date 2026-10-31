@@ -1,32 +1,28 @@
-import type { RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
+import { posthogCredential } from "./credentials.js";
 
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  const c = ctx.connection.config;
-  return {
-    url: (c.url as string).replace(/\/$/, ""),
-    apiKey: c.apiKey as string,
-  };
-}
-
-async function apiRequest(
-  conn: { url: string; apiKey: string },
+/** Every PostHog capture call is a JSON POST. */
+function apiRequest(
+  ctx: ActionContext,
   endpoint: string,
   body: Record<string, unknown>,
 ): Promise<unknown> {
-  body.api_key = conn.apiKey;
-  const res = await fetch(`${conn.url}${endpoint}`, {
+  return credentialJson(ctx, posthogCredential, "posthog", {
+    target: "api",
+    path: endpoint,
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    json: body,
   });
-  if (!res.ok)
-    throw new Error(`PostHog error ${res.status}: ${await res.text()}`);
-  return res.json();
 }
 
 export default function posthog(rl: RunlinePluginAPI) {
   rl.setName("posthog");
   rl.setVersion("0.1.0");
+  rl.setCredential(posthogCredential);
 
   rl.setConnectionSchema({
     url: {
@@ -69,7 +65,7 @@ export default function posthog(rl: RunlinePluginAPI) {
         properties: { distinct_id: p.distinctId, alias: p.alias },
       };
       if (p.timestamp) body.timestamp = p.timestamp;
-      return apiRequest(getConn(ctx), "/batch", body);
+      return apiRequest(ctx, "batch", body);
     },
   });
 
@@ -86,7 +82,7 @@ export default function posthog(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { events } = input as Record<string, unknown>;
-      return apiRequest(getConn(ctx), "/capture", { batch: events });
+      return apiRequest(ctx, "capture", { batch: events });
     },
   });
 
@@ -110,7 +106,7 @@ export default function posthog(rl: RunlinePluginAPI) {
         properties: p.properties ?? {},
       };
       if (p.timestamp) body.timestamp = p.timestamp;
-      return apiRequest(getConn(ctx), "/batch", body);
+      return apiRequest(ctx, "batch", body);
     },
   });
 
@@ -135,7 +131,7 @@ export default function posthog(rl: RunlinePluginAPI) {
         context: p.context ?? {},
       };
       if (p.timestamp) body.timestamp = p.timestamp;
-      return apiRequest(getConn(ctx), "/batch", body);
+      return apiRequest(ctx, "batch", body);
     },
   });
 
@@ -160,7 +156,7 @@ export default function posthog(rl: RunlinePluginAPI) {
         context: p.context ?? {},
       };
       if (p.timestamp) body.timestamp = p.timestamp;
-      return apiRequest(getConn(ctx), "/batch", body);
+      return apiRequest(ctx, "batch", body);
     },
   });
 }

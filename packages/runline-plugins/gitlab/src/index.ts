@@ -1,65 +1,41 @@
-import type { RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+  slashEncodedSegment,
+} from "runline";
+import { gitlabCredential } from "./credentials.js";
 
-async function apiRequest(
-  server: string,
-  token: string,
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-): Promise<unknown> {
-  const url = new URL(`${server}/api/v4${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
-    method,
-    headers: { "PRIVATE-TOKEN": token, "Content-Type": "application/json" },
-  };
-  if (
-    body &&
-    Object.keys(body).length > 0 &&
-    method !== "GET" &&
-    method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`GitLab API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    server: (
-      (ctx.connection.config.server as string) ?? "https://gitlab.com"
-    ).replace(/\/$/, ""),
-    token: ctx.connection.config.token as string,
-  };
-}
-
+/** A GitLab API call; a DELETE carries a body where GitLab needs one (file deletes). */
 function gl(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { server, token } = getConn(ctx);
-  return apiRequest(server, token, method, endpoint, body, qs);
+  query?: Record<string, unknown>,
+): Promise<unknown> {
+  return credentialJson(ctx, gitlabCredential, "gitlab", {
+    target: "api",
+    path,
+    method,
+    query,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
 }
 
-function projectPath(owner: string, repo: string): string {
-  return `/projects/${encodeURIComponent(`${owner}/${repo}`)}`;
+/** A project by its namespace and name, as one encoded segment. */
+function projectPath(owner: unknown, repo: unknown): string {
+  return `projects/${slashEncodedSegment(`${owner}/${repo}`)}`;
 }
 
 export default function gitlab(rl: RunlinePluginAPI) {
   rl.setName("gitlab");
   rl.setVersion("0.1.0");
+  rl.setCredential(gitlabCredential);
 
   rl.setConnectionSchema({
     server: {
@@ -126,12 +102,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       if (labels) body.labels = labels;
       if (assigneeIds) body.assignee_ids = assigneeIds;
       if (dueDate) body.due_date = dueDate;
-      return gl(
-        ctx,
-        "POST",
-        `${projectPath(owner as string, repo as string)}/issues`,
-        body,
-      );
+      return gl(ctx, "POST", `${projectPath(owner, repo)}/issues`, body);
     },
   });
 
@@ -148,7 +119,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "GET",
-        `${projectPath(owner as string, repo as string)}/issues/${issueIid}`,
+        `${projectPath(owner, repo)}/issues/${pathSegment(issueIid)}`,
       );
     },
   });
@@ -205,7 +176,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "PUT",
-        `${projectPath(owner as string, repo as string)}/issues/${issueIid}`,
+        `${projectPath(owner, repo)}/issues/${pathSegment(issueIid)}`,
         body,
       );
     },
@@ -234,7 +205,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "POST",
-        `${projectPath(owner as string, repo as string)}/issues/${issueIid}/notes`,
+        `${projectPath(owner, repo)}/issues/${pathSegment(issueIid)}/notes`,
         { body: noteBody },
       );
     },
@@ -253,7 +224,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "PUT",
-        `${projectPath(owner as string, repo as string)}/issues/${issueIid}`,
+        `${projectPath(owner, repo)}/issues/${pathSegment(issueIid)}`,
         { discussion_locked: true },
       );
     },
@@ -305,7 +276,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "POST",
-        `/projects/${encodeURIComponent(projectId as string)}/releases`,
+        `projects/${slashEncodedSegment(projectId)}/releases`,
         body,
       );
     },
@@ -327,7 +298,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "GET",
-        `/projects/${encodeURIComponent(projectId as string)}/releases/${encodeURIComponent(tagName as string)}`,
+        `projects/${slashEncodedSegment(projectId)}/releases/${slashEncodedSegment(tagName)}`,
       );
     },
   });
@@ -361,7 +332,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "GET",
-        `/projects/${encodeURIComponent(projectId as string)}/releases`,
+        `projects/${slashEncodedSegment(projectId)}/releases`,
         undefined,
         qs,
       );
@@ -405,7 +376,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "PUT",
-        `/projects/${encodeURIComponent(projectId as string)}/releases/${encodeURIComponent(tagName as string)}`,
+        `projects/${slashEncodedSegment(projectId)}/releases/${slashEncodedSegment(tagName)}`,
         body,
       );
     },
@@ -427,7 +398,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       await gl(
         ctx,
         "DELETE",
-        `/projects/${encodeURIComponent(projectId as string)}/releases/${encodeURIComponent(tagName as string)}`,
+        `projects/${slashEncodedSegment(projectId)}/releases/${slashEncodedSegment(tagName)}`,
       );
       return { success: true };
     },
@@ -478,7 +449,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "GET",
-        `${projectPath(owner as string, repo as string)}/issues`,
+        `${projectPath(owner, repo)}/issues`,
         undefined,
         qs,
       );
@@ -498,7 +469,13 @@ export default function gitlab(rl: RunlinePluginAPI) {
       const { username, limit } = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = {};
       if (limit) qs.per_page = limit;
-      return gl(ctx, "GET", `/users/${username}/projects`, undefined, qs);
+      return gl(
+        ctx,
+        "GET",
+        `users/${pathSegment(username)}/projects`,
+        undefined,
+        qs,
+      );
     },
   });
 
@@ -514,7 +491,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       ref: {
         type: "string",
         required: false,
-        description: "Branch/tag/SHA (default: default branch)",
+        description: "Branch/tag/SHA (default: main)",
       },
     },
     async execute(input, ctx) {
@@ -527,7 +504,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "GET",
-        `${projectPath(owner as string, repo as string)}/repository/files/${encodeURIComponent(filePath as string)}`,
+        `${projectPath(owner, repo)}/repository/files/${slashEncodedSegment(filePath)}`,
         undefined,
         { ref },
       );
@@ -601,7 +578,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         method,
-        `${projectPath(owner as string, repo as string)}/repository/files/${encodeURIComponent(filePath as string)}`,
+        `${projectPath(owner, repo)}/repository/files/${slashEncodedSegment(filePath)}`,
         body,
       );
     },
@@ -629,7 +606,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "DELETE",
-        `${projectPath(owner as string, repo as string)}/repository/files/${encodeURIComponent(filePath as string)}`,
+        `${projectPath(owner, repo)}/repository/files/${slashEncodedSegment(filePath)}`,
         {
           branch,
           commit_message: commitMessage,
@@ -664,7 +641,7 @@ export default function gitlab(rl: RunlinePluginAPI) {
       return gl(
         ctx,
         "GET",
-        `${projectPath(owner as string, repo as string)}/repository/tree`,
+        `${projectPath(owner, repo)}/repository/tree`,
         undefined,
         qs,
       );

@@ -6,6 +6,7 @@ import process from "node:process";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { discoverPlugins, loadPluginFromPath } from "../plugin/loader.js";
 import { Runline } from "../sdk.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalEnv = { ...process.env };
 
@@ -140,6 +141,72 @@ export default function inspector(api: RunlinePluginAPI) {
         config: { token: "secret-token", region: "iad" },
       },
     });
+  });
+
+  it("lets a custom plugin declare its credential with the public kit and sign through it", async () => {
+    writeConfig([
+      { name: "ledger", plugin: "ledger", config: { apiKey: "sk-ledger" } },
+    ]);
+    // Imports the kit from "runline" exactly as a workspace plugin outside
+    // the package tree does: through the loader's alias, no node_modules.
+    writeFileSync(
+      join(pluginsDir, "ledger.ts"),
+      `import { credentialJson, pathSegment, staticCredential } from "runline";
+
+const credential = staticCredential({
+  id: "ledger",
+  auth: { kind: "bearer" },
+  local: { secret: "apiKey" },
+  targets: { api: { baseUrl: "https://ledger.example/v1/", methods: ["GET"] } },
+});
+
+export default function ledger(api) {
+  api.setName("ledger");
+  api.setCredential(credential);
+  api.registerAction("entry.get", {
+    access: "read",
+    execute(input, ctx) {
+      return credentialJson(ctx, credential, "ledger", {
+        target: "api",
+        path: \`entries/\${pathSegment(input.id)}\`,
+      });
+    },
+  });
+}
+`,
+    );
+    const seen: Array<{ url: string; authorization: string | null }> = [];
+    const originalFetch = globalThis.fetch;
+    stubFetch(async (url, init) => {
+      seen.push({
+        url: String(url),
+        authorization: new Headers(init?.headers).get("authorization"),
+      });
+      return Response.json({ id: "e 1", amount: 7 });
+    });
+    try {
+      const rl = await Runline.fromProject(tempDir, { builtinDir });
+      assert.ok(rl);
+      const signed = await rl.execute(
+        `return await ledger.entry.get({ id: "e 1" })`,
+      );
+      assert.equal(signed.error, undefined, signed.error);
+      assert.deepEqual(signed.result, { id: "e 1", amount: 7 });
+      assert.deepEqual(seen, [
+        {
+          url: "https://ledger.example/v1/entries/e%201",
+          authorization: "Bearer sk-ledger",
+        },
+      ]);
+
+      const traversal = await rl.execute(
+        `return await ledger.entry.get({ id: "../admin" })`,
+      );
+      assert.match(traversal.error ?? "", /outside the approved policy/);
+      assert.equal(seen.length, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it("loads supported export shapes and package entrypoints", async () => {

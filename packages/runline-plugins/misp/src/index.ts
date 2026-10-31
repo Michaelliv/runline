@@ -1,36 +1,35 @@
-import type { RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
+import { mispCredential } from "./credentials.js";
 
-async function apiRequest(
-  baseUrl: string,
-  apiKey: string,
-  method: string,
-  endpoint: string,
+function req(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
   body?: Record<string, unknown>,
 ): Promise<unknown> {
-  const opts: RequestInit = {
+  return credentialJson(ctx, mispCredential, "misp", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: apiKey,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  )
-    opts.body = JSON.stringify(body);
-  const res = await fetch(`${baseUrl}${endpoint}`, opts);
-  if (!res.ok)
-    throw new Error(`MISP API error ${res.status}: ${await res.text()}`);
-  return res.json();
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function misp(rl: RunlinePluginAPI) {
   rl.setName("misp");
   rl.setVersion("0.1.0");
+  rl.setCredential(mispCredential);
 
   rl.setConnectionSchema({
     baseUrl: {
@@ -46,21 +45,6 @@ export default function misp(rl: RunlinePluginAPI) {
       env: "MISP_API_KEY",
     },
   });
-
-  const conn = (ctx: { connection: { config: Record<string, unknown> } }) => ({
-    baseUrl: (ctx.connection.config.baseUrl as string).replace(/\/$/, ""),
-    apiKey: ctx.connection.config.apiKey as string,
-  });
-
-  const req = (
-    ctx: { connection: { config: Record<string, unknown> } },
-    method: string,
-    ep: string,
-    body?: Record<string, unknown>,
-  ) => {
-    const c = conn(ctx);
-    return apiRequest(c.baseUrl, c.apiKey, method, ep, body);
-  };
 
   // ── Attribute ───────────────────────────────────────
 
@@ -92,7 +76,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        `/attributes/add/${eventId}`,
+        `attributes/add/${pathSegment(eventId)}`,
         body,
       )) as Record<string, unknown>;
       return data.Attribute;
@@ -107,7 +91,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/attributes/view/${(input as { attributeId: string }).attributeId}`,
+        `attributes/view/${pathSegment((input as { attributeId: string }).attributeId)}`,
       )) as Record<string, unknown>;
       return data.Attribute;
     },
@@ -118,7 +102,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all attributes",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      let data = (await req(ctx, "GET", "/attributes")) as unknown[];
+      let data = (await req(ctx, "GET", "attributes")) as unknown[];
       if ((input as Record<string, unknown>)?.limit)
         data = data.slice(
           0,
@@ -146,7 +130,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        "/attributes/restSearch",
+        "attributes/restSearch",
         body,
       )) as Record<string, unknown>;
       return (data.response as Record<string, unknown>)?.Attribute ?? [];
@@ -165,7 +149,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/attributes/edit/${attributeId}`,
+        `attributes/edit/${pathSegment(attributeId)}`,
         updateFields as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.Attribute;
@@ -180,7 +164,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "DELETE",
-        `/attributes/delete/${(input as { attributeId: string }).attributeId}`,
+        `attributes/delete/${pathSegment((input as { attributeId: string }).attributeId)}`,
       );
     },
   });
@@ -210,7 +194,7 @@ export default function misp(rl: RunlinePluginAPI) {
       >;
       const body: Record<string, unknown> = { org_id: orgId, info };
       if (additionalFields) Object.assign(body, additionalFields);
-      const data = (await req(ctx, "POST", "/events", body)) as Record<
+      const data = (await req(ctx, "POST", "events", body)) as Record<
         string,
         unknown
       >;
@@ -226,7 +210,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/events/view/${(input as { eventId: string }).eventId}`,
+        `events/view/${pathSegment((input as { eventId: string }).eventId)}`,
       )) as Record<string, unknown>;
       const event = data.Event as Record<string, unknown>;
       delete event.Attribute; // prevent excessive payload
@@ -239,7 +223,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all events",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      let data = (await req(ctx, "GET", "/events")) as unknown[];
+      let data = (await req(ctx, "GET", "events")) as unknown[];
       if ((input as Record<string, unknown>)?.limit)
         data = data.slice(
           0,
@@ -267,7 +251,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        "/events/restSearch",
+        "events/restSearch",
         body,
       )) as Record<string, unknown>;
       const response = data.response as
@@ -289,7 +273,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/events/edit/${eventId}`,
+        `events/edit/${pathSegment(eventId)}`,
         updateFields as Record<string, unknown>,
       )) as Record<string, unknown>;
       const event = data.Event as Record<string, unknown>;
@@ -306,7 +290,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `/events/publish/${(input as { eventId: string }).eventId}`,
+        `events/publish/${pathSegment((input as { eventId: string }).eventId)}`,
       );
     },
   });
@@ -319,7 +303,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `/events/unpublish/${(input as { eventId: string }).eventId}`,
+        `events/unpublish/${pathSegment((input as { eventId: string }).eventId)}`,
       );
     },
   });
@@ -332,7 +316,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "DELETE",
-        `/events/delete/${(input as { eventId: string }).eventId}`,
+        `events/delete/${pathSegment((input as { eventId: string }).eventId)}`,
       );
     },
   });
@@ -348,7 +332,7 @@ export default function misp(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { eventId, tagId } = input as Record<string, unknown>;
-      return req(ctx, "POST", "/events/addTag", { event: eventId, tag: tagId });
+      return req(ctx, "POST", "events/addTag", { event: eventId, tag: tagId });
     },
   });
 
@@ -361,7 +345,11 @@ export default function misp(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const { eventId, tagId } = input as Record<string, unknown>;
-      return req(ctx, "POST", `/events/removeTag/${eventId}/${tagId}`);
+      return req(
+        ctx,
+        "POST",
+        `events/removeTag/${pathSegment(eventId)}/${pathSegment(tagId)}`,
+      );
     },
   });
 
@@ -387,7 +375,7 @@ export default function misp(rl: RunlinePluginAPI) {
       >;
       const body: Record<string, unknown> = { name, provider, url };
       if (additionalFields) Object.assign(body, additionalFields);
-      const data = (await req(ctx, "POST", "/feeds/add", body)) as Record<
+      const data = (await req(ctx, "POST", "feeds/add", body)) as Record<
         string,
         unknown
       >;
@@ -403,7 +391,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/feeds/view/${(input as { feedId: string }).feedId}`,
+        `feeds/view/${pathSegment((input as { feedId: string }).feedId)}`,
       )) as Record<string, unknown>;
       return data.Feed;
     },
@@ -414,7 +402,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all feeds",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      let data = (await req(ctx, "GET", "/feeds")) as Array<
+      let data = (await req(ctx, "GET", "feeds")) as Array<
         Record<string, unknown>
       >;
       data = data.map((e) => e.Feed as Record<string, unknown>);
@@ -439,7 +427,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/feeds/edit/${feedId}`,
+        `feeds/edit/${pathSegment(feedId)}`,
         updateFields as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.Feed;
@@ -454,7 +442,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `/feeds/enable/${(input as { feedId: string }).feedId}`,
+        `feeds/enable/${pathSegment((input as { feedId: string }).feedId)}`,
       );
     },
   });
@@ -467,7 +455,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `/feeds/disable/${(input as { feedId: string }).feedId}`,
+        `feeds/disable/${pathSegment((input as { feedId: string }).feedId)}`,
       );
     },
   });
@@ -482,7 +470,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/galaxies/view/${(input as { galaxyId: string }).galaxyId}`,
+        `galaxies/view/${pathSegment((input as { galaxyId: string }).galaxyId)}`,
       )) as Record<string, unknown>;
       return data.Galaxy;
     },
@@ -493,7 +481,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all galaxies",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      let data = (await req(ctx, "GET", "/galaxies")) as Array<
+      let data = (await req(ctx, "GET", "galaxies")) as Array<
         Record<string, unknown>
       >;
       data = data.map((e) => e.Galaxy as Record<string, unknown>);
@@ -514,7 +502,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "DELETE",
-        `/galaxies/delete/${(input as { galaxyId: string }).galaxyId}`,
+        `galaxies/delete/${pathSegment((input as { galaxyId: string }).galaxyId)}`,
       );
     },
   });
@@ -529,7 +517,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/noticelists/view/${(input as { noticelistId: string }).noticelistId}`,
+        `noticelists/view/${pathSegment((input as { noticelistId: string }).noticelistId)}`,
       )) as Record<string, unknown>;
       return data.Noticelist;
     },
@@ -540,7 +528,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all noticelists",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      let data = (await req(ctx, "GET", "/noticelists")) as Array<
+      let data = (await req(ctx, "GET", "noticelists")) as Array<
         Record<string, unknown>
       >;
       data = data.map((e) => e.Noticelist as Record<string, unknown>);
@@ -569,7 +557,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        "/objects/restSearch",
+        "objects/restSearch",
         body,
       )) as Record<string, unknown>;
       const response = data.response as
@@ -600,7 +588,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "POST",
-        "/admin/organisations/add",
+        "admin/organisations/add",
         body,
       )) as Record<string, unknown>;
       return data.Organisation;
@@ -615,7 +603,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/organisations/view/${(input as { organisationId: string }).organisationId}`,
+        `organisations/view/${pathSegment((input as { organisationId: string }).organisationId)}`,
       )) as Record<string, unknown>;
       return data.Organisation;
     },
@@ -626,7 +614,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all organisations",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      let data = (await req(ctx, "GET", "/organisations")) as Array<
+      let data = (await req(ctx, "GET", "organisations")) as Array<
         Record<string, unknown>
       >;
       data = data.map((e) => e.Organisation as Record<string, unknown>);
@@ -651,7 +639,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/admin/organisations/edit/${organisationId}`,
+        `admin/organisations/edit/${pathSegment(organisationId)}`,
         updateFields as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.Organisation;
@@ -666,7 +654,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "DELETE",
-        `/admin/organisations/delete/${(input as { organisationId: string }).organisationId}`,
+        `admin/organisations/delete/${pathSegment((input as { organisationId: string }).organisationId)}`,
       );
     },
   });
@@ -690,8 +678,8 @@ export default function misp(rl: RunlinePluginAPI) {
       if (colour)
         body.colour = (colour as string).startsWith("#")
           ? colour
-          : `#${colour}`;
-      const data = (await req(ctx, "POST", "/tags/add", body)) as Record<
+          : `#${encodeURIComponent(colour as string)}`;
+      const data = (await req(ctx, "POST", "tags/add", body)) as Record<
         string,
         unknown
       >;
@@ -704,7 +692,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all tags",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const data = (await req(ctx, "GET", "/tags")) as Record<string, unknown>;
+      const data = (await req(ctx, "GET", "tags")) as Record<string, unknown>;
       let tags = data.Tag as unknown[];
       if ((input as Record<string, unknown>)?.limit)
         tags = tags.slice(
@@ -730,11 +718,11 @@ export default function misp(rl: RunlinePluginAPI) {
       if (colour)
         body.colour = (colour as string).startsWith("#")
           ? colour
-          : `#${colour}`;
+          : `#${encodeURIComponent(colour as string)}`;
       const data = (await req(
         ctx,
         "POST",
-        `/tags/edit/${tagId}`,
+        `tags/edit/${pathSegment(tagId)}`,
         body,
       )) as Record<string, unknown>;
       return data.Tag;
@@ -749,7 +737,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "POST",
-        `/tags/delete/${(input as { tagId: string }).tagId}`,
+        `tags/delete/${pathSegment((input as { tagId: string }).tagId)}`,
       );
     },
   });
@@ -775,7 +763,7 @@ export default function misp(rl: RunlinePluginAPI) {
       >;
       const body: Record<string, unknown> = { email, role_id: roleId };
       if (additionalFields) Object.assign(body, additionalFields);
-      const data = (await req(ctx, "POST", "/admin/users/add", body)) as Record<
+      const data = (await req(ctx, "POST", "admin/users/add", body)) as Record<
         string,
         unknown
       >;
@@ -791,7 +779,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/admin/users/view/${(input as { userId: string }).userId}`,
+        `admin/users/view/${pathSegment((input as { userId: string }).userId)}`,
       )) as Record<string, unknown>;
       return data.User;
     },
@@ -802,7 +790,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all users",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      let data = (await req(ctx, "GET", "/admin/users")) as Array<
+      let data = (await req(ctx, "GET", "admin/users")) as Array<
         Record<string, unknown>
       >;
       data = data.map((e) => e.User as Record<string, unknown>);
@@ -827,7 +815,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "PUT",
-        `/admin/users/edit/${userId}`,
+        `admin/users/edit/${pathSegment(userId)}`,
         updateFields as Record<string, unknown>,
       )) as Record<string, unknown>;
       return data.User;
@@ -842,7 +830,7 @@ export default function misp(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "DELETE",
-        `/admin/users/delete/${(input as { userId: string }).userId}`,
+        `admin/users/delete/${pathSegment((input as { userId: string }).userId)}`,
       );
     },
   });
@@ -857,7 +845,7 @@ export default function misp(rl: RunlinePluginAPI) {
       const data = (await req(
         ctx,
         "GET",
-        `/warninglists/view/${(input as { warninglistId: string }).warninglistId}`,
+        `warninglists/view/${pathSegment((input as { warninglistId: string }).warninglistId)}`,
       )) as Record<string, unknown>;
       return data.Warninglist;
     },
@@ -868,7 +856,7 @@ export default function misp(rl: RunlinePluginAPI) {
     description: "List all warninglists",
     inputSchema: { limit: { type: "number", required: false } },
     async execute(input, ctx) {
-      const data = (await req(ctx, "GET", "/warninglists")) as Record<
+      const data = (await req(ctx, "GET", "warninglists")) as Record<
         string,
         unknown
       >;

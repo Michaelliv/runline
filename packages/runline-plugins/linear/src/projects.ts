@@ -4,7 +4,6 @@ import {
   bindGetAction,
   bindListAction,
   gql,
-  key,
   MILESTONE_FIELDS,
   PROJECT_FIELDS,
   PROJECT_UPDATE_FIELDS,
@@ -135,7 +134,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "projects.*");
       const { slackChannelName, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: ProjectCreateInput!, $slackChannelName: String) { projectCreate(input: $input, slackChannelName: $slackChannelName) { success project { ${PROJECT_FIELDS} } } }`,
         { input: fields, slackChannelName: slackChannelName ?? null },
       );
@@ -237,7 +236,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "projects.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: ProjectUpdateInput!) { projectUpdate(id: $id, input: $input) { success project { ${PROJECT_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -255,7 +254,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "projects.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { projectDelete(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );
@@ -275,7 +274,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "projects.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { projectUnarchive(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );
@@ -307,7 +306,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "projects.*");
       const opts = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `query($term: String!, $first: Int, $includeComments: Boolean, $teamId: String) {
           searchProjects(term: $term, first: $first, includeComments: $includeComments, teamId: $teamId) {
             nodes { ${PROJECT_FIELDS} }
@@ -376,7 +375,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "projects.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: ProjectMilestoneCreateInput!) { projectMilestoneCreate(input: $input) { success projectMilestone { ${MILESTONE_FIELDS} } } }`,
         { input: input as Record<string, unknown> },
       );
@@ -422,7 +421,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "projects.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: ProjectMilestoneUpdateInput!) { projectMilestoneUpdate(id: $id, input: $input) { success projectMilestone { ${MILESTONE_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -441,7 +440,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "projects.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { projectMilestoneDelete(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );
@@ -492,7 +491,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "projects.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: ProjectUpdateCreateInput!) { projectUpdateCreate(input: $input) { success projectUpdate { ${PROJECT_UPDATE_FIELDS} } } }`,
         { input: input as Record<string, unknown> },
       );
@@ -529,7 +528,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "projects.*");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: ProjectUpdateUpdateInput!) { projectUpdateUpdate(id: $id, input: $input) { success projectUpdate { ${PROJECT_UPDATE_FIELDS} } } }`,
         { id, input: fields },
       );
@@ -548,7 +547,7 @@ export function registerProjectActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "projects.*");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!) { projectUpdateArchive(id: $id) { success } }`,
         { id: (input as { id: string }).id },
       );

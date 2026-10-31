@@ -53,6 +53,7 @@ runline exec 'return await github.user.listRepos({ username: "torvalds" })'
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/activeCampaign.svg" width="16" height="16" style="vertical-align: middle"> **activeCampaign** | 48 | contact, account, accountContact, contactTag, contactList, list, tag, deal, connection, ecomCustomer, ecomOrder, ecomOrderProduct | `ACTIVE_CAMPAIGN_API_URL`, `ACTIVE_CAMPAIGN_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/adalo.svg" width="16" height="16" style="vertical-align: middle"> **adalo** | 5 | collection | `ADALO_APP_ID`, `ADALO_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/affinity.svg" width="16" height="16" style="vertical-align: middle"> **affinity** | 16 | list, listEntry, person, organization | `AFFINITY_API_KEY` |
+| <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/agentMail.png" width="16" height="16" style="vertical-align: middle"> **agentMail** | 32 | whoami, inbox, message, thread, draft | `AGENTMAIL_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/agileCrm.png" width="16" height="16" style="vertical-align: middle"> **agileCrm** | 15 | contact, company, deal | `AGILE_CRM_SUBDOMAIN`, `AGILE_CRM_EMAIL`, `AGILE_CRM_API_KEY` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/airtable.svg" width="16" height="16" style="vertical-align: middle"> **airtable** | 10 | base, record | `AIRTABLE_TOKEN` |
 | <img src="https://raw.githubusercontent.com/Michaelliv/runline/main/packages/runline-plugins/icons/airtop.svg" width="16" height="16" style="vertical-align: middle"> **airtop** | 24 | session, window, extraction, interaction, agent, file | `AIRTOP_API_KEY` |
@@ -321,67 +322,141 @@ runline exec 'return await github.repo.list({ owner: "torvalds" })' --json
 
 ## Writing a Plugin
 
-Plugins export a function that receives a `RunlinePluginAPI` and registers actions. Use TypeBox schemas by default for both connection config and action input schemas; Runline uses them for action discovery, `actions.check(...)`, and runtime validation before `execute` runs.
+Plugins export a function that receives a `RunlinePluginAPI` and registers actions. Use TypeBox schemas for both connection config and action input; Runline uses them for action discovery, `actions.check(...)`, and validation before `execute` runs.
+
+A plugin that calls an authenticated API **declares** its credential instead of building auth headers itself. The declaration says what the secret is, how it is placed, and the exact HTTPS targets it may be sent to; every request goes through `credentialJson` / `credentialRequest`, which sign it — through the host's broker when there is one, else locally from the connection config. The plugin never touches the secret, and nothing outside its declared targets can receive it.
 
 ```typescript
-import type { RunlinePluginAPI } from "runline";
+import {
+  credentialJson,
+  pathSegment,
+  type RunlinePluginAPI,
+  staticCredential,
+} from "runline";
 import * as t from "typebox";
+
+// Bearer token from the connection's `apiKey`, sent only beneath this base.
+const credential = staticCredential({
+  id: "orders",
+  auth: { kind: "bearer" },
+  local: { secret: "apiKey" },
+  targets: {
+    api: { baseUrl: "https://api.orders.example/v1/", methods: ["GET", "POST"] },
+  },
+  probe: { target: "api", path: "me", method: "GET", acceptedStatuses: [200] },
+});
 
 export default function orders(rl: RunlinePluginAPI) {
   rl.setName("orders");
   rl.setVersion("1.0.0");
-
-  // Connection config — env vars override config.json values
-  rl.setConnectionSchema(t.Object({
-    apiKey: t.String({ env: "ORDERS_API_KEY" }),
-    baseUrl: t.String({ env: "ORDERS_BASE_URL" }),
-  }));
+  rl.setCredential(credential);
+  rl.setConnectionSchema(
+    t.Object({ apiKey: t.String({ env: "ORDERS_API_KEY" }) }),
+  );
 
   rl.registerAction("list", {
     access: "read",
-    description: "List orders for an organization",
-    inputSchema: t.Object({
-      orgId: t.String(),
-      status: t.Optional(t.String({ description: "open, closed, or all" })),
-      limit: t.Optional(t.Number()),
-    }),
+    description: "List an organization's orders, newest first.",
+    inputSchema: t.Object(
+      {
+        orgId: t.String({ minLength: 1, description: "Organization ID" }),
+        status: t.Optional(t.Union([t.Literal("open"), t.Literal("closed")])),
+        limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input, ctx) {
-      const { orgId, status, limit } = input as Record<string, unknown>;
-      const url = new URL(`${ctx.connection.config.baseUrl}/orgs/${orgId}/orders`);
-      if (status) url.searchParams.set("status", status as string);
-      if (limit) url.searchParams.set("limit", String(limit));
-
-      const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${ctx.connection.config.apiKey}` },
+      const { orgId, ...query } = input as { orgId: string };
+      return credentialJson(ctx, credential, "orders", {
+        target: "api",
+        path: `orgs/${pathSegment(orgId)}/orders`,
+        query,
       });
-      if (!res.ok) throw new Error(`Orders API ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 
   rl.registerAction("create", {
     access: "write",
-    description: "Create a new order",
-    inputSchema: t.Object({
-      orgId: t.String(),
-      customer: t.String(),
-      total: t.Number(),
-    }),
+    description: "Create an order. Returns the created order.",
+    inputSchema: t.Object(
+      {
+        orgId: t.String({ minLength: 1 }),
+        customer: t.String({ minLength: 1 }),
+        total: t.Number({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
     async execute(input, ctx) {
-      const res = await fetch(`${ctx.connection.config.baseUrl}/orders`, {
+      return credentialJson(ctx, credential, "orders", {
+        target: "api",
+        path: "orders",
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${ctx.connection.config.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(input),
+        json: input,
       });
-      if (!res.ok) throw new Error(`Orders API ${res.status}: ${await res.text()}`);
-      return res.json();
     },
   });
 }
 ```
+
+The credential kit is exported from `runline` for every plugin, bundled or custom:
+
+| Helper | Use |
+|---|---|
+| `staticCredential(spec)` | Declare a static secret: `bearer`, `apiKey` (named header, optional prefix), `queryKey`, `basic`, or the general form of named parts and placements. `local` names the flat config fields it signs from; `targets` may be a function of public config. |
+| `grantSchema` | The stored shape of an OAuth method's revisioned grant, for plugins declaring `oauth2`. |
+| `credentialJson` / `credentialOk` / `credentialRequest` | Send one request through the declared credential: JSON answer, successful `Response`, or raw `Response`. `query`, `json`, `form`, `body`, `headers` and WebDAV `destination` are built for you. |
+| `credentialSocketUrl` | A signed (or host-relayed) URL for a declared `wss://` target. |
+| `brokerFor(ctx, declaration)` | The broker one action call signs through, for requests and probes the helpers above do not shape: the host's, or the local signer. |
+| `pathSegment` / `pathSegments` / `slashEncodedSegment` | Put caller input into a path as exactly one segment (or slash-separated segments); `..`, empty segments and separators are refused. |
+| `pathWithin` | Turn an API-returned next-page URL back into a path beneath the declared target, refusing anything outside it. |
+| `httpsBase` / `hostLabel` / `configChoice` / `configFlag` | Derive a target from public config, refusing anything that could send the credential to another host. |
+| `responseFailed` / `requestFailed` / `failureMessage` / `errorIdentifier` | Report a failed response by status and identifier-shaped codes only: provider free text, where a secret may be echoed, never reaches the error. |
+| `answerFailed` / `graphqlFailed` | Report a failure inside a 2xx answer (`ok: false`, GraphQL `errors`) by code, field and a one-line message. |
+| `jsonAnswer` / `jsonOrAcknowledged` | Read a successful answer; an empty or 204 answer is `{ success: true }`. |
+| `multipartBody` | Buffer `FormData` into the bytes and boundary the transport accepts. |
+| `refuseUnderHost` | Refuse an owner-login step when a host keeps the credential. |
+| `awsCredential(spec)` / `awsTarget(service, region)` | Declare an AWS connection: an access key (`accessKeyId`, `secretAccessKey`, a session's `sessionToken`) or, signing locally, an AWS CLI profile (`awsProfile`, e.g. an SSO login) in its place; with `roleArn`, a role that key assumes, signing with the role's sessions. Targets are regional service endpoints, each signed for its service and region. |
+| `awsJson` / `awsQuery` | Call an AWS JSON-protocol service by operation (`AmazonSSM.SendCommand`), or a Query-protocol service by action (`DescribeInstances`), its XML answer read as data. |
+| `awsFailed` / `awsList` / `parseAwsXml` / `awsEndpoint` / `awsRegion` | Report a failed AWS call by status and AWS error code; read an XML list's `item` or `member` entries; parse AWS XML; build and validate endpoints and regions. |
+
+An AWS plugin declares its credential the same way, and signs through SigV4:
+
+```typescript
+import {
+  awsCredential,
+  awsJson,
+  awsRegion,
+  awsTarget,
+  type RunlinePluginAPI,
+} from "runline";
+import * as t from "typebox";
+
+// An access key, or with `roleArn` in the connection a role it assumes.
+const credential = awsCredential({
+  id: "aws",
+  targets: (config) => ({
+    ssm: awsTarget("ssm", awsRegion(config.region ?? "us-east-1")),
+  }),
+});
+
+export default function fleet(rl: RunlinePluginAPI) {
+  rl.setName("fleet");
+  rl.setCredential(credential);
+  rl.registerAction("instances.list", {
+    access: "read",
+    description: "Instances managed by Systems Manager.",
+    inputSchema: t.Object({}, { additionalProperties: false }),
+    execute: (_input, ctx) =>
+      awsJson(ctx, credential, "fleet", {
+        target: "ssm",
+        operation: "AmazonSSM.DescribeInstanceInformation",
+        version: "1.1",
+      }),
+  });
+}
+```
+
+See [Host-signed requests](#host-signed-requests) for the declaration model itself: authentication kinds, placements and targets.
 
 Custom plugins are discovered from the nearest project `.runline/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then the bundled built-ins named by configured connections. Project-local plugins win over same-named global or built-in plugins; duplicates discovered later are skipped and reported on stderr.
 
@@ -471,6 +546,58 @@ const result = await rl.execute(`
 
 console.log(result.result);  // [{ hex: "#635BFF", type: "accent", brightness: 116 }]
 ```
+
+### Host-signed requests
+
+A host that keeps credentials outside the process running actions — a server signing for a sandboxed worker — passes `credentialBroker`. The engine calls it once per action call of a plugin that declares its credential (`setCredential`), with `{ plugin, action, context }` (`context` is whatever that `execute()` passed) and hands the result to the action as `ctx.credentials`. Every built-in that declares its credential then sends every request and probe through it and signs nothing itself, so its connection config carries public settings only.
+
+```typescript
+const rl = Runline.create({
+  plugins: [gmail],
+  credentialBroker: ({ plugin, action, context }) => ({
+    request: (req) => signOnServer({ plugin, action, context, req }),
+    probe: () => probeOnServer({ plugin, context }),
+  }),
+});
+```
+
+The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application, JWT identity and AWS role — never with anything the plugin's process sends.
+
+Each method's `authentication.field` names the one config field a host stores the secret in. There are four kinds:
+
+| kind | stored shape | sent as |
+|---|---|---|
+| `none` | nothing | unsigned, still held to the method's targets: the method of a connection without an optional credential |
+| `static` | its named `parts`, each a string, `optionalParts` allowed to be absent (`staticSecretSchema(parts, optionalParts)`) | each part through its `placements` |
+| `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection by its declared `renewal`: a refresh token, client credentials, a JWT bearer assertion (`jwtIdentity`), or the resource owner's username and password (`resourceOwner`, under the endpoint's own `fields` names) |
+| `awsSigV4` | an `AwsAccessKeySchema` key: `accessKeyId`, `secretAccessKey`, and a session's `sessionToken` | AWS Signature Version 4 for each target's declared `aws: { service, region }`. With `assumeRole: { sessionField }`, the key only assumes the binding's `awsRole` through STS; requests sign with the role's session (`AwsSessionSchema`, in `sessionField`), renewed five minutes before it expires |
+
+A static placement is one of:
+
+| placement | sent as |
+|---|---|
+| `{ in: "header", part, name, prefix? }` | `<name>: <prefix><part>` |
+| `{ in: "query", part, name }` | `?<name>=<part>` |
+| `{ in: "body", part, name }` | a top-level field of a JSON-object or form body; `?<name>=<part>` when the request has no body |
+| `{ in: "jsonPointer", part, pointer }` | the value at an RFC 6901 pointer in a JSON body (`/params/args/2`), where the request carries null for the transport to fill |
+| `{ in: "path", part, prefix? }` | the first path segment beneath the base, `<prefix><part>`; at most one per method. A secret in a URL can reach access logs, so a host may refuse this placement |
+| `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
+| `{ in: "jwt", part, name, prefix?, audience }` | `<name>: <prefix><JWT>`: an HS256 JWT signed per request from a `<key id>:<hex secret>` part, for `audience`, valid five minutes |
+| `{ in: "querySignature", part, name }` | `<name>: base64(HMAC-SHA256(query))`, keyed by the part, over the query as sent, after every other placement |
+
+Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. A placement may name `targets` it alone signs, so a connection holding two credentials for two APIs keeps them as two parts scoped to their own targets; every target of a static method must be signed by at least one placement. A part listed in `optionalParts` may be missing, which refuses only the targets that place it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`). With `optional: true` the type also declares a `none` method, which a connection selects unless it holds the flat secret fields or says `authenticated: true` in its public config.
+
+A public config field that picks a host — a region, an environment, a hosting mode, a sandbox flag — accepts only its documented values; anything else makes the declaration throw `invalid_credentials` rather than fall back to a default host.
+
+Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
+
+A target with `socket: true` is a `wss://` endpoint, such as a browser's CDP socket. The broker's optional `socketUrl({ target, path })` returns a URL the plugin may open: the local signer returns it signed by the method's query placements, the only placements such a target may have; a host keeping the credential returns a relay it controls. A broker without `socketUrl` serves no sockets, and plugins refuse those actions as `unsupported_operation`.
+
+A target may allow the WebDAV methods `MKCOL`, `COPY` and `MOVE`. A `COPY` or `MOVE` names its `destination`, a path beneath the same target checked as `path` is, and the transport alone sends it as the absolute `Destination` header; a caller never sets that header.
+
+A target that the provider holds open longer, or answers larger, than the transport defaults declares its own `timeoutMs` or `maxResponseBytes`; the host caps both with `maxTargetTimeoutMs` and `maxTargetResponseBytes` on `CredentialTransport`.
+
+Every target of an `awsSigV4` method names the service and region it is signed for, and no other method's target may; none is a socket. SigV4 owns `Authorization`, `X-Amz-Date`, `X-Amz-Security-Token` and `X-Amz-Content-Sha256`, and refuses a presigned URL's `X-Amz-*` query parameters; the query goes out in the canonical encoding it was signed in. An STS refusal of the key itself (`InvalidClientTokenId`, `SignatureDoesNotMatch`, an expired session token) is `reconnect_required`; any other refusal to assume the role is `provider_rejected`. Signing locally, an `assumeRole` connection keeps its session in the flat field `awsSession`, bound to the key and role it was issued for. A selection's `awsProfile` (local signing only, ignored by hosts, like `localSecret`) takes the key from an AWS CLI profile through `aws configure export-credentials`, held until five minutes before it expires; a CLI with no login is `reconnect_required`, mended by `aws sso login`.
 
 ## CLI Reference
 

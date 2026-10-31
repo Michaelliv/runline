@@ -1,12 +1,20 @@
 import {
   AuthError,
+  type CredentialDeclaration,
   type CredentialProbe,
   type CredentialTarget,
   type CredentialType,
-  OAuthGrantSchema,
+  grantSchema,
   type OAuthJwtIdentity,
 } from "runline";
-import * as t from "typebox";
+
+/** The grant every Google plugin's consent belongs to. */
+export const GOOGLE_GRANT = "google";
+/**
+ * Google's fixed token endpoint: a JSON credential's token_uri never
+ * selects egress.
+ */
+export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 export type GoogleAuthConfig = {
   authMethod?: "delegated" | "serviceAccount";
@@ -77,6 +85,19 @@ const API_BASES: Record<string, string> = {
   calendar: "https://www.googleapis.com/calendar/v3/",
   gmail: "https://gmail.googleapis.com/gmail/v1/users/me/",
 };
+/** The Cloud Console service each API base belongs to, to enable it by. */
+const API_SERVICES: Record<string, string> = {
+  drive: "drive.googleapis.com",
+  upload: "drive.googleapis.com",
+  docs: "docs.googleapis.com",
+  sheets: "sheets.googleapis.com",
+  slides: "slides.googleapis.com",
+  script: "script.googleapis.com",
+  tasks: "tasks.googleapis.com",
+  people: "people.googleapis.com",
+  calendar: "calendar-json.googleapis.com",
+  gmail: "gmail.googleapis.com",
+};
 const PLUGIN_TARGETS: Record<string, string[]> = {
   googleDrive: ["drive", "upload", "docs"],
   googleDocs: ["docs", "drive"],
@@ -89,14 +110,24 @@ const PLUGIN_TARGETS: Record<string, string[]> = {
   gmail: ["gmail"],
 };
 
+/** The API bases a builtin Google plugin calls; any other name is refused. */
+function targetNames(plugin: string): string[] {
+  if (!Object.hasOwn(PLUGIN_TARGETS, plugin))
+    throw new AuthError("request_not_allowed");
+  return PLUGIN_TARGETS[plugin];
+}
+
+/** The Cloud Console services a plugin calls, each to be enabled once. */
+export function googleServices(plugin: string): string[] {
+  return [...new Set(targetNames(plugin).map((name) => API_SERVICES[name]))];
+}
+
 /** Builtin routing policy, never derived from action input or a returned URL. */
 export function googleResources(plugin: string): {
   targets: Record<string, CredentialTarget>;
   probe?: CredentialProbe;
 } {
-  if (!Object.hasOwn(PLUGIN_TARGETS, plugin))
-    throw new AuthError("request_not_allowed");
-  const names = PLUGIN_TARGETS[plugin];
+  const names = targetNames(plugin);
   const targets = Object.fromEntries(
     names.map((name) => [
       name,
@@ -145,30 +176,54 @@ export function googleResources(plugin: string): {
   };
 }
 
-/** Fixed vendor endpoints; a JSON credential's token_uri can never select egress. */
+/**
+ * A Google plugin's credential declaration: its own targets and the scopes
+ * it signs service-account requests for, the method its config selects,
+ * and — for a service account — the JWT identity, subject included.
+ */
+export function googleCredential(
+  plugin: string,
+  scopes: string[],
+): CredentialDeclaration {
+  return (config) => {
+    const cfg = config as GoogleAuthConfig;
+    const method = googleMethod(cfg);
+    return {
+      type: googleCredentialType(scopes, plugin),
+      method,
+      application: {
+        clientId: cfg.clientId as string,
+        clientSecret: cfg.clientSecret,
+      },
+      ...(method === "serviceAccount"
+        ? { jwtIdentity: googleIdentity(cfg) }
+        : {}),
+    };
+  };
+}
+
 export function googleCredentialType(
   scopes: string[],
   plugin: string,
 ): CredentialType {
-  const url = "https://oauth2.googleapis.com/token";
-  const schema = t.Object(
-    { grant: t.Optional(OAuthGrantSchema) },
-    { additionalProperties: false },
-  );
   const { targets, probe } = googleResources(plugin);
   return {
     id: "google.oauth",
     methods: {
       delegated: {
-        schema,
+        schema: grantSchema,
         authentication: {
           kind: "oauth2",
-          grantField: "grant",
+          field: "grant",
           renewal: "refresh",
+          grant: GOOGLE_GRANT,
           definition: {
             id: "google.oauth",
             provider: "google",
-            refresh: { url, clientAuthentication: "client_secret_post" },
+            refresh: {
+              url: GOOGLE_TOKEN_URL,
+              clientAuthentication: "client_secret_post",
+            },
           },
         },
         targets,
@@ -177,16 +232,19 @@ export function googleCredentialType(
       ...(scopes.length
         ? {
             serviceAccount: {
-              schema,
+              schema: grantSchema,
               authentication: {
                 kind: "oauth2",
-                grantField: "grant",
+                field: "grant",
                 renewal: "jwtBearer",
                 scopes,
                 definition: {
                   id: "google.serviceAccount",
                   provider: "google",
-                  jwtBearer: { url, clientAuthentication: "none" },
+                  jwtBearer: {
+                    url: GOOGLE_TOKEN_URL,
+                    clientAuthentication: "none",
+                  },
                 },
               },
               targets,

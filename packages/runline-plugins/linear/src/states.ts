@@ -4,7 +4,6 @@ import {
   bindGetAction,
   bindListAction,
   gql,
-  key,
   requireUnscoped,
   STATE_FIELDS,
   withScopedNote,
@@ -56,7 +55,7 @@ export function registerStateActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       requireUnscoped(ctx, "state.create");
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($input: WorkflowStateCreateInput!) { workflowStateCreate(input: $input) { success workflowState { ${STATE_FIELDS} } } }`,
         { input: input as Record<string, unknown> },
       );
@@ -86,7 +85,7 @@ export function registerStateActions(rl: RunlinePluginAPI) {
       requireUnscoped(ctx, "state.update");
       const { id, ...fields } = input as Record<string, unknown>;
       const data = await gql(
-        key(ctx),
+        ctx,
         `mutation($id: String!, $input: WorkflowStateUpdateInput!) { workflowStateUpdate(id: $id, input: $input) { success workflowState { ${STATE_FIELDS} } } }`,
         { id, input: fields },
       );

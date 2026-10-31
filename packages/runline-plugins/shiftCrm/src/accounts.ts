@@ -1,18 +1,15 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   CRM_BASE,
   type CrmAccount,
   createRecordFields,
   idSchema,
-  listParams,
   paginationFields,
-  pathSegment,
   request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   updateRecordFields,
-  withQuery,
 } from "./shared.js";
 
 const accountListFields = {
@@ -46,7 +43,8 @@ export function registerAccountActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ accounts: CrmAccount[] }>(
         ctx,
-        withQuery(`${CRM_BASE}/accounts`, listParams(input)),
+        `${CRM_BASE}/accounts`,
+        { query: input },
       );
       return body.accounts;
     },
@@ -59,7 +57,8 @@ export function registerAccountActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ accounts: CrmAccount[]; nextCursor?: string }>(
         ctx,
-        withQuery(`${CRM_BASE}/accounts`, listParams(input)),
+        `${CRM_BASE}/accounts`,
+        { query: input },
       );
     },
   });

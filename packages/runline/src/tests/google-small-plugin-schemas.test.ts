@@ -1,29 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { TSchema } from "typebox";
 import { Check } from "typebox/value";
 import googleAppsScript from "../../../runline-plugins/googleAppsScript/src/index.js";
 import googleImage from "../../../runline-plugins/googleImage/src/index.js";
 import googleTasks from "../../../runline-plugins/googleTasks/src/index.js";
 import { createPluginAPI, type PluginFunction } from "../plugin/api.js";
-import type { ActionDef, PluginDef } from "../plugin/types.js";
+import type { PluginDef } from "../plugin/types.js";
+import { typedSchema } from "./helpers/plugin.js";
 
 function makePlugin(name: string, plugin: PluginFunction): PluginDef {
   const { api, resolve } = createPluginAPI(name);
   plugin(api);
   return resolve();
-}
-
-function action(plugin: PluginDef, name: string): ActionDef {
-  const found = plugin.actions.find((candidate) => candidate.name === name);
-  assert.ok(found, `expected ${plugin.name}.${name} to be registered`);
-  return found;
-}
-
-function schema(plugin: PluginDef, name: string): TSchema {
-  const inputSchema = action(plugin, name).inputSchema as TSchema | undefined;
-  assert.ok(inputSchema, `expected ${plugin.name}.${name} to have a schema`);
-  return inputSchema;
 }
 
 const appsScriptFixtures: Record<string, Record<string, unknown>> = {
@@ -76,10 +64,7 @@ function assertStrictSchemaSurface(
   );
 
   for (const candidate of plugin.actions) {
-    const inputSchema = schema(plugin, candidate.name) as TSchema & {
-      additionalProperties?: boolean;
-      required?: string[];
-    };
+    const inputSchema = typedSchema(plugin, candidate.name);
     const fixture = fixtures[candidate.name];
 
     assert.equal(
@@ -131,7 +116,7 @@ describe("small Google plugin TypeBox schemas", () => {
   });
 
   it("types Apps Script files, enums, JSON parameters, and numeric limits", () => {
-    const files = schema(appsScript, "project.updateContent");
+    const files = typedSchema(appsScript, "project.updateContent");
     assert.equal(
       Check(files, {
         scriptId: "script-1",
@@ -166,7 +151,7 @@ describe("small Google plugin TypeBox schemas", () => {
       false,
     );
 
-    const run = schema(appsScript, "function.run");
+    const run = typedSchema(appsScript, "function.run");
     assert.equal(
       Check(run, {
         scriptId: "script-1",
@@ -193,7 +178,7 @@ describe("small Google plugin TypeBox schemas", () => {
       false,
     );
 
-    const edit = schema(appsScript, "file.edit");
+    const edit = typedSchema(appsScript, "file.edit");
     assert.equal(
       Check(edit, {
         scriptId: "script-1",
@@ -213,23 +198,23 @@ describe("small Google plugin TypeBox schemas", () => {
       false,
     );
 
-    const scripts = schema(appsScript, "script.list");
+    const scripts = typedSchema(appsScript, "script.list");
     assert.equal(Check(scripts, { pageSize: 1 }), true);
     assert.equal(Check(scripts, { pageSize: 1000 }), true);
     assert.equal(Check(scripts, { pageSize: 0 }), false);
     assert.equal(Check(scripts, { pageSize: 1.5 }), false);
 
-    const processes = schema(appsScript, "process.list");
+    const processes = typedSchema(appsScript, "process.list");
     assert.equal(Check(processes, { scriptId: "s", pageSize: 50 }), true);
     assert.equal(Check(processes, { scriptId: "s", pageSize: 51 }), false);
 
-    const deploy = schema(appsScript, "deployment.create");
+    const deploy = typedSchema(appsScript, "deployment.create");
     assert.equal(Check(deploy, { scriptId: "s", versionNumber: 1.5 }), false);
     assert.equal(Check(deploy, { scriptId: "s", versionNumber: 0 }), false);
   });
 
   it("keeps Google Image models extensible while rejecting empty prompts", () => {
-    const create = schema(image, "image.create");
+    const create = typedSchema(image, "image.create");
     assert.equal(Check(create, { prompt: "" }), false);
     assert.equal(
       Check(create, {
@@ -243,7 +228,7 @@ describe("small Google plugin TypeBox schemas", () => {
   });
 
   it("types Tasks timestamps, statuses, pagination, and patch requirements", () => {
-    const create = schema(tasks, "task.create");
+    const create = typedSchema(tasks, "task.create");
     assert.equal(
       Check(create, {
         taskListId: "list-1",
@@ -279,7 +264,7 @@ describe("small Google plugin TypeBox schemas", () => {
       false,
     );
 
-    const list = schema(tasks, "task.list");
+    const list = typedSchema(tasks, "task.list");
     assert.equal(
       Check(list, { taskListId: "list-1", dueMin: 0, maxResults: 100 }),
       true,
@@ -290,7 +275,7 @@ describe("small Google plugin TypeBox schemas", () => {
       false,
     );
 
-    const update = schema(tasks, "task.update");
+    const update = typedSchema(tasks, "task.update");
     assert.equal(
       Check(update, { taskListId: "list-1", taskId: "task-1" }),
       false,
@@ -321,7 +306,7 @@ describe("small Google plugin TypeBox schemas", () => {
       false,
     );
 
-    const get = schema(tasks, "task.get");
+    const get = typedSchema(tasks, "task.get");
     assert.equal(Check(get, { taskListId: "", taskId: "task-1" }), false);
   });
 });

@@ -1,6 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { registerPageActions } from "./pages.js";
+import { shiftPagesCredential } from "./shared.js";
 
 /**
  * Shift Pages — hosted HTML pages in the Shift cloud: draft, publish,
@@ -11,6 +12,7 @@ import { registerPageActions } from "./pages.js";
 export default function shiftPages(rl: RunlinePluginAPI) {
   rl.setName("shiftPages");
   rl.setVersion("0.1.0");
+  rl.setCredential(shiftPagesCredential);
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({

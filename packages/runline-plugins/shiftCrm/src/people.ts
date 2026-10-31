@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   assertTimeOrder,
@@ -8,15 +8,12 @@ import {
   createRecordFields,
   enumSchema,
   idSchema,
-  listParams,
   paginationFields,
-  pathSegment,
   request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
   updateRecordFields,
-  withQuery,
 } from "./shared.js";
 
 const personListFields = {
@@ -107,7 +104,8 @@ export function registerPersonActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ people: CrmPerson[] }>(
         ctx,
-        withQuery(`${CRM_BASE}/people`, listParams(input)),
+        `${CRM_BASE}/people`,
+        { query: input },
       );
       return body.people;
     },
@@ -120,7 +118,8 @@ export function registerPersonActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ people: CrmPerson[]; nextCursor?: string }>(
         ctx,
-        withQuery(`${CRM_BASE}/people`, listParams(input)),
+        `${CRM_BASE}/people`,
+        { query: input },
       );
     },
   });

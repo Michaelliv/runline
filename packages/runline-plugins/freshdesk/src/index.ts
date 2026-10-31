@@ -1,4 +1,11 @@
-import type { RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
+import { freshdeskCredential } from "./credentials.js";
 
 const STATUS: Record<string, number> = {
   open: 2,
@@ -22,63 +29,31 @@ const SOURCE: Record<string, number> = {
   outboundEmail: 10,
 };
 
-async function apiRequest(
-  domain: string,
-  apiKey: string,
-  method: string,
+function req(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`https://${domain}.freshdesk.com/api/v2${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const opts: RequestInit = {
+  return credentialJson(ctx, freshdeskCredential, "freshdesk", {
+    target: "api",
+    path: endpoint,
     method,
-    headers: {
-      Authorization: `Basic ${btoa(`${apiKey}:X`)}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (
-    body &&
+    query: qs,
+    ...(body &&
     Object.keys(body).length > 0 &&
     method !== "GET" &&
     method !== "DELETE"
-  ) {
-    opts.body = JSON.stringify(body);
-  }
-  const res = await fetch(url.toString(), opts);
-  if (!res.ok)
-    throw new Error(`Freshdesk API error ${res.status}: ${await res.text()}`);
-  if (res.status === 204) return { success: true };
-  return res.json();
-}
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    domain: ctx.connection.config.domain as string,
-    apiKey: ctx.connection.config.apiKey as string,
-  };
-}
-
-function req(
-  ctx: { connection: { config: Record<string, unknown> } },
-  method: string,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-) {
-  const { domain, apiKey } = getConn(ctx);
-  return apiRequest(domain, apiKey, method, endpoint, body, qs);
+      ? { json: body }
+      : {}),
+  });
 }
 
 export default function freshdesk(rl: RunlinePluginAPI) {
   rl.setName("freshdesk");
   rl.setVersion("0.1.0");
+  rl.setCredential(freshdeskCredential);
 
   rl.setConnectionSchema({
     domain: {
@@ -196,7 +171,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       if (i.dueBy) body.due_by = i.dueBy;
       if (i.frDueBy) body.fr_due_by = i.frDueBy;
       if (i.customFields) body.custom_fields = i.customFields;
-      return req(ctx, "POST", "/tickets", body);
+      return req(ctx, "POST", "tickets", body);
     },
   });
 
@@ -210,7 +185,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "GET",
-        `/tickets/${(input as { ticketId: string }).ticketId}`,
+        `tickets/${pathSegment((input as { ticketId: string }).ticketId)}`,
       );
     },
   });
@@ -280,7 +255,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       if (orderBy) qs.order_by = orderBy;
       if (orderType) qs.order_type = orderType;
       if (include) qs.include = include;
-      return req(ctx, "GET", "/tickets", undefined, qs);
+      return req(ctx, "GET", "tickets", undefined, qs);
     },
   });
 
@@ -347,7 +322,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       if (dueBy) body.due_by = dueBy;
       if (frDueBy) body.fr_due_by = frDueBy;
       if (customFields) body.custom_fields = customFields;
-      return req(ctx, "PUT", `/tickets/${ticketId}`, body);
+      return req(ctx, "PUT", `tickets/${pathSegment(ticketId)}`, body);
     },
   });
 
@@ -361,7 +336,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       await req(
         ctx,
         "DELETE",
-        `/tickets/${(input as { ticketId: string }).ticketId}`,
+        `tickets/${pathSegment((input as { ticketId: string }).ticketId)}`,
       );
       return { success: true };
     },
@@ -415,7 +390,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       if (tags) body.tags = tags;
       if (companyId) body.company_id = companyId;
       if (customFields) body.custom_fields = customFields;
-      return req(ctx, "POST", "/contacts", body);
+      return req(ctx, "POST", "contacts", body);
     },
   });
 
@@ -429,7 +404,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       return req(
         ctx,
         "GET",
-        `/contacts/${(input as { contactId: string }).contactId}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       );
     },
   });
@@ -473,7 +448,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       if (mobile) qs.mobile = mobile;
       if (companyId) qs.company_id = companyId;
       if (state) qs.state = state;
-      return req(ctx, "GET", "/contacts", undefined, qs);
+      return req(ctx, "GET", "contacts", undefined, qs);
     },
   });
 
@@ -516,7 +491,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       if (jobTitle) body.job_title = jobTitle;
       if (tags) body.tags = tags;
       if (customFields) body.custom_fields = customFields;
-      return req(ctx, "PUT", `/contacts/${contactId}`, body);
+      return req(ctx, "PUT", `contacts/${pathSegment(contactId)}`, body);
     },
   });
 
@@ -530,7 +505,7 @@ export default function freshdesk(rl: RunlinePluginAPI) {
       await req(
         ctx,
         "DELETE",
-        `/contacts/${(input as { contactId: string }).contactId}`,
+        `contacts/${pathSegment((input as { contactId: string }).contactId)}`,
       );
       return { success: true };
     },

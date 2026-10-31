@@ -2,6 +2,7 @@ export { AuthError, type AuthErrorCode } from "./auth/errors.js";
 export {
   acquireOAuth2ClientToken,
   acquireOAuth2JwtToken,
+  acquireOAuth2PasswordToken,
   buildOAuth2AuthorizationUrl,
   exchangeOAuth2Code,
   refreshOAuth2Token,
@@ -16,6 +17,7 @@ export type {
   OAuthEvent,
   OAuthJwtIdentity,
   OAuthOperation,
+  OAuthResourceOwner,
   OAuthRuntimeOptions,
 } from "./auth/types.js";
 export {
@@ -62,28 +64,86 @@ export {
   oauthCallback,
   runOAuth,
 } from "./core/oauth.js";
-export { downloadResource } from "./credentials/http.js";
+export { awsEndpoint, awsRegion, parseAwsXml } from "./credentials/aws.js";
+export type { AwsCredentialSpec } from "./credentials/aws-plugin.js";
 export {
+  awsCredential,
+  awsFailed,
+  awsJson,
+  awsList,
+  awsQuery,
+  awsTarget,
+} from "./credentials/aws-plugin.js";
+export { brokerFor } from "./credentials/broker.js";
+export { downloadResource } from "./credentials/http.js";
+export type {
+  CredentialCall,
+  EmptyAnswer,
+  ErrorEnvelope,
+  StaticCredentialSpec,
+} from "./credentials/plugin.js";
+export {
+  answerFailed,
+  configChoice,
+  configFlag,
+  credentialJson,
+  credentialOk,
+  credentialRequest,
+  credentialSocketUrl,
+  errorIdentifier,
+  failureMessage,
+  grantSchema,
+  graphqlFailed,
+  hostLabel,
+  httpsBase,
+  jsonAnswer,
+  jsonOrAcknowledged,
+  multipartBody,
+  pathSegment,
+  pathSegments,
+  pathWithin,
+  refuseUnderHost,
+  requestFailed,
+  responseFailed,
+  slashEncodedSegment,
+  staticCredential,
+} from "./credentials/plugin.js";
+export {
+  AwsAccessKeySchema,
+  AwsSessionSchema,
   CredentialRegistry,
   OAuthGrantSchema,
   OAuthTokensSchema,
+  staticSecretSchema,
   validateCredential,
 } from "./credentials/registry.js";
 export type {
   AuthenticatedRequest,
+  CredentialBroker,
+  CredentialBrokerCall,
   CredentialTransportOptions,
+  SocketRequest,
 } from "./credentials/transport.js";
 export { CredentialTransport } from "./credentials/transport.js";
 export type {
+  AwsAccessKey,
+  AwsRole,
+  AwsScope,
+  AwsSession,
   CredentialAuthentication,
   CredentialBinding,
+  CredentialDeclaration,
   CredentialMethod,
   CredentialProbe,
   CredentialProbeResult,
+  CredentialSelection,
   CredentialTarget,
   CredentialType,
   HttpMethod,
+  LocalSecretPart,
+  LocalSecretSource,
   OAuthGrant,
+  SecretPlacement,
 } from "./credentials/types.js";
 export type {
   ActionDefinition,
@@ -109,6 +169,7 @@ export {
   loadPluginsFromConfig,
 } from "./plugin/loader.js";
 export { PluginRegistry, registry } from "./plugin/registry.js";
+export { connectionFields } from "./plugin/schema.js";
 export type {
   ActionAccess,
   ActionContext,

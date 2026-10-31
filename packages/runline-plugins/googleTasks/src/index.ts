@@ -20,9 +20,17 @@
  * normalize ISO input via `Date.toISOString()` when detected.
  */
 
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import * as t from "typebox";
-import { googleJsonRequest } from "../../_shared/googleAuth.js";
+import {
+  googleCredential,
+  googleJsonRequest,
+  googleOAuth,
+} from "../../_shared/googleAuth.js";
 import {
   GoogleTimestamp,
   Id,
@@ -112,38 +120,9 @@ const pageSizeSchema = t.Integer({ minimum: 1, maximum: 100 });
 export default function googleTasks(rl: RunlinePluginAPI) {
   rl.setName("googleTasks");
   rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleTasks", SCOPES));
 
-  rl.setOAuth({
-    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-    tokenUrl: "https://oauth2.googleapis.com/token",
-    scopes: SCOPES,
-    authParams: { access_type: "offline", prompt: "consent" },
-    setupHelp: [
-      "You need a Google Cloud OAuth client. Takes ~5 minutes, one time.",
-      "",
-      "1. Create or pick a Google Cloud project:",
-      "     https://console.cloud.google.com/projectcreate",
-      "",
-      "2. Enable the Google Tasks API:",
-      "     https://console.cloud.google.com/apis/library/tasks.googleapis.com",
-      "",
-      "3. Configure the OAuth consent screen:",
-      "     https://console.cloud.google.com/apis/credentials/consent",
-      "     • Audience: External",
-      "",
-      "4. Add yourself as a test user:",
-      "     https://console.cloud.google.com/auth/audience",
-      "",
-      "5. Create the OAuth client:",
-      "     https://console.cloud.google.com/apis/credentials",
-      "     • + Create credentials → OAuth client ID",
-      "     • Application type: Web application",
-      "     • Authorized redirect URIs → + Add URI: {{redirectUri}}",
-      "",
-      "6. Paste the Client ID and Client Secret below, or export",
-      "   GOOGLE_TASKS_CLIENT_ID and GOOGLE_TASKS_CLIENT_SECRET.",
-    ],
-  });
+  rl.setOAuth(googleOAuth("googleTasks", SCOPES, "GOOGLE_TASKS"));
 
   rl.setConnectionSchema({
     authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
@@ -193,7 +172,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      return tasksRequest(ctx, "GET", `/users/@me/lists/${p.taskListId}`);
+      return tasksRequest(ctx, "GET", `/users/@me/lists/${pathSegment(p.taskListId)}`);
     },
   });
 
@@ -222,7 +201,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      return tasksRequest(ctx, "PATCH", `/users/@me/lists/${p.taskListId}`, {
+      return tasksRequest(ctx, "PATCH", `/users/@me/lists/${pathSegment(p.taskListId)}`, {
         title: p.title,
       });
     },
@@ -237,7 +216,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      await tasksRequest(ctx, "DELETE", `/users/@me/lists/${p.taskListId}`);
+      await tasksRequest(ctx, "DELETE", `/users/@me/lists/${pathSegment(p.taskListId)}`);
       return { success: true };
     },
   });
@@ -286,7 +265,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       if (p.parent) qs.parent = p.parent;
       if (p.previous) qs.previous = p.previous;
 
-      return tasksRequest(ctx, "POST", `/lists/${p.taskListId}/tasks`, body, qs);
+      return tasksRequest(ctx, "POST", `/lists/${pathSegment(p.taskListId)}/tasks`, body, qs);
     },
   });
 
@@ -302,7 +281,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      return tasksRequest(ctx, "GET", `/lists/${p.taskListId}/tasks/${p.taskId}`);
+      return tasksRequest(ctx, "GET", `/lists/${pathSegment(p.taskListId)}/tasks/${pathSegment(p.taskId)}`);
     },
   });
 
@@ -341,7 +320,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
         if (v) qs[k] = v;
       }
       if (p.pageToken) qs.pageToken = p.pageToken;
-      const path = `/lists/${p.taskListId}/tasks`;
+      const path = `/lists/${pathSegment(p.taskListId)}/tasks`;
       if (p.returnAll) return paginateAll(ctx, path, qs);
       if (p.maxResults) qs.maxResults = p.maxResults;
       const res = (await tasksRequest(ctx, "GET", path, undefined, qs)) as {
@@ -395,7 +374,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       return tasksRequest(
         ctx,
         "PATCH",
-        `/lists/${p.taskListId}/tasks/${p.taskId}`,
+        `/lists/${pathSegment(p.taskListId)}/tasks/${pathSegment(p.taskId)}`,
         body,
       );
     },
@@ -413,7 +392,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      await tasksRequest(ctx, "DELETE", `/lists/${p.taskListId}/tasks/${p.taskId}`);
+      await tasksRequest(ctx, "DELETE", `/lists/${pathSegment(p.taskListId)}/tasks/${pathSegment(p.taskId)}`);
       return { success: true };
     },
   });
@@ -439,7 +418,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       return tasksRequest(
         ctx,
         "POST",
-        `/lists/${p.taskListId}/tasks/${p.taskId}/move`,
+        `/lists/${pathSegment(p.taskListId)}/tasks/${pathSegment(p.taskId)}/move`,
         undefined,
         qs,
       );
@@ -456,7 +435,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     ),
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
-      await tasksRequest(ctx, "POST", `/lists/${p.taskListId}/clear`);
+      await tasksRequest(ctx, "POST", `/lists/${pathSegment(p.taskListId)}/clear`);
       return { success: true };
     },
   });

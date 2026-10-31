@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { api } from "./shared.js";
 
@@ -33,7 +33,7 @@ export function registerExtensionActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object({ id: t.String(), url: t.String() }),
     async execute(input, ctx) {
       const { id, ...body } = input as Record<string, unknown>;
-      return api(ctx, `/v1/extensions/${encodeURIComponent(String(id))}`, { method: "PUT", body: extensionForm(body) });
+      return api(ctx, `/v1/extensions/${pathSegment(id)}`, { method: "PUT", body: extensionForm(body) });
     },
   });
 
@@ -42,7 +42,7 @@ export function registerExtensionActions(rl: RunlinePluginAPI) {
     description: "Delete an extension by ID.",
     inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
-      return api(ctx, `/v1/extensions/${encodeURIComponent((input as { id: string }).id)}`, { method: "DELETE" });
+      return api(ctx, `/v1/extensions/${pathSegment((input as { id: string }).id)}`, { method: "DELETE" });
     },
   });
 

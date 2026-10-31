@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import shiftBwm from "../../../runline-plugins/shiftBwm/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -48,12 +49,6 @@ function makeShiftBwm(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected shiftBwm.${name} to be registered`);
-  return action;
-}
-
 function ctx(config: Record<string, unknown> = {}): ActionContext {
   return {
     connection: {
@@ -76,7 +71,7 @@ function mockFetch(replies: Reply[]) {
     headers: Headers;
     body?: unknown;
   }> = [];
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
     seen.push({
       url: String(input),
@@ -92,7 +87,7 @@ function mockFetch(replies: Reply[]) {
       status,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
   return seen;
 }
 
@@ -230,36 +225,33 @@ describe("shiftBwm plugin", () => {
     );
   });
 
-  it("uses the shared Shift transport: redirects refused, deadline set", async () => {
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+  it("signs through the declared credential: redirects refused, deadline set", async () => {
+    stubFetch(async (_input: RequestInfo | URL, init?: RequestInit) => {
       assert.equal(init?.redirect, "error");
       assert.ok(init?.signal, "every request carries a deadline");
       return new Response(null, {
         status: 302,
         headers: { location: "https://evil.test" },
       });
-    }) as typeof fetch;
+    });
     await assert.rejects(
       getAction(makeShiftBwm(), "objectType.list").execute({}, ctx()),
-      /Refusing a redirect/,
+      { code: "transport_failed" },
     );
   });
 
   it("refuses to run without an apiKey", async () => {
     let calls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       calls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
     await assert.rejects(
       getAction(makeShiftBwm(), "objectType.list").execute(
         {},
         ctx({ apiKey: "" }),
       ),
-      /apiKey is required/,
+      { code: "invalid_credentials" },
     );
     assert.equal(calls, 0);
   });
@@ -388,6 +380,7 @@ describe("shiftBwm plugin", () => {
         assert.ok(err instanceof Error);
         assert.match(err.message, /422 unknown_field/);
         assert.match(err.message, /param: fields\.tier/);
+        assert.doesNotMatch(err.message, /unknown field tier/);
         assert.equal((err as { param?: string }).param, "fields.tier");
         assert.equal((err as { status?: number }).status, 422);
         return true;

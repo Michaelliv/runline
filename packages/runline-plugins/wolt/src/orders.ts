@@ -422,7 +422,7 @@ export async function purchase(ctx: ActionContext, plan: Plan) {
 }
 
 export async function orderStatus(ctx: ActionContext, orderId: string) {
-  const id = seg(orderId, "order_id");
+  const id = seg(orderId);
   const [tracking, page] = await Promise.all([
     authed(ctx, RESTAURANT, `/v2/order_details/purchase_tracking/${id}`),
     authed(ctx, CONSUMER, `/order-xp/v1/pages/order-tracking/${id}`).catch(
@@ -453,7 +453,7 @@ export async function cancelOrder(
   orderId: string,
   reason: string,
 ) {
-  const id = seg(orderId, "order_id");
+  const id = seg(orderId);
   try {
     await authed(ctx, RESTAURANT, `/v2/purchases/${id}/cancel`, {
       method: "PUT",

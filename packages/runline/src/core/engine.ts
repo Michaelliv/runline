@@ -4,8 +4,13 @@ import { Worker } from "node:worker_threads";
 import type { RunlineConfig } from "../config/types.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import type { ConnectionProvider } from "../connections/types.js";
+import type {
+  CredentialBroker,
+  CredentialBrokerCall,
+} from "../credentials/transport.js";
 import type { PluginRegistry } from "../plugin/registry.js";
 import {
+  dropUndefined,
   formatValidationError,
   helpInputs,
   isTypedInputSchema,
@@ -56,6 +61,12 @@ export interface ActionInvocation {
 export interface EngineHooks {
   /** Host-owned resolution and persistence. Defaults to process-local memory. */
   connectionProvider?: ConnectionProvider;
+  /**
+   * Host-signed requests: built per action call of a plugin that declares
+   * its credential, and handed to the action as `ctx.credentials`. Absent,
+   * plugins sign with their own connection.
+   */
+  credentialBroker?: (call: CredentialBrokerCall) => CredentialBroker;
   /**
    * Observer for every action invocation. Must not throw — but if it
    * does, the engine swallows it: observability never breaks a run.
@@ -531,6 +542,15 @@ export class ExecutionEngine {
     const ctx: ActionContext = {
       connection,
       context,
+      ...(this.hooks.credentialBroker && plugin.credential
+        ? {
+            credentials: this.hooks.credentialBroker({
+              plugin: plugin.name,
+              action: action.name,
+              context,
+            }),
+          }
+        : {}),
       log: {
         info: (msg) => console.log(`[${plugin.name}] ${msg}`),
         warn: (msg) => console.warn(`[${plugin.name}] ${msg}`),
@@ -819,6 +839,14 @@ const { FerroSearch } = require(${JSON.stringify(ferrosearchPath)});
 // The host's own validator, for actions.check on typed schemas.
 const { Check: __schemaCheck, Errors: __schemaErrors } = require(${JSON.stringify(typeboxValuePath)});
 
+// The host's own normalizeActionInput, by its source, so a check sees the
+// arguments exactly as validation and execute do. The closure keeps the
+// helper names it calls out of the scope plugin globals are declared in.
+const __normalizeActionInput = (() => {
+${dropUndefined.toString()}
+return ${normalizeActionInput.toString()};
+})();
+
 const __help = ${JSON.stringify(helpData)};
 
 const __makeProxy = (path = []) => new Proxy(() => undefined, {
@@ -993,14 +1021,10 @@ const __actionsApi = {
       return { ok: false, error: 'Unknown action: ' + path, suggestions: near };
     }
     const signature = __formatSignature(hit.plugin, hit.entry);
-    if (hit.entry.schema) {
-      // Mirror the host's normalizeActionInput: a check with no args is
-      // a call with an empty argument set; anything else — null, a
-      // scalar — is validated as given, exactly as execute would.
-      return __checkTyped(hit.entry, args === undefined ? {} : args, signature);
-    }
+    const input = __normalizeActionInput(args);
+    if (hit.entry.schema) return __checkTyped(hit.entry, input, signature);
     const inputs = hit.entry.inputs || {};
-    const provided = args && typeof args === 'object' ? args : {};
+    const provided = input && typeof input === 'object' ? input : {};
     const missing = [];
     const unknown = [];
     const typeErrors = [];

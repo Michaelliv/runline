@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   AUDIO_VIDEO_MEDIA_TYPES,
@@ -10,9 +10,7 @@ import {
 } from "../../_shared/shiftUpload.js";
 import {
   enumSchema,
-  pathSegment,
   request,
-  SHIFT_REQUEST_TIMEOUT_MS,
   STRICT_OBJECT,
   TRANSCRIPT_FORMAT,
   TRANSCRIPTION_LANGUAGE,
@@ -105,7 +103,6 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
         created.upload,
         fields.path,
         contentType,
-        sizeBytes,
         "Media upload",
       );
 
@@ -132,13 +129,12 @@ export function registerTranscriptionActions(rl: RunlinePluginAPI) {
 
       if (!fields.waitSeconds) return job;
       const timeoutMs = Math.min(Math.max(fields.waitSeconds, 1), 120) * 1000;
-      // The server holds the request open for up to timeoutMs, so the
-      // client deadline is that wait plus the ordinary allowance.
+      // The server holds the request open for up to timeoutMs; the
+      // target's declared AWAIT_DEADLINE_MS covers that wait.
       return request(
         ctx,
         `/v1/services/transcription/jobs/${pathSegment(job.id)}/await?timeoutMs=${timeoutMs}`,
         { method: "POST" },
-        timeoutMs + SHIFT_REQUEST_TIMEOUT_MS,
       );
     },
   });

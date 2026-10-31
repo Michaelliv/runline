@@ -13,6 +13,7 @@ import microsoftMail from "../../../runline-plugins/microsoftMail/src/index.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import { createPluginAPI, type PluginFunction } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -21,8 +22,7 @@ afterEach(() => {
 function mock(
   handler: (url: string, init: RequestInit) => Response | Promise<Response>,
 ) {
-  globalThis.fetch = (async (url, init) =>
-    handler(String(url), init ?? {})) as typeof fetch;
+  stubFetch(async (url, init) => handler(String(url), init ?? {}));
 }
 async function context(config: Record<string, unknown> = {}) {
   const store = new MemoryConnectionProvider([
@@ -109,7 +109,7 @@ describe("Microsoft credential migration", () => {
         { to: ["x@example.com"], subject: "test", body: "test" },
         ctx,
       ) as Promise<unknown>,
-      { message: "microsoftMail: Graph request failed (HTTP 401)" },
+      { message: "microsoftMail: request failed (HTTP 401)" },
     );
     assert.equal(calls, 1);
   });

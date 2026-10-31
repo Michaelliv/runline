@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { shiftObjectsCredential } from "./credentials.js";
 import { registerObjectActions } from "./objects.js";
 
 /**
@@ -12,6 +13,7 @@ import { registerObjectActions } from "./objects.js";
 export default function shiftObjects(rl: RunlinePluginAPI) {
   rl.setName("shiftObjects");
   rl.setVersion("0.1.0");
+  rl.setCredential(shiftObjectsCredential);
   rl.setConnectionSchema(
     t.Object({
       apiKey: t.String({

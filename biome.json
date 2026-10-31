@@ -12,7 +12,6 @@
       "!**/dist",
       "!**/node_modules",
       "!**/vendor",
-      "!packages/runline-plugins/_shared",
       "!packages/runline-plugins/actionNetwork",
       "!packages/runline-plugins/activeCampaign",
       "!packages/runline-plugins/adalo",

@@ -6,6 +6,7 @@ import { ExecutionEngine } from "../core/engine.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { PluginRegistry } from "../plugin/registry.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -17,12 +18,6 @@ function makeGithub(): PluginDef {
   const { api, resolve } = createPluginAPI("github");
   github(api);
   return resolve();
-}
-
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected github.${name} to be registered`);
-  return action;
 }
 
 function ctx(): ActionContext {
@@ -42,14 +37,14 @@ function ctx(): ActionContext {
 }
 
 function mockJsonFetch(assertRequest: (url: URL, init?: RequestInit) => void) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     assertRequest(url, init);
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("github plugin commit and branch actions", () => {
@@ -74,7 +69,7 @@ describe("github plugin commit and branch actions", () => {
       assert.equal(url.searchParams.get("per_page"), "25");
       assert.equal(url.searchParams.get("page"), "2");
       assert.equal(
-        init?.headers?.["Authorization" as keyof HeadersInit],
+        new Headers(init?.headers).get("authorization"),
         "Bearer gh_test",
       );
     });
@@ -102,10 +97,9 @@ describe("github plugin commit and branch actions", () => {
 
     mockJsonFetch((url, init) => {
       assert.equal(init?.method, "GET");
-      assert.equal(
-        url.pathname,
-        "/repos/octo/hello/commits/feature%2Fread-api",
-      );
+      // A nested ref travels as literal path segments: the credential
+      // transport refuses an encoded slash inside one segment.
+      assert.equal(url.pathname, "/repos/octo/hello/commits/feature/read-api");
     });
 
     const result = await action.execute(
@@ -121,10 +115,7 @@ describe("github plugin commit and branch actions", () => {
 
     mockJsonFetch((url, init) => {
       assert.equal(init?.method, "GET");
-      assert.equal(
-        url.pathname,
-        "/repos/octo/hello/branches/feature%2Fread-api",
-      );
+      assert.equal(url.pathname, "/repos/octo/hello/branches/feature/read-api");
     });
 
     const result = await action.execute(
@@ -133,6 +124,31 @@ describe("github plugin commit and branch actions", () => {
     );
 
     assert.deepEqual(result, { ok: true });
+  });
+
+  it("file.delete sends the sha and commit message GitHub requires in its DELETE body", async () => {
+    const action = getAction(makeGithub(), "file.delete");
+
+    mockJsonFetch((url, init) => {
+      assert.equal(init?.method, "DELETE");
+      assert.equal(url.pathname, "/repos/octo/hello/contents/docs/a.md");
+      assert.deepEqual(
+        JSON.parse(new TextDecoder().decode(init?.body as Uint8Array)),
+        { sha: "abc", message: "remove", branch: "main" },
+      );
+    });
+
+    await action.execute(
+      {
+        owner: "octo",
+        repo: "hello",
+        path: "docs/a.md",
+        sha: "abc",
+        message: "remove",
+        branch: "main",
+      },
+      ctx(),
+    );
   });
 
   it("actions.find can discover latest commit actions", async () => {

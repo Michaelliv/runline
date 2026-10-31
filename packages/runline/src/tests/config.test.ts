@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { applyEnvOverrides } from "../config/loader.js";
 import { DEFAULT_CONFIG } from "../config/types.js";
+import type { ConnectionConfig } from "../plugin/types.js";
 
 describe("DEFAULT_CONFIG", () => {
   it("has sensible defaults", () => {
@@ -67,7 +68,7 @@ describe("applyEnvOverrides", () => {
 
   it("does not mutate the original connection", () => {
     process.env.MY_KEY = "injected";
-    const conn = { name: "x", plugin: "y", config: {} };
+    const conn: ConnectionConfig = { name: "x", plugin: "y", config: {} };
     const schema = { apiKey: { env: "MY_KEY" } };
 
     applyEnvOverrides(conn, schema);

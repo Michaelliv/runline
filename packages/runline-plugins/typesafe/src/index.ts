@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { typesafeCredential } from "./credentials.js";
 import { GUIDE, GUIDE_TOPICS, type GuideTopic } from "./guide.js";
 import {
   choiceRubric,
@@ -50,6 +51,7 @@ const USE_WHEN =
 export default function typesafe(rl: RunlinePluginAPI): void {
   rl.setName("typesafe");
   rl.setVersion("0.1.0");
+  rl.setCredential(typesafeCredential);
 
   rl.setConnectionSchema(
     t.Object({
@@ -230,7 +232,7 @@ export default function typesafe(rl: RunlinePluginAPI): void {
       "Versioned ids such as 'jev-1.13.0' are accepted whether or not they appear here.",
     inputSchema: t.Object({}, STRICT),
     async execute(_input, ctx) {
-      const body = await request<{ models?: unknown[] }>(ctx, "/v1/models");
+      const body = await request<{ models?: unknown[] }>(ctx, "models");
       if (!Array.isArray(body.models)) {
         throw new Error("TypeSafe returned a response with no models list.");
       }

@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   CRM_BASE,
@@ -8,16 +8,13 @@ import {
   createRecordFields,
   enumSchema,
   idSchema,
-  listParams,
   nullableTimestamp,
   paginationFields,
-  pathSegment,
   request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
   updateRecordFields,
-  withQuery,
 } from "./shared.js";
 
 const taskListFields = {
@@ -35,7 +32,8 @@ export function registerTaskActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ tasks: CrmTask[] }>(
         ctx,
-        withQuery(`${CRM_BASE}/tasks`, listParams(input)),
+        `${CRM_BASE}/tasks`,
+        { query: input },
       );
       return body.tasks;
     },
@@ -48,7 +46,8 @@ export function registerTaskActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ tasks: CrmTask[]; nextCursor?: string }>(
         ctx,
-        withQuery(`${CRM_BASE}/tasks`, listParams(input)),
+        `${CRM_BASE}/tasks`,
+        { query: input },
       );
     },
   });

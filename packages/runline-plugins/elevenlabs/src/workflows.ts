@@ -1,6 +1,5 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { seg } from "../../_shared/provider.js";
 import {
   audioOptions,
   dictionaries,
@@ -116,8 +115,7 @@ const dictionaryCreate = t.Object(
   },
   STRICT,
 );
-const historyPath = (id: string) =>
-  `/v1/history/${seg(id, "history item id", "elevenlabs")}`;
+const historyPath = (id: string) => `/v1/history/${pathSegment(id)}`;
 
 export function registerWorkflows(rl: RunlinePluginAPI) {
   rl.registerAction("dialogue.create", {

@@ -24,7 +24,7 @@
 
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { cdpUrl, compactRecord, type Ctx } from "../shared.js";
+import { compactRecord, type Ctx, socketUrl } from "../shared.js";
 import {
   attachToPage,
   attachToTarget,
@@ -71,7 +71,7 @@ type Session = {
 };
 
 async function open(ctx: Ctx, id: string, target?: string): Promise<Session> {
-  const cdp = await connectCdp(cdpUrl(ctx, id));
+  const cdp = await connectCdp(await socketUrl(ctx, id));
   try {
     const page = target
       ? await attachToTarget(cdp, target)
@@ -629,7 +629,7 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       const args = input as Record<string, unknown>;
       // Browser-level, not page-level: this is the one action that is not
       // scoped to a single target, so it uses its own short-lived socket.
-      const cdp = await connectCdp(cdpUrl(ctx, String(args.sessionId)));
+      const cdp = await connectCdp(await socketUrl(ctx, String(args.sessionId)));
       try {
         if (args.action === "new") {
           const created = (await cdp.send("Target.createTarget", {

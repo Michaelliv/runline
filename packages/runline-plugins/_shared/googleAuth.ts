@@ -1,57 +1,91 @@
 import {
   type ActionContext,
   AuthError,
+  brokerFor,
   downloadResource,
   type HttpMethod,
+  jsonAnswer,
+  type OAuthConfig,
+  requestFailed,
 } from "runline";
-import { credentialRuntime } from "./credentialAdapter.js";
 import {
-  type GoogleAuthConfig,
-  googleCredentialType,
-  googleIdentity,
-  googleMethod,
+  GOOGLE_GRANT,
+  GOOGLE_TOKEN_URL,
+  googleCredential,
   googleResources,
+  googleServices,
 } from "./googleCredentials.js";
 
 export type { GoogleAuthConfig } from "./googleCredentials.js";
+export { googleCredential } from "./googleCredentials.js";
 
-/** Explicit storage adapter: the registry owns token protocols and renewal. */
-export function googleRuntime(
-  ctx: ActionContext,
-  pluginName: string,
+/**
+ * A Google plugin's OAuth declaration: Google's endpoints, the offline
+ * consent that returns a refresh token (without `access_type=offline` and
+ * `prompt=consent` a repeat login omits it), the grant every Google plugin
+ * shares, and setup steps that enable the APIs its targets call and name
+ * its client variables (`env`: `GMAIL` → `GMAIL_CLIENT_ID`).
+ */
+export function googleOAuth(
+  plugin: string,
   scopes: string[],
-) {
-  const config = ctx.connection.config as GoogleAuthConfig;
-  const method = googleMethod(config);
-  const runtime = credentialRuntime(
-    ctx,
-    googleCredentialType(scopes, pluginName),
-    method,
-    (current) => {
-      const cfg = current as GoogleAuthConfig;
-      return [
-        pluginName,
-        scopes,
-        googleMethod(cfg),
-        ...(method === "serviceAccount"
-          ? [googleIdentity(cfg)]
-          : [cfg.clientId, cfg.clientSecret]),
-      ];
-    },
-  );
-  if (method === "serviceAccount")
-    runtime.binding.jwtIdentity = googleIdentity(config);
-  return runtime;
-}
-
-/** Trusted-runtime token compatibility only; resource consumers use googleResponse. */
-export async function googleAccessToken(
-  ctx: ActionContext,
-  pluginName: string,
-  scopes: string[],
-): Promise<string> {
-  const { binding, transport } = googleRuntime(ctx, pluginName, scopes);
-  return transport.accessToken(binding);
+  env: string,
+): OAuthConfig {
+  return {
+    grant: GOOGLE_GRANT,
+    authUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: GOOGLE_TOKEN_URL,
+    scopes,
+    authParams: { access_type: "offline", prompt: "consent" },
+    setupHelp: [
+      "You need a Google Cloud OAuth client. Takes ~5 minutes, one time;",
+      "the same client serves every Google plugin.",
+      "Do the steps in order — skipping step 4 causes a 403 when you log in.",
+      "",
+      "1. Create a Google Cloud project (or pick an existing one):",
+      "     https://console.cloud.google.com/projectcreate",
+      "   Make sure the project is selected in the top navigation dropdown.",
+      "",
+      "2. Enable the APIs this plugin calls (click 'Enable' on each):",
+      ...googleServices(plugin).map(
+        (service) =>
+          `     https://console.cloud.google.com/apis/library/${service}`,
+      ),
+      "",
+      "3. Configure the OAuth consent screen (first time only):",
+      "     https://console.cloud.google.com/apis/credentials/consent",
+      "   Click 'Get started' and fill in:",
+      "     • App name: runline (or whatever)",
+      "     • User support email: your email",
+      "     • Audience: External",
+      "     • Developer contact: your email",
+      "   You can skip the Scopes screen — runline declares scopes at auth time.",
+      "",
+      "4. Add yourself as a test user (required — External apps in Testing mode",
+      "   only allow authentication from addresses on this list):",
+      "     https://console.cloud.google.com/auth/audience",
+      "   Under 'Test users', click '+ Add users' and enter the Google address",
+      "   you'll use to log in. Consent and refresh tokens expire every 7 days",
+      "   while the app is in Testing mode.",
+      "",
+      "5. Create the OAuth client:",
+      "     https://console.cloud.google.com/apis/credentials",
+      "     • + Create credentials → OAuth client ID",
+      "     • Application type: Web application",
+      "     • Name: runline (or whatever)",
+      "     • Authorized redirect URIs → + Add URI:",
+      "         {{redirectUri}}",
+      "     • Click Create, then copy the Client ID and Client Secret from the",
+      "       dialog — the secret is only shown once.",
+      "",
+      "6. Paste them below (or re-run with --client-id / --client-secret,",
+      `   or export ${env}_CLIENT_ID and ${env}_CLIENT_SECRET).`,
+      "",
+      "During login you'll see a 'Google hasn't verified this app' warning.",
+      "Click 'Advanced → Go to runline (unsafe)' to continue — this is",
+      "expected for apps in Testing mode.",
+    ],
+  };
 }
 
 /** Translate builtin absolute URLs at one boundary; validate the raw path before URL normalization. */
@@ -87,8 +121,7 @@ export async function googleResponse(
     }
     path = `${separator < 0 ? path : path.slice(0, separator)}?${params}`;
   }
-  const { binding, transport } = googleRuntime(ctx, plugin, scopes);
-  return transport.request(binding, {
+  return brokerFor(ctx, googleCredential(plugin, scopes)).request({
     target,
     path,
     method: (init.method ?? "GET") as HttpMethod,
@@ -97,7 +130,8 @@ export async function googleResponse(
   });
 }
 
-export async function googleJsonRequest(
+/** A Google JSON request that must succeed; its answer is read by `jsonAnswer`. */
+export async function googleJsonRequest<T = unknown>(
   ctx: ActionContext,
   plugin: string,
   scopes: string[],
@@ -105,7 +139,7 @@ export async function googleJsonRequest(
   url: string,
   body?: unknown,
   query?: Record<string, unknown>,
-): Promise<unknown> {
+): Promise<T> {
   const response = await googleResponse(
     ctx,
     plugin,
@@ -121,15 +155,8 @@ export async function googleJsonRequest(
     },
     query,
   );
-  if (!response.ok)
-    throw new Error(`${plugin}: request failed (HTTP ${response.status})`);
-  if (response.status === 204) return { success: true };
-  const text = await response.text();
-  try {
-    return text ? JSON.parse(text) : { success: true };
-  } catch {
-    throw new AuthError("invalid_response");
-  }
+  if (!response.ok) throw requestFailed(plugin, response.status);
+  return jsonAnswer<T>(response);
 }
 
 export async function googleProbe(
@@ -137,8 +164,7 @@ export async function googleProbe(
   plugin: string,
   scopes: string[],
 ) {
-  const { binding, transport } = googleRuntime(ctx, plugin, scopes);
-  return transport.probe(binding);
+  return brokerFor(ctx, googleCredential(plugin, scopes)).probe();
 }
 
 /** Only Google-issued thumbnail hosts; never attach credentials to signed URLs. */

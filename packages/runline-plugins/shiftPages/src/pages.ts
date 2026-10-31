@@ -1,18 +1,15 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   enumSchema,
   idSchema,
-  listParams,
   PAGE_STATUS,
   PAGE_TYPE,
   PAGE_VISIBILITY,
   pageRenderUrl,
-  pathSegment,
   request,
   STRICT_OBJECT,
   timestampSchema,
-  withQuery,
 } from "./shared.js";
 
 export interface ShiftPage {
@@ -92,10 +89,9 @@ export function registerPageActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const body = await request<{ pages: ShiftPage[] }>(
-        ctx,
-        withQuery("/v1/pages", listParams(input)),
-      );
+      const body = await request<{ pages: ShiftPage[] }>(ctx, "/v1/pages", {
+        query: input,
+      });
       return body.pages;
     },
   });
@@ -128,7 +124,8 @@ export function registerPageActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ artifacts: ShiftVexArtifact[] }>(
         ctx,
-        withQuery("/v1/pages/vex-artifacts", listParams(input)),
+        "/v1/pages/vex-artifacts",
+        { query: input },
       );
       return body.artifacts;
     },

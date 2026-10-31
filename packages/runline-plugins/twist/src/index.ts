@@ -1,37 +1,31 @@
-import type { RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  type RunlinePluginAPI,
+} from "runline";
+import { twistCredential } from "./credentials.js";
 
-const BASE = "https://api.twist.com/api/v3";
-
-async function api(
-  token: string,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   endpoint: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${endpoint}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, twistCredential, "twist", {
+    target: "api",
+    path: endpoint.replace(/^\//, ""),
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`Twist error ${res.status}: ${await res.text()}`);
-  return res.json();
+    query: qs,
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function twist(rl: RunlinePluginAPI) {
   rl.setName("twist");
   rl.setVersion("0.1.0");
+  rl.setCredential(twistCredential);
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -40,8 +34,6 @@ export default function twist(rl: RunlinePluginAPI) {
       env: "TWIST_ACCESS_TOKEN",
     },
   });
-  const t = (ctx: { connection: { config: Record<string, unknown> } }) =>
-    ctx.connection.config.accessToken as string;
 
   // ── Channel ─────────────────────────────────────────
 
@@ -53,7 +45,7 @@ export default function twist(rl: RunlinePluginAPI) {
       name: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/channels/add", {
+      return api(ctx, "POST", "/channels/add", {
         workspace_id: (input as Record<string, unknown>).workspaceId,
         name: (input as Record<string, unknown>).name,
       });
@@ -65,7 +57,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Get a channel",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "GET", "/channels/getone", undefined, {
+      return api(ctx, "GET", "/channels/getone", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -80,7 +72,7 @@ export default function twist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      const data = (await api(t(ctx), "GET", "/channels/get", undefined, {
+      const data = (await api(ctx, "GET", "/channels/get", undefined, {
         workspace_id: p.workspaceId,
       })) as unknown[];
       return p.limit ? data.slice(0, p.limit as number) : data;
@@ -97,7 +89,7 @@ export default function twist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "POST",
         "/channels/update",
         input as Record<string, unknown>,
@@ -110,7 +102,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Delete a channel",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/channels/remove", undefined, {
+      return api(ctx, "POST", "/channels/remove", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -121,7 +113,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Archive a channel",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/channels/archive", undefined, {
+      return api(ctx, "POST", "/channels/archive", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -132,7 +124,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Unarchive a channel",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/channels/unarchive", undefined, {
+      return api(ctx, "POST", "/channels/unarchive", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -150,7 +142,7 @@ export default function twist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "POST", "/threads/add", {
+      return api(ctx, "POST", "/threads/add", {
         channel_id: p.channelId,
         title: p.title,
         content: p.content,
@@ -163,7 +155,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Get a thread",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "GET", "/threads/getone", undefined, {
+      return api(ctx, "GET", "/threads/getone", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -180,7 +172,7 @@ export default function twist(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { channel_id: p.channelId };
       if (p.limit) qs.limit = p.limit;
-      return api(t(ctx), "GET", "/threads/get", undefined, qs);
+      return api(ctx, "GET", "/threads/get", undefined, qs);
     },
   });
 
@@ -194,7 +186,7 @@ export default function twist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "POST",
         "/threads/update",
         input as Record<string, unknown>,
@@ -207,7 +199,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Delete a thread",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/threads/remove", undefined, {
+      return api(ctx, "POST", "/threads/remove", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -224,7 +216,7 @@ export default function twist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "POST", "/comments/add", {
+      return api(ctx, "POST", "/comments/add", {
         thread_id: p.threadId,
         content: p.content,
       });
@@ -236,7 +228,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Get a comment",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      const data = (await api(t(ctx), "GET", "/comments/getone", undefined, {
+      const data = (await api(ctx, "GET", "/comments/getone", undefined, {
         id: (input as Record<string, unknown>).id,
       })) as Record<string, unknown>;
       return data.comment ?? data;
@@ -254,7 +246,7 @@ export default function twist(rl: RunlinePluginAPI) {
       const p = input as Record<string, unknown>;
       const qs: Record<string, unknown> = { thread_id: p.threadId };
       if (p.limit) qs.limit = p.limit;
-      return api(t(ctx), "GET", "/comments/get", undefined, qs);
+      return api(ctx, "GET", "/comments/get", undefined, qs);
     },
   });
 
@@ -267,7 +259,7 @@ export default function twist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "POST",
         "/comments/update",
         input as Record<string, unknown>,
@@ -280,7 +272,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Delete a comment",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/comments/remove", undefined, {
+      return api(ctx, "POST", "/comments/remove", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -298,7 +290,7 @@ export default function twist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const p = input as Record<string, unknown>;
-      return api(t(ctx), "POST", "/conversation_messages/add", {
+      return api(ctx, "POST", "/conversation_messages/add", {
         workspace_id: p.workspaceId,
         conversation_id: p.conversationId,
         content: p.content,
@@ -311,7 +303,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Get a conversation message",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "GET", "/conversation_messages/getone", undefined, {
+      return api(ctx, "GET", "/conversation_messages/getone", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },
@@ -322,7 +314,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "List messages in a conversation",
     inputSchema: { conversationId: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "GET", "/conversation_messages/get", undefined, {
+      return api(ctx, "GET", "/conversation_messages/get", undefined, {
         conversation_id: (input as Record<string, unknown>).conversationId,
       });
     },
@@ -337,7 +329,7 @@ export default function twist(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       return api(
-        t(ctx),
+        ctx,
         "POST",
         "/conversation_messages/update",
         input as Record<string, unknown>,
@@ -350,7 +342,7 @@ export default function twist(rl: RunlinePluginAPI) {
     description: "Delete a conversation message",
     inputSchema: { id: { type: "number", required: true } },
     async execute(input, ctx) {
-      return api(t(ctx), "POST", "/conversation_messages/remove", undefined, {
+      return api(ctx, "POST", "/conversation_messages/remove", undefined, {
         id: (input as Record<string, unknown>).id,
       });
     },

@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   ATLAS_BASE,
@@ -14,12 +14,9 @@ import {
   GRAPH_RELATION_KIND,
   GRAPH_TASK_MODE,
   idSchema,
-  listParams,
-  pathSegment,
   request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
-  withQuery,
 } from "./shared.js";
 
 /**
@@ -194,10 +191,7 @@ export function registerGraphActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      return request(
-        ctx,
-        withQuery(`${ATLAS_BASE}/changes`, listParams(input)),
-      );
+      return request(ctx, `${ATLAS_BASE}/changes`, { query: input });
     },
   });
 

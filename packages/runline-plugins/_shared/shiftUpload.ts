@@ -1,6 +1,7 @@
 import { openAsBlob } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { extname } from "node:path";
+import { readLocalFile } from "./localFile.js";
 
 /**
  * The Shift cloud signed-grant upload arc, shared by every plugin that
@@ -11,8 +12,8 @@ import { extname } from "node:path";
  * live here once: the openAsBlob streaming fallback, grant-header
  * merging, and the size ceilings.
  *
- * shiftOcr deliberately does not use this arc — it inlines small files
- * as base64 data URLs instead of uploading through a grant.
+ * shiftOcr inlines small files as base64 data URLs and takes this arc
+ * only for files too large to inline.
  */
 
 /** Mirrors the public service contracts' 5 GiB upload ceiling. */
@@ -109,21 +110,25 @@ export async function statUploadFile(
   if (!file.isFile()) throw new Error(`${path} is not a file`);
   if (file.size === 0) throw new Error(`${label} is empty`);
   if (file.size > maxBytes) {
-    throw new Error(`${label} is larger than the ${maxBytes}-byte service limit`);
+    throw new Error(
+      `${label} is larger than the ${maxBytes}-byte service limit`,
+    );
   }
   return file.size;
 }
 
-async function fileBody(path: string, sizeBytes: number): Promise<Blob> {
+async function fileBody(path: string): Promise<Blob> {
   try {
     return await openAsBlob(path);
   } catch {
-    if (sizeBytes > MAX_BUFFERED_BYTES) {
-      throw new Error(
-        "This runtime cannot stream uploads and the file is too large to buffer.",
-      );
-    }
-    return new Blob([await readFile(path)]);
+    return new Blob([
+      await readLocalFile(path, {
+        subject: "File",
+        maxBytes: MAX_BUFFERED_BYTES,
+        oversize:
+          "This runtime cannot stream uploads and the file is too large to buffer.",
+      }),
+    ]);
   }
 }
 
@@ -135,7 +140,6 @@ export async function putThroughGrant(
   grant: SignedUploadGrant,
   path: string,
   contentType: string,
-  sizeBytes: number,
   label = "Upload",
 ): Promise<void> {
   const headers = new Headers(grant.headers);
@@ -145,7 +149,7 @@ export async function putThroughGrant(
   const response = await fetch(grant.url, {
     method: grant.method,
     headers,
-    body: await fileBody(path, sizeBytes),
+    body: await fileBody(path),
   });
   if (!response.ok) {
     throw new Error(`${label} failed: HTTP ${response.status}`);

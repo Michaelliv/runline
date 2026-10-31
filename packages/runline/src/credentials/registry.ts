@@ -2,9 +2,33 @@ import * as t from "typebox";
 import { Check } from "typebox/value";
 import { AuthError } from "../auth/errors.js";
 import { validateOAuth2ExchangePolicy } from "../auth/oauth2.js";
-import { oauthEndpoint, providerParameters } from "../auth/token.js";
-import { HTTP_METHODS, headerName, resourceUrl, targetBase } from "./policy.js";
-import type { CredentialMethod, CredentialType } from "./types.js";
+import {
+  oauthEndpoint,
+  providerHeaders,
+  providerParameters,
+} from "../auth/token.js";
+import { isAwsScope } from "./aws.js";
+import {
+  bounded,
+  HTTP_METHODS,
+  headerName,
+  injectedHeaders,
+  injectedParams,
+  injectedPointers,
+  placementsFor,
+  refuseCredentialParams,
+  resourceUrl,
+  TARGET_RESPONSE_LIMIT_BYTES,
+  TARGET_TIMEOUT_LIMIT_MS,
+  TRANSPORT_HEADERS,
+  targetBase,
+  targetOf,
+} from "./policy.js";
+import type {
+  CredentialAuthentication,
+  CredentialMethod,
+  CredentialType,
+} from "./types.js";
 
 /** Normalized grant storage; application registration remains host-owned. */
 export const OAuthTokensSchema = t.Object(
@@ -21,6 +45,27 @@ export const OAuthTokensSchema = t.Object(
   { additionalProperties: false },
 );
 
+/**
+ * Stored shape of a static secret: exactly its named parts, each a string,
+ * the `optional` ones allowed to be absent. A Basic part may be empty (a
+ * key as the username with no password, or the reverse); the transport
+ * refuses an empty part anywhere else.
+ */
+export function staticSecretSchema(
+  parts: readonly string[],
+  optional: readonly string[] = [],
+) {
+  return t.Object(
+    Object.fromEntries(
+      parts.map((part) => [
+        part,
+        optional.includes(part) ? t.Optional(t.String()) : t.String(),
+      ]),
+    ),
+    { additionalProperties: false },
+  );
+}
+
 export const OAuthGrantSchema = t.Object(
   {
     tokens: t.Partial(OAuthTokensSchema),
@@ -29,17 +74,198 @@ export const OAuthGrantSchema = t.Object(
   { additionalProperties: false },
 );
 
+/** Stored shape of an AWS access key; a session's carries its token. */
+export const AwsAccessKeySchema = t.Object(
+  {
+    accessKeyId: t.String({ minLength: 1 }),
+    secretAccessKey: t.String({ minLength: 1 }),
+    sessionToken: t.Optional(t.String({ minLength: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+/** Stored shape of an assumed role's session. */
+export const AwsSessionSchema = t.Object(
+  {
+    accessKeyId: t.String({ minLength: 1 }),
+    secretAccessKey: t.String({ minLength: 1 }),
+    sessionToken: t.String({ minLength: 1 }),
+    expiresAt: t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+    revision: t.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+/** The shape of a strict object schema, as the registry inspects it. */
+type ObjectSchema = {
+  type?: string;
+  additionalProperties?: boolean;
+  properties?: Record<string, { type?: string }>;
+  required?: string[];
+};
+
+/** Whether two strict object schemas store the same fields, alike required. */
+function sameShape(actual: unknown, expected: ObjectSchema): boolean {
+  const shape = actual as ObjectSchema | undefined;
+  const describe = (schema: ObjectSchema) =>
+    JSON.stringify([
+      schema.type,
+      schema.additionalProperties,
+      Object.entries(schema.properties ?? {})
+        .map(([name, field]) => [name, field.type])
+        .sort(),
+      [...(schema.required ?? [])].sort(),
+    ]);
+  return !!shape && describe(shape) === describe(expected);
+}
+
+/**
+ * A SigV4 method stores exactly an access key in its field and, when it
+ * assumes a role, an optional session in a field of its own.
+ */
+function validateAwsSigV4(
+  auth: Extract<CredentialAuthentication, { kind: "awsSigV4" }>,
+  schema: ObjectSchema,
+): void {
+  if (!sameShape(schema.properties?.[auth.field], AwsAccessKeySchema))
+    throw new AuthError("invalid_definition");
+  if (auth.assumeRole === undefined) return;
+  const session = auth.assumeRole.sessionField;
+  identifier(session);
+  if (
+    session === auth.field ||
+    !sameShape(schema.properties?.[session], AwsSessionSchema) ||
+    schema.required?.includes(session)
+  )
+    throw new AuthError("invalid_definition");
+}
+
 function identifier(value: string): void {
   if (typeof value !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(value))
     throw new AuthError("invalid_definition");
 }
 
-function validateMethod(method: CredentialMethod): void {
-  const schema = method.schema as {
-    type?: string;
-    additionalProperties?: boolean;
-    properties?: Record<string, unknown>;
+/**
+ * A static secret's parts and placements agree with each other, with the
+ * stored shape and with the method's targets: the stored field holds
+ * exactly the declared parts, each a string, required unless optional;
+ * every placement names a declared part and only declared targets; every
+ * part is placed; and on each target at least one placement signs, no
+ * header, query parameter or JSON pointer is claimed twice, and at most
+ * one part takes the one path position.
+ */
+function validateStatic(
+  auth: Extract<CredentialAuthentication, { kind: "static" }>,
+  stored: unknown,
+  targets: string[],
+): void {
+  const parts = auth.parts;
+  if (
+    !Array.isArray(parts) ||
+    !parts.length ||
+    new Set(parts).size !== parts.length ||
+    !Array.isArray(auth.placements) ||
+    !auth.placements.length
+  )
+    throw new AuthError("invalid_definition");
+  for (const part of parts) identifier(part);
+  const optional = auth.optionalParts ?? [];
+  if (
+    !Array.isArray(optional) ||
+    new Set(optional).size !== optional.length ||
+    optional.some((part) => !parts.includes(part))
+  )
+    throw new AuthError("invalid_definition");
+  const shape = stored as ObjectSchema;
+  if (
+    shape?.type !== "object" ||
+    shape.additionalProperties !== false ||
+    !shape.properties ||
+    Object.keys(shape.properties).sort().join() !== [...parts].sort().join() ||
+    Object.values(shape.properties).some((part) => part.type !== "string") ||
+    [...(shape.required ?? [])].sort().join() !==
+      parts
+        .filter((part) => !optional.includes(part))
+        .sort()
+        .join()
+  )
+    throw new AuthError("invalid_definition");
+  const used = new Set<string>();
+  const place = (part: unknown) => {
+    if (typeof part !== "string" || !parts.includes(part))
+      throw new AuthError("invalid_definition");
+    used.add(part);
   };
+  for (const placement of auth.placements) {
+    if (
+      placement.targets !== undefined &&
+      (!Array.isArray(placement.targets) ||
+        !placement.targets.length ||
+        placement.targets.some((target) => !targets.includes(target)))
+    )
+      throw new AuthError("invalid_definition");
+    if (placement.in === "header" || placement.in === "jwt") {
+      place(placement.part);
+      headerName(placement.name);
+      if (
+        placement.prefix !== undefined &&
+        (typeof placement.prefix !== "string" ||
+          !/^[\x21-\x7e][\x20-\x7e]{0,31}$/.test(placement.prefix))
+      )
+        throw new AuthError("invalid_definition");
+      if (
+        placement.in === "jwt" &&
+        (typeof placement.audience !== "string" ||
+          !/^[\x21-\x7e]{1,64}$/.test(placement.audience))
+      )
+        throw new AuthError("invalid_definition");
+    } else if (placement.in === "querySignature") {
+      place(placement.part);
+      headerName(placement.name);
+    } else if (placement.in === "jsonPointer") {
+      place(placement.part);
+      if (
+        typeof placement.pointer !== "string" ||
+        !/^(\/[A-Za-z0-9_.-]+)+$/.test(placement.pointer)
+      )
+        throw new AuthError("invalid_definition");
+    } else if (placement.in === "query" || placement.in === "body") {
+      place(placement.part);
+      identifier(placement.name);
+    } else if (placement.in === "path") {
+      place(placement.part);
+      if (
+        placement.prefix !== undefined &&
+        (typeof placement.prefix !== "string" ||
+          !/^[A-Za-z0-9._~-]{1,32}$/.test(placement.prefix))
+      )
+        throw new AuthError("invalid_definition");
+    } else if (placement.in === "basic") {
+      place(placement.username);
+      place(placement.password);
+    } else throw new AuthError("invalid_definition");
+  }
+  if (used.size !== parts.length) throw new AuthError("invalid_definition");
+  for (const target of targets) {
+    const placed = placementsFor(auth, target);
+    const headers = injectedHeaders(auth, target);
+    const params = injectedParams(auth, target).map((name) =>
+      name.toLowerCase(),
+    );
+    const pointers = injectedPointers(auth, target);
+    if (
+      !placed.length ||
+      new Set(headers).size !== headers.length ||
+      new Set(params).size !== params.length ||
+      new Set(pointers).size !== pointers.length ||
+      placed.filter((placement) => placement.in === "path").length > 1
+    )
+      throw new AuthError("invalid_definition");
+  }
+}
+
+function validateMethod(method: CredentialMethod): void {
+  const schema = method.schema as ObjectSchema;
   if (
     schema.type !== "object" ||
     schema.additionalProperties !== false ||
@@ -47,18 +273,30 @@ function validateMethod(method: CredentialMethod): void {
   )
     throw new AuthError("invalid_definition");
   const auth = method.authentication;
-  const field = auth.kind === "oauth2" ? auth.grantField : auth.field;
-  identifier(field);
-  if (!Object.hasOwn(schema.properties, field))
-    throw new AuthError("invalid_definition");
-  let injected = "authorization";
-  if (auth.kind === "apiKey") injected = headerName(auth.header);
+  if (auth.kind === "none") {
+    // Nothing is stored for a method that signs nothing.
+    if (Object.keys(schema.properties).length)
+      throw new AuthError("invalid_definition");
+  } else {
+    identifier(auth.field);
+    if (!Object.hasOwn(schema.properties, auth.field))
+      throw new AuthError("invalid_definition");
+  }
+  if (auth.kind === "static")
+    validateStatic(
+      auth,
+      schema.properties[auth.field],
+      Object.keys(method.targets ?? {}),
+    );
+  else if (auth.kind === "awsSigV4") validateAwsSigV4(auth, schema);
   else if (auth.kind === "oauth2") {
     identifier(auth.definition.id);
     identifier(auth.definition.provider);
     validateOAuth2ExchangePolicy(auth.definition.exchange);
     if (
-      !["refresh", "clientCredentials", "jwtBearer"].includes(auth.renewal) ||
+      !["refresh", "clientCredentials", "jwtBearer", "password"].includes(
+        auth.renewal,
+      ) ||
       !auth.definition[auth.renewal]
     )
       throw new AuthError("invalid_definition");
@@ -67,6 +305,10 @@ function validateMethod(method: CredentialMethod): void {
       ![401, 403].includes(auth.rejectionStatus)
     )
       throw new AuthError("invalid_definition");
+    if (auth.grant !== undefined) {
+      identifier(auth.grant);
+      if (auth.renewal !== "refresh") throw new AuthError("invalid_definition");
+    }
     if (
       auth.scopes &&
       (!Array.isArray(auth.scopes) ||
@@ -84,16 +326,34 @@ function validateMethod(method: CredentialMethod): void {
       oauthEndpoint(auth.definition.authorization.url);
       providerParameters(auth.definition.authorization.parameters);
     }
+    const fields = Object.values(auth.definition.password?.fields ?? {});
+    for (const name of fields) {
+      identifier(name);
+      providerParameters({ [name]: "" });
+    }
+    if (new Set(fields).size !== fields.length)
+      throw new AuthError("invalid_definition");
     for (const operation of [
       "exchange",
       "refresh",
       "clientCredentials",
       "jwtBearer",
+      "password",
     ] as const) {
       const endpoint = auth.definition[operation];
       if (!endpoint) continue;
       oauthEndpoint(endpoint.url);
       providerParameters(endpoint.parameters);
+      providerHeaders(endpoint.headers);
+      if (
+        (endpoint.refreshTokenBearer !== undefined &&
+          typeof endpoint.refreshTokenBearer !== "boolean") ||
+        (endpoint.refreshTokenBearer &&
+          ["client_id_basic", "client_secret_basic"].includes(
+            endpoint.clientAuthentication,
+          ))
+      )
+        throw new AuthError("invalid_definition");
       if (
         ![
           "none",
@@ -107,12 +367,20 @@ function validateMethod(method: CredentialMethod): void {
       )
         throw new AuthError("invalid_definition");
     }
-  } else if (auth.kind !== "bearer") throw new AuthError("invalid_definition");
+  } else if (auth.kind !== "none") throw new AuthError("invalid_definition");
   if (!Object.keys(method.targets).length)
     throw new AuthError("invalid_definition");
   for (const [name, target] of Object.entries(method.targets)) {
     identifier(name);
+    const injected = injectedHeaders(auth, name);
     targetBase(target);
+    // A SigV4 target names what it is signed for; no other target may.
+    if (
+      auth.kind === "awsSigV4"
+        ? !isAwsScope(target.aws)
+        : target.aws !== undefined
+    )
+      throw new AuthError("invalid_definition");
     if (
       !Array.isArray(target.methods) ||
       !target.methods.length ||
@@ -120,15 +388,46 @@ function validateMethod(method: CredentialMethod): void {
     )
       throw new AuthError("invalid_definition");
     if (
-      target.allowedHeaders !== undefined &&
-      !Array.isArray(target.allowedHeaders)
+      (target.allowedHeaders !== undefined &&
+        !Array.isArray(target.allowedHeaders)) ||
+      (target.timeoutMs !== undefined &&
+        !bounded(target.timeoutMs, TARGET_TIMEOUT_LIMIT_MS)) ||
+      (target.maxResponseBytes !== undefined &&
+        !bounded(target.maxResponseBytes, TARGET_RESPONSE_LIMIT_BYTES)) ||
+      (target.encodedSlashes !== undefined &&
+        typeof target.encodedSlashes !== "boolean")
     )
       throw new AuthError("invalid_definition");
-    for (const name of target.allowedHeaders ?? []) {
-      const header = headerName(name);
-      if (header === injected || header === "authorization")
+    for (const allowed of target.allowedHeaders ?? []) {
+      const header = headerName(allowed);
+      if (injected.includes(header) || TRANSPORT_HEADERS.includes(header))
         throw new AuthError("invalid_definition");
     }
+    // A socket URL carries only query parameters: no header, body,
+    // bearer or request signature can sign it, and nothing is sent
+    // through it by the transport.
+    if (
+      target.socket !== undefined &&
+      (target.socket !== true ||
+        auth.kind === "oauth2" ||
+        auth.kind === "awsSigV4" ||
+        target.allowedHeaders !== undefined ||
+        target.idempotency !== undefined ||
+        target.resumableUpload !== undefined ||
+        (auth.kind === "static" &&
+          placementsFor(auth, name).some(
+            (placement) => placement.in !== "query",
+          )))
+    )
+      throw new AuthError("invalid_definition");
+    // A path part is inserted into the request URL alone; a Destination on
+    // the same target would name a resource outside the signed position.
+    if (
+      auth.kind === "static" &&
+      (target.methods.includes("COPY") || target.methods.includes("MOVE")) &&
+      placementsFor(auth, name).some((placement) => placement.in === "path")
+    )
+      throw new AuthError("invalid_definition");
     if (
       target.resumableUpload !== undefined &&
       (typeof target.resumableUpload !== "boolean" ||
@@ -141,8 +440,8 @@ function validateMethod(method: CredentialMethod): void {
     if (target.idempotency) {
       const header = headerName(target.idempotency.header);
       if (
-        header === injected ||
-        header === "authorization" ||
+        injected.includes(header) ||
+        TRANSPORT_HEADERS.includes(header) ||
         !target.idempotency.methods.length ||
         target.idempotency.methods.some(
           (m) => !target.methods.includes(m) || m === "GET" || m === "HEAD",
@@ -153,11 +452,10 @@ function validateMethod(method: CredentialMethod): void {
   }
   if (method.probe) {
     const probe = method.probe;
-    const target = Object.hasOwn(method.targets, probe.target)
-      ? method.targets[probe.target]
-      : undefined;
+    const target = targetOf(method, probe.target);
     if (
       !target ||
+      target.socket ||
       !["GET", "HEAD"].includes(probe.method) ||
       !target.methods.includes(probe.method) ||
       !probe.acceptedStatuses.length ||
@@ -166,7 +464,10 @@ function validateMethod(method: CredentialMethod): void {
       )
     )
       throw new AuthError("invalid_definition");
-    resourceUrl(target, probe.path);
+    refuseCredentialParams(
+      resourceUrl(target, probe.path),
+      injectedParams(auth, probe.target),
+    );
   }
 }
 

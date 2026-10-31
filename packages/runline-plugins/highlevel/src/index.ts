@@ -1,47 +1,37 @@
-import type { RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
+import { HIGHLEVEL_VERSION, highlevelCredential } from "./credentials.js";
 
-const BASE = "https://services.leadconnectorhq.com";
-
-function getConn(ctx: { connection: { config: Record<string, unknown> } }) {
-  return {
-    token: ctx.connection.config.accessToken as string,
-    locationId: ctx.connection.config.locationId as string,
-  };
+function locationOf(ctx: ActionContext): string {
+  return ctx.connection.config.locationId as string;
 }
 
-async function api(
-  token: string,
-  method: string,
+function api(
+  ctx: ActionContext,
+  method: HttpMethod,
   path: string,
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  const url = new URL(`${BASE}${path}`);
-  if (qs) {
-    for (const [k, v] of Object.entries(qs)) {
-      if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-    }
-  }
-  const init: RequestInit = {
+  return credentialJson(ctx, highlevelCredential, "highlevel", {
+    target: "api",
+    path,
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Version: "2021-07-28",
-    },
-  };
-  if (body && Object.keys(body).length > 0) init.body = JSON.stringify(body);
-  const res = await fetch(url.toString(), init);
-  if (!res.ok)
-    throw new Error(`HighLevel error ${res.status}: ${await res.text()}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : { success: true };
+    query: qs,
+    headers: { Version: HIGHLEVEL_VERSION },
+    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
+  });
 }
 
 export default function highlevel(rl: RunlinePluginAPI) {
   rl.setName("highlevel");
   rl.setVersion("0.1.0");
+  rl.setCredential(highlevelCredential);
   rl.setConnectionSchema({
     accessToken: {
       type: "string",
@@ -88,18 +78,19 @@ export default function highlevel(rl: RunlinePluginAPI) {
       },
     },
     async execute(input, ctx) {
-      const { token, locationId } = getConn(ctx);
-      const body = { ...(input as Record<string, unknown>), locationId };
+      const locationId = locationOf(ctx);
+      const body: Record<string, unknown> = {
+        ...(input as Record<string, unknown>),
+        locationId,
+      };
       if (typeof body.tags === "string")
         body.tags = (body.tags as string)
           .split(",")
           .map((t: string) => t.trim());
-      const res = (await api(
-        token,
-        "POST",
-        "/contacts/upsert/",
-        body,
-      )) as Record<string, unknown>;
+      const res = (await api(ctx, "POST", "contacts/upsert/", body)) as Record<
+        string,
+        unknown
+      >;
       return res.contact ?? res;
     },
   });
@@ -109,11 +100,10 @@ export default function highlevel(rl: RunlinePluginAPI) {
     description: "Get a contact by ID",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const res = (await api(
-        token,
+        ctx,
         "GET",
-        `/contacts/${(input as Record<string, unknown>).id}/`,
+        `contacts/${pathSegment((input as Record<string, unknown>).id)}/`,
       )) as Record<string, unknown>;
       return res.contact ?? res;
     },
@@ -137,20 +127,17 @@ export default function highlevel(rl: RunlinePluginAPI) {
       order: { type: "string", required: false, description: "asc or desc" },
     },
     async execute(input, ctx) {
-      const { token, locationId } = getConn(ctx);
+      const locationId = locationOf(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { locationId };
       if (p.limit) qs.limit = p.limit;
       if (p.query) qs.query = p.query;
       if (p.sortBy) qs.sortBy = p.sortBy;
       if (p.order) qs.order = p.order;
-      const res = (await api(
-        token,
-        "GET",
-        "/contacts/",
-        undefined,
-        qs,
-      )) as Record<string, unknown>;
+      const res = (await api(ctx, "GET", "contacts/", undefined, qs)) as Record<
+        string,
+        unknown
+      >;
       return res.contacts ?? res;
     },
   });
@@ -175,16 +162,17 @@ export default function highlevel(rl: RunlinePluginAPI) {
       customFields: { type: "object", required: false },
     },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const { id, ...body } = input as Record<string, unknown>;
       if (typeof body.tags === "string")
         body.tags = (body.tags as string)
           .split(",")
           .map((t: string) => t.trim());
-      const res = (await api(token, "PUT", `/contacts/${id}/`, body)) as Record<
-        string,
-        unknown
-      >;
+      const res = (await api(
+        ctx,
+        "PUT",
+        `contacts/${pathSegment(id)}/`,
+        body,
+      )) as Record<string, unknown>;
       return res.contact ?? res;
     },
   });
@@ -194,11 +182,10 @@ export default function highlevel(rl: RunlinePluginAPI) {
     description: "Delete a contact",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       await api(
-        token,
+        ctx,
         "DELETE",
-        `/contacts/${(input as Record<string, unknown>).id}/`,
+        `contacts/${pathSegment((input as Record<string, unknown>).id)}/`,
       );
       return { success: true };
     },
@@ -229,8 +216,11 @@ export default function highlevel(rl: RunlinePluginAPI) {
       tags: { type: "object", required: false },
     },
     async execute(input, ctx) {
-      const { token, locationId } = getConn(ctx);
-      const body = { ...(input as Record<string, unknown>), locationId };
+      const locationId = locationOf(ctx);
+      const body: Record<string, unknown> = {
+        ...(input as Record<string, unknown>),
+        locationId,
+      };
       if (body.stageId) {
         body.pipelineStageId = body.stageId;
         delete body.stageId;
@@ -239,7 +229,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
         body.tags = (body.tags as string)
           .split(",")
           .map((t: string) => t.trim());
-      return api(token, "POST", "/opportunities/", body);
+      return api(ctx, "POST", "opportunities/", body);
     },
   });
 
@@ -248,11 +238,10 @@ export default function highlevel(rl: RunlinePluginAPI) {
     description: "Get an opportunity",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       return api(
-        token,
+        ctx,
         "GET",
-        `/opportunities/${(input as Record<string, unknown>).id}`,
+        `opportunities/${pathSegment((input as Record<string, unknown>).id)}`,
       );
     },
   });
@@ -271,7 +260,7 @@ export default function highlevel(rl: RunlinePluginAPI) {
       endDate: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { token, locationId } = getConn(ctx);
+      const locationId = locationOf(ctx);
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { location_id: locationId };
       if (p.limit) qs.limit = p.limit;
@@ -283,9 +272,9 @@ export default function highlevel(rl: RunlinePluginAPI) {
       if (p.startDate) qs.startDate = new Date(p.startDate as string).getTime();
       if (p.endDate) qs.endDate = new Date(p.endDate as string).getTime();
       const res = (await api(
-        token,
+        ctx,
         "GET",
-        "/opportunities/search",
+        "opportunities/search",
         undefined,
         qs,
       )) as Record<string, unknown>;
@@ -306,13 +295,12 @@ export default function highlevel(rl: RunlinePluginAPI) {
       assignedTo: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const { id, ...body } = input as Record<string, unknown>;
       if (body.stageId) {
         body.pipelineStageId = body.stageId;
         delete body.stageId;
       }
-      return api(token, "PUT", `/opportunities/${id}`, body);
+      return api(ctx, "PUT", `opportunities/${pathSegment(id)}`, body);
     },
   });
 
@@ -321,11 +309,10 @@ export default function highlevel(rl: RunlinePluginAPI) {
     description: "Delete an opportunity",
     inputSchema: { id: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       await api(
-        token,
+        ctx,
         "DELETE",
-        `/opportunities/${(input as Record<string, unknown>).id}`,
+        `opportunities/${pathSegment((input as Record<string, unknown>).id)}`,
       );
       return { success: true };
     },
@@ -345,9 +332,13 @@ export default function highlevel(rl: RunlinePluginAPI) {
       assignedTo: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const { contactId, ...body } = input as Record<string, unknown>;
-      return api(token, "POST", `/contacts/${contactId}/tasks/`, body);
+      return api(
+        ctx,
+        "POST",
+        `contacts/${pathSegment(contactId)}/tasks/`,
+        body,
+      );
     },
   });
 
@@ -359,9 +350,12 @@ export default function highlevel(rl: RunlinePluginAPI) {
       taskId: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const p = input as Record<string, unknown>;
-      return api(token, "GET", `/contacts/${p.contactId}/tasks/${p.taskId}/`);
+      return api(
+        ctx,
+        "GET",
+        `contacts/${pathSegment(p.contactId)}/tasks/${pathSegment(p.taskId)}/`,
+      );
     },
   });
 
@@ -370,11 +364,10 @@ export default function highlevel(rl: RunlinePluginAPI) {
     description: "List tasks for a contact",
     inputSchema: { contactId: { type: "string", required: true } },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const res = (await api(
-        token,
+        ctx,
         "GET",
-        `/contacts/${(input as Record<string, unknown>).contactId}/tasks/`,
+        `contacts/${pathSegment((input as Record<string, unknown>).contactId)}/tasks/`,
       )) as Record<string, unknown>;
       return res.tasks ?? res;
     },
@@ -393,9 +386,13 @@ export default function highlevel(rl: RunlinePluginAPI) {
       assignedTo: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const { contactId, taskId, ...body } = input as Record<string, unknown>;
-      return api(token, "PUT", `/contacts/${contactId}/tasks/${taskId}/`, body);
+      return api(
+        ctx,
+        "PUT",
+        `contacts/${pathSegment(contactId)}/tasks/${pathSegment(taskId)}/`,
+        body,
+      );
     },
   });
 
@@ -407,9 +404,12 @@ export default function highlevel(rl: RunlinePluginAPI) {
       taskId: { type: "string", required: true },
     },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const p = input as Record<string, unknown>;
-      await api(token, "DELETE", `/contacts/${p.contactId}/tasks/${p.taskId}/`);
+      await api(
+        ctx,
+        "DELETE",
+        `contacts/${pathSegment(p.contactId)}/tasks/${pathSegment(p.taskId)}/`,
+      );
       return { success: true };
     },
   });
@@ -440,11 +440,10 @@ export default function highlevel(rl: RunlinePluginAPI) {
       toNotify: { type: "boolean", required: false },
     },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       return api(
-        token,
+        ctx,
         "POST",
-        "/calendars/events/appointments",
+        "calendars/events/appointments",
         input as Record<string, unknown>,
       );
     },
@@ -469,7 +468,6 @@ export default function highlevel(rl: RunlinePluginAPI) {
       userId: { type: "string", required: false },
     },
     async execute(input, ctx) {
-      const { token } = getConn(ctx);
       const p = input as Record<string, unknown>;
       const qs: Record<string, unknown> = {
         startDate: p.startDate,
@@ -478,9 +476,9 @@ export default function highlevel(rl: RunlinePluginAPI) {
       if (p.timezone) qs.timezone = p.timezone;
       if (p.userId) qs.userId = p.userId;
       return api(
-        token,
+        ctx,
         "GET",
-        `/calendars/${p.calendarId}/free-slots`,
+        `calendars/${pathSegment(p.calendarId)}/free-slots`,
         undefined,
         qs,
       );

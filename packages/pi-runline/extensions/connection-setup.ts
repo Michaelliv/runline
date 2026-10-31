@@ -1,19 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import {
+  type ConnectionSchemaField,
+  connectionFields,
+  type PluginDef,
+} from "runline";
 
-type ConnectionSchemaField = {
-  type: string;
-  required?: boolean;
-  description?: string;
-  default?: unknown;
-  env?: string;
-};
-
-type PluginSummary = {
-  name: string;
-  connectionConfigSchema?: Record<string, ConnectionSchemaField>;
-};
+type PluginSummary = Pick<PluginDef, "name" | "connectionConfigSchema">;
 
 type Connection = {
   name: string;
@@ -80,8 +74,9 @@ export async function promptForCredentials(
     const plugin = plugins.find((p) => p.name === name);
     if (!plugin) continue;
 
-    const schema = plugin.connectionConfigSchema;
-    if (!schema || Object.keys(schema).length === 0) continue; // no creds needed
+    // Legacy field maps and TypeBox objects both read as named fields.
+    const schema = connectionFields(plugin.connectionConfigSchema);
+    if (Object.keys(schema).length === 0) continue; // no creds needed
 
     if (!force && connectionFor(connections, name)) continue; // already configured
 

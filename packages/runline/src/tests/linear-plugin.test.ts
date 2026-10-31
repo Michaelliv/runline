@@ -4,6 +4,7 @@ import linear from "../../../runline-plugins/linear/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { isTypedInputSchema, validateTypedInput } from "../plugin/schema.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch, typedSchema } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -109,12 +110,6 @@ function makeLinear(): PluginDef {
   return resolve();
 }
 
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected linear.${name} to be registered`);
-  return action;
-}
-
 function ctx(config: Record<string, unknown> = {}): ActionContext {
   return {
     connection: {
@@ -160,11 +155,12 @@ function mockLinearSequence(
   opts: MockOpts = {},
 ) {
   let i = 0;
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     assert.equal(String(input), "https://api.linear.app/graphql");
     assert.equal(init?.method, "POST");
+    // The credential transport signs with a Headers instance.
     assert.match(
-      String(init?.headers?.["Authorization" as keyof HeadersInit]),
+      String(new Headers(init?.headers).get("authorization")),
       /^lin_/,
     );
     // Asserted on every request in the suite: the API key travels on all of
@@ -199,7 +195,7 @@ function mockLinearSequence(
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("linear plugin action surface", () => {
@@ -210,9 +206,8 @@ describe("linear plugin action surface", () => {
   });
 
   it("describes issue.get issueId as the required parameter for UUIDs or identifiers", () => {
-    const action = getAction(makeLinear(), "issue.get");
     assert.equal(
-      action.inputSchema?.properties?.issueId?.description,
+      typedSchema(makeLinear(), "issue.get").properties?.issueId?.description,
       "Required parameter name. Pass either the Linear issue UUID or issue identifier, e.g. 'THE-154'.",
     );
   });
@@ -231,14 +226,15 @@ describe("linear plugin action surface", () => {
 // burns a turn learning it was blocked.
 describe("linear scoped-availability notes match behaviour", () => {
   const NOTE = "Unavailable on scoped connections.";
-  const SENTINEL = "linear-test: reached the network";
+  // A fetch failure surfaces as the credential transport's opaque error.
+  const SENTINEL = "Authenticated request failed";
 
   it("carries the note on exactly the actions a scoped connection cannot run", async () => {
     const plugin = makeLinear();
     // Any action that gets past the scope gate hits fetch; stop it there.
-    globalThis.fetch = (async () => {
-      throw new Error(SENTINEL);
-    }) as typeof fetch;
+    stubFetch(async () => {
+      throw new Error("linear-test: reached the network");
+    });
 
     const scoped = ctx({
       apiKey: "lin_notes",
@@ -408,8 +404,8 @@ describe("linear plugin cycle actions", () => {
     const action = getAction(plugin, "team.cyclesDeleteAll");
     assert.match(String(action.description), /^DESTRUCTIVE:/);
     assert.ok(
-      isTypedInputSchema(action.inputSchema) &&
-        "teamId" in (action.inputSchema.properties ?? {}),
+      "teamId" in
+        (typedSchema(plugin, "team.cyclesDeleteAll").properties ?? {}),
       "the parameter must be named teamId so the blast radius is obvious",
     );
   });
@@ -908,6 +904,58 @@ describe("linear plugin scoped issue access", () => {
     await action.execute({}, ctx({ scopeLabelIds: LABEL_ID }));
   });
 
+  // A brokered connection carries no secret, so two people's connections can
+  // share every public field. Whose workspace a directory belongs to is known
+  // only to the broker; a directory read for one call must not answer another.
+  it("never answers one brokered connection from another's label directory", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    stubFetch(async () => {
+      throw new Error("a brokered plugin must not reach the network itself");
+    });
+    const brokerFor = (labelId: string, seen: unknown[]) => ({
+      async request(input: { body?: string | Uint8Array }) {
+        const body = JSON.parse(String(input.body)) as {
+          query: string;
+          variables?: Record<string, unknown>;
+        };
+        if (DIRECTORY_QUERY.test(body.query))
+          return Response.json({
+            data: {
+              issueLabels: {
+                nodes: [{ id: labelId, name: "requester:yosi" }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          });
+        seen.push(body.variables?.filter);
+        return Response.json({
+          data: { issues: { nodes: [], pageInfo: { hasNextPage: false } } },
+        });
+      },
+      async probe() {
+        return { outcome: "unverified" as const };
+      },
+    });
+    const brokered = (labelId: string, seen: unknown[]): ActionContext => ({
+      connection: {
+        name: "linear",
+        plugin: "linear",
+        config: { scopeLabelIds: "requester:yosi" },
+      },
+      credentials: brokerFor(labelId, seen),
+      log: { info() {}, warn() {}, error() {} },
+      async updateConnection() {},
+    });
+    const DANA = "11111111-1111-4111-8111-111111111111";
+    const GABI = "22222222-2222-4222-8222-222222222222";
+    const dana: unknown[] = [];
+    const gabi: unknown[] = [];
+    await action.execute({}, brokered(DANA, dana));
+    await action.execute({}, brokered(GABI, gabi));
+    assert.deepEqual(dana, [{ labels: { id: { in: [DANA] } } }]);
+    assert.deepEqual(gabi, [{ labels: { id: { in: [GABI] } } }]);
+  });
+
   it("injects the scope label filter on issue.search with caller filters", async () => {
     const action = getAction(makeLinear(), "issue.search");
 
@@ -1388,9 +1436,9 @@ describe("linear issue.list pagination and cycle hydration", () => {
   });
 
   it("documents pagination on the limit input", () => {
-    const action = getAction(makeLinear(), "issue.list");
     const description = String(
-      action.inputSchema?.properties?.limit?.description ?? "",
+      typedSchema(makeLinear(), "issue.list").properties?.limit?.description ??
+        "",
     );
     assert.match(description, /pageInfo/);
   });

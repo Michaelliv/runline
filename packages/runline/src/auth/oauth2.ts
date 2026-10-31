@@ -13,6 +13,7 @@ import type {
   OAuthCodeOptions,
   OAuthJwtIdentity,
   OAuthOperation,
+  OAuthResourceOwner,
   OAuthRuntimeOptions,
   OAuthTokens,
 } from "./types.js";
@@ -79,6 +80,7 @@ async function operate(
       refresh: "refresh_token",
       clientCredentials: "client_credentials",
       jwtBearer: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      password: "password",
     };
     const tokens = await requestOAuth2Token(
       configured,
@@ -220,6 +222,30 @@ export async function acquireOAuth2JwtToken(
     undefined,
     { assertion },
     { ...options, now: () => now },
+  );
+}
+
+/** Resource-owner password grant, the owner's fields under the endpoint's own names. */
+export async function acquireOAuth2PasswordToken(
+  definition: OAuth2Definition,
+  input: {
+    owner: OAuthResourceOwner;
+    application?: OAuthApplication;
+    scopes?: string[];
+  },
+  options: OAuthRuntimeOptions = {},
+): Promise<OAuthTokens> {
+  const names = definition.password?.fields ?? {};
+  return operate(
+    definition,
+    "password",
+    input.application,
+    {
+      [names.username ?? "username"]: required(input.owner.username),
+      [names.password ?? "password"]: required(input.owner.password),
+      ...(input.scopes?.length ? { scope: input.scopes.join(" ") } : {}),
+    },
+    options,
   );
 }
 

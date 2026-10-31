@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { salesforceCredential } from "./credentials.js";
 import { registerMetadataActions } from "./metadata.js";
 import { registerQueryActions } from "./query.js";
 import {
@@ -10,6 +11,7 @@ import {
 export default function salesforce(rl: RunlinePluginAPI) {
   rl.setName("salesforce");
   rl.setVersion("0.2.0");
+  rl.setCredential(salesforceCredential);
   rl.setConnectionSchema(
     t.Object({
       instanceUrl: t.Optional(
@@ -17,6 +19,13 @@ export default function salesforce(rl: RunlinePluginAPI) {
           description:
             "Salesforce API instance URL, e.g. https://your-domain.my.salesforce.com. Required for static accessToken auth; optional for client credentials when loginUrl is set.",
           env: "SALESFORCE_INSTANCE_URL",
+        }),
+      ),
+      authMethod: t.Optional(
+        t.String({
+          description:
+            "accessToken or clientCredentials (inferred from which credential the connection holds)",
+          env: "SALESFORCE_AUTH_METHOD",
         }),
       ),
       accessToken: t.Optional(

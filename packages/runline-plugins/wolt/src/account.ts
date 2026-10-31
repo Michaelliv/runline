@@ -1,4 +1,4 @@
-import type { ActionContext } from "runline";
+import { type ActionContext, refuseUnderHost } from "runline";
 import {
   AUDIENCE,
   AUTH,
@@ -159,6 +159,7 @@ async function finish(ctx: ActionContext, grant: Record<string, unknown>) {
 }
 
 export async function redeemLink(ctx: ActionContext, link: string) {
+  refuseUnderHost(ctx);
   await ensureIdentity(ctx);
   const cfg = cfgOf(ctx);
   const token = linkToken(link);
@@ -185,6 +186,7 @@ export async function requestEmailCode(
   email: string,
   captcha?: string,
 ) {
+  refuseUnderHost(ctx);
   await ensureIdentity(ctx);
   await ctx.updateConnection({ pendingEmail: email, pendingPhone: undefined });
   const r = await authJson(
@@ -239,6 +241,7 @@ export async function requestSmsCode(
     viaWhatsapp?: boolean;
   },
 ) {
+  refuseUnderHost(ctx);
   await ensureIdentity(ctx);
   const normalized = normPhone(input.phone);
   await ctx.updateConnection({ pendingPhone: normalized });
@@ -307,6 +310,7 @@ export async function requestSmsCode(
  * error keeps its body privately.
  */
 export async function submitCode(ctx: ActionContext, code: string) {
+  refuseUnderHost(ctx);
   const cfg = cfgOf(ctx);
   if (!cfg.pendingEmail && !cfg.pendingPhone)
     throw new Error(
@@ -391,6 +395,7 @@ async function startEmailConfirmation(
 }
 
 export async function submitConfirmation(ctx: ActionContext, code: string) {
+  refuseUnderHost(ctx);
   const cfg = cfgOf(ctx);
   if (!cfg.pendingConfirmationToken)
     throw new Error(

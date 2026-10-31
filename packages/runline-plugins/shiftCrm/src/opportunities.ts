@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   CRM_BASE,
@@ -8,16 +8,13 @@ import {
   createRecordFields,
   enumSchema,
   idSchema,
-  listParams,
   nullableTimestamp,
   paginationFields,
-  pathSegment,
   request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
   timestampSchema,
   updateRecordFields,
-  withQuery,
 } from "./shared.js";
 
 const opportunityListFields = {
@@ -121,7 +118,8 @@ export function registerOpportunityActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const body = await request<{ opportunities: CrmOpportunity[] }>(
         ctx,
-        withQuery(`${CRM_BASE}/opportunities`, listParams(input)),
+        `${CRM_BASE}/opportunities`,
+        { query: input },
       );
       return body.opportunities;
     },
@@ -134,7 +132,8 @@ export function registerOpportunityActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       return request<{ opportunities: CrmOpportunity[]; nextCursor?: string }>(
         ctx,
-        withQuery(`${CRM_BASE}/opportunities`, listParams(input)),
+        `${CRM_BASE}/opportunities`,
+        { query: input },
       );
     },
   });
