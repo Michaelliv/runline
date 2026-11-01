@@ -1,6 +1,5 @@
 import {
   type ActionContext,
-  credentialOk,
   credentialRequest,
   jsonAnswer,
   pathSegment,
@@ -11,61 +10,145 @@ import * as t from "typebox";
 import { DCS, SCOPES, zohoMailCredential } from "./credentials.js";
 
 /**
- * Zoho Mail.
+ * Zoho Mail, read-only: accounts, folders, labels, message lists and
+ * search, message content, attachments and raw source, which is what
+ * triaging a mailbox takes. Zoho CRM is the separate `zoho` plugin.
  *
- * The existing `zoho` plugin covers Zoho CRM. This one covers the mailbox, which
- * had no plugin at all.
- *
- * Tokens are DATA-CENTRE BOUND: see `credentials.ts`, where `dc` selects the
- * accounts host and the API host as a pair.
- *
- * Read-only. Listing, reading and downloading attachments are the operations an
- * agent needs to triage a mailbox; mutations are deliberately left out of this
- * first version.
+ * Tokens are bound to a data centre: `credentials.ts` selects the accounts
+ * host and the API host as a pair from `dc`.
  */
 
-/** Zoho's error envelope: `{ data: { errorCode, moreInfo? }, status }`. */
+const STRICT = { additionalProperties: false } as const;
+const Id = (description?: string) =>
+  t.String({ minLength: 1, ...(description ? { description } : {}) });
+
+/** Zoho's error envelope, `{ status, data: { errorCode, moreInfo? } }`: only the code is kept. */
 function zohoError(body: unknown) {
   const data = (body as { data?: { errorCode?: unknown } } | undefined)?.data;
   return { code: data?.errorCode };
 }
 
-/** A JSON read; Zoho wraps every answer in `{ status, data }`. */
+/** One read of the mail API; a failure reports the status and Zoho's errorCode. */
+async function read(
+  ctx: ActionContext,
+  path: string,
+  options: { query?: Record<string, unknown>; accept?: string } = {},
+): Promise<Response> {
+  const res = await credentialRequest(ctx, zohoMailCredential, {
+    target: "api",
+    path,
+    query: options.query,
+    ...(options.accept ? { headers: { Accept: options.accept } } : {}),
+  });
+  if (!res.ok) throw await responseFailed("zohoMail", res, zohoError);
+  return res;
+}
+
+/** A JSON read, unwrapped from Zoho's `{ status, data }` envelope. */
 async function api(
   ctx: ActionContext,
   path: string,
   query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const res = await credentialRequest(ctx, zohoMailCredential, {
-    target: "api",
-    path,
-    query: Object.fromEntries(
-      Object.entries(query ?? {}).filter(([, v]) => v !== ""),
-    ),
-  });
-  if (!res.ok) throw await responseFailed("zohoMail", res, zohoError);
-  const body = await jsonAnswer<{ data?: unknown }>(res);
+  const body = await jsonAnswer<{ data?: unknown }>(
+    await read(ctx, path, { query }),
+  );
   return body.data !== undefined ? body.data : body;
 }
 
 /**
- * A binary read, as base64. The attachment endpoint returns the file itself
- * and answers `Accept: application/json` with 406 NOT_ACCEPTABLE, so it must
- * not ask for JSON.
+ * An attachment's bytes as a googleDrive.file.download result carries
+ * them, so the answer passes unedited to a mail plugin's attachment input.
+ * The endpoint returns the file itself and answers
+ * `Accept: application/json` with 406 NOT_ACCEPTABLE, so it asks for any
+ * type.
  */
-async function bytes(ctx: ActionContext, path: string): Promise<string> {
-  const res = await credentialOk(ctx, zohoMailCredential, "zohoMail", {
-    target: "api",
-    path,
-    headers: { Accept: "*/*" },
-  });
-  return Buffer.from(await res.arrayBuffer()).toString("base64");
+async function download(
+  ctx: ActionContext,
+  path: string,
+): Promise<{ contentBase64: string; mimeType?: string; size: number }> {
+  const res = await read(ctx, path, { accept: "*/*" });
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const mimeType = res.headers.get("content-type")?.split(";")[0].trim();
+  return {
+    contentBase64: bytes.toString("base64"),
+    ...(mimeType ? { mimeType } : {}),
+    size: bytes.byteLength,
+  };
+}
+
+/** The call's accountId, else the connection's, as one path segment. */
+function account(accountId: string | undefined, ctx: ActionContext): string {
+  const id = accountId ?? ctx.connection.config.accountId;
+  if (typeof id !== "string" || !id)
+    throw new Error(
+      "zohoMail: accountId required — pass it, set ZOHOMAIL_ACCOUNT_ID, or call account.list first",
+    );
+  return pathSegment(id);
 }
 
 /** `accounts/{accountId}/folders/{folderId}/messages/{messageId}` */
-function messagePath(i: Record<string, unknown>, acct: string): string {
-  return `accounts/${acct}/folders/${pathSegment(i.folderId)}/messages/${pathSegment(i.messageId)}`;
+function messagePath(
+  input: { accountId?: string; folderId: string; messageId: string },
+  ctx: ActionContext,
+): string {
+  return `accounts/${account(input.accountId, ctx)}/folders/${pathSegment(input.folderId)}/messages/${pathSegment(input.messageId)}`;
 }
+
+const AccountId = t.Optional(Id("Defaults to the connection's accountId"));
+const Start = t.Optional(
+  t.Integer({ minimum: 1, description: "1-based start index (default 1)" }),
+);
+
+const accountOnly = t.Object({ accountId: AccountId }, STRICT);
+const messageList = t.Object(
+  {
+    accountId: AccountId,
+    folderId: Id("From folder.list. Without it Zoho mixes every folder."),
+    start: Start,
+    limit: t.Optional(
+      t.Integer({ minimum: 1, maximum: 200, description: "Default 25" }),
+    ),
+    status: t.Optional(
+      t.Union([t.Literal("read"), t.Literal("unread"), t.Literal("all")]),
+    ),
+    includeto: t.Optional(
+      t.Boolean({ description: "Include recipient details" }),
+    ),
+  },
+  STRICT,
+);
+const messageSearch = t.Object(
+  {
+    accountId: AccountId,
+    searchKey: Id(),
+    start: Start,
+    limit: t.Optional(t.Integer({ minimum: 1 })),
+  },
+  STRICT,
+);
+const message = {
+  accountId: AccountId,
+  folderId: Id("From folder.list or message.list"),
+  messageId: Id(),
+};
+const messageContent = t.Object(
+  {
+    ...message,
+    includeBlockContent: t.Optional(
+      t.Boolean({
+        description: "Return the reply and the quoted parent separately",
+      }),
+    ),
+  },
+  STRICT,
+);
+const messageOnly = t.Object(message, STRICT);
+const attachment = t.Object(
+  { ...message, attachmentId: Id("From message.attachmentInfo") },
+  STRICT,
+);
+const original = t.Object({ accountId: AccountId, messageId: Id() }, STRICT);
 
 export default function zohoMail(rl: RunlinePluginAPI) {
   rl.setName("zohoMail");
@@ -141,26 +224,11 @@ export default function zohoMail(rl: RunlinePluginAPI) {
     ],
   });
 
-  const acct = (input: Record<string, unknown>, ctx: ActionContext): string => {
-    const id =
-      (input.accountId as string) ||
-      (ctx.connection.config.accountId as string);
-    if (!id)
-      throw new Error(
-        "zohoMail: accountId required — pass it, set ZOHOMAIL_ACCOUNT_ID, or call account.list first",
-      );
-    return pathSegment(id);
-  };
-
-  const AccountId = t.Optional(
-    t.String({ description: "Defaults to the connection's accountId" }),
-  );
-
   rl.registerAction("account.list", {
     access: "read",
     description:
       "List the mail accounts this user can access, with accountId and primaryEmailAddress. Call this first — every other action needs an accountId.",
-    inputSchema: t.Object({}),
+    inputSchema: t.Object({}, STRICT),
     async execute(_input, ctx) {
       return api(ctx, "accounts");
     },
@@ -170,56 +238,36 @@ export default function zohoMail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "List all folders with folderId, folderName and folderType. Match on folderType, not folderName: a mailbox migrated from IMAP can carry a 'Deleted Messages' folder whose folderType is Inbox, distinct from both Trash and Archive.",
-    inputSchema: t.Object({ accountId: AccountId }),
+    inputSchema: accountOnly,
     async execute(input, ctx) {
-      return api(
-        ctx,
-        `accounts/${acct(input as Record<string, unknown>, ctx)}/folders`,
-      );
+      const p = input as t.Static<typeof accountOnly>;
+      return api(ctx, `accounts/${account(p.accountId, ctx)}/folders`);
     },
   });
 
   rl.registerAction("label.list", {
     access: "read",
     description: "List all labels with their ids and display names.",
-    inputSchema: t.Object({ accountId: AccountId }),
+    inputSchema: accountOnly,
     async execute(input, ctx) {
-      return api(
-        ctx,
-        `accounts/${acct(input as Record<string, unknown>, ctx)}/labels`,
-      );
+      const p = input as t.Static<typeof accountOnly>;
+      return api(ctx, `accounts/${account(p.accountId, ctx)}/labels`);
     },
   });
 
   rl.registerAction("message.list", {
     access: "read",
     description:
-      'List messages in a folder. Always pass folderId: without it Zoho returns every folder mixed together, so archived and deleted mail is indistinguishable from inbox. Each entry carries a `summary` snippet, usually enough to triage without fetching content. Note `status` of "0" means unread, and receivedTime is epoch milliseconds.',
-    inputSchema: t.Object({
-      accountId: AccountId,
-      folderId: t.String({
-        description:
-          "From folder.list. Omitting it mixes all folders together.",
-      }),
-      start: t.Optional(
-        t.Number({ description: "1-based start index (default 1)" }),
-      ),
-      limit: t.Optional(t.Number({ description: "Max 200 (default 25)" })),
-      status: t.Optional(
-        t.Union([t.Literal("read"), t.Literal("unread"), t.Literal("all")]),
-      ),
-      includeto: t.Optional(
-        t.Boolean({ description: "Include recipient details" }),
-      ),
-    }),
+      'List messages in one folder. folderId is required: without it Zoho returns every folder mixed together, so archived and deleted mail is indistinguishable from inbox. Each entry carries a `summary` snippet, usually enough to triage without fetching content. `status` "0" means unread, and receivedTime is epoch milliseconds.',
+    inputSchema: messageList,
     async execute(input, ctx) {
-      const i = input as Record<string, unknown>;
-      return api(ctx, `accounts/${acct(i, ctx)}/messages/view`, {
-        folderId: i.folderId,
-        start: i.start,
-        limit: i.limit,
-        status: i.status,
-        includeto: i.includeto,
+      const p = input as t.Static<typeof messageList>;
+      return api(ctx, `accounts/${account(p.accountId, ctx)}/messages/view`, {
+        folderId: p.folderId,
+        start: p.start,
+        limit: p.limit,
+        status: p.status,
+        includeto: p.includeto,
       });
     },
   });
@@ -228,18 +276,13 @@ export default function zohoMail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       'Search messages. searchKey is {field}:{value}, joined with "::" for AND and ":or:" for OR. Fields include entire, subject, sender, to, cc, content, fileName, fileContent, has:attachment, in:{folderId}, fromDate/toDate as DD-MMM-YYYY. Example: sender:bolt.eu::in:9000000002014',
-    inputSchema: t.Object({
-      accountId: AccountId,
-      searchKey: t.String(),
-      start: t.Optional(t.Number()),
-      limit: t.Optional(t.Number()),
-    }),
+    inputSchema: messageSearch,
     async execute(input, ctx) {
-      const i = input as Record<string, unknown>;
-      return api(ctx, `accounts/${acct(i, ctx)}/messages/search`, {
-        searchKey: i.searchKey,
-        start: i.start,
-        limit: i.limit,
+      const p = input as t.Static<typeof messageSearch>;
+      return api(ctx, `accounts/${account(p.accountId, ctx)}/messages/search`, {
+        searchKey: p.searchKey,
+        start: p.start,
+        limit: p.limit,
       });
     },
   });
@@ -248,20 +291,11 @@ export default function zohoMail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "Get the full body of one message. Requires folderId as well as messageId.",
-    inputSchema: t.Object({
-      accountId: AccountId,
-      folderId: t.String(),
-      messageId: t.String(),
-      includeBlockContent: t.Optional(
-        t.Boolean({
-          description: "Return the reply and the quoted parent separately",
-        }),
-      ),
-    }),
+    inputSchema: messageContent,
     async execute(input, ctx) {
-      const i = input as Record<string, unknown>;
-      return api(ctx, `${messagePath(i, acct(i, ctx))}/content`, {
-        includeBlockContent: i.includeBlockContent,
+      const p = input as t.Static<typeof messageContent>;
+      return api(ctx, `${messagePath(p, ctx)}/content`, {
+        includeBlockContent: p.includeBlockContent,
       });
     },
   });
@@ -270,35 +304,24 @@ export default function zohoMail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "List a message's attachments with names, sizes and attachmentIds. Read the filenames before concluding an invoice is attached — senders routinely attach terms and cancellation notices while the figures sit only in the body.",
-    inputSchema: t.Object({
-      accountId: AccountId,
-      folderId: t.String(),
-      messageId: t.String(),
-    }),
+    inputSchema: messageOnly,
     async execute(input, ctx) {
-      const i = input as Record<string, unknown>;
-      return api(ctx, `${messagePath(i, acct(i, ctx))}/attachmentinfo`);
+      const p = input as t.Static<typeof messageOnly>;
+      return api(ctx, `${messagePath(p, ctx)}/attachmentinfo`);
     },
   });
 
   rl.registerAction("message.attachment", {
     access: "read",
-    description: "Download one attachment. Returns { attachmentId, base64 }.",
-    inputSchema: t.Object({
-      accountId: AccountId,
-      folderId: t.String(),
-      messageId: t.String(),
-      attachmentId: t.String(),
-    }),
+    description:
+      "Download one attachment. Returns { contentBase64, mimeType, size }, accepted as-is as an attachment by mail plugins; its name is in message.attachmentInfo.",
+    inputSchema: attachment,
     async execute(input, ctx) {
-      const i = input as Record<string, unknown>;
-      return {
-        attachmentId: i.attachmentId,
-        base64: await bytes(
-          ctx,
-          `${messagePath(i, acct(i, ctx))}/attachments/${pathSegment(i.attachmentId)}`,
-        ),
-      };
+      const p = input as t.Static<typeof attachment>;
+      return download(
+        ctx,
+        `${messagePath(p, ctx)}/attachments/${pathSegment(p.attachmentId)}`,
+      );
     },
   });
 
@@ -306,18 +329,14 @@ export default function zohoMail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "Get the raw RFC-822 source of a message, attachments inline as base64. Large — prefer message.content plus message.attachment unless the MIME tree itself is needed.",
-    inputSchema: t.Object({
-      accountId: AccountId,
-      // Unused: originalmessage is account-wide. With a folder segment in the
-      // path Zoho answers 404 URL_RULE_NOT_CONFIGURED.
-      folderId: t.Optional(t.String()),
-      messageId: t.String(),
-    }),
+    inputSchema: original,
     async execute(input, ctx) {
-      const i = input as Record<string, unknown>;
+      const p = input as t.Static<typeof original>;
+      // Account-wide: with a folder segment in the path Zoho answers
+      // 404 URL_RULE_NOT_CONFIGURED.
       return api(
         ctx,
-        `accounts/${acct(i, ctx)}/messages/${pathSegment(i.messageId)}/originalmessage`,
+        `accounts/${account(p.accountId, ctx)}/messages/${pathSegment(p.messageId)}/originalmessage`,
       );
     },
   });
