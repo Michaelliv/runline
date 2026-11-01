@@ -308,12 +308,17 @@ export default function zohoMail(rl: RunlinePluginAPI) {
       "Get the raw RFC-822 source of a message, attachments inline as base64. Large — prefer message.content plus message.attachment unless the MIME tree itself is needed.",
     inputSchema: t.Object({
       accountId: AccountId,
-      folderId: t.String(),
+      // Unused: originalmessage is account-wide. With a folder segment in the
+      // path Zoho answers 404 URL_RULE_NOT_CONFIGURED.
+      folderId: t.Optional(t.String()),
       messageId: t.String(),
     }),
     async execute(input, ctx) {
       const i = input as Record<string, unknown>;
-      return api(ctx, `${messagePath(i, acct(i, ctx))}/originalmessage`);
+      return api(
+        ctx,
+        `accounts/${acct(i, ctx)}/messages/${pathSegment(i.messageId)}/originalmessage`,
+      );
     },
   });
 }
