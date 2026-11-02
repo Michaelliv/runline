@@ -9,9 +9,9 @@ export default {
   action: "task.get",
   input: { id: "t1" },
   response: { id: "t1" },
-  target: "rest",
+  target: "api",
   wire: {
-    url: "https://api.todoist.com/rest/v2/tasks/t1",
+    url: "https://api.todoist.com/api/v1/tasks/t1",
     header: ["authorization", "Bearer todoist_token"],
   },
 } satisfies CredentialFixture;
