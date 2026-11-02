@@ -1,5 +1,8 @@
 import * as t from "typebox";
-import { DownloadedFile } from "../../_shared/base64.js";
+import {
+  attachmentMetadata,
+  attachmentSources,
+} from "../../_shared/attachments.js";
 
 export const STRICT = { additionalProperties: false } as const;
 export const MAX_REQUEST_BYTES = 6_000_000;
@@ -90,58 +93,12 @@ export const sendFields = {
 };
 
 /**
- * Attachment bytes come one way each, named as gmail and googleDrive name
- * them: `contentBase64`, `contentPath`, `content` (UTF-8 text), plus
- * AgentMail's own `url`. A googleDrive download result passes straight
- * through as `contentBase64`.
+ * Attachment bytes come one way each, as every mail plugin takes them,
+ * plus AgentMail's own `url`, which AgentMail fetches itself.
  */
-const attachmentMetadata = {
-  name: t.Optional(
-    t.String({ ...id, description: "File name; defaults to the path's name." }),
-  ),
-  mimeType: t.Optional(
-    t.String({ ...id, description: "MIME type, e.g. application/pdf." }),
-  ),
-  inline: t.Optional(
-    t.Boolean({
-      description:
-        "Embed in the HTML body, referenced as cid:<contentId>, instead of attaching.",
-    }),
-  ),
-  contentId: t.Optional(
-    t.String({ ...id, description: "Content-ID for inline images." }),
-  ),
-};
-const SIZE_NOTE =
-  "The entire serialized request is limited to 6 MB; use url for larger files.";
 export const attachment = t.Union([
-  t.Object(
-    {
-      ...attachmentMetadata,
-      contentBase64: t.Union([t.String(), DownloadedFile], {
-        description: `Base64 bytes (standard or base64url; padding and whitespace normalized), or a googleDrive.file.download result, whose name and mimeType are used when not given here. ${SIZE_NOTE}`,
-      }),
-    },
-    STRICT,
-  ),
-  t.Object(
-    {
-      ...attachmentMetadata,
-      contentPath: t.String({
-        ...id,
-        description: `A regular file on the runline host, read at call time. ${SIZE_NOTE}`,
-      }),
-    },
-    STRICT,
-  ),
-  t.Object(
-    {
-      ...attachmentMetadata,
-      content: t.String({
-        description: `UTF-8 text content, e.g. a generated CSV. ${SIZE_NOTE}`,
-      }),
-    },
-    STRICT,
+  ...attachmentSources(
+    "The entire serialized request is limited to 6 MB; use url for larger files.",
   ),
   t.Object(
     {
