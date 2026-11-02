@@ -1,13 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import {
-  atLeastOne,
-  clientId,
-  id,
-  inboxFields,
-  pageFields,
-  STRICT,
-} from "./schemas.js";
+import { atLeastOne } from "../../_shared/schemas.js";
+import { clientId, id, inboxFields, pageFields, STRICT } from "./schemas.js";
 import { inboxPath, request } from "./shared.js";
 
 const metadataValue = t.Union([

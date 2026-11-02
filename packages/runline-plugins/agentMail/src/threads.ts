@@ -1,7 +1,7 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne } from "../../_shared/schemas.js";
 import {
-  atLeastOne,
   id,
   inboxFields,
   labelFields,
