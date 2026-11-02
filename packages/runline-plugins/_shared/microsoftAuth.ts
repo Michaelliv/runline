@@ -6,6 +6,7 @@ import {
   type HttpMethod,
   jsonAnswer,
   type OAuthConfig,
+  presignedRequest,
   responseFailed,
 } from "runline";
 import {
@@ -34,6 +35,10 @@ export async function microsoftProbe(
   return brokerFor(ctx, microsoftCredential(plugin, scopes)).probe();
 }
 
+/**
+ * One Graph request under the plugin's credential. `accept` is JSON
+ * unless the caller reads raw bytes, such as an attachment's `$value`.
+ */
 export async function graphResponse(
   ctx: ActionContext,
   plugin: string,
@@ -42,6 +47,7 @@ export async function graphResponse(
   path: string,
   body?: string | Uint8Array,
   contentType?: string,
+  accept = "application/json",
 ): Promise<Response> {
   if (!path.startsWith("/") || path.startsWith("//"))
     throw new AuthError("request_not_allowed");
@@ -50,7 +56,7 @@ export async function graphResponse(
     path: path.slice(1),
     method: method as HttpMethod,
     headers: {
-      Accept: "application/json",
+      Accept: accept,
       ...(contentType ? { "Content-Type": contentType } : {}),
     },
     body,
@@ -122,6 +128,30 @@ export async function microsoftDownload(value: unknown): Promise<Response> {
   return downloadResource(value, {
     allowedOrigins: [url.origin],
     fetch: globalThis.fetch,
+  });
+}
+
+/** Where Graph's Outlook attachment upload sessions live, as Microsoft documents them. */
+const OUTLOOK_UPLOAD_ORIGIN = "https://outlook.office.com";
+
+/**
+ * One request to an Outlook attachment upload session's `uploadUrl`. The
+ * URL carries its own authority, so the request has no bearer token; a
+ * URL on any other origin is refused.
+ */
+export function outlookUpload(
+  uploadUrl: unknown,
+  init: {
+    method: "PUT" | "DELETE";
+    headers?: Record<string, string>;
+    body?: Uint8Array;
+  },
+): Promise<Response> {
+  if (typeof uploadUrl !== "string") throw new AuthError("invalid_response");
+  return presignedRequest(uploadUrl, {
+    allowedOrigins: [OUTLOOK_UPLOAD_ORIGIN],
+    fetch: globalThis.fetch,
+    ...init,
   });
 }
 

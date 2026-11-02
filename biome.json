@@ -122,7 +122,6 @@
       "!packages/runline-plugins/messagebird",
       "!packages/runline-plugins/metabase",
       "!packages/runline-plugins/microsoftFiles",
-      "!packages/runline-plugins/microsoftMail",
       "!packages/runline-plugins/misp",
       "!packages/runline-plugins/mocean",
       "!packages/runline-plugins/monday",
