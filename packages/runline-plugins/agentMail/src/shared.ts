@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import {
   type ActionContext,
   AuthError,
@@ -10,8 +9,7 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { Check } from "typebox/value";
-import { standardBase64 } from "../../_shared/base64.js";
-import { readLocalFile } from "../../_shared/localFile.js";
+import { attachmentFile } from "../../_shared/attachments.js";
 import { obj } from "../../_shared/provider.js";
 import { agentMailCredential } from "./credentials.js";
 import { type attachment, id, MAX_REQUEST_BYTES } from "./schemas.js";
@@ -51,77 +49,43 @@ const MAX_FILE_BYTES = Math.floor((MAX_REQUEST_BYTES * 3) / 4);
 
 type AttachmentInput = t.Static<typeof attachment>;
 
-function base64Content(value: string, index: number): string {
-  const content = standardBase64(value);
-  if (content === undefined)
-    throw new Error(
-      `agentMail: attachment ${index} contentBase64 is not valid base64`,
-    );
-  return content;
-}
-
-/** One attachment's base64 bytes, or its URL for AgentMail to fetch. */
-async function attachmentSource(
-  input: AttachmentInput,
-  index: number,
-): Promise<{ content: string } | { url: string }> {
-  if ("contentBase64" in input) {
-    const value = input.contentBase64;
-    return {
-      content: base64Content(
-        typeof value === "string" ? value : value.contentBase64,
-        index,
-      ),
-    };
-  }
-  if ("contentPath" in input) {
-    const bytes = await readLocalFile(input.contentPath, {
-      subject: `agentMail: attachment ${index} contentPath`,
-      maxBytes: MAX_FILE_BYTES,
-      oversize: `agentMail: attachment ${index} exceeds the 6 MB request limit once encoded; use url`,
-    });
-    return { content: bytes.toString("base64") };
-  }
-  if ("content" in input)
-    return { content: Buffer.from(input.content, "utf8").toString("base64") };
-  try {
-    const url = new URL(input.url);
-    if (url.protocol !== "https:" || url.username || url.password)
-      throw new Error();
-  } catch {
-    throw new Error(
-      `agentMail: attachment ${index} url requires HTTPS without embedded credentials`,
-    );
-  }
-  return { url: input.url };
-}
-
 /**
- * One attachment as AgentMail's SendAttachment. A download result passed
- * as contentBase64 supplies the name and type the input leaves out; a
- * local file is named for its path; text defaults to text/plain.
+ * One attachment as AgentMail's SendAttachment: its bytes as base64, or
+ * its URL for AgentMail to fetch.
  */
 async function wireAttachment(
   input: AttachmentInput,
   index: number,
 ): Promise<Record<string, unknown>> {
-  const source = await attachmentSource(input, index);
-  if ("content" in source && !source.content)
-    throw new Error(`agentMail: attachment ${index} is empty`);
-  const result =
-    "contentBase64" in input && typeof input.contentBase64 !== "string"
-      ? input.contentBase64
-      : undefined;
+  let source: { content: string } | { url: string };
+  let file: { name?: string; mimeType?: string };
+  if ("url" in input) {
+    try {
+      const url = new URL(input.url);
+      if (url.protocol !== "https:" || url.username || url.password)
+        throw new Error();
+    } catch {
+      throw new Error(
+        `agentMail: attachment ${index} url requires HTTPS without embedded credentials`,
+      );
+    }
+    source = { url: input.url };
+    file = { name: input.name, mimeType: input.mimeType };
+  } else {
+    const resolved = await attachmentFile(input, index, {
+      plugin: "agentMail",
+      maxBytes: MAX_FILE_BYTES,
+      oversize: `agentMail: attachment ${index} exceeds the 6 MB request limit once encoded; use url`,
+    });
+    if (!resolved.bytes.length)
+      throw new Error(`agentMail: attachment ${index} is empty`);
+    source = { content: resolved.bytes.toString("base64") };
+    file = resolved;
+  }
   return Object.fromEntries(
     Object.entries({
-      filename:
-        input.name ??
-        (result?.name || undefined) ??
-        ("contentPath" in input ? basename(input.contentPath) : undefined),
-      content_type:
-        input.mimeType ??
-        (result?.mimeType || undefined) ??
-        ("content" in input ? "text/plain" : undefined),
+      filename: file.name,
+      content_type: file.mimeType,
       content_disposition:
         input.inline === undefined
           ? undefined

@@ -24,7 +24,8 @@ import {
   type RunlinePluginAPI,
 } from "runline";
 import * as t from "typebox";
-import { DownloadedFile, standardBase64 } from "../../_shared/base64.js";
+import { base64File } from "../../_shared/attachments.js";
+import { DownloadedFile } from "../../_shared/base64.js";
 import { renderEmailJsx } from "../../_shared/emailJsx.js";
 import {
   googleCredential,
@@ -206,42 +207,26 @@ function normalizeAttachment(
   if (!input || typeof input !== "object") {
     throw new Error(`gmail: attachment ${index} must be an object`);
   }
-
   const content = input.contentBase64;
-  const contentBase64 =
-    typeof content === "string"
-      ? content
-      : content &&
-          typeof content === "object" &&
-          typeof content.contentBase64 === "string"
-        ? content.contentBase64
-        : undefined;
-
-  if (typeof contentBase64 !== "string") {
+  if (
+    typeof content !== "string" &&
+    (typeof content !== "object" ||
+      !content ||
+      typeof content.contentBase64 !== "string")
+  ) {
     throw new Error(
       `gmail: attachment ${index} contentBase64 must be a base64 string`,
     );
   }
-
-  const normalized = standardBase64(contentBase64);
-  if (normalized === undefined) {
-    throw new Error(
-      `gmail: attachment ${index} contentBase64 is not valid base64`,
-    );
-  }
-  // A download result passed as contentBase64 names its own file and type.
-  const result = typeof content === "object" && content ? content : {};
-  const named = (value: unknown) =>
-    typeof value === "string" && value ? value : undefined;
+  const file = base64File(
+    content as string | t.Static<typeof DownloadedFile>,
+    `gmail: attachment ${index}`,
+  );
   return {
     name:
-      input.name ??
-      input.filename ??
-      named(result.name) ??
-      `attachment-${index + 1}`,
-    mimeType:
-      input.mimeType ?? named(result.mimeType) ?? "application/octet-stream",
-    contentBase64: normalized,
+      input.name ?? input.filename ?? file.name ?? `attachment-${index + 1}`,
+    mimeType: input.mimeType ?? file.mimeType ?? "application/octet-stream",
+    contentBase64: file.bytes.toString("base64"),
   };
 }
 
