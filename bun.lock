@@ -12,7 +12,7 @@
     },
     "packages/pi-runline": {
       "name": "pi-runline",
-      "version": "0.37.0",
+      "version": "0.38.0",
       "dependencies": {
         "runline": "0.37.0",
       },
@@ -28,7 +28,7 @@
     },
     "packages/runline": {
       "name": "runline",
-      "version": "0.37.0",
+      "version": "0.38.0",
       "bin": {
         "runline": "./dist/main.js",
       },
