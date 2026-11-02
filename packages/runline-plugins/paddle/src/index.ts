@@ -1,5 +1,8 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { paddleCredential } from "./credentials.js";
 
 /** A Paddle JSON call; an answer without success is a failure. */

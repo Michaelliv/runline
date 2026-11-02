@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import clickup from "../../../runline-plugins/clickup/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -18,9 +19,7 @@ function build() {
 const plugin = build();
 
 function action(name: string) {
-  const found = plugin.actions.find((a) => a.name === name);
-  assert.ok(found, `expected clickup.${name} to be registered`);
-  return found;
+  return getAction(plugin, name);
 }
 
 function context(): ActionContext {
@@ -39,13 +38,10 @@ function context(): ActionContext {
 describe("clickup timeEntryTag.remove", () => {
   it("sends the tags to remove in the DELETE body", async () => {
     const bodies: string[] = [];
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (_input: RequestInfo | URL, init?: RequestInit) => {
       bodies.push(init?.body ? String(init.body) : "");
       return Response.json({});
-    }) as typeof fetch;
+    });
     await action("timeEntryTag.remove").execute(
       { teamId: "t1", timeEntryIds: ["e1"], tagNames: ["billable"] },
       context(),

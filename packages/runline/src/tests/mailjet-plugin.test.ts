@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import mailjet from "../../../runline-plugins/mailjet/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -29,13 +30,13 @@ function run(
 describe("mailjet sms", () => {
   it("signs the SMS API with its own bearer token", async () => {
     const seen: Array<{ url: string; auth: string | null }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         auth: new Headers(init?.headers).get("authorization"),
       });
       return Response.json({});
-    }) as typeof fetch;
+    });
     await run({ apiKeyPublic: "p", apiKeyPrivate: "s", smsToken: "sms1" });
     assert.deepEqual(seen, [
       { url: "https://api.mailjet.com/v4/sms-send", auth: "Bearer sms1" },
@@ -43,9 +44,9 @@ describe("mailjet sms", () => {
   });
 
   it("refuses SMS without a token, before any request", async () => {
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("no request expected");
-    }) as typeof fetch;
+    });
     await assert.rejects(run({ apiKeyPublic: "p", apiKeyPrivate: "s" }), {
       code: "invalid_credentials",
     });
@@ -76,10 +77,10 @@ describe("mailjet email", () => {
 
   it("builds one message shape for plain and template sends, in sandbox when configured", async () => {
     const bodies: unknown[] = [];
-    globalThis.fetch = (async (_url, init) => {
+    stubFetch(async (_url, init) => {
       bodies.push(JSON.parse(String(init?.body)));
       return Response.json({ Messages: [] });
-    }) as typeof fetch;
+    });
     await run(keys, "email.send", { ...shared, textPart: "hi" });
     await run(keys, "email.sendTemplate", { ...shared, templateId: 9 });
     assert.deepEqual(bodies, [

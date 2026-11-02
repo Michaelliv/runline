@@ -1,6 +1,11 @@
-import { AuthError } from "runline";
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialOk, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  AuthError,
+  credentialOk,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { oktaCredential } from "./credentials.js";
 
 async function apiRequest(

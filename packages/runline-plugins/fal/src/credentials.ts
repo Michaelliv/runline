@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as `Authorization: Key {key}` to fal's queue origin.
  *  CDN media downloads are credential-free and stay outside the broker. */

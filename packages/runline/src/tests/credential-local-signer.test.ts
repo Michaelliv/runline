@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import * as t from "typebox";
-import { credentialBroker } from "../../../runline-plugins/_shared/credentialAdapter.js";
+import { brokerFor } from "../credentials/broker.js";
 import { staticSecretSchema } from "../credentials/registry.js";
 import type {
   CredentialDeclaration,
@@ -18,6 +18,7 @@ import type {
   SecretPlacement,
 } from "../credentials/types.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -84,13 +85,13 @@ function context(config: Record<string, unknown>): ActionContext {
 
 function capture() {
   const seen: Array<{ url: string; authorization: string | null }> = [];
-  globalThis.fetch = (async (url: string, init: RequestInit) => {
+  stubFetch(async (url, init) => {
     seen.push({
       url: String(url),
-      authorization: new Headers(init.headers).get("authorization"),
+      authorization: new Headers(init?.headers).get("authorization"),
     });
     return Response.json({ ok: true });
-  }) as unknown as typeof fetch;
+  });
   return seen;
 }
 
@@ -141,9 +142,10 @@ describe("the local signer signs static keys from flat config", () => {
     ];
     for (const [declare, config, url, authorization] of cases) {
       const seen = capture();
-      const response = await credentialBroker(context(config), declare).request(
-        { target: "api", path: "items" },
-      );
+      const response = await brokerFor(context(config), declare).request({
+        target: "api",
+        path: "items",
+      });
       assert.equal(response.status, 200);
       assert.deepEqual(seen, [{ url, authorization }]);
     }
@@ -177,7 +179,7 @@ describe("the local signer signs static keys from flat config", () => {
     ];
     for (const [declare, config, authorization] of cases) {
       const seen = capture();
-      await credentialBroker(context(config), declare).request({
+      await brokerFor(context(config), declare).request({
         target: "api",
         path: "items",
       });
@@ -185,7 +187,7 @@ describe("the local signer signs static keys from flat config", () => {
     }
     const seen = capture();
     await assert.rejects(
-      credentialBroker(context({ apiKey: "k" }), cases[1][0]).request({
+      brokerFor(context({ apiKey: "k" }), cases[1][0]).request({
         target: "api",
         path: "items",
       }),
@@ -206,7 +208,7 @@ describe("the local signer signs static keys from flat config", () => {
     ]) {
       const seen = capture();
       await assert.rejects(
-        credentialBroker(context(config), declare).request({
+        brokerFor(context(config), declare).request({
           target: "api",
           path: "items",
         }),
@@ -219,7 +221,7 @@ describe("the local signer signs static keys from flat config", () => {
   it("a declaration without localSecret cannot sign a static key locally", async () => {
     const seen = capture();
     await assert.rejects(
-      credentialBroker(
+      brokerFor(
         context({ apiKey: "sk-1" }),
         declaration(bearer, undefined),
       ).request({ target: "api", path: "items" }),
@@ -230,13 +232,15 @@ describe("the local signer signs static keys from flat config", () => {
 
   it("refuses a redirect, and the error carries no secret", async () => {
     const declare = declaration(bearer, { secret: { field: "apiKey" } });
-    globalThis.fetch = (async () =>
-      new Response(null, {
-        status: 302,
-        headers: { location: "https://evil.example/" },
-      })) as unknown as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://evil.example/" },
+        }),
+    );
     await assert.rejects(
-      credentialBroker(context({ apiKey: "sk-1" }), declare).request({
+      brokerFor(context({ apiKey: "sk-1" }), declare).request({
         target: "api",
         path: "items",
       }),

@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import facebookGraph from "../../../runline-plugins/facebookGraph/src/index.js";
 import graphql from "../../../runline-plugins/graphql/src/index.js";
-import { createPluginAPI } from "../plugin/api.js";
-import type { ActionContext, RunlinePluginAPI } from "../plugin/types.js";
+import { createPluginAPI, type RunlinePluginAPI } from "../plugin/api.js";
+import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -33,7 +34,7 @@ type Seen = { url: string; headers: Record<string, string>; body?: unknown };
 
 function capture(reply: unknown) {
   const seen: Seen[] = [];
-  globalThis.fetch = (async (url, init) => {
+  stubFetch(async (url, init) => {
     seen.push({
       url: String(url),
       headers: Object.fromEntries(new Headers(init?.headers).entries()),
@@ -42,7 +43,7 @@ function capture(reply: unknown) {
         : undefined,
     });
     return Response.json(reply);
-  }) as typeof fetch;
+  });
   return seen;
 }
 

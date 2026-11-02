@@ -1,5 +1,9 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  type RunlinePluginAPI,
+} from "runline";
 import { veroCredential } from "./credentials.js";
 
 /** A Vero form call; object values travel JSON-encoded. */

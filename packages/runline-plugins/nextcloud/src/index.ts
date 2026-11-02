@@ -1,11 +1,13 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   answerFailed,
   credentialJson,
   credentialOk,
+  type HttpMethod,
   pathSegment,
   pathSegments,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { nextcloudCredential } from "./credentials.js";
 
 /** A file or folder path beneath the WebDAV base, each segment encoded. */

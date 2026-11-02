@@ -1,4 +1,4 @@
-import { configChoice, staticCredential } from "../../_shared/credentials.js";
+import { configChoice, staticCredential } from "runline";
 
 /** The Track and App API bases of each region, keyed by its Track host. */
 const REGIONS = {

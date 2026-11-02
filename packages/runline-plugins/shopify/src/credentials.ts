@@ -1,4 +1,4 @@
-import { hostLabel, staticCredential } from "../../_shared/credentials.js";
+import { hostLabel, staticCredential } from "runline";
 
 /**
  * An Admin API access token, sent as the X-Shopify-Access-Token header to

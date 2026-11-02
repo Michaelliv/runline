@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API access token, sent as a bearer to Drift's one API origin. */
 export const driftCredential = staticCredential({

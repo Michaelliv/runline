@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A personal access token, sent as a bearer to Asana's one API origin. */
 export const asanaCredential = staticCredential({

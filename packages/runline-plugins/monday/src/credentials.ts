@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API token, sent raw in the Authorization header to the GraphQL endpoint. */
 export const mondayCredential = staticCredential({

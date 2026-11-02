@@ -1,6 +1,5 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { pathSegment } from "../../_shared/credentials.js";
 import {
   LIST_INPUT_SCHEMA,
   TEAM_INPUT_SCHEMA,

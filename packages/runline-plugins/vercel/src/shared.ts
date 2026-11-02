@@ -1,7 +1,11 @@
-import { AuthError } from "runline";
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  AuthError,
+  credentialOk,
+  type HttpMethod,
+  type RunlinePluginAPI,
+} from "runline";
 import * as t from "typebox";
-import { credentialOk } from "../../_shared/credentials.js";
 import { vercelCredential } from "./credentials.js";
 
 export type Ctx = ActionContext;

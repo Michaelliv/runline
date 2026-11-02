@@ -3,7 +3,6 @@ import { shiftClient } from "../../_shared/shiftCredentials.js";
 export {
   type Ctx,
   enumSchema,
-  pathSegment,
   STRICT_OBJECT,
 } from "../../_shared/shiftCloud.js";
 

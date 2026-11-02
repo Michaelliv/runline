@@ -1,9 +1,11 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialOk,
+  type HttpMethod,
   jsonAnswer,
   pathSegments,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { jenkinsCredential } from "./credentials.js";
 
 async function jk(

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A project API key, sent as a bearer to Bannerbear's one API origin. */
 export const bannerbearCredential = staticCredential({

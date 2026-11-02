@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, afterEach, describe, it } from "node:test";
 import { putThroughGrant } from "../../../runline-plugins/_shared/shiftUpload.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -26,14 +27,11 @@ const grant = {
 describe("signed-grant upload", () => {
   it("PUTs the file bytes with the grant headers and a default content-type", async () => {
     let seen: { url: string; init?: RequestInit } | undefined;
-    globalThis.fetch = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       seen = { url: String(input), init };
       return new Response(null, { status: 200 });
-    }) as typeof fetch;
-    await putThroughGrant(grant, file, "audio/mpeg", bytes.byteLength);
+    });
+    await putThroughGrant(grant, file, "audio/mpeg");
     assert.equal(seen?.url, grant.url);
     assert.equal(seen?.init?.method, "PUT");
     const headers = new Headers(seen?.init?.headers);
@@ -46,33 +44,22 @@ describe("signed-grant upload", () => {
 
   it("keeps a content-type the grant already signs", async () => {
     let headers: Headers | undefined;
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit,
-    ) => {
+    stubFetch(async (_input: RequestInfo | URL, init?: RequestInit) => {
       headers = new Headers(init?.headers);
       return new Response(null, { status: 200 });
-    }) as typeof fetch;
+    });
     await putThroughGrant(
       { ...grant, headers: { "content-type": "application/octet-stream" } },
       file,
       "audio/mpeg",
-      bytes.byteLength,
     );
     assert.equal(headers?.get("content-type"), "application/octet-stream");
   });
 
   it("reports a rejected upload with its label and status", async () => {
-    globalThis.fetch = (async () =>
-      new Response(null, { status: 403 })) as typeof fetch;
+    stubFetch(async () => new Response(null, { status: 403 }));
     await assert.rejects(
-      putThroughGrant(
-        grant,
-        file,
-        "audio/mpeg",
-        bytes.byteLength,
-        "Media upload",
-      ),
+      putThroughGrant(grant, file, "audio/mpeg", "Media upload"),
       /Media upload failed: HTTP 403/,
     );
   });

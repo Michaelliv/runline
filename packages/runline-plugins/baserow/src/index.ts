@@ -1,5 +1,10 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { baserowCredential } from "./credentials.js";
 
 /** A path beneath the host's /api/ base, signed through the credential. */

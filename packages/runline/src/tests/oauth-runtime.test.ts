@@ -369,13 +369,14 @@ describe("OAuth2 definitions and protocol runtime", () => {
   });
 
   it("refuses provider headers that claim a protocol header, and a refresh bearer beside Basic client auth", async () => {
-    for (const headers of [
+    const claims: Array<Record<string, string>> = [
       { Authorization: "x" },
       { "content-type": "text/plain" },
       { Accept: "text/html" },
       { Host: "evil" },
       { "bad name": "x" },
-    ]) {
+    ];
+    for (const headers of claims) {
       const def = definition();
       if (!def.refresh) throw new Error("fixture");
       def.refresh.headers = headers;

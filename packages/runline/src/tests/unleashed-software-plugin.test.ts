@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import unleashedSoftware from "../../../runline-plugins/unleashedSoftware/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -22,7 +23,7 @@ describe("unleashedSoftware", () => {
       sig: string | null;
       type: string | null;
     }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       const headers = new Headers(init?.headers);
       seen.push({
         url: String(url),
@@ -31,7 +32,7 @@ describe("unleashedSoftware", () => {
         type: headers.get("content-type"),
       });
       return Response.json({ Items: [] });
-    }) as typeof fetch;
+    });
     const ctx: ActionContext = {
       connection: {
         name: "ul",

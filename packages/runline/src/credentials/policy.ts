@@ -1,4 +1,5 @@
 import { AuthError } from "../auth/errors.js";
+import { SIGV4_HEADERS, SIGV4_QUERY_PARAMETERS } from "./sigv4.js";
 import type {
   CredentialAuthentication,
   CredentialMethod,
@@ -32,6 +33,23 @@ export const TRANSPORT_HEADERS: readonly string[] = [
 /** The most any target may declare, and any host may allow, per request. */
 export const TARGET_TIMEOUT_LIMIT_MS = 60 * 60_000;
 export const TARGET_RESPONSE_LIMIT_BYTES = 1024 * 1024 * 1024;
+
+/**
+ * A secret sent exactly as it is (a token in a header, a key in a query,
+ * a signature's credential): printable ASCII with no whitespace. Anything
+ * else is refused as invalid_credentials before it reaches a request.
+ */
+export function secret(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    [...value].some(
+      (char) => char.charCodeAt(0) <= 32 || char.charCodeAt(0) > 126,
+    )
+  )
+    throw new AuthError("invalid_credentials");
+  return value;
+}
 
 /** A positive integer no larger than `limit`. */
 export function bounded(value: unknown, limit: number): boolean {
@@ -140,6 +158,7 @@ export function injectedHeaders(
 ): string[] {
   if (auth.kind === "none") return [];
   if (auth.kind === "oauth2") return ["authorization"];
+  if (auth.kind === "awsSigV4") return [...SIGV4_HEADERS];
   return placementsFor(auth, target).flatMap((placement) =>
     placement.in === "header" ||
     placement.in === "jwt" ||
@@ -152,14 +171,17 @@ export function injectedHeaders(
 }
 
 /**
- * Query parameters a method's authentication sets on `target`, a body
- * part's included (it reaches the query when a request has no body);
- * callers never set them.
+ * Query parameters a method's authentication owns on `target`, so callers
+ * never set them: the parameters a static method places, a body part's
+ * included (it reaches the query when a request has no body), and for
+ * SigV4 those of a presigned URL, which a header-signed request never
+ * carries.
  */
 export function injectedParams(
   auth: CredentialAuthentication,
   target: string,
 ): string[] {
+  if (auth.kind === "awsSigV4") return [...SIGV4_QUERY_PARAMETERS];
   if (auth.kind !== "static") return [];
   return placementsFor(auth, target).flatMap((placement) =>
     placement.in === "query" || placement.in === "body" ? [placement.name] : [],

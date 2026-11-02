@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An application token, added by the transport as the token field of Pushover's form body. */
 export const pushoverCredential = staticCredential({

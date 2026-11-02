@@ -1,9 +1,11 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
+  type HttpMethod,
   pathSegment,
   pathSegments,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { GITHUB_API_VERSION, githubCredential } from "./credentials.js";
 
 function gh(

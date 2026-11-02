@@ -6,6 +6,7 @@ import paypal from "../../../runline-plugins/paypal/src/index.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -46,7 +47,7 @@ for (const spec of [
       const action = resolve().actions.find((a) => a.name === spec.action);
       assert.ok(action);
       const calls: string[] = [];
-      globalThis.fetch = (async (url, init) => {
+      stubFetch(async (url, init) => {
         const headers = new Headers(init?.headers);
         if (String(url).includes("/token")) {
           assert.equal(init?.redirect, "error");
@@ -80,7 +81,7 @@ for (const spec of [
           });
         }
         return Response.json({ authorization: headers.get("authorization") });
-      }) as typeof fetch;
+      });
       const stores = ["alice", "bob"].map(
         (clientId) =>
           new MemoryConnectionProvider([
@@ -131,14 +132,14 @@ describe("bitwarden self-hosted", () => {
     const action = resolve().actions.find((a) => a.name === "group.list");
     assert.ok(action);
     const requests: string[] = [];
-    globalThis.fetch = (async (url) => {
+    stubFetch(async (url) => {
       requests.push(String(url));
       return Response.json({
         access_token: "t",
         expires_in: 3600,
         data: [],
       });
-    }) as typeof fetch;
+    });
     const invoke = async (config: Record<string, unknown>) => {
       const store = new MemoryConnectionProvider([
         {

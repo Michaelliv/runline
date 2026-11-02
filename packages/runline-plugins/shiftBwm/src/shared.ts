@@ -1,7 +1,12 @@
-import { type ActionContext, AuthError, type HttpMethod } from "runline";
+import {
+  type ActionContext,
+  AuthError,
+  brokerFor,
+  errorIdentifier,
+  failureMessage,
+  type HttpMethod,
+} from "runline";
 import * as t from "typebox";
-import { credentialBroker } from "../../_shared/credentialAdapter.js";
-import { errorIdentifier, failureMessage } from "../../_shared/credentials.js";
 import { SHIFT_API_URL, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
 import { shiftCredential, shiftPath } from "../../_shared/shiftCredentials.js";
 import {
@@ -37,7 +42,7 @@ function brokeredFetch(ctx: Ctx): BwmFetch {
     const url = new URL(input);
     if (url.origin !== SHIFT_API_URL)
       throw new AuthError("request_not_allowed");
-    return credentialBroker(ctx, shiftBwmCredential).request({
+    return brokerFor(ctx, shiftBwmCredential).request({
       target: "api",
       path: `${shiftPath(url.pathname)}${url.search}`,
       method: (init?.method ?? "GET") as HttpMethod,

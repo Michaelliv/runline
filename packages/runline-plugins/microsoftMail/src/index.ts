@@ -4,17 +4,21 @@
  * Auth: Microsoft identity platform OAuth2 (delegated, acts as the signed-in
  * user → /me) seeded by the OAuth flow; or app-only client credentials
  * (set tenantId/clientId/clientSecret + userUpn) for an unattended service
- * mailbox. Shared "microsoft" OAuth client family (authUrl on
- * login.microsoftonline.com), so one Entra app is reused across the Microsoft
- * plugins. See _shared/microsoftAuth.ts.
+ * mailbox. Delegated consent belongs to the "microsoft" grant, so one Entra
+ * app and one cached token serve every Microsoft plugin. See
+ * _shared/microsoftAuth.ts.
  *
  * Graph delegated scopes: Mail.Send, Mail.ReadWrite, Mail.Read.
  */
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import {
   graphRequest,
   microsoftCredential,
-  microsoftSetupHelp,
+  microsoftOAuth,
   userBase,
 } from "../../_shared/microsoftAuth.js";
 
@@ -97,12 +101,9 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
     },
   });
 
-  rl.setOAuth({
-    authUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-    tokenUrl: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    scopes: [...SCOPES, "offline_access"],
-    setupHelp: microsoftSetupHelp("Mail.Send, Mail.ReadWrite, Mail.Read"),
-  });
+  rl.setOAuth(
+    microsoftOAuth(SCOPES, "Mail.Send, Mail.ReadWrite, Mail.Read"),
+  );
 
   rl.registerAction("mail.send", {
     access: "write",
@@ -204,7 +205,7 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
         NAME,
         SCOPES,
         "GET",
-        `${userBase(ctx)}/messages/${encodeURIComponent(p.id)}`,
+        `${userBase(ctx)}/messages/${pathSegment(p.id)}`,
       );
     },
   });

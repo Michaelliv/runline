@@ -1,10 +1,12 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
   credentialOk,
+  type HttpMethod,
   pathSegment,
   pathSegments,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { databricksCredential } from "./credentials.js";
 
 function api(

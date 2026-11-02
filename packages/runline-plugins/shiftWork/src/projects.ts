@@ -1,11 +1,10 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   cursorSchema,
   enumSchema,
   idSchema,
   PROJECT_STATUS,
-  pathSegment,
   request,
   type ShiftProject,
   type ShiftProjectProgress,

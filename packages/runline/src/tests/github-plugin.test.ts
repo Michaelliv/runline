@@ -6,6 +6,7 @@ import { ExecutionEngine } from "../core/engine.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { PluginRegistry } from "../plugin/registry.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -17,12 +18,6 @@ function makeGithub(): PluginDef {
   const { api, resolve } = createPluginAPI("github");
   github(api);
   return resolve();
-}
-
-function getAction(plugin: PluginDef, name: string) {
-  const action = plugin.actions.find((a) => a.name === name);
-  assert.ok(action, `expected github.${name} to be registered`);
-  return action;
 }
 
 function ctx(): ActionContext {
@@ -42,14 +37,14 @@ function ctx(): ActionContext {
 }
 
 function mockJsonFetch(assertRequest: (url: URL, init?: RequestInit) => void) {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     assertRequest(url, init);
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
-  }) as typeof fetch;
+  });
 }
 
 describe("github plugin commit and branch actions", () => {

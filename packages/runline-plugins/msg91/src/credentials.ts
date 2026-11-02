@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** The auth key, appended by the transport as the authkey query parameter. */
 export const msg91Credential = staticCredential({

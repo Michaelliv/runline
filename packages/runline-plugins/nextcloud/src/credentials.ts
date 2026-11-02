@@ -1,5 +1,4 @@
-import { AuthError } from "runline";
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { AuthError, httpsBase, staticCredential } from "runline";
 
 /**
  * A username and password (or app token) as HTTP Basic, on two targets of

@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import strapi from "../../../runline-plugins/strapi/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -38,7 +39,7 @@ describe("strapi with an email and password", () => {
   it("logs in for a JWT, keeps it, and signs entries with it", async () => {
     const seen: Array<{ url: string; auth: string | null; body?: unknown }> =
       [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         auth: new Headers(init?.headers).get("authorization"),
@@ -53,7 +54,7 @@ describe("strapi with an email and password", () => {
       return String(url).endsWith("/auth/local")
         ? Response.json({ jwt: "jwt1", user: { id: 1 } })
         : Response.json({ data: [{ id: 1 }] });
-    }) as typeof fetch;
+    });
     const config: Record<string, unknown> = {
       url: "https://cms.example.com",
       email: "me@x.io",
@@ -84,12 +85,12 @@ describe("strapi with an email and password", () => {
 
   it("uses the v3 paths, with no /api prefix", async () => {
     const seen: string[] = [];
-    globalThis.fetch = (async (url) => {
+    stubFetch(async (url) => {
       seen.push(String(url));
       return String(url).endsWith("/auth/local")
         ? Response.json({ jwt: "j" })
         : Response.json({ id: 1 });
-    }) as typeof fetch;
+    });
     await run(
       "entry.get",
       { contentType: "articles", entryId: "a b" },
@@ -107,9 +108,9 @@ describe("strapi with an email and password", () => {
   });
 
   it("refuses an API version it does not know", async () => {
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("no request expected");
-    }) as typeof fetch;
+    });
     await assert.rejects(
       run(
         "entry.list",

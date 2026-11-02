@@ -4,7 +4,6 @@ export {
   cursorSchema,
   enumSchema,
   idSchema,
-  pathSegment,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,
 } from "../../_shared/shiftCloud.js";

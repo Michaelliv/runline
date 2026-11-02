@@ -1,11 +1,10 @@
-import type { ActionContext } from "runline";
-import { baseUrl, pathSegment } from "../../_shared/shiftCloud.js";
+import { type ActionContext, pathSegment } from "runline";
+import { baseUrl } from "../../_shared/shiftCloud.js";
 import { shiftClient } from "../../_shared/shiftCredentials.js";
 
 export {
   enumSchema,
   idSchema,
-  pathSegment,
   STRICT_OBJECT,
   timestampSchema,
 } from "../../_shared/shiftCloud.js";

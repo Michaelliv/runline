@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import coda from "../../../runline-plugins/coda/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -16,7 +17,7 @@ describe("coda table.deleteRow", () => {
     const action = resolve().actions.find((a) => a.name === "table.deleteRow");
     assert.ok(action);
     const sent: Array<{ url: string; method?: string; body?: string }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       sent.push({
         url: String(url),
         method: init?.method,
@@ -25,7 +26,7 @@ describe("coda table.deleteRow", () => {
           : undefined,
       });
       return Response.json({ requestId: "r" });
-    }) as typeof fetch;
+    });
     const ctx: ActionContext = {
       connection: {
         name: "coda",

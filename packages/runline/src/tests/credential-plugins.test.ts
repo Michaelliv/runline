@@ -29,6 +29,7 @@ import type { CredentialSelection } from "../credentials/types.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
 import type { CredentialFixture } from "./credential-fixtures/fixture.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = join(here, "credential-fixtures");
@@ -129,10 +130,10 @@ function context(
 
 function wire(handler: (url: string, init: RequestInit) => Response) {
   const seen: Array<{ url: string; init: RequestInit }> = [];
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
     seen.push({ url: String(input), init: init ?? {} });
     return handler(String(input), init ?? {});
-  }) as typeof fetch;
+  });
   return seen;
 }
 
@@ -145,9 +146,9 @@ describe("credential fixtures", () => {
 for (const fixture of fixtures) {
   describe(`${fixture.name} signs through its declared credential`, () => {
     it("brokered: no secret in config, no fetch, no credential of its own", async () => {
-      globalThis.fetch = (async () => {
+      stubFetch(async () => {
         throw new Error("a brokered plugin must not reach the network itself");
-      }) as unknown as typeof fetch;
+      });
       const requests: AuthenticatedRequest[] = [];
       const broker: CredentialBroker = {
         async request(input) {

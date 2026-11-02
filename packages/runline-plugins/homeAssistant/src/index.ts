@@ -1,9 +1,11 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
   credentialOk,
+  type HttpMethod,
   pathSegment,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { homeAssistantCredential } from "./credentials.js";
 
 /** One Home Assistant call: every endpoint is a path beneath /api/. */

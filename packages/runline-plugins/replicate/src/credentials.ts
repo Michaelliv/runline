@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /**
  * An API token, sent as a bearer to Replicate's v1 API. `Prefer: wait`

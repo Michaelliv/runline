@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key and secret, added by the transport as the api_key and api_secret fields of Vonage's SMS form. */
 export const vonageCredential = staticCredential({

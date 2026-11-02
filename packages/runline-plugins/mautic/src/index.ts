@@ -1,9 +1,11 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   answerFailed,
   credentialJson,
+  type HttpMethod,
   pathSegment,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { mauticCredential } from "./credentials.js";
 
 async function req(

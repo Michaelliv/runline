@@ -15,8 +15,9 @@ import pipedrive from "../../../runline-plugins/pipedrive/src/index.js";
 import slack from "../../../runline-plugins/slack/src/index.js";
 import telegram from "../../../runline-plugins/telegram/src/index.js";
 import yourls from "../../../runline-plugins/yourls/src/index.js";
-import { createPluginAPI } from "../plugin/api.js";
-import type { ActionContext, RunlinePluginAPI } from "../plugin/types.js";
+import { createPluginAPI, type RunlinePluginAPI } from "../plugin/api.js";
+import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -59,18 +60,18 @@ describe("failures inside a 2xx answer", () => {
     [emelia, "emelia", "campaign.get", { campaignId: "1" }, { apiKey: "e" }],
   ] as const)
     it(`${name} reports a GraphQL error by its code, path and message`, async () => {
-      globalThis.fetch = (async () =>
-        Response.json(graphqlErrors)) as typeof fetch;
+      stubFetch(async () => Response.json(graphqlErrors));
       await assert.rejects(run(plugin, name, action, input, config), {
         message: `${name}: request failed (NOT_FOUND, param: node): Entity not found: Issue`,
       });
     });
 
   it("mautic reports its error code and message", async () => {
-    globalThis.fetch = (async () =>
+    stubFetch(async () =>
       Response.json({
         errors: [{ code: 404, message: "Item was not found." }],
-      })) as typeof fetch;
+      }),
+    );
     await assert.rejects(
       run(
         mautic,
@@ -84,8 +85,7 @@ describe("failures inside a 2xx answer", () => {
   });
 
   it("mautic reports a failure whose errors are not a list", async () => {
-    globalThis.fetch = (async () =>
-      Response.json({ errors: { message: "odd shape" } })) as typeof fetch;
+    stubFetch(async () => Response.json({ errors: { message: "odd shape" } }));
     await assert.rejects(
       run(
         mautic,
@@ -99,12 +99,13 @@ describe("failures inside a 2xx answer", () => {
   });
 
   it("pipedrive reports its error code and message", async () => {
-    globalThis.fetch = (async () =>
+    stubFetch(async () =>
       Response.json({
         success: false,
         error: "Deal not found",
         errorCode: 404,
-      })) as typeof fetch;
+      }),
+    );
     await assert.rejects(
       run(pipedrive, "pipedrive", "deal.get", { id: 1 }, { apiToken: "pd" }),
       { message: "pipedrive: request failed (404): Deal not found" },
@@ -112,12 +113,13 @@ describe("failures inside a 2xx answer", () => {
   });
 
   it("slack reports its error code", async () => {
-    globalThis.fetch = (async () =>
+    stubFetch(async () =>
       Response.json({
         ok: false,
         error: "channel_not_found",
         detail: "private",
-      })) as typeof fetch;
+      }),
+    );
     await assert.rejects(
       run(
         slack,
@@ -131,12 +133,13 @@ describe("failures inside a 2xx answer", () => {
   });
 
   it("yourls reports its error code and message", async () => {
-    globalThis.fetch = (async () =>
+    stubFetch(async () =>
       Response.json({
         status: "fail",
         code: "error:keyword",
         message: "Short URL private-keyword already exists",
-      })) as typeof fetch;
+      }),
+    );
     await assert.rejects(
       run(
         yourls,
@@ -153,12 +156,13 @@ describe("failures inside a 2xx answer", () => {
   });
 
   it("telegram reports its error code and description", async () => {
-    globalThis.fetch = (async () =>
+    stubFetch(async () =>
       Response.json({
         ok: false,
         error_code: 400,
         description: "Bad Request: private chat text",
-      })) as typeof fetch;
+      }),
+    );
     await assert.rejects(
       run(
         telegram,

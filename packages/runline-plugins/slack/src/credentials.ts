@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A bot or user token, sent as a bearer to Slack's one API origin. */
 export const slackCredential = staticCredential({

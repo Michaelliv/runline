@@ -1,5 +1,10 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { cortexCredential, MAX_WAIT_SECONDS } from "./credentials.js";
 
 function apiRequest(
@@ -179,7 +184,7 @@ export default function cortex(rl: RunlinePluginAPI) {
         pap = 2,
         message,
       } = input as Record<string, unknown>;
-      const entityData = {
+      const entityData: Record<string, unknown> = {
         _type: entityType,
         ...(data as Record<string, unknown>),
       };

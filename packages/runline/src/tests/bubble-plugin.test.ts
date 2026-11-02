@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import bubble from "../../../runline-plugins/bubble/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -29,10 +30,10 @@ function list(config: Record<string, unknown>) {
 describe("bubble", () => {
   it("refuses a self-hosted connection without a domain instead of sending its token to bubbleapps.io", async () => {
     const urls: string[] = [];
-    globalThis.fetch = (async (url) => {
+    stubFetch(async (url) => {
       urls.push(String(url));
       return Response.json({ response: { results: [], remaining: 0 } });
-    }) as typeof fetch;
+    });
     await list({});
     assert.equal(urls.length, 1);
     await assert.rejects(list({ hosting: "selfHosted" }), {
@@ -43,11 +44,11 @@ describe("bubble", () => {
 
   it("stops paging when a page omits its remaining count", async () => {
     let calls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       calls++;
       if (calls > 3) throw new Error("unbounded paging");
       return Response.json({ response: { results: [{ id: calls }] } });
-    }) as typeof fetch;
+    });
     assert.deepEqual(await list({}), [{ id: 1 }]);
   });
 });

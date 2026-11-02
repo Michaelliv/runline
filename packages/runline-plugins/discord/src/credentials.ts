@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A bot token, sent as `Authorization: Bot {token}` to Discord's v10 API. */
 export const discordCredential = staticCredential({

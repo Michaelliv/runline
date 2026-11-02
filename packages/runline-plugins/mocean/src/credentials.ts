@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key and secret, added by the transport as the mocean-api-key and mocean-api-secret fields of every Mocean form. */
 export const moceanCredential = staticCredential({

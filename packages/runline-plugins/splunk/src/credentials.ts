@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** An auth token, sent as a bearer to the configured management origin. */
 export const splunkCredential = staticCredential({

@@ -3,13 +3,11 @@ import {
   type CredentialDeclaration,
   type CredentialTarget,
   type CredentialType,
-} from "runline";
-import {
   configChoice,
   grantSchema,
   httpsBase,
   staticCredential,
-} from "../../_shared/credentials.js";
+} from "runline";
 
 /**
  * A path beneath the org's My Domain URL. A Lightning UI host serves no

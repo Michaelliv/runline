@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An auth token, added by the transport as the auth_token field of every Vero form. */
 export const veroCredential = staticCredential({

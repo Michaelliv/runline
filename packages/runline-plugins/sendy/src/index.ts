@@ -1,5 +1,8 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialOk } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialOk,
+  type RunlinePluginAPI,
+} from "runline";
 import { sendyCredential } from "./credentials.js";
 
 /** A Sendy form call; Sendy answers in plain text, `boolean` asking for 1 on success. */

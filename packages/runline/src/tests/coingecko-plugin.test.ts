@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import coingecko from "../../../runline-plugins/coingecko/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -16,13 +17,13 @@ describe("coingecko without a key", () => {
     const action = resolve().actions.find((a) => a.name === "coin.list");
     assert.ok(action);
     const seen: Array<{ url: string; key: string | null }> = [];
-    globalThis.fetch = (async (url, init) => {
+    stubFetch(async (url, init) => {
       seen.push({
         url: String(url),
         key: new Headers(init?.headers).get("x-cg-demo-api-key"),
       });
       return Response.json([]);
-    }) as typeof fetch;
+    });
     const ctx: ActionContext = {
       connection: { name: "cg", plugin: "coingecko", config: {} },
       log: { info() {}, warn() {}, error() {} },

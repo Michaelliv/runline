@@ -1,8 +1,4 @@
-import {
-  configFlag,
-  httpsBase,
-  staticCredential,
-} from "../../_shared/credentials.js";
+import { configFlag, httpsBase, staticCredential } from "runline";
 
 /**
  * A long-lived access token, sent as a bearer to the instance's own /api/

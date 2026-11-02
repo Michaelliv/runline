@@ -1,10 +1,11 @@
 import {
-  AuthError,
   type ActionContext,
+  AuthError,
+  credentialOk,
   type HttpMethod,
+  pathSegment,
   type RunlinePluginAPI,
 } from "runline";
-import { credentialOk, pathSegment } from "../../_shared/credentials.js";
 import { sendgridCredential } from "./credentials.js";
 
 /** A JSON request whose response headers stay readable (mail.send's x-message-id). */

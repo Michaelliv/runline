@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** The account email and API key as the Basic pair, to uProc's one
  *  process endpoint. */

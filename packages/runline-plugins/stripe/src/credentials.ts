@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A secret key, sent as a bearer to Stripe's v1 API base. */
 export const stripeCredential = staticCredential({

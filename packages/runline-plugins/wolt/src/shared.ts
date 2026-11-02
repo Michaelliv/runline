@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { type ActionContext, AuthError, type HttpMethod } from "runline";
-import { credentialRequest, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  AuthError,
+  credentialRequest,
+  type HttpMethod,
+  pathSegment,
+} from "runline";
 import { arr, num, numOrNull, obj, pick } from "../../_shared/provider.js";
 import {
   CONSUMER,

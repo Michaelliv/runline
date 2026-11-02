@@ -1,5 +1,10 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { HIGHLEVEL_VERSION, highlevelCredential } from "./credentials.js";
 
 function locationOf(ctx: ActionContext): string {
@@ -74,7 +79,10 @@ export default function highlevel(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const locationId = locationOf(ctx);
-      const body = { ...(input as Record<string, unknown>), locationId };
+      const body: Record<string, unknown> = {
+        ...(input as Record<string, unknown>),
+        locationId,
+      };
       if (typeof body.tags === "string")
         body.tags = (body.tags as string)
           .split(",")
@@ -209,7 +217,10 @@ export default function highlevel(rl: RunlinePluginAPI) {
     },
     async execute(input, ctx) {
       const locationId = locationOf(ctx);
-      const body = { ...(input as Record<string, unknown>), locationId };
+      const body: Record<string, unknown> = {
+        ...(input as Record<string, unknown>),
+        locationId,
+      };
       if (body.stageId) {
         body.pipelineStageId = body.stageId;
         delete body.stageId;

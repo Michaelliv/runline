@@ -1,5 +1,9 @@
-import { AuthError, type CredentialDeclaration } from "runline";
-import { grantSchema, pathSegment } from "../../_shared/credentials.js";
+import {
+  AuthError,
+  type CredentialDeclaration,
+  grantSchema,
+  pathSegment,
+} from "runline";
 
 export const HOST = "b2cgateway.gett.com";
 export const APP_VERSION = "10.48.187";

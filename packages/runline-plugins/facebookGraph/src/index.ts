@@ -1,5 +1,10 @@
-import { AuthError, type HttpMethod, type RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  AuthError,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { facebookGraphCredential } from "./credentials.js";
 
 /** Meta's hosts, by the target each is declared as. */

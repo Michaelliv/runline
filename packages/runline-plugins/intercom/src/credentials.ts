@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An access token, sent as a bearer to Intercom's one API origin. */
 export const intercomCredential = staticCredential({

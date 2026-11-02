@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the API-Key header to urlscan.io's v1 API. */
 export const urlscanioCredential = staticCredential({

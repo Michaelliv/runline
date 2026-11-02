@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, added by the transport as the api_key field of every UptimeRobot form. */
 export const uptimerobotCredential = staticCredential({

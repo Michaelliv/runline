@@ -17,6 +17,7 @@ import elevenlabs from "../../../runline-plugins/elevenlabs/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import { helpInputs } from "../plugin/schema.js";
 import type { ActionContext } from "../plugin/types.js";
+import { getAction, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -40,19 +41,17 @@ const ctx: ActionContext = {
   async updateConnection() {},
 };
 function action(name: string) {
-  const a = plugin.actions.find((a) => a.name === name);
-  assert.ok(a);
-  return a;
+  return getAction(plugin, name);
 }
 function run(name: string, input: unknown = {}) {
   return action(name).execute(input, ctx);
 }
 function mock(body: unknown = {}) {
   const calls: { url: string; init: RequestInit }[] = [];
-  globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+  stubFetch(async (url: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(url), init: init ?? {} });
     return body instanceof Response ? body : Response.json(body);
-  }) as typeof fetch;
+  });
   return calls;
 }
 function audio() {
@@ -589,10 +588,7 @@ describe("elevenlabs plugin", () => {
       ["transcription.create", { filePath: source }],
     ] as const) {
       let calls = 0;
-      globalThis.fetch = (async (
-        _url: RequestInfo | URL,
-        init?: RequestInit,
-      ) => {
+      stubFetch(async (_url: RequestInfo | URL, init?: RequestInit) => {
         calls++;
         return new Response(
           new ReadableStream({
@@ -608,7 +604,7 @@ describe("elevenlabs plugin", () => {
             headers: { "content-type": "audio/mpeg", "request-id": "stalled" },
           },
         );
-      }) as typeof fetch;
+      });
       await assert.rejects(
         () => run(name, { ...input, timeoutMs: 1000 }),
         /timed out.*do not retry automatically/,

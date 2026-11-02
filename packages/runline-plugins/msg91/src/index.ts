@@ -1,5 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
-import { credentialOk } from "../../_shared/credentials.js";
+import { credentialOk, type RunlinePluginAPI } from "runline";
 import { msg91Credential } from "./credentials.js";
 
 export default function msg91(rl: RunlinePluginAPI) {

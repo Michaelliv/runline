@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   ATLAS_BASE,
@@ -14,7 +14,6 @@ import {
   GRAPH_RELATION_KIND,
   GRAPH_TASK_MODE,
   idSchema,
-  pathSegment,
   request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,

@@ -18,9 +18,13 @@
  * inline next to the instruction and writes the edited result to disk.
  */
 
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  credentialJson,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import * as t from "typebox";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
 import {
   readImageInput,
   type SavedMedia,
@@ -182,7 +186,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("googleImage: prompt is required");
       }
-      const img = readImageInput(p.imagePath, "googleImage");
+      const img = await readImageInput(p.imagePath, "googleImage");
 
       const model = p.model ?? "gemini-2.5-flash-image";
       const data = await generateContent(ctx, model, {

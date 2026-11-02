@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import gitlab from "../../../runline-plugins/gitlab/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -24,7 +25,7 @@ function run(action: string, input: Record<string, unknown>) {
 
 function capture() {
   const seen: Array<{ url: string; method?: string; body?: unknown }> = [];
-  globalThis.fetch = (async (url, init) => {
+  stubFetch(async (url, init) => {
     seen.push({
       url: String(url),
       method: init?.method,
@@ -33,7 +34,7 @@ function capture() {
         : undefined,
     });
     return Response.json({});
-  }) as typeof fetch;
+  });
   return seen;
 }
 

@@ -10,6 +10,7 @@ import type {
 } from "../credentials/transport.js";
 import type { PluginRegistry } from "../plugin/registry.js";
 import {
+  dropUndefined,
   formatValidationError,
   helpInputs,
   isTypedInputSchema,
@@ -838,6 +839,14 @@ const { FerroSearch } = require(${JSON.stringify(ferrosearchPath)});
 // The host's own validator, for actions.check on typed schemas.
 const { Check: __schemaCheck, Errors: __schemaErrors } = require(${JSON.stringify(typeboxValuePath)});
 
+// The host's own normalizeActionInput, by its source, so a check sees the
+// arguments exactly as validation and execute do. The closure keeps the
+// helper names it calls out of the scope plugin globals are declared in.
+const __normalizeActionInput = (() => {
+${dropUndefined.toString()}
+return ${normalizeActionInput.toString()};
+})();
+
 const __help = ${JSON.stringify(helpData)};
 
 const __makeProxy = (path = []) => new Proxy(() => undefined, {
@@ -1012,14 +1021,10 @@ const __actionsApi = {
       return { ok: false, error: 'Unknown action: ' + path, suggestions: near };
     }
     const signature = __formatSignature(hit.plugin, hit.entry);
-    if (hit.entry.schema) {
-      // Mirror the host's normalizeActionInput: a check with no args is
-      // a call with an empty argument set; anything else — null, a
-      // scalar — is validated as given, exactly as execute would.
-      return __checkTyped(hit.entry, args === undefined ? {} : args, signature);
-    }
+    const input = __normalizeActionInput(args);
+    if (hit.entry.schema) return __checkTyped(hit.entry, input, signature);
     const inputs = hit.entry.inputs || {};
-    const provided = args && typeof args === 'object' ? args : {};
+    const provided = input && typeof input === 'object' ? input : {};
     const missing = [];
     const unknown = [];
     const typeErrors = [];

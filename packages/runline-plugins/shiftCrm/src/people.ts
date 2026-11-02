@@ -1,4 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import {
   assertTimeOrder,
@@ -9,7 +9,6 @@ import {
   enumSchema,
   idSchema,
   paginationFields,
-  pathSegment,
   request,
   STRICT_OBJECT,
   STRICT_UPDATE_OBJECT,

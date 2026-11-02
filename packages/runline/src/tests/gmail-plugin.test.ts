@@ -6,6 +6,7 @@ import gmail, {
   encodeEmail,
 } from "../../../runline-plugins/gmail/src/index.js";
 import { Runline } from "../sdk.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const gmailActions = Runline.create({ plugins: [gmail] }).actions();
 
@@ -79,18 +80,20 @@ const gmailValidInputs: Record<string, Record<string, unknown>> = {
 describe("gmail plugin send errors", () => {
   it("nudges agents to check sent mail with Gmail actions before retrying", async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          error: {
-            code: 429,
-            message:
-              "Too many requests: User-rate limit exceeded (Mail sending)",
-            errors: [{ reason: "userRateLimitExceeded" }],
-          },
-        }),
-        { status: 429, headers: { "Content-Type": "application/json" } },
-      )) as typeof fetch;
+    stubFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 429,
+              message:
+                "Too many requests: User-rate limit exceeded (Mail sending)",
+              errors: [{ reason: "userRateLimitExceeded" }],
+            },
+          }),
+          { status: 429, headers: { "Content-Type": "application/json" } },
+        ),
+    );
 
     try {
       const rl = Runline.create({
@@ -272,7 +275,7 @@ describe("gmail plugin TypeBox schemas", () => {
     assert.equal(accepts("message.send", { ...base, content: "hello" }), false);
     assert.equal(accepts("message.send", { ...base, text: "" }), false);
     assert.equal(accepts("message.send", { ...base, text: "   " }), false);
-    // html was removed in favor of jsx; the strict schema rejects it.
+    // jsx is the only HTML input; the strict schema rejects html.
     assert.equal(accepts("message.send", { ...base, html: "<p>x</p>" }), false);
     assert.equal(accepts("message.send", { ...base, attachments: [] }), false);
   });
@@ -426,10 +429,10 @@ describe("gmail plugin TypeBox schemas", () => {
   it("rejects SHFT-545 inputs in the execution engine before fetching", async () => {
     const originalFetch = globalThis.fetch;
     let fetchCalls = 0;
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       fetchCalls += 1;
       throw new Error("fetch should not run");
-    }) as typeof fetch;
+    });
 
     try {
       const rl = Runline.create({
@@ -533,6 +536,33 @@ describe("gmail plugin MIME encoding", () => {
     assert.ok(raw.length > 0);
   });
 
+  it("attaches a googleDrive.file.download result unedited, named by it", () => {
+    const download = {
+      name: "report.csv",
+      mimeType: "text/csv",
+      size: 5,
+      contentBase64: Buffer.from("a,b\n1").toString("base64"),
+    };
+    assert.equal(
+      accepts("message.send", {
+        to: "recipient@example.com",
+        subject: "Drive",
+        attachments: [{ contentBase64: download }],
+      }),
+      true,
+    );
+    const message = Buffer.from(
+      encodeEmail({
+        to: "recipient@example.com",
+        subject: "Drive",
+        attachments: [{ contentBase64: download }],
+      }),
+      "base64url",
+    ).toString("utf8");
+    assert.match(message, /Content-Type: text\/csv; name="report.csv"/);
+    assert.match(message, /filename="report.csv"/);
+  });
+
   it("normalizes base64url attachment content into MIME-safe base64", () => {
     const bytes = Buffer.from([251, 255, 254, 250, 239, 190]);
     const raw = encodeEmail({
@@ -554,7 +584,7 @@ describe("gmail plugin MIME encoding", () => {
     assert.doesNotMatch(message, /-__-/);
   });
 
-  it("throws a clear error for invalid attachment base64 characters", () => {
+  it("throws a clear error for invalid attachment base64", () => {
     assert.throws(
       () =>
         encodeEmail({
@@ -568,7 +598,7 @@ describe("gmail plugin MIME encoding", () => {
             },
           ],
         }),
-      /gmail: attachment 0 contentBase64 contains invalid base64 characters/,
+      /gmail: attachment 0 contentBase64 is not valid base64/,
     );
   });
 

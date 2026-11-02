@@ -14,8 +14,7 @@
  * style if you've set one up.
  */
 
-import type { RunlinePluginAPI } from "runline";
-import { credentialJson, multipartBody } from "../../_shared/credentials.js";
+import { credentialJson, multipartBody, type RunlinePluginAPI } from "runline";
 import {
   readImageInput,
   SEND_FILE_NOTE,
@@ -201,7 +200,7 @@ export default function recraft(rl: RunlinePluginAPI) {
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("recraft: prompt is required");
       }
-      const img = readImageInput(p.imagePath, "recraft");
+      const img = await readImageInput(p.imagePath, "recraft");
 
       const form = new FormData();
       form.append(

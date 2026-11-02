@@ -1,6 +1,5 @@
-import type { RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { pathSegment } from "../../_shared/credentials.js";
 import { api, compactRecord } from "./shared.js";
 
 export function registerCaptchaActions(rl: RunlinePluginAPI) {

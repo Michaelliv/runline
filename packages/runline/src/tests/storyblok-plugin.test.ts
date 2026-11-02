@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import storyblok from "../../../runline-plugins/storyblok/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -29,10 +30,10 @@ function run(action: string, input: Record<string, unknown>) {
 describe("storyblok with only a content token", () => {
   it("reads content, and refuses the management API before any request", async () => {
     const seen: string[] = [];
-    globalThis.fetch = (async (url) => {
+    stubFetch(async (url) => {
       seen.push(String(url));
       return Response.json({ stories: [] });
-    }) as typeof fetch;
+    });
     await run("content.story.list", {});
     await assert.rejects(run("management.story.list", { spaceId: "1" }), {
       code: "invalid_credentials",

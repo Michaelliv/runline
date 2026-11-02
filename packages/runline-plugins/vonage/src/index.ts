@@ -1,5 +1,4 @@
-import type { RunlinePluginAPI } from "runline";
-import { credentialJson } from "../../_shared/credentials.js";
+import { credentialJson, type RunlinePluginAPI } from "runline";
 import { vonageCredential } from "./credentials.js";
 
 export default function vonage(rl: RunlinePluginAPI) {

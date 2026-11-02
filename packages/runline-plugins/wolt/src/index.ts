@@ -1,6 +1,9 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  type RunlinePluginAPI,
+  refuseUnderHost,
+} from "runline";
 import * as t from "typebox";
-import { refuseUnderHost } from "../../_shared/credentials.js";
 import {
   discoverPaymentMethod,
   listAddresses,

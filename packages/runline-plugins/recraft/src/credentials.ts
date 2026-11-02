@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key as a bearer to Recraft's image generation endpoints. */
 export const recraftCredential = staticCredential({

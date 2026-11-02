@@ -1,6 +1,5 @@
-import type { ActionContext } from "runline";
+import { type ActionContext, pathSegment } from "runline";
 import * as t from "typebox";
-import { pathSegment } from "../../_shared/credentials.js";
 import { googleJsonRequest } from "../../_shared/googleAuth.js";
 import { RawGoogleObject } from "../../_shared/googleSchemas.js";
 

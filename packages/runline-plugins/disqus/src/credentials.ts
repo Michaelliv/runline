@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An access token, sent as the api_key query parameter on read-only GETs. */
 export const disqusCredential = staticCredential({

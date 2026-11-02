@@ -1,5 +1,10 @@
-import { type ActionContext, AuthError, type RunlinePluginAPI } from "runline";
-import { answerFailed, credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  AuthError,
+  answerFailed,
+  credentialJson,
+  type RunlinePluginAPI,
+} from "runline";
 import { odooCredential } from "./credentials.js";
 
 /**

@@ -1,4 +1,4 @@
-import { hostLabel, staticCredential } from "../../_shared/credentials.js";
+import { hostLabel, staticCredential } from "runline";
 
 /**
  * The account email and REST API key, sent as HTTP Basic to the

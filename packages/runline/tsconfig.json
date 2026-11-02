@@ -16,11 +16,5 @@
     "allowJs": true
   },
   "include": ["src"],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "plugins",
-    "src/**/*.test.ts",
-    "src/tests/credential-fixtures"
-  ]
+  "exclude": ["node_modules", "dist", "plugins", "src/tests"]
 }

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An OAuth2 access token, sent as a bearer to Strava's one API origin. */
 export const stravaCredential = staticCredential({

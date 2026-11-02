@@ -172,7 +172,7 @@ describe("credential registry", () => {
         d.methods.apiKey.authentication = {
           ...header("X-Api-Key"),
           field: "missing",
-        };
+        } as typeof d.methods.apiKey.authentication;
       },
       (d) => {
         d.methods.apiKey.schema = t.Object({ key: t.String() });

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A Google AI API key, appended by the transport as the `key` query
  *  parameter on the Generative Language API. */

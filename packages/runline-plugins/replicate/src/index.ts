@@ -19,12 +19,13 @@
  */
 
 import { Buffer } from "node:buffer";
-import type { ActionContext, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialJson,
   pathSegments,
   pathWithin,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import {
   readImageInput,
   type SavedMedia,
@@ -312,7 +313,7 @@ export default function replicate(rl: RunlinePluginAPI) {
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("replicate: prompt is required");
       }
-      const img = readImageInput(p.imagePath, "replicate");
+      const img = await readImageInput(p.imagePath, "replicate");
 
       const model = p.model ?? "black-forest-labs/flux-kontext-pro";
       const imageKey = p.imageInputKey ?? "input_image";

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, added by the transport as the key field of every JSON call to Mandrill. */
 export const mandrillCredential = staticCredential({

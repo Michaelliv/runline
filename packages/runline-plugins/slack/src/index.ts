@@ -1,5 +1,10 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
-import { answerFailed, credentialJson } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  answerFailed,
+  credentialJson,
+  type HttpMethod,
+  type RunlinePluginAPI,
+} from "runline";
 import { slackCredential } from "./credentials.js";
 
 async function api(

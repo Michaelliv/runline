@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A personal or OAuth2 token, sent raw in Authorization, to ClickUp's one API origin. */
 export const clickupCredential = staticCredential({

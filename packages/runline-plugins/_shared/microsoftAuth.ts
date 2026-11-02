@@ -1,15 +1,19 @@
 import {
-  AuthError,
-  downloadResource,
   type ActionContext,
+  AuthError,
+  brokerFor,
+  downloadResource,
   type HttpMethod,
+  jsonAnswer,
+  type OAuthConfig,
+  responseFailed,
 } from "runline";
-import { credentialBroker } from "./credentialAdapter.js";
-import { jsonAnswer, requestFailed } from "./credentials.js";
 import {
-  microsoftCredential,
-  microsoftUserBase,
+  MICROSOFT_GRANT,
   type MicrosoftAuthConfig,
+  microsoftCredential,
+  microsoftEndpoint,
+  microsoftUserBase,
 } from "./microsoftCredentials.js";
 
 export type { MicrosoftAuthConfig } from "./microsoftCredentials.js";
@@ -27,7 +31,7 @@ export async function microsoftProbe(
   plugin: string,
   scopes: string[],
 ) {
-  return credentialBroker(ctx, microsoftCredential(plugin, scopes)).probe();
+  return brokerFor(ctx, microsoftCredential(plugin, scopes)).probe();
 }
 
 export async function graphResponse(
@@ -41,7 +45,7 @@ export async function graphResponse(
 ): Promise<Response> {
   if (!path.startsWith("/") || path.startsWith("//"))
     throw new AuthError("request_not_allowed");
-  return credentialBroker(ctx, microsoftCredential(plugin, scopes)).request({
+  return brokerFor(ctx, microsoftCredential(plugin, scopes)).request({
     target: "graph",
     path: path.slice(1),
     method: method as HttpMethod,
@@ -51,6 +55,19 @@ export async function graphResponse(
     },
     body,
   });
+}
+
+/**
+ * A failed Graph response, by its status and Graph's `error.code`
+ * (`ErrorItemNotFound`, `ErrorAccessDenied`); Graph's message is never read.
+ */
+export function graphFailed(
+  plugin: string,
+  response: Response,
+): Promise<Error & { status: number }> {
+  return responseFailed(plugin, response, (body) => ({
+    code: (body as { error?: { code?: unknown } } | undefined)?.error?.code,
+  }));
 }
 
 /**
@@ -75,7 +92,7 @@ export async function graphRequest<T = unknown>(
     body === undefined ? undefined : JSON.stringify(body),
     body === undefined ? undefined : "application/json",
   );
-  if (!res.ok) throw requestFailed(plugin, res.status);
+  if (!res.ok) throw await graphFailed(plugin, res);
   return jsonAnswer<T>(res);
 }
 
@@ -108,8 +125,27 @@ export async function microsoftDownload(value: unknown): Promise<Response> {
   });
 }
 
-/** Setup help shown by the OAuth wizard for all Microsoft plugins. */
-export function microsoftSetupHelp(apiName: string): string[] {
+/**
+ * A Microsoft Graph plugin's OAuth declaration: the multi-tenant endpoints,
+ * `offline_access` for a refresh token, the grant every Graph plugin
+ * shares, and setup steps naming the Graph permissions it needs
+ * (`permissions`, e.g. "Calendars.Read").
+ */
+export function microsoftOAuth(
+  scopes: string[],
+  permissions: string,
+): OAuthConfig {
+  return {
+    grant: MICROSOFT_GRANT,
+    authUrl: microsoftEndpoint("common", "authorize"),
+    tokenUrl: microsoftEndpoint("common", "token"),
+    scopes: [...scopes, "offline_access"],
+    setupHelp: setupHelp(permissions),
+  };
+}
+
+/** The OAuth wizard's steps for a Microsoft plugin. */
+function setupHelp(permissions: string): string[] {
   return [
     `You need a Microsoft Entra (Azure AD) app registration. One-time, ~5 minutes.`,
     "",
@@ -118,7 +154,7 @@ export function microsoftSetupHelp(apiName: string): string[] {
     "2. Add a Web redirect URI (Authentication → Add platform → Web):",
     "     {{redirectUri}}",
     "3. Certificates & secrets → New client secret → copy the VALUE (not the Secret ID).",
-    `4. API permissions → Add → Microsoft Graph → Delegated → add the ${apiName} scopes,`,
+    `4. API permissions → Add → Microsoft Graph → Delegated → add the ${permissions} scopes,`,
     "   then 'Grant admin consent'.",
     "5. Paste the Application (client) ID and the client secret VALUE below.",
   ];

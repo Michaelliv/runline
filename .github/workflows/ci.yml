@@ -19,6 +19,8 @@ jobs:
       # CDP; a mocked protocol would only ever agree with itself.
       - run: bunx playwright install --with-deps chromium
       - run: bun --filter runline build
+      # Plugins and pi-runline resolve runline through its built types.
+      - run: bun run typecheck
       - run: bun --filter runline test
       # Lint/format across the whole monorepo — catches issues in
       # pi-runline and runline-plugins that the runline filter misses.

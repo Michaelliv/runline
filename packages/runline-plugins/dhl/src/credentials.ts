@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the DHL-API-Key header to DHL's EU API origin. */
 export const dhlCredential = staticCredential({

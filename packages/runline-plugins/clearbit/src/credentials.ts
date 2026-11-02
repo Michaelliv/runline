@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** One API key, sent as a bearer to Clearbit's three read-only API hosts:
  *  person enrichment, company enrichment, and name autocomplete. */

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as a bearer to SendGrid's v3 API. */
 export const sendgridCredential = staticCredential({

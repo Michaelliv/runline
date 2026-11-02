@@ -1,6 +1,5 @@
-import type { ActionContext } from "runline";
+import { type ActionContext, credentialRequest } from "runline";
 import * as t from "typebox";
-import { credentialRequest } from "../../_shared/credentials.js";
 import { typesafeCredential } from "./credentials.js";
 
 /**

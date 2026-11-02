@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API token, sent as a bearer to Coda's one API origin. */
 export const codaCredential = staticCredential({

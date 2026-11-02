@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An OAuth2 user token, sent as a bearer to Spotify's one API origin. */
 export const spotifyCredential = staticCredential({

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /**
  * The API key pair, sent as HTTP Basic to the v3.1 email API, and an

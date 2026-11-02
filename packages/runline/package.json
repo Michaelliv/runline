@@ -1,7 +1,7 @@
 {
   "name": "runline",
-  "version": "0.34.0",
-  "description": "Code mode for agents \u2014 turn any API or command into a callable action",
+  "version": "0.37.0",
+  "description": "Code mode for agents — turn any API or command into a callable action",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -32,6 +32,7 @@
     "prepublishOnly": "bun run build",
     "dev": "bun run src/main.ts",
     "test": "bun test src/tests",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "format": "bunx @biomejs/biome format --write src/",
     "lint": "bunx @biomejs/biome lint src/",
     "check": "bunx @biomejs/biome check src/"
@@ -92,6 +93,7 @@
     "@shift-labs/ferrosearch": "^0.1.0",
     "chalk": "^5.6.2",
     "commander": "^14.0.3",
+    "fast-xml-parser": "^5.11.2",
     "jiti": "^2.7.0",
     "proper-lockfile": "^4.1.2",
     "rrule": "^2.8.1",

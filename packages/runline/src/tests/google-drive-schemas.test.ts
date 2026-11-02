@@ -4,6 +4,7 @@ import { Check } from "typebox/value";
 import googleDrive from "../../../runline-plugins/googleDrive/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -409,10 +410,10 @@ describe("googleDrive TypeBox action schemas", () => {
     assert.ok(update);
 
     let request: { url: string; init?: RequestInit } | undefined;
-    globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
+    stubFetch(async (url, init) => {
       request = { url: String(url), init };
       return Response.json({ id: "file", trashed: false });
-    }) as typeof fetch;
+    });
 
     const context: ActionContext = {
       connection: {

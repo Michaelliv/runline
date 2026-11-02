@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** A personal access token, sent as a bearer to the workspace host in config. */
 export const databricksCredential = staticCredential({

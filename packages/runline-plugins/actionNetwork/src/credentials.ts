@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An OSDI API token, sent as the OSDI-API-Token header to Action Network's
  *  one API origin. */

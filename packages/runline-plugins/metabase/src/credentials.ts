@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** A session token, sent as X-Metabase-Session, to the instance's own /api/. */
 export const metabaseCredential = staticCredential({

@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** An API key, sent as the api-key header to Brevo's v3 API base. */
 export const brevoCredential = staticCredential({

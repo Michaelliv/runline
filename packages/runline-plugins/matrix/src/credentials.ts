@@ -1,4 +1,4 @@
-import { httpsBase, staticCredential } from "../../_shared/credentials.js";
+import { httpsBase, staticCredential } from "runline";
 
 /** An access token, sent as a bearer to the configured homeserver's client API. */
 export const matrixCredential = staticCredential({

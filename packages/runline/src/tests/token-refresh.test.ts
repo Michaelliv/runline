@@ -13,6 +13,7 @@ import { graphResponse } from "../../../runline-plugins/_shared/microsoftAuth.js
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import type { ConnectionHandle } from "../connections/types.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -53,11 +54,11 @@ function serve(
   issue: (url: string, init: RequestInit) => Response | Promise<Response>,
 ): string[] {
   const bearers: string[] = [];
-  globalThis.fetch = (async (url, init) => {
+  stubFetch(async (url, init) => {
     if (String(url).endsWith("/token")) return issue(String(url), init ?? {});
     bearers.push(new Headers(init?.headers).get("authorization") ?? "");
     return Response.json({});
-  }) as typeof fetch;
+  });
   return bearers;
 }
 

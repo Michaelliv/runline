@@ -1,9 +1,11 @@
-import type { ActionContext, HttpMethod, RunlinePluginAPI } from "runline";
 import {
+  type ActionContext,
   credentialOk,
+  type HttpMethod,
   jsonOrAcknowledged,
   pathSegment,
-} from "../../_shared/credentials.js";
+  type RunlinePluginAPI,
+} from "runline";
 import { elasticsearchCredential } from "./credentials.js";
 
 async function req(

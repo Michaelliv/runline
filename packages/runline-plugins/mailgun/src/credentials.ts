@@ -1,4 +1,4 @@
-import { configChoice, staticCredential } from "../../_shared/credentials.js";
+import { configChoice, staticCredential } from "runline";
 
 /**
  * An API key as the Basic password with the fixed username "api", to

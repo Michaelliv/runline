@@ -1,5 +1,9 @@
-import type { ActionContext, RunlinePluginAPI } from "runline";
-import { credentialJson, pathSegment } from "../../_shared/credentials.js";
+import {
+  type ActionContext,
+  credentialJson,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import { marketstackCredential } from "./credentials.js";
 
 function api(

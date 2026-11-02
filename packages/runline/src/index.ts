@@ -64,8 +64,53 @@ export {
   oauthCallback,
   runOAuth,
 } from "./core/oauth.js";
-export { downloadResource } from "./credentials/http.js";
+export { awsEndpoint, awsRegion, parseAwsXml } from "./credentials/aws.js";
+export type { AwsCredentialSpec } from "./credentials/aws-plugin.js";
 export {
+  awsCredential,
+  awsFailed,
+  awsJson,
+  awsList,
+  awsQuery,
+  awsTarget,
+} from "./credentials/aws-plugin.js";
+export { brokerFor } from "./credentials/broker.js";
+export { downloadResource } from "./credentials/http.js";
+export type {
+  CredentialCall,
+  EmptyAnswer,
+  ErrorEnvelope,
+  StaticCredentialSpec,
+} from "./credentials/plugin.js";
+export {
+  answerFailed,
+  configChoice,
+  configFlag,
+  credentialJson,
+  credentialOk,
+  credentialRequest,
+  credentialSocketUrl,
+  errorIdentifier,
+  failureMessage,
+  grantSchema,
+  graphqlFailed,
+  hostLabel,
+  httpsBase,
+  jsonAnswer,
+  jsonOrAcknowledged,
+  multipartBody,
+  pathSegment,
+  pathSegments,
+  pathWithin,
+  refuseUnderHost,
+  requestFailed,
+  responseFailed,
+  slashEncodedSegment,
+  staticCredential,
+} from "./credentials/plugin.js";
+export {
+  AwsAccessKeySchema,
+  AwsSessionSchema,
   CredentialRegistry,
   OAuthGrantSchema,
   OAuthTokensSchema,
@@ -81,6 +126,10 @@ export type {
 } from "./credentials/transport.js";
 export { CredentialTransport } from "./credentials/transport.js";
 export type {
+  AwsAccessKey,
+  AwsRole,
+  AwsScope,
+  AwsSession,
   CredentialAuthentication,
   CredentialBinding,
   CredentialDeclaration,
@@ -120,6 +169,7 @@ export {
   loadPluginsFromConfig,
 } from "./plugin/loader.js";
 export { PluginRegistry, registry } from "./plugin/registry.js";
+export { connectionFields } from "./plugin/schema.js";
 export type {
   ActionAccess,
   ActionContext,

@@ -268,16 +268,39 @@ export function validateLegacyInput(
 }
 
 /**
- * A call written with no arguments is a call with an empty argument set.
+ * A value as JSON would carry it: plain-object keys whose value is
+ * `undefined` are dropped, at every depth. JSON has no `undefined`, and a
+ * schema's `required` counts a present key as given, so `{ name: undefined }`
+ * would otherwise satisfy a rule that needs a name. Arrays keep their
+ * length; other objects (a Buffer, a Date) pass through untouched.
  *
+ * Self-contained, because the worker's `actions.check` runs this same
+ * source: preflight and execution cannot disagree about what was passed.
+ */
+export function dropUndefined(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((entry) => dropUndefined(entry));
+  if (value === null || typeof value !== "object") return value;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, dropUndefined(entry)]),
+  );
+}
+
+/**
+ * An action's arguments as validation and `execute` see them.
+ *
+ * A call written with no arguments is a call with an empty argument set:
  * `linear.user.me()` supplies no argument, so object validation needs an
  * empty object to accept no-input actions and name missing required fields.
- *
- * Only `undefined` is normalized: an explicit `null` or `42` is an
- * argument, and a wrong one.
+ * An explicit `null` or `42` is an argument, and a wrong one. Keys holding
+ * `undefined` are absent, by `dropUndefined`. The worker's `actions.check`
+ * runs this source too, so it may call nothing but `dropUndefined`.
  */
 export function normalizeActionInput(input: unknown): unknown {
-  return input === undefined ? {} : input;
+  return input === undefined ? {} : dropUndefined(input);
 }
 
 export function validateTypedInput(

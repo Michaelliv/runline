@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import jenkins from "../../../runline-plugins/jenkins/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
+import { stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -34,10 +35,10 @@ function trigger(jobName: string) {
 describe("jenkins job names", () => {
   it("addresses a nested job by its folder/job/name path, each segment encoded", async () => {
     const urls: string[] = [];
-    globalThis.fetch = (async (url) => {
+    stubFetch(async (url) => {
       urls.push(String(url));
       return new Response(null, { status: 201 });
-    }) as typeof fetch;
+    });
     await trigger("folder/job/my job");
     await trigger("a?b");
     assert.deepEqual(urls, [
@@ -47,9 +48,9 @@ describe("jenkins job names", () => {
   });
 
   it("refuses an empty segment before any request", async () => {
-    globalThis.fetch = (async () => {
+    stubFetch(async () => {
       throw new Error("no request expected");
-    }) as typeof fetch;
+    });
     await assert.rejects(trigger("folder//x"), { code: "request_not_allowed" });
   });
 });

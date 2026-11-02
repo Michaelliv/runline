@@ -1,4 +1,4 @@
-import { staticCredential } from "../../_shared/credentials.js";
+import { staticCredential } from "runline";
 
 /** A user token, sent as "QB-USER-TOKEN {token}" in Authorization, to QuickBase's
  *  one API origin. The realm hostname rides along as a public caller header. */
