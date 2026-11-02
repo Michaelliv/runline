@@ -10,7 +10,11 @@
  *
  * Graph delegated scopes: Mail.Send, Mail.ReadWrite, Mail.Read.
  */
-import type { ActionContext, RunlinePluginAPI } from "runline";
+import {
+  type ActionContext,
+  pathSegment,
+  type RunlinePluginAPI,
+} from "runline";
 import {
   graphRequest,
   microsoftCredential,
@@ -201,7 +205,7 @@ export default function microsoftMail(rl: RunlinePluginAPI): void {
         NAME,
         SCOPES,
         "GET",
-        `${userBase(ctx)}/messages/${encodeURIComponent(p.id)}`,
+        `${userBase(ctx)}/messages/${pathSegment(p.id)}`,
       );
     },
   });
