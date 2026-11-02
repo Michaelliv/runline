@@ -95,18 +95,34 @@ export async function sendResource(
   }
 }
 
+export interface PresignedRequestOptions {
+  /** Exact origins the URL may be on; anything else is refused. */
+  allowedOrigins: string[];
+  fetch: typeof globalThis.fetch;
+  method?: "GET" | "PUT" | "DELETE";
+  /** Request headers; credentials and cookies are never among them. */
+  headers?: Record<string, string>;
+  body?: Uint8Array;
+  maxResponseBytes?: number;
+}
+
 /**
- * Fetch a provider-issued preauthenticated URL without bearer tokens or cookies.
- * Hosts approve exact origins and enforce DNS/IP egress through their fetch hook.
- * The signed URL is itself secret: errors never include it. No redirects or retries.
+ * Headers a presigned request never sends: the URL is its only authority,
+ * so no credential or cookie rides along, and Destination belongs to the
+ * credential transport's COPY and MOVE.
  */
-export async function downloadResource(
+const PRESIGNED_REFUSED_HEADERS = ["authorization", "cookie", "destination"];
+
+/**
+ * One request to a provider-issued preauthenticated URL — a signed
+ * download, an upload session — without bearer tokens or cookies.
+ * Hosts approve exact origins and enforce DNS/IP egress through their
+ * fetch hook. The signed URL is itself secret: errors never include it.
+ * No redirects or retries.
+ */
+export async function presignedRequest(
   value: string,
-  options: {
-    allowedOrigins: string[];
-    fetch: typeof globalThis.fetch;
-    maxResponseBytes?: number;
-  },
+  options: PresignedRequestOptions,
 ): Promise<Response> {
   let url: URL;
   try {
@@ -129,9 +145,35 @@ export async function downloadResource(
     maxResponseBytes > 64 * 1024 * 1024
   )
     throw new AuthError("invalid_definition");
-  return sendResource(url.toString(), "GET", new Headers(), undefined, {
-    fetch: options.fetch,
-    timeoutMs: 20_000,
-    maxResponseBytes,
-  });
+  const method = options.method ?? "GET";
+  const headers = new Headers();
+  try {
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      if (PRESIGNED_REFUSED_HEADERS.includes(name.toLowerCase()))
+        throw new Error();
+      headers.set(name, value);
+    }
+    if (options.body !== undefined && method !== "PUT") throw new Error();
+  } catch {
+    throw new AuthError("request_not_allowed");
+  }
+  return sendResource(
+    url.toString(),
+    method,
+    headers,
+    options.body === undefined ? undefined : Buffer.from(options.body),
+    { fetch: options.fetch, timeoutMs: 20_000, maxResponseBytes },
+  );
+}
+
+/** A GET of a provider-issued preauthenticated URL; see presignedRequest. */
+export function downloadResource(
+  value: string,
+  options: {
+    allowedOrigins: string[];
+    fetch: typeof globalThis.fetch;
+    maxResponseBytes?: number;
+  },
+): Promise<Response> {
+  return presignedRequest(value, options);
 }

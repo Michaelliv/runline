@@ -75,7 +75,11 @@ export {
   awsTarget,
 } from "./credentials/aws-plugin.js";
 export { brokerFor } from "./credentials/broker.js";
-export { downloadResource } from "./credentials/http.js";
+export {
+  downloadResource,
+  type PresignedRequestOptions,
+  presignedRequest,
+} from "./credentials/http.js";
 export type {
   CredentialCall,
   EmptyAnswer,
