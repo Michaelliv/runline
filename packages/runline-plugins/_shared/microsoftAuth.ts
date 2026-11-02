@@ -6,7 +6,7 @@ import {
   type HttpMethod,
   jsonAnswer,
   type OAuthConfig,
-  requestFailed,
+  responseFailed,
 } from "runline";
 import {
   MICROSOFT_GRANT,
@@ -58,6 +58,19 @@ export async function graphResponse(
 }
 
 /**
+ * A failed Graph response, by its status and Graph's `error.code`
+ * (`ErrorItemNotFound`, `ErrorAccessDenied`); Graph's message is never read.
+ */
+export function graphFailed(
+  plugin: string,
+  response: Response,
+): Promise<Error & { status: number }> {
+  return responseFailed(plugin, response, (body) => ({
+    code: (body as { error?: { code?: unknown } } | undefined)?.error?.code,
+  }));
+}
+
+/**
  * A Graph JSON request that must succeed; its answer is read by
  * `jsonAnswer`. JSON and binary requests share the same destination,
  * renewal and replay policy through `graphResponse`.
@@ -79,7 +92,7 @@ export async function graphRequest<T = unknown>(
     body === undefined ? undefined : JSON.stringify(body),
     body === undefined ? undefined : "application/json",
   );
-  if (!res.ok) throw requestFailed(plugin, res.status);
+  if (!res.ok) throw await graphFailed(plugin, res);
   return jsonAnswer<T>(res);
 }
 

@@ -231,6 +231,48 @@ describe("Microsoft credential migration", () => {
     assert.equal(calls.length, 3);
   });
 
+  it("reports Graph's error code for JSON and upload failures, never its message", async () => {
+    const { ctx } = await context();
+    mock(() =>
+      Response.json(
+        { error: { code: "ErrorAccessDenied", message: "echoes old" } },
+        { status: 403 },
+      ),
+    );
+    await assert.rejects(
+      action(microsoftMail, "mail.list").execute({}, ctx) as Promise<unknown>,
+      { message: "microsoftMail: request failed (HTTP 403 ErrorAccessDenied)" },
+    );
+    await assert.rejects(
+      action(microsoftFiles, "files.upload").execute(
+        { path: "a.txt", base64: Buffer.from("a").toString("base64") },
+        ctx,
+      ) as Promise<unknown>,
+      {
+        message: "microsoftFiles: request failed (HTTP 403 ErrorAccessDenied)",
+      },
+    );
+  });
+
+  it("addresses a message id as one path segment, never the collection", async () => {
+    const { ctx } = await context();
+    const urls: string[] = [];
+    mock((url) => {
+      urls.push(url);
+      return Response.json({});
+    });
+    await action(microsoftMail, "mail.get").execute({ id: "AAMk-1=" }, ctx);
+    assert.ok(urls[0].endsWith("/me/messages/AAMk-1%3D"));
+    await assert.rejects(
+      action(microsoftMail, "mail.get").execute(
+        { id: "" },
+        ctx,
+      ) as Promise<unknown>,
+      { code: "request_not_allowed" },
+    );
+    assert.equal(urls.length, 1);
+  });
+
   it("rejects token routing changes while waiting for update ownership", async () => {
     const { ctx, handle } = await context({ accessTokenExpiresAt: 1 });
     await handle.update({ clientId: "another-app" });

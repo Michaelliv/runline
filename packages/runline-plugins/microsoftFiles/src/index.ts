@@ -13,10 +13,10 @@ import {
   pathSegment,
   pathSegments,
   type RunlinePluginAPI,
-  requestFailed,
 } from "runline";
 import { standardBase64 } from "../../_shared/base64.js";
 import {
+  graphFailed,
   graphRequest,
   graphResponse,
   microsoftCredential,
@@ -243,7 +243,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
         `${driveBase(ctx)}/root:/${pathSegments(path)}:/content`,
         bytes,
       );
-      if (!res.ok) throw requestFailed(NAME, res.status);
+      if (!res.ok) throw await graphFailed(NAME, res);
       return jsonAnswer(res);
     },
   });
