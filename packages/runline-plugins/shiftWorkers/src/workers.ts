@@ -404,7 +404,7 @@ export function registerWorkersActions(rl: RunlinePluginAPI) {
   rl.registerAction("shareToken.create", {
     access: "write",
     description:
-      "Databases only: create an access code for a program that queries a shared database (sends `token` as a bearer), with a role. Shown once: give it to the user to pass on; never send it anywhere yourself. Optional expiry; revocable. Apps have no access codes (refused): share an app with a person by email with access.set (allow {kind:\"user\", email}); they sign in with that email.",
+      'Databases only: create an access code for a program that queries a shared database (sends `token` as a bearer), with a role. Shown once: give it to the user to pass on; never send it anywhere yourself. Optional expiry; revocable. Apps have no access codes (refused): share an app with a person by email with access.set (allow {kind:"user", email}); they sign in with that email.',
     inputSchema: t.Object(
       {
         app: App,
