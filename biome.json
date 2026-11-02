@@ -194,7 +194,6 @@
       "!packages/runline-plugins/telegram",
       "!packages/runline-plugins/thehive",
       "!packages/runline-plugins/thehiveProject",
-      "!packages/runline-plugins/todoist",
       "!packages/runline-plugins/together",
       "!packages/runline-plugins/travisci",
       "!packages/runline-plugins/trello",

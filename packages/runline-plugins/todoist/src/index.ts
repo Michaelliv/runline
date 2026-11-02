@@ -1,55 +1,346 @@
+/**
+ * Todoist plugin for runline, on Todoist's unified API v1.
+ *
+ * Lists follow API v1's cursors (`next_cursor`, at most 200 a page) and
+ * answer one flat array; `limit` stops paging once that many are in.
+ * Failures report Todoist's `error_tag` (`UNAUTHORIZED`, `NOT_FOUND`).
+ */
 import {
   type ActionContext,
-  credentialJson,
+  credentialRequest,
   type HttpMethod,
+  jsonAnswer,
   pathSegment,
   type RunlinePluginAPI,
+  responseFailed,
 } from "runline";
+import * as t from "typebox";
+import { atLeastOne } from "../../_shared/schemas.js";
 import { todoistCredential } from "./credentials.js";
-
-function api(
-  ctx: ActionContext,
-  method: HttpMethod,
-  endpoint: string,
-  body?: Record<string, unknown>,
-  qs?: Record<string, unknown>,
-): Promise<unknown> {
-  return credentialJson(ctx, todoistCredential, "todoist", {
-    target: "api",
-    path: endpoint.replace(/^\//, ""),
-    method,
-    query: qs,
-    ...(body && Object.keys(body).length > 0 ? { json: body } : {}),
-  });
-}
 
 /** API v1's largest page. */
 const PAGE = 200;
 
-/**
- * Every item of a v1 cursor-paginated list, as the flat array the REST v2
- * list endpoints answered with. `limit` stops early once that many are in.
- */
+const STRICT = { additionalProperties: false } as const;
+const Id = (description?: string) =>
+  t.String({ minLength: 1, ...(description ? { description } : {}) });
+const Limit = t.Optional(
+  t.Integer({ minimum: 1, description: "Stop after this many (default all)" }),
+);
+const Labels = t.Array(t.String({ minLength: 1 }), {
+  description: "Label names",
+});
+const Priority = t.Integer({
+  minimum: 1,
+  maximum: 4,
+  description: "1 (normal) to 4 (urgent)",
+});
+const DueDate = t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" });
+const Filter = (description: string) =>
+  t.String({ minLength: 1, maxLength: 1024, description });
+const FilterLang = t.Optional(
+  Id(
+    "IETF language tag the filter query is written in (default English); with filter",
+  ),
+);
+/** A language belongs to a filter query: `lang` only beside `filter`. */
+const langWithFilter = {
+  anyOf: [{ required: ["filter"] }, { not: { required: ["lang"] } }],
+};
+const AssigneeId = t.String({
+  pattern: "^\\d+$",
+  description: "A user id, as project.getCollaborators lists it",
+});
+/** Todoist's color names, as API v1 lists them. */
+const COLORS = [
+  "berry_red",
+  "red",
+  "orange",
+  "yellow",
+  "olive_green",
+  "lime_green",
+  "green",
+  "mint_green",
+  "teal",
+  "sky_blue",
+  "light_blue",
+  "blue",
+  "grape",
+  "violet",
+  "lavender",
+  "magenta",
+  "salmon",
+  "charcoal",
+  "grey",
+  "taupe",
+] as const;
+const Color = t.Unsafe<(typeof COLORS)[number]>(
+  t.Union(COLORS.map((color) => t.Literal(color))),
+);
+const ViewStyle = t.Union([
+  t.Literal("list"),
+  t.Literal("board"),
+  t.Literal("calendar"),
+]);
+
+/** Todoist's error envelope: only its `error_tag` is read. */
+function todoistError(body: unknown) {
+  return { code: (body as { error_tag?: unknown } | undefined)?.error_tag };
+}
+
+/** One request; a failure reports the status and Todoist's error_tag. */
+async function api(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
+  options: {
+    body?: Record<string, unknown>;
+    query?: Record<string, unknown>;
+  } = {},
+): Promise<unknown> {
+  const res = await credentialRequest(ctx, todoistCredential, {
+    target: "api",
+    path,
+    method,
+    query: options.query,
+    ...(options.body ? { json: options.body } : {}),
+  });
+  if (!res.ok) throw await responseFailed("todoist", res, todoistError);
+  return jsonAnswer(res);
+}
+
+/** A request whose answer is an acknowledgement. */
+async function act(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
+): Promise<{ success: true }> {
+  await api(ctx, method, path);
+  return { success: true };
+}
+
+/** Every item of a cursor-paginated list; `limit` stops paging early. */
 async function listAll(
   ctx: ActionContext,
-  endpoint: string,
-  qs: Record<string, unknown> = {},
+  path: string,
+  query: Record<string, unknown> = {},
   limit?: number,
   key: "results" | "items" = "results",
 ): Promise<unknown[]> {
   const all: unknown[] = [];
   let cursor: string | null | undefined;
   do {
-    const page = (await api(ctx, "GET", endpoint, undefined, {
-      ...qs,
-      limit: limit ? Math.min(limit - all.length, PAGE) : PAGE,
-      ...(cursor ? { cursor } : {}),
+    const page = (await api(ctx, "GET", path, {
+      query: {
+        ...query,
+        limit: limit ? Math.min(limit - all.length, PAGE) : PAGE,
+        cursor,
+      },
     })) as Record<string, unknown> & { next_cursor?: string | null };
     all.push(...((page[key] as unknown[] | undefined) ?? []));
     cursor = page.next_cursor;
   } while (cursor && (!limit || all.length < limit));
   return limit ? all.slice(0, limit) : all;
 }
+
+/** The defined entries of `fields`, under their API names. */
+function wire(
+  fields: Record<string, unknown>,
+  names: Record<string, string>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, name] of Object.entries(names))
+    if (fields[key] !== undefined) out[name] = fields[key];
+  return out;
+}
+
+/** Where a task sits, as API v1 names it. */
+const placeNames = {
+  projectId: "project_id",
+  sectionId: "section_id",
+  parentId: "parent_id",
+};
+
+/** A task's fields as API v1 names them; assigneeId is sent as a number. */
+function taskBody(fields: Record<string, unknown>): Record<string, unknown> {
+  const body = wire(fields, {
+    content: "content",
+    description: "description",
+    ...placeNames,
+    priority: "priority",
+    dueString: "due_string",
+    dueDate: "due_date",
+    labels: "labels",
+  });
+  if (typeof fields.assigneeId === "string")
+    body.assignee_id = Number(fields.assigneeId);
+  return body;
+}
+
+const byId = t.Object({ id: Id() }, STRICT);
+
+const taskChanges = {
+  content: t.Optional(Id()),
+  description: t.Optional(t.String()),
+  priority: t.Optional(Priority),
+  dueString: t.Optional(Id('Natural language, e.g. "every monday"')),
+  dueDate: t.Optional(DueDate),
+  labels: t.Optional(Labels),
+  assigneeId: t.Optional(AssigneeId),
+};
+/** Where a task sits; placeNames gives the API's names. */
+const taskPlace = {
+  projectId: t.Optional(Id()),
+  sectionId: t.Optional(Id()),
+  parentId: t.Optional(Id()),
+};
+const taskCreate = t.Object(
+  { ...taskChanges, ...taskPlace, content: Id() },
+  STRICT,
+);
+const taskUpdate = t.Object(
+  { id: Id(), ...taskChanges },
+  { ...STRICT, ...atLeastOne(taskChanges) },
+);
+const taskSelectors = { ...taskPlace, label: t.Optional(Id()) };
+const taskList = t.Object(
+  {
+    ...taskSelectors,
+    filter: t.Optional(
+      Filter(
+        'Todoist filter query, e.g. "today | overdue"; instead of the fields above',
+      ),
+    ),
+    lang: FilterLang,
+    limit: Limit,
+  },
+  {
+    ...STRICT,
+    allOf: [
+      // A filter query replaces the selectors rather than narrowing them.
+      {
+        anyOf: [
+          { not: { required: ["filter"] } },
+          {
+            not: {
+              anyOf: Object.keys(taskSelectors).map((key) => ({
+                required: [key],
+              })),
+            },
+          },
+        ],
+      },
+      langWithFilter,
+    ],
+  },
+);
+const taskQuickAdd = t.Object(
+  {
+    text: Id('e.g. "Buy milk @Grocery #shopping tomorrow"'),
+    note: t.Optional(t.String()),
+    reminder: t.Optional(Id()),
+    autoReminder: t.Optional(
+      t.Boolean({
+        description:
+          "Add the user's default reminder when the task has a due time",
+      }),
+    ),
+  },
+  STRICT,
+);
+const taskMove = t.Object(
+  { id: Id(), ...taskPlace },
+  {
+    ...STRICT,
+    oneOf: Object.keys(taskPlace).map((key) => ({ required: [key] })),
+  },
+);
+const taskListCompleted = t.Object(
+  {
+    since: t.String({
+      format: "date-time",
+      description: "Start of the window, inclusive, e.g. 2026-05-01T00:00:00Z",
+    }),
+    until: t.String({
+      format: "date-time",
+      description: "End of the window, exclusive; at most 3 months after since",
+    }),
+    ...taskPlace,
+    filter: t.Optional(Filter("Todoist filter query the tasks must match")),
+    lang: FilterLang,
+    limit: Limit,
+  },
+  { ...STRICT, ...langWithFilter },
+);
+
+const projectChanges = {
+  name: t.Optional(Id()),
+  color: t.Optional(Color),
+  isFavorite: t.Optional(t.Boolean()),
+  viewStyle: t.Optional(ViewStyle),
+};
+const projectCreate = t.Object(
+  { ...projectChanges, name: Id(), parentId: t.Optional(Id()) },
+  STRICT,
+);
+const projectUpdate = t.Object(
+  { id: Id(), ...projectChanges },
+  { ...STRICT, ...atLeastOne(projectChanges) },
+);
+
+const sectionCreate = t.Object(
+  {
+    projectId: Id(),
+    name: Id(),
+    order: t.Optional(
+      t.Integer({ description: "Position of the section in the project" }),
+    ),
+  },
+  STRICT,
+);
+const sectionList = t.Object({ projectId: t.Optional(Id()) }, STRICT);
+const sectionUpdate = t.Object({ id: Id(), name: Id() }, STRICT);
+
+/** A comment belongs to a task or to a project, never both. */
+const commentOwner = {
+  taskId: t.Optional(Id()),
+  projectId: t.Optional(Id()),
+};
+const ownerRule = {
+  oneOf: Object.keys(commentOwner).map((key) => ({ required: [key] })),
+};
+const commentCreate = t.Object(
+  { ...commentOwner, content: Id() },
+  { ...STRICT, ...ownerRule },
+);
+const commentList = t.Object(commentOwner, { ...STRICT, ...ownerRule });
+const commentUpdate = t.Object({ id: Id(), content: Id() }, STRICT);
+
+const labelChanges = {
+  name: t.Optional(Id()),
+  color: t.Optional(Color),
+  order: t.Optional(t.Integer({ minimum: -32768, maximum: 32767 })),
+  isFavorite: t.Optional(t.Boolean()),
+};
+const labelCreate = t.Object({ ...labelChanges, name: Id() }, STRICT);
+const labelUpdate = t.Object(
+  { id: Id(), ...labelChanges },
+  { ...STRICT, ...atLeastOne(labelChanges) },
+);
+
+const projectNames = {
+  name: "name",
+  color: "color",
+  isFavorite: "is_favorite",
+  viewStyle: "view_style",
+  parentId: "parent_id",
+};
+const labelNames = {
+  name: "name",
+  color: "color",
+  order: "order",
+  isFavorite: "is_favorite",
+};
 
 export default function todoist(rl: RunlinePluginAPI) {
   rl.setName("todoist");
@@ -69,195 +360,103 @@ export default function todoist(rl: RunlinePluginAPI) {
   rl.registerAction("task.create", {
     access: "write",
     description: "Create a task",
-    inputSchema: {
-      content: { type: "string", required: true },
-      projectId: { type: "string", required: false },
-      description: { type: "string", required: false },
-      priority: {
-        type: "number",
-        required: false,
-        description: "1 (normal) to 4 (urgent)",
-      },
-      dueString: { type: "string", required: false },
-      dueDate: { type: "string", required: false, description: "YYYY-MM-DD" },
-      labels: {
-        type: "object",
-        required: false,
-        description: "Array of label names",
-      },
-      sectionId: { type: "string", required: false },
-      parentId: { type: "string", required: false },
-      assigneeId: { type: "string", required: false },
-    },
+    inputSchema: taskCreate,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      const body: Record<string, unknown> = { content: p.content };
-      if (p.projectId) body.project_id = p.projectId;
-      if (p.description) body.description = p.description;
-      if (p.priority) body.priority = p.priority;
-      if (p.dueString) body.due_string = p.dueString;
-      if (p.dueDate) body.due_date = p.dueDate;
-      if (p.labels) body.labels = p.labels;
-      if (p.sectionId) body.section_id = p.sectionId;
-      if (p.parentId) body.parent_id = p.parentId;
-      if (p.assigneeId) body.assignee_id = p.assigneeId;
-      return api(ctx, "POST", "/tasks", body);
+      return api(ctx, "POST", "tasks", {
+        body: taskBody(input as t.Static<typeof taskCreate>),
+      });
     },
   });
 
   rl.registerAction("task.get", {
     access: "read",
     description: "Get a task by ID",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      return api(
-        ctx,
-        "GET",
-        `/tasks/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
+      const { id } = input as t.Static<typeof byId>;
+      return api(ctx, "GET", `tasks/${pathSegment(id)}`);
     },
   });
 
   rl.registerAction("task.list", {
     access: "read",
     description:
-      "List active tasks, by project/section/parent/label or by a Todoist filter query",
-    inputSchema: {
-      projectId: { type: "string", required: false },
-      sectionId: { type: "string", required: false },
-      parentId: { type: "string", required: false },
-      label: { type: "string", required: false },
-      filter: {
-        type: "string",
-        required: false,
-        description:
-          'Todoist filter query, e.g. "today | overdue"; not combined with the fields above',
-      },
-      lang: {
-        type: "string",
-        required: false,
-        description: "Language of the filter query (default English)",
-      },
-      limit: { type: "number", required: false },
-    },
+      "List active tasks, by project, section, parent or label, or by a Todoist filter query instead",
+    inputSchema: taskList,
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const limit = p.limit as number | undefined;
-      if (p.filter) {
-        if (p.projectId || p.sectionId || p.parentId || p.label)
-          throw new Error(
-            "todoist: filter cannot be combined with projectId, sectionId, parentId or label; put them in the query",
-          );
+      const p = (input ?? {}) as t.Static<typeof taskList>;
+      if (p.filter !== undefined)
         return listAll(
           ctx,
-          "/tasks/filter",
-          { query: p.filter, ...(p.lang ? { lang: p.lang } : {}) },
-          limit,
+          "tasks/filter",
+          { query: p.filter, lang: p.lang },
+          p.limit,
         );
-      }
-      const qs: Record<string, unknown> = {};
-      if (p.projectId) qs.project_id = p.projectId;
-      if (p.sectionId) qs.section_id = p.sectionId;
-      if (p.parentId) qs.parent_id = p.parentId;
-      if (p.label) qs.label = p.label;
-      return listAll(ctx, "/tasks", qs, limit);
+      return listAll(
+        ctx,
+        "tasks",
+        wire(p, { ...placeNames, label: "label" }),
+        p.limit,
+      );
     },
   });
 
   rl.registerAction("task.update", {
     access: "write",
-    description: "Update a task",
-    inputSchema: {
-      id: { type: "string", required: true },
-      content: { type: "string", required: false },
-      description: { type: "string", required: false },
-      priority: { type: "number", required: false },
-      dueString: { type: "string", required: false },
-      dueDate: { type: "string", required: false },
-      labels: { type: "object", required: false },
-      assigneeId: { type: "string", required: false },
-    },
+    description: "Update a task; only the fields given change",
+    inputSchema: taskUpdate,
     async execute(input, ctx) {
-      const { id, ...fields } = input as Record<string, unknown>;
-      const body: Record<string, unknown> = {};
-      if (fields.content) body.content = fields.content;
-      if (fields.description) body.description = fields.description;
-      if (fields.priority) body.priority = fields.priority;
-      if (fields.dueString) body.due_string = fields.dueString;
-      if (fields.dueDate) body.due_date = fields.dueDate;
-      if (fields.labels) body.labels = fields.labels;
-      if (fields.assigneeId) body.assignee_id = fields.assigneeId;
-      return api(ctx, "POST", `/tasks/${pathSegment(id)}`, body);
+      const { id, ...fields } = input as t.Static<typeof taskUpdate>;
+      return api(ctx, "POST", `tasks/${pathSegment(id)}`, {
+        body: taskBody(fields),
+      });
     },
   });
 
   rl.registerAction("task.close", {
     access: "write",
     description: "Close (complete) a task",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "POST",
-        `/tasks/${pathSegment((input as Record<string, unknown>).id)}/close`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "POST", `tasks/${pathSegment(id)}/close`);
     },
   });
 
   rl.registerAction("task.reopen", {
     access: "write",
     description: "Reopen a task",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "POST",
-        `/tasks/${pathSegment((input as Record<string, unknown>).id)}/reopen`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "POST", `tasks/${pathSegment(id)}/reopen`);
     },
   });
 
   rl.registerAction("task.delete", {
     access: "write",
     description: "Delete a task",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "DELETE",
-        `/tasks/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "DELETE", `tasks/${pathSegment(id)}`);
     },
   });
 
   rl.registerAction("task.quickAdd", {
     access: "write",
     description: "Quick add a task using natural language",
-    inputSchema: {
-      text: {
-        type: "string",
-        required: true,
-        description: 'e.g. "Buy milk @Grocery #shopping tomorrow"',
-      },
-      note: { type: "string", required: false },
-      reminder: { type: "string", required: false },
-      autoReminder: {
-        type: "boolean",
-        required: false,
-        description:
-          "Add the user's default reminder when the task has a due time (API v1 no longer does so on its own)",
-      },
-    },
+    inputSchema: taskQuickAdd,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      const body: Record<string, unknown> = { text: p.text };
-      if (p.note) body.note = p.note;
-      if (p.reminder) body.reminder = p.reminder;
-      if (p.autoReminder !== undefined) body.auto_reminder = p.autoReminder;
-      return api(ctx, "POST", "/tasks/quick", body);
+      const p = input as t.Static<typeof taskQuickAdd>;
+      return api(ctx, "POST", "tasks/quick", {
+        body: wire(p, {
+          text: "text",
+          note: "note",
+          reminder: "reminder",
+          autoReminder: "auto_reminder",
+        }),
+      });
     },
   });
 
@@ -265,59 +464,33 @@ export default function todoist(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Move a task to another project, section or parent task (exactly one)",
-    inputSchema: {
-      id: { type: "string", required: true },
-      projectId: { type: "string", required: false },
-      sectionId: { type: "string", required: false },
-      parentId: { type: "string", required: false },
-    },
+    inputSchema: taskMove,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      const body: Record<string, unknown> = {};
-      if (p.projectId) body.project_id = p.projectId;
-      if (p.sectionId) body.section_id = p.sectionId;
-      if (p.parentId) body.parent_id = p.parentId;
-      if (Object.keys(body).length !== 1)
-        throw new Error(
-          "todoist: task.move takes exactly one of projectId, sectionId or parentId",
-        );
-      return api(ctx, "POST", `/tasks/${pathSegment(p.id)}/move`, body);
+      const { id, ...place } = input as t.Static<typeof taskMove>;
+      return api(ctx, "POST", `tasks/${pathSegment(id)}/move`, {
+        body: wire(place, placeNames),
+      });
     },
   });
 
   rl.registerAction("task.listCompleted", {
     access: "read",
     description:
-      "List tasks completed in a time window (at most about 3 months wide)",
-    inputSchema: {
-      since: {
-        type: "string",
-        required: true,
-        description: "ISO datetime, e.g. 2026-05-01T00:00:00Z",
-      },
-      until: { type: "string", required: true, description: "ISO datetime" },
-      projectId: { type: "string", required: false },
-      sectionId: { type: "string", required: false },
-      parentId: { type: "string", required: false },
-      filter: {
-        type: "string",
-        required: false,
-        description: "Todoist filter query the completed tasks must match",
-      },
-      limit: { type: "number", required: false },
-    },
+      "List tasks completed in a time window of at most 3 months, by completion date",
+    inputSchema: taskListCompleted,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      const qs: Record<string, unknown> = { since: p.since, until: p.until };
-      if (p.projectId) qs.project_id = p.projectId;
-      if (p.sectionId) qs.section_id = p.sectionId;
-      if (p.parentId) qs.parent_id = p.parentId;
-      if (p.filter) qs.filter_query = p.filter;
+      const p = input as t.Static<typeof taskListCompleted>;
       return listAll(
         ctx,
-        "/tasks/completed/by_completion_date",
-        qs,
-        p.limit as number | undefined,
+        "tasks/completed/by_completion_date",
+        wire(p, {
+          since: "since",
+          until: "until",
+          ...placeNames,
+          filter: "filter_query",
+          lang: "filter_lang",
+        }),
+        p.limit,
         "items",
       );
     },
@@ -328,122 +501,82 @@ export default function todoist(rl: RunlinePluginAPI) {
   rl.registerAction("project.create", {
     access: "write",
     description: "Create a project",
-    inputSchema: {
-      name: { type: "string", required: true },
-      color: { type: "string", required: false },
-      isFavorite: { type: "boolean", required: false },
-      parentId: { type: "string", required: false },
-      viewStyle: {
-        type: "string",
-        required: false,
-        description: "list or board",
-      },
-    },
+    inputSchema: projectCreate,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      const body: Record<string, unknown> = { name: p.name };
-      if (p.color) body.color = p.color;
-      if (p.isFavorite) body.is_favorite = true;
-      if (p.parentId) body.parent_id = p.parentId;
-      if (p.viewStyle) body.view_style = p.viewStyle;
-      return api(ctx, "POST", "/projects", body);
+      return api(ctx, "POST", "projects", {
+        body: wire(input as t.Static<typeof projectCreate>, projectNames),
+      });
     },
   });
 
   rl.registerAction("project.get", {
     access: "read",
     description: "Get a project",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      return api(
-        ctx,
-        "GET",
-        `/projects/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
+      const { id } = input as t.Static<typeof byId>;
+      return api(ctx, "GET", `projects/${pathSegment(id)}`);
     },
   });
 
   rl.registerAction("project.list", {
     access: "read",
     description: "List all projects",
-    inputSchema: {},
+    inputSchema: t.Object({}, STRICT),
     async execute(_input, ctx) {
-      return listAll(ctx, "/projects");
+      return listAll(ctx, "projects");
     },
   });
 
   rl.registerAction("project.update", {
     access: "write",
-    description: "Update a project",
-    inputSchema: {
-      id: { type: "string", required: true },
-      name: { type: "string", required: false },
-      color: { type: "string", required: false },
-      isFavorite: { type: "boolean", required: false },
-      viewStyle: { type: "string", required: false },
-    },
+    description: "Update a project; only the fields given change",
+    inputSchema: projectUpdate,
     async execute(input, ctx) {
-      const { id, ...fields } = input as Record<string, unknown>;
-      const body: Record<string, unknown> = {};
-      if (fields.name) body.name = fields.name;
-      if (fields.color) body.color = fields.color;
-      if (fields.isFavorite !== undefined) body.is_favorite = fields.isFavorite;
-      if (fields.viewStyle) body.view_style = fields.viewStyle;
-      return api(ctx, "POST", `/projects/${pathSegment(id)}`, body);
+      const { id, ...fields } = input as t.Static<typeof projectUpdate>;
+      return api(ctx, "POST", `projects/${pathSegment(id)}`, {
+        body: wire(fields, projectNames),
+      });
     },
   });
 
   rl.registerAction("project.delete", {
     access: "write",
     description: "Delete a project",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "DELETE",
-        `/projects/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "DELETE", `projects/${pathSegment(id)}`);
     },
   });
 
   rl.registerAction("project.archive", {
     access: "write",
     description: "Archive a project",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "POST",
-        `/projects/${pathSegment((input as Record<string, unknown>).id)}/archive`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "POST", `projects/${pathSegment(id)}/archive`);
     },
   });
 
   rl.registerAction("project.unarchive", {
     access: "write",
     description: "Unarchive a project",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "POST",
-        `/projects/${pathSegment((input as Record<string, unknown>).id)}/unarchive`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "POST", `projects/${pathSegment(id)}/unarchive`);
     },
   });
 
   rl.registerAction("project.getCollaborators", {
     access: "read",
-    description: "Get project collaborators",
-    inputSchema: { id: { type: "string", required: true } },
+    description: "Get project collaborators: [{id,name,email}]",
+    inputSchema: byId,
     async execute(input, ctx) {
-      return listAll(
-        ctx,
-        `/projects/${pathSegment((input as Record<string, unknown>).id)}/collaborators`,
-      );
+      const { id } = input as t.Static<typeof byId>;
+      return listAll(ctx, `projects/${pathSegment(id)}/collaborators`);
     },
   });
 
@@ -452,17 +585,15 @@ export default function todoist(rl: RunlinePluginAPI) {
   rl.registerAction("section.create", {
     access: "write",
     description: "Create a section",
-    inputSchema: {
-      projectId: { type: "string", required: true },
-      name: { type: "string", required: true },
-      order: { type: "number", required: false },
-    },
+    inputSchema: sectionCreate,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      return api(ctx, "POST", "/sections", {
-        project_id: p.projectId,
-        name: p.name,
-        ...(p.order ? { order: p.order } : {}),
+      const p = input as t.Static<typeof sectionCreate>;
+      return api(ctx, "POST", "sections", {
+        body: wire(p, {
+          projectId: "project_id",
+          name: "name",
+          order: "order",
+        }),
       });
     },
   });
@@ -470,39 +601,31 @@ export default function todoist(rl: RunlinePluginAPI) {
   rl.registerAction("section.get", {
     access: "read",
     description: "Get a section",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      return api(
-        ctx,
-        "GET",
-        `/sections/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
+      const { id } = input as t.Static<typeof byId>;
+      return api(ctx, "GET", `sections/${pathSegment(id)}`);
     },
   });
 
   rl.registerAction("section.list", {
     access: "read",
-    description: "List sections",
-    inputSchema: { projectId: { type: "string", required: false } },
+    description: "List sections, of one project or all",
+    inputSchema: sectionList,
     async execute(input, ctx) {
-      const qs: Record<string, unknown> = {};
-      if ((input as Record<string, unknown>)?.projectId)
-        qs.project_id = (input as Record<string, unknown>).projectId;
-      return listAll(ctx, "/sections", qs);
+      const p = (input ?? {}) as t.Static<typeof sectionList>;
+      return listAll(ctx, "sections", wire(p, { projectId: "project_id" }));
     },
   });
 
   rl.registerAction("section.update", {
     access: "write",
-    description: "Update a section",
-    inputSchema: {
-      id: { type: "string", required: true },
-      name: { type: "string", required: true },
-    },
+    description: "Rename a section",
+    inputSchema: sectionUpdate,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `/sections/${pathSegment(p.id)}`, {
-        name: p.name,
+      const p = input as t.Static<typeof sectionUpdate>;
+      return api(ctx, "POST", `sections/${pathSegment(p.id)}`, {
+        body: { name: p.name },
       });
     },
   });
@@ -510,14 +633,10 @@ export default function todoist(rl: RunlinePluginAPI) {
   rl.registerAction("section.delete", {
     access: "write",
     description: "Delete a section",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "DELETE",
-        `/sections/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "DELETE", `sections/${pathSegment(id)}`);
     },
   });
 
@@ -525,21 +644,16 @@ export default function todoist(rl: RunlinePluginAPI) {
 
   rl.registerAction("comment.create", {
     access: "write",
-    description: "Create a comment on a task or on a project (exactly one)",
-    inputSchema: {
-      taskId: { type: "string", required: false },
-      projectId: { type: "string", required: false },
-      content: { type: "string", required: true },
-    },
+    description: "Comment on a task or on a project (exactly one)",
+    inputSchema: commentCreate,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      if (!p.taskId === !p.projectId)
-        throw new Error(
-          "todoist: comment.create takes exactly one of taskId or projectId",
-        );
-      return api(ctx, "POST", "/comments", {
-        ...(p.taskId ? { task_id: p.taskId } : { project_id: p.projectId }),
-        content: p.content,
+      const p = input as t.Static<typeof commentCreate>;
+      return api(ctx, "POST", "comments", {
+        body: wire(p, {
+          taskId: "task_id",
+          projectId: "project_id",
+          content: "content",
+        }),
       });
     },
   });
@@ -547,47 +661,35 @@ export default function todoist(rl: RunlinePluginAPI) {
   rl.registerAction("comment.get", {
     access: "read",
     description: "Get a comment",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      return api(
-        ctx,
-        "GET",
-        `/comments/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
+      const { id } = input as t.Static<typeof byId>;
+      return api(ctx, "GET", `comments/${pathSegment(id)}`);
     },
   });
 
   rl.registerAction("comment.list", {
     access: "read",
     description: "List the comments of a task or of a project (exactly one)",
-    inputSchema: {
-      taskId: { type: "string", required: false },
-      projectId: { type: "string", required: false },
-    },
+    inputSchema: commentList,
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      if (!p.taskId === !p.projectId)
-        throw new Error(
-          "todoist: comment.list takes exactly one of taskId or projectId",
-        );
-      const qs: Record<string, unknown> = {};
-      if (p.taskId) qs.task_id = p.taskId;
-      if (p.projectId) qs.project_id = p.projectId;
-      return listAll(ctx, "/comments", qs);
+      const p = input as t.Static<typeof commentList>;
+      return listAll(
+        ctx,
+        "comments",
+        wire(p, { taskId: "task_id", projectId: "project_id" }),
+      );
     },
   });
 
   rl.registerAction("comment.update", {
     access: "write",
     description: "Update a comment",
-    inputSchema: {
-      id: { type: "string", required: true },
-      content: { type: "string", required: true },
-    },
+    inputSchema: commentUpdate,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      return api(ctx, "POST", `/comments/${pathSegment(p.id)}`, {
-        content: p.content,
+      const p = input as t.Static<typeof commentUpdate>;
+      return api(ctx, "POST", `comments/${pathSegment(p.id)}`, {
+        body: { content: p.content },
       });
     },
   });
@@ -595,14 +697,10 @@ export default function todoist(rl: RunlinePluginAPI) {
   rl.registerAction("comment.delete", {
     access: "write",
     description: "Delete a comment",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "DELETE",
-        `/comments/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "DELETE", `comments/${pathSegment(id)}`);
     },
   });
 
@@ -611,76 +709,52 @@ export default function todoist(rl: RunlinePluginAPI) {
   rl.registerAction("label.create", {
     access: "write",
     description: "Create a label",
-    inputSchema: {
-      name: { type: "string", required: true },
-      color: { type: "string", required: false },
-      order: { type: "number", required: false },
-      isFavorite: { type: "boolean", required: false },
-    },
+    inputSchema: labelCreate,
     async execute(input, ctx) {
-      const p = input as Record<string, unknown>;
-      const body: Record<string, unknown> = { name: p.name };
-      if (p.color) body.color = p.color;
-      if (p.order) body.order = p.order;
-      if (p.isFavorite) body.is_favorite = true;
-      return api(ctx, "POST", "/labels", body);
+      return api(ctx, "POST", "labels", {
+        body: wire(input as t.Static<typeof labelCreate>, labelNames),
+      });
     },
   });
 
   rl.registerAction("label.get", {
     access: "read",
     description: "Get a label",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      return api(
-        ctx,
-        "GET",
-        `/labels/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
+      const { id } = input as t.Static<typeof byId>;
+      return api(ctx, "GET", `labels/${pathSegment(id)}`);
     },
   });
 
   rl.registerAction("label.list", {
     access: "read",
     description: "List all labels",
-    inputSchema: {},
+    inputSchema: t.Object({}, STRICT),
     async execute(_input, ctx) {
-      return listAll(ctx, "/labels");
+      return listAll(ctx, "labels");
     },
   });
 
   rl.registerAction("label.update", {
     access: "write",
-    description: "Update a label",
-    inputSchema: {
-      id: { type: "string", required: true },
-      name: { type: "string", required: false },
-      color: { type: "string", required: false },
-      order: { type: "number", required: false },
-      isFavorite: { type: "boolean", required: false },
-    },
+    description: "Update a label; only the fields given change",
+    inputSchema: labelUpdate,
     async execute(input, ctx) {
-      const { id, ...fields } = input as Record<string, unknown>;
-      const body: Record<string, unknown> = {};
-      if (fields.name) body.name = fields.name;
-      if (fields.color) body.color = fields.color;
-      if (fields.order) body.order = fields.order;
-      if (fields.isFavorite !== undefined) body.is_favorite = fields.isFavorite;
-      return api(ctx, "POST", `/labels/${pathSegment(id)}`, body);
+      const { id, ...fields } = input as t.Static<typeof labelUpdate>;
+      return api(ctx, "POST", `labels/${pathSegment(id)}`, {
+        body: wire(fields, labelNames),
+      });
     },
   });
 
   rl.registerAction("label.delete", {
     access: "write",
     description: "Delete a label",
-    inputSchema: { id: { type: "string", required: true } },
+    inputSchema: byId,
     async execute(input, ctx) {
-      await api(
-        ctx,
-        "DELETE",
-        `/labels/${pathSegment((input as Record<string, unknown>).id)}`,
-      );
-      return { success: true };
+      const { id } = input as t.Static<typeof byId>;
+      return act(ctx, "DELETE", `labels/${pathSegment(id)}`);
     },
   });
 }

@@ -1,9 +1,6 @@
 import { staticCredential } from "runline";
 
-/**
- * An API token, sent as a bearer to Todoist's unified API v1, which
- * replaced the REST v2 and Sync v9 surfaces.
- */
+/** An API token, sent as a bearer to Todoist's unified API v1. */
 export const todoistCredential = staticCredential({
   id: "todoist",
   auth: { kind: "bearer" },
