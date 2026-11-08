@@ -8,6 +8,7 @@ import {
   providerParameters,
 } from "../auth/token.js";
 import { isAwsScope } from "./aws.js";
+import { isCookieName, MAX_COOKIES } from "./cookies.js";
 import {
   bounded,
   HTTP_METHODS,
@@ -96,6 +97,32 @@ export const AwsSessionSchema = t.Object(
   { additionalProperties: false },
 );
 
+/** Stored shape of one cookie in a session's jar. */
+export const StoredCookieSchema = t.Object(
+  {
+    name: t.String({ minLength: 1 }),
+    value: t.String(),
+    domain: t.String({ minLength: 1 }),
+    hostOnly: t.Boolean(),
+    path: t.String({ minLength: 1 }),
+    secure: t.Boolean(),
+    httpOnly: t.Boolean(),
+    expiresAt: t.Optional(
+      t.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+/** Stored shape of a cookie session: its jar and the login it came from. */
+export const CookieSessionSchema = t.Object(
+  {
+    cookies: t.Array(StoredCookieSchema, { maxItems: MAX_COOKIES }),
+    revision: t.String({ minLength: 1 }),
+  },
+  { additionalProperties: false },
+);
+
 /** The shape of a strict object schema, as the registry inspects it. */
 type ObjectSchema = {
   type?: string;
@@ -143,6 +170,80 @@ function validateAwsSigV4(
 function identifier(value: string): void {
   if (typeof value !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(value))
     throw new AuthError("invalid_definition");
+}
+
+/** A login form's field name, brackets allowed (Rails' `user[email]`). */
+function formField(value: unknown): string {
+  if (typeof value !== "string" || !/^[A-Za-z_][\w.[\]-]{0,99}$/.test(value))
+    throw new AuthError("invalid_definition");
+  return value;
+}
+
+/** The longest body marker a rejection may declare. */
+const MAX_MARKER_LENGTH = 128;
+
+/**
+ * A cookie method stores an optional jar in its field, logs in on one of
+ * its own targets with a POST (and a GET, with a preflight), and declares
+ * at least one rejection signal; every path is checked as a request path
+ * beneath the login target is.
+ */
+function validateCookie(
+  auth: Extract<CredentialAuthentication, { kind: "cookie" }>,
+  method: CredentialMethod,
+): void {
+  const schema = method.schema as ObjectSchema;
+  if (
+    !sameShape(schema.properties?.[auth.field], CookieSessionSchema) ||
+    schema.required?.includes(auth.field)
+  )
+    throw new AuthError("invalid_definition");
+  const { login, rejection, csrf } = auth;
+  const target = login && targetOf(method, login.target);
+  if (
+    !target ||
+    target.socket ||
+    !target.methods.includes("POST") ||
+    (login.preflight !== undefined && !target.methods.includes("GET")) ||
+    !["form", "json"].includes(login.encoding)
+  )
+    throw new AuthError("invalid_definition");
+  resourceUrl(target, login.path);
+  if (login.preflight !== undefined) resourceUrl(target, login.preflight);
+  const names = [
+    formField(login.fields?.username ?? "username"),
+    formField(login.fields?.password ?? "password"),
+  ];
+  for (const [name, value] of Object.entries(login.parameters ?? {})) {
+    names.push(formField(name));
+    if (typeof value !== "string" || !/^[\x20-\x7e]{0,1024}$/.test(value))
+      throw new AuthError("invalid_definition");
+  }
+  if (new Set(names).size !== names.length)
+    throw new AuthError("invalid_definition");
+  const { statuses, loginPaths, marker } = rejection ?? {};
+  if (
+    !rejection ||
+    (statuses !== undefined &&
+      (!Array.isArray(statuses) ||
+        !statuses.length ||
+        statuses.some(
+          (status) => !Number.isInteger(status) || status < 400 || status > 499,
+        ))) ||
+    (loginPaths !== undefined &&
+      (!Array.isArray(loginPaths) || !loginPaths.length)) ||
+    (marker !== undefined &&
+      (typeof marker !== "string" ||
+        !new RegExp(`^[\\x20-\\x7e]{1,${MAX_MARKER_LENGTH}}$`).test(marker))) ||
+    (statuses === undefined && loginPaths === undefined && marker === undefined)
+  )
+    throw new AuthError("invalid_definition");
+  for (const path of loginPaths ?? []) resourceUrl(target, path);
+  if (csrf !== undefined) {
+    if (!isCookieName(csrf.cookie)) throw new AuthError("invalid_definition");
+    if (TRANSPORT_HEADERS.includes(headerName(csrf.header)))
+      throw new AuthError("invalid_definition");
+  }
 }
 
 /**
@@ -289,6 +390,7 @@ function validateMethod(method: CredentialMethod): void {
       Object.keys(method.targets ?? {}),
     );
   else if (auth.kind === "awsSigV4") validateAwsSigV4(auth, schema);
+  else if (auth.kind === "cookie") validateCookie(auth, method);
   else if (auth.kind === "oauth2") {
     identifier(auth.definition.id);
     identifier(auth.definition.provider);
@@ -411,6 +513,7 @@ function validateMethod(method: CredentialMethod): void {
       (target.socket !== true ||
         auth.kind === "oauth2" ||
         auth.kind === "awsSigV4" ||
+        auth.kind === "cookie" ||
         target.allowedHeaders !== undefined ||
         target.idempotency !== undefined ||
         target.resumableUpload !== undefined ||

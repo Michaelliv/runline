@@ -6,6 +6,7 @@ import { CredentialRegistry } from "./registry.js";
 import { type CredentialBroker, CredentialTransport } from "./transport.js";
 import type {
   AwsSession,
+  CookieSession,
   CredentialAuthentication,
   CredentialBinding,
   CredentialDeclaration,
@@ -101,9 +102,9 @@ function joinedPart(
 
 /**
  * How an issued credential is stored flat: an OAuth grant as its token
- * fields, a role session as `awsSession`, each stamped with the authority
- * (`expected`) it was issued under. Only those two are ever renewed and
- * written back.
+ * fields, a role session as `awsSession`, a cookie jar as `cookieSession`,
+ * each stamped with the authority (`expected`) it was issued under. Only
+ * those three are ever renewed and written back.
  */
 function writeBack(
   auth: CredentialAuthentication,
@@ -120,6 +121,18 @@ function writeBack(
       return { awsSession: { ...session, binding: expected } };
     };
   }
+  if (auth.kind === "cookie")
+    return (patch) => {
+      const session = patch[auth.field] as CookieSession | undefined;
+      if (!session?.revision) throw new AuthError("invalid_credentials");
+      return {
+        cookieSession: {
+          cookies: session.cookies,
+          revision: session.revision,
+          binding: expected,
+        },
+      };
+    };
   if (auth.kind !== "oauth2") throw new AuthError("invalid_definition");
   return (patch, current) => {
     const grant = patch[auth.field] as OAuthGrant | undefined;
@@ -182,6 +195,21 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
             }
           : {}),
       };
+    }
+    if (auth.kind === "cookie") {
+      // A jar logged in under another selection (another app, user or
+      // login) is never sent.
+      const cached = current.cookieSession as
+        | (CookieSession & { binding?: string })
+        | undefined;
+      return cached?.binding === expected
+        ? {
+            [auth.field]: {
+              cookies: cached.cookies,
+              revision: cached.revision,
+            },
+          }
+        : {};
     }
     const compatible =
       current.authTokenBinding === undefined ||
