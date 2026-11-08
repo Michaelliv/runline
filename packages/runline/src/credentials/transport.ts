@@ -16,7 +16,7 @@ import {
   cookieHeader,
   liveCookies,
 } from "./cookies.js";
-import { sendResource } from "./http.js";
+import { type ResourceOptions, sendResource } from "./http.js";
 import {
   bodyFields,
   bodyFormat,
@@ -55,6 +55,7 @@ import type {
   CredentialTarget,
   HttpMethod,
   OAuthGrant,
+  StoredCookie,
 } from "./types.js";
 
 export interface AuthenticatedRequest {
@@ -179,17 +180,39 @@ function unsafe(method: HttpMethod): boolean {
 /** Signs with the jar's cookies for the request's URL, and the CSRF header on an unsafe one. */
 function cookieSigner(
   auth: CookieAuthentication,
-  session: CookieSession,
+  cookies: readonly StoredCookie[],
 ): Signer {
   return ({ method, headers, url }) => {
     const now = Date.now();
-    const cookie = cookieHeader(session.cookies, url, now);
+    const cookie = cookieHeader(cookies, url, now);
     if (cookie) headers.set("cookie", cookie);
     if (auth.csrf && unsafe(method)) {
-      const token = cookieFor(session.cookies, auth.csrf.cookie, url, now);
+      const token = cookieFor(cookies, auth.csrf.cookie, url, now);
       if (token) headers.set(headerName(auth.csrf.header), token);
     }
   };
+}
+
+/** Whether a Location, read against the request's `url`, falls beneath a declared login path. */
+function toLogin(
+  auth: CookieAuthentication,
+  loginTarget: CredentialTarget,
+  location: string | null,
+  url: URL,
+): boolean {
+  if (!location || !auth.rejection.loginPaths) return false;
+  let next: URL;
+  try {
+    next = new URL(location, url);
+  } catch {
+    return false;
+  }
+  return auth.rejection.loginPaths.some((path) => {
+    const login = resourceUrl(loginTarget, path);
+    return (
+      next.origin === login.origin && next.pathname.startsWith(login.pathname)
+    );
+  });
 }
 
 /**
@@ -203,31 +226,10 @@ async function sessionRejection(
   response: Response,
   url: URL,
 ): Promise<"status" | "redirect" | "marker" | null> {
-  const { statuses, loginPaths, marker } = auth.rejection;
+  const { statuses, marker } = auth.rejection;
   if (statuses?.includes(response.status)) return "status";
-  if (response.status >= 300 && response.status < 400) {
-    const location = response.headers.get("location");
-    if (location && loginPaths) {
-      let next: URL | undefined;
-      try {
-        next = new URL(location, url);
-      } catch {
-        next = undefined;
-      }
-      if (
-        next &&
-        loginPaths.some((path) => {
-          const login = resourceUrl(loginTarget, path);
-          return (
-            next.origin === login.origin &&
-            next.pathname.startsWith(login.pathname)
-          );
-        })
-      )
-        return "redirect";
-    }
-    return null;
-  }
+  if (toLogin(auth, loginTarget, response.headers.get("location"), url))
+    return "redirect";
   if (
     marker &&
     response.status >= 200 &&
@@ -657,7 +659,10 @@ export class CredentialTransport {
       const url = resourceUrl(target, path);
       const headers = new Headers({ accept: "*/*" });
       if (body) headers.set("content-type", body.type);
-      cookieSigner(auth, { cookies, revision: "login" })({
+      cookieSigner(
+        auth,
+        cookies,
+      )({
         method: verb,
         headers,
         url,
@@ -673,7 +678,7 @@ export class CredentialTransport {
           fetch: this.options.fetch,
           timeoutMs: this.options.timeoutMs,
           maxResponseBytes: this.options.maxResponseBytes,
-          redirects: "return",
+          redirect: () => true,
           setCookie: (values) => {
             set = values;
           },
@@ -703,7 +708,7 @@ export class CredentialTransport {
             bytes: Buffer.from(new URLSearchParams(fields).toString()),
           };
     const { response, url } = await exchange(login.path, "POST", body);
-    if (response.status >= 400 || response.status < 200)
+    if (response.status >= 400)
       throw new AuthError("provider_rejected", response.status);
     if (
       (await sessionRejection(auth, target, response, url)) ||
@@ -922,7 +927,7 @@ export class CredentialTransport {
     );
     const send = async (
       signer: Signer,
-      setCookie?: (values: string[]) => void,
+      cookies?: Pick<ResourceOptions, "redirect" | "setCookie">,
     ) => {
       const outgoing: Outgoing = {
         method: verb,
@@ -948,7 +953,7 @@ export class CredentialTransport {
             this.options.maxTargetResponseBytes,
           ),
           resumableUpload: target.resumableUpload,
-          ...(setCookie ? { redirects: "return" as const, setCookie } : {}),
+          ...cookies,
         },
       );
     };
@@ -957,8 +962,11 @@ export class CredentialTransport {
       if (!loginTarget) throw new AuthError("invalid_definition");
       const attempt = async (current: CookieSession) => {
         let set: string[] = [];
-        const response = await send(cookieSigner(auth, current), (values) => {
-          set = values;
+        const response = await send(cookieSigner(auth, current.cookies), {
+          redirect: (location) => toLogin(auth, loginTarget, location, url),
+          setCookie: (values) => {
+            set = values;
+          },
         });
         await this.absorb(binding, method, current.revision, set, url);
         const rejection = await sessionRejection(
@@ -967,39 +975,28 @@ export class CredentialTransport {
           response,
           url,
         );
-        // Only a rejection's redirect is read; any other is refused as
-        // every transport redirect is, bar a resumable upload's 308.
-        if (
-          !rejection &&
-          response.status >= 300 &&
-          response.status < 400 &&
-          !(
-            target.resumableUpload &&
-            verb === "PUT" &&
-            headers.has("content-range") &&
-            response.status === 308 &&
-            !response.headers.has("location")
-          )
-        )
-          throw new AuthError("transport_failed");
-        return { response, rejection };
+        // A rejection by redirect or marker reads as the 401 it means; one
+        // by status keeps the app's own answer.
+        return {
+          rejection,
+          response:
+            rejection === "redirect" || rejection === "marker"
+              ? new Response(null, { status: 401 })
+              : response,
+        };
       };
-      // A rejection by redirect or marker reads as the 401 it means; one by
-      // status keeps the app's own answer.
-      const answer = (result: Awaited<ReturnType<typeof attempt>>) =>
-        !result.rejection || result.rejection === "status"
-          ? result.response
-          : new Response(null, { status: 401 });
       const first = await attempt(session);
-      if (!first.rejection || !replay) return answer(first);
-      // Exactly one replay, only after a newer login is committed.
+      if (!first.rejection) return first.response;
+      // A rejected session is dead whether or not this request may be sent
+      // again, so a newer login is committed either way and the next call
+      // signs with it. Exactly one replay, and only of a replayable request.
       session = await this.loginSession(
         binding,
         method,
         session.revision,
         true,
       );
-      return answer(await attempt(session));
+      return replay ? (await attempt(session)).response : first.response;
     }
     const first = await send(sign);
     if (
@@ -1080,7 +1077,7 @@ export class CredentialTransport {
         stored && liveCookies(stored.cookies, Date.now()).length
           ? stored
           : await this.loginSession(binding, method, stored?.revision);
-      return { sign: cookieSigner(auth, session), session };
+      return { sign: cookieSigner(auth, session.cookies), session };
     }
     if (auth.kind === "awsSigV4") {
       const scope = targetOf(method, target)?.aws;

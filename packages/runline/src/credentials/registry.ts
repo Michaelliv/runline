@@ -234,7 +234,8 @@ function validateCookie(
       (!Array.isArray(loginPaths) || !loginPaths.length)) ||
     (marker !== undefined &&
       (typeof marker !== "string" ||
-        !new RegExp(`^[\\x20-\\x7e]{1,${MAX_MARKER_LENGTH}}$`).test(marker))) ||
+        marker.length > MAX_MARKER_LENGTH ||
+        !/^[\x20-\x7e]+$/.test(marker))) ||
     (statuses === undefined && loginPaths === undefined && marker === undefined)
   )
     throw new AuthError("invalid_definition");

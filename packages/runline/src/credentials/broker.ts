@@ -100,6 +100,22 @@ function joinedPart(
   return joined;
 }
 
+/** An issued credential as stored flat: stamped with the authority it was issued under. */
+function stamped(issued: object, expected: string): Record<string, unknown> {
+  return { ...issued, binding: expected };
+}
+
+/**
+ * A flat issued credential without its stamp, when it was issued under
+ * `expected`; undefined for one issued under any other selection, which is
+ * never used.
+ */
+function issuedUnder<T>(stored: unknown, expected: string): T | undefined {
+  if (!stored || typeof stored !== "object") return undefined;
+  const { binding, ...issued } = stored as { binding?: unknown };
+  return binding === expected ? (issued as T) : undefined;
+}
+
 /**
  * How an issued credential is stored flat: an OAuth grant as its token
  * fields, a role session as `awsSession`, a cookie jar as `cookieSession`,
@@ -118,20 +134,14 @@ function writeBack(
     return (patch) => {
       const session = patch[sessionField] as AwsSession | undefined;
       if (!session?.sessionToken) throw new AuthError("invalid_credentials");
-      return { awsSession: { ...session, binding: expected } };
+      return { awsSession: stamped(session, expected) };
     };
   }
   if (auth.kind === "cookie")
     return (patch) => {
       const session = patch[auth.field] as CookieSession | undefined;
       if (!session?.revision) throw new AuthError("invalid_credentials");
-      return {
-        cookieSession: {
-          cookies: session.cookies,
-          revision: session.revision,
-          binding: expected,
-        },
-      };
+      return { cookieSession: stamped(session, expected) };
     };
   if (auth.kind !== "oauth2") throw new AuthError("invalid_definition");
   return (patch, current) => {
@@ -177,39 +187,19 @@ function localSigner(ctx: ActionContext, declaration: CredentialDeclaration) {
       const key = selection.awsProfile
         ? await awsProfileKey(selection.awsProfile)
         : staticSecret(current, selection.localSecret, ["sessionToken"]);
-      const cached = current.awsSession as
-        | (AwsSession & { binding?: string })
-        | undefined;
+      const session = issuedUnder<AwsSession>(current.awsSession, expected);
       const sessionField = auth.assumeRole?.sessionField;
       return {
         ...(key ? { [auth.field]: key } : {}),
-        ...(sessionField && cached?.binding === expected
-          ? {
-              [sessionField]: {
-                accessKeyId: cached.accessKeyId,
-                secretAccessKey: cached.secretAccessKey,
-                sessionToken: cached.sessionToken,
-                expiresAt: cached.expiresAt,
-                revision: cached.revision,
-              },
-            }
-          : {}),
+        ...(sessionField && session ? { [sessionField]: session } : {}),
       };
     }
     if (auth.kind === "cookie") {
-      // A jar logged in under another selection (another app, user or
-      // login) is never sent.
-      const cached = current.cookieSession as
-        | (CookieSession & { binding?: string })
-        | undefined;
-      return cached?.binding === expected
-        ? {
-            [auth.field]: {
-              cookies: cached.cookies,
-              revision: cached.revision,
-            },
-          }
-        : {};
+      const session = issuedUnder<CookieSession>(
+        current.cookieSession,
+        expected,
+      );
+      return session ? { [auth.field]: session } : {};
     }
     const compatible =
       current.authTokenBinding === undefined ||

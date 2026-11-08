@@ -85,7 +85,8 @@ interface Seen {
 /**
  * A fake cookie-session app on app.example: a preflight sets a CSRF
  * cookie, the login checks it and the password and sets a session, and
- * /items answers a live session, else rejects it as `mode` says.
+ * /items answers a live session, else rejects it as `mode` says. `expire`
+ * ends every session; `refuse` makes it honour none it issues from then on.
  */
 function fakeApp(
   options: {
@@ -97,6 +98,7 @@ function fakeApp(
 ) {
   const sessions = new Set<string>();
   const seen: Seen[] = [];
+  let honours = true;
   let logins = 0;
   let rotation = 0;
   const html = (body: string, status = 200, headers: [string, string][] = []) =>
@@ -146,7 +148,7 @@ function fakeApp(
         ],
       });
     }
-    if (!sessions.has(jar.sessionid)) {
+    if (!honours || !sessions.has(jar.sessionid)) {
       if (options.mode === "redirect")
         return new Response(null, {
           status: 302,
@@ -172,9 +174,11 @@ function fakeApp(
   return {
     fetch,
     seen,
-    sessions,
     logins: () => logins,
     expire: () => sessions.clear(),
+    refuse: () => {
+      honours = false;
+    },
   };
 }
 
@@ -360,44 +364,42 @@ describe("cookie-session credentials", () => {
     });
   }
 
-  it("answers a rejection that persists after the replay as 401, with no second login", async () => {
+  it("answers a rejection that persists after the replay as 401, with no further login", async () => {
     for (const mode of ["redirect", "marker"] as const) {
       const app = fakeApp({ mode });
       const h = await harness(app);
       await h.transport.request(h.binding, { target: "app", path: "items" });
-      app.expire();
-      // The app logs in but never honours the session again.
-      const original = app.sessions.add.bind(app.sessions);
-      app.sessions.add = () => app.sessions;
+      app.refuse();
       const response = await h.transport.request(h.binding, {
         target: "app",
         path: "items",
       });
-      app.sessions.add = original;
       assert.equal(response.status, 401);
       assert.equal(app.logins(), 2);
     }
   });
 
-  it("never replays a rejected write without an idempotency key", async () => {
+  it("never replays a rejected write, but logs in again so the next one is signed by a live session", async () => {
     const app = fakeApp({ mode: "redirect" });
     const h = await harness(app);
     await h.transport.request(h.binding, { target: "app", path: "items" });
     app.expire();
-    const response = await h.transport.request(h.binding, {
+    const write = {
       target: "app",
       path: "items",
-      method: "POST",
+      method: "POST" as const,
       headers: { "Content-Type": "application/json" },
       body: "{}",
-    });
+    };
+    const response = await h.transport.request(h.binding, write);
     assert.equal(response.status, 401);
-    assert.equal(app.logins(), 1);
-    assert.equal(
-      app.seen.filter((s) => s.method === "POST" && s.url.endsWith("items"))
-        .length,
-      1,
-    );
+    assert.equal(app.logins(), 2);
+    const writes = () =>
+      app.seen.filter((s) => s.method === "POST" && s.url.endsWith("items"));
+    assert.equal(writes().length, 1);
+    assert.equal((await h.transport.request(h.binding, write)).status, 200);
+    assert.equal(app.logins(), 2);
+    assert.equal(writes().length, 2);
   });
 
   it("replays an idempotent write once, with its key, after logging in again", async () => {
@@ -551,11 +553,8 @@ describe("cookie-session credentials", () => {
     };
     const h = await harness(app, def);
     assert.equal((await h.transport.probe(h.binding)).outcome, "accepted");
-    const original = app.sessions.add.bind(app.sessions);
-    app.expire();
-    app.sessions.add = () => app.sessions;
+    app.refuse();
     assert.equal((await h.transport.probe(h.binding)).outcome, "rejected");
-    app.sessions.add = original;
   });
 });
 

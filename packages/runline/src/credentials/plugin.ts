@@ -1,8 +1,8 @@
 /**
  * The plugin side of the credential broker, public to every plugin —
  * bundled or custom: one declaration factory for static keys, one stored
- * grant shape for OAuth methods, one way to turn public config into an
- * HTTPS target, one request path.
+ * shape each for OAuth and cookie methods, one way to turn public config
+ * into an HTTPS target, one request path.
  */
 
 import * as t from "typebox";

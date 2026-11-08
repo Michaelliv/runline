@@ -7,11 +7,11 @@ export interface ResourceOptions {
   maxResponseBytes: number;
   resumableUpload?: boolean;
   /**
-   * A cookie session's requests: a 3xx comes back as it is, Location and
-   * all, for the transport to read as a rejection or a login's answer,
-   * instead of failing. Nothing is followed.
+   * The 3xx that come back as they are, Location and all, judged by their
+   * Location; nothing is followed. Without it, or when it refuses, a 3xx
+   * fails as transport_failed, bar a resumable upload's 308.
    */
-  redirects?: "return";
+  redirect?: (location: string | null) => boolean;
   /**
    * Receives the response's `Set-Cookie` values before they are stripped:
    * the only way a cookie leaves this function, and never to a caller.
@@ -40,7 +40,7 @@ export async function sendResource(
       method,
       headers,
       body: body === undefined ? undefined : Buffer.from(body),
-      redirect: options.redirects === "return" ? "manual" : "error",
+      redirect: options.redirect ? "manual" : "error",
       credentials: "omit",
       signal: controller.signal,
     });
@@ -49,7 +49,7 @@ export async function sendResource(
       response.redirected ||
       (response.status >= 300 &&
         response.status < 400 &&
-        options.redirects !== "return" &&
+        !options.redirect?.(response.headers.get("location")) &&
         !(
           options.resumableUpload &&
           method === "PUT" &&

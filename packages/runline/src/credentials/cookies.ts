@@ -11,7 +11,7 @@ import type { StoredCookie } from "./types.js";
 /** The most cookies a jar keeps; the oldest go first beyond it. */
 export const MAX_COOKIES = 64;
 /** The largest name plus value a cookie may have (RFC 6265 §6.1's floor). */
-export const MAX_COOKIE_BYTES = 4096;
+const MAX_COOKIE_BYTES = 4096;
 
 const TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
@@ -90,18 +90,18 @@ export function parseSetCookie(
     else if (key === "httponly") httpOnly = true;
   }
   // A Domain the host does not match is refused, and so is a bare
-  // top-level label: nothing may set a cookie for a whole suffix.
+  // top-level label. A wider Domain still reaches only the method's own
+  // targets: the jar signs nothing else.
   if (
     domain !== undefined &&
     (!domainMatch(host, domain) || (domain !== host && !domain.includes(".")))
   )
     return undefined;
+  const until = maxAge !== undefined ? now + maxAge * 1000 : expires;
   const expiresAt =
-    maxAge !== undefined
-      ? maxAge <= 0
-        ? 0
-        : Math.min(now + maxAge * 1000, Number.MAX_SAFE_INTEGER)
-      : expires;
+    until === undefined
+      ? undefined
+      : Math.min(Math.max(0, until), Number.MAX_SAFE_INTEGER);
   const cookie: StoredCookie = {
     name,
     value,
@@ -110,7 +110,7 @@ export function parseSetCookie(
     path: path ?? defaultPath(url.pathname),
     secure,
     httpOnly,
-    ...(expiresAt !== undefined ? { expiresAt: Math.max(0, expiresAt) } : {}),
+    ...(expiresAt !== undefined ? { expiresAt } : {}),
   };
   return { cookie, expired: expiresAt !== undefined && expiresAt <= now };
 }
