@@ -919,8 +919,22 @@ export class CredentialTransport {
     const replay =
       input.retry !== "never" &&
       (verb === "GET" || verb === "HEAD" || input.idempotencyKey !== undefined);
+    /**
+     * A rejected credential is dead whether or not this request may be sent
+     * again, so it is renewed either way and the next call signs with the
+     * renewal. Only a replayable request is sent again, exactly once; any
+     * other is answered with its rejection.
+     */
+    const afterRejection = async <T>(
+      rejection: Response,
+      renew: () => Promise<T>,
+      resend: (renewed: T) => Promise<Response>,
+    ): Promise<Response> => {
+      const renewed = await renew();
+      return replay ? resend(renewed) : rejection;
+    };
     const base = targetBase(target).pathname;
-    let { sign, grant, session } = await this.authorize(
+    const { sign, grant, session } = await this.authorize(
       binding,
       method,
       input.target,
@@ -987,28 +1001,24 @@ export class CredentialTransport {
       };
       const first = await attempt(session);
       if (!first.rejection) return first.response;
-      // A rejected session is dead whether or not this request may be sent
-      // again, so a newer login is committed either way and the next call
-      // signs with it. Exactly one replay, and only of a replayable request.
-      session = await this.loginSession(
-        binding,
-        method,
-        session.revision,
-        true,
+      return afterRejection(
+        first.response,
+        () => this.loginSession(binding, method, session.revision, true),
+        async (renewed) => (await attempt(renewed)).response,
       );
-      return replay ? (await attempt(session)).response : first.response;
     }
     const first = await send(sign);
     if (
       auth.kind !== "oauth2" ||
       !grant ||
-      !replay ||
       first.status !== (auth.rejectionStatus ?? 401)
     )
       return first;
-    // Exactly one replay, only after durable renewal (or a newer committed revision).
-    grant = await this.renew(binding, method, grant.revision, true);
-    return send(bearer(secret(grant.tokens.accessToken)));
+    return afterRejection(
+      first,
+      () => this.renew(binding, method, grant.revision, true),
+      (renewed) => send(bearer(secret(renewed.tokens.accessToken))),
+    );
   }
 
   /**
