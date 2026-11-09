@@ -59,6 +59,7 @@ import {
   type ActionContext,
   jsonAnswer,
   pathSegment,
+  requestFailed,
   type RunlinePluginAPI,
 } from "runline";
 import * as t from "typebox";
@@ -333,7 +334,7 @@ async function uploadBytes(
     });
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`googleDrive: upload failed (HTTP ${res.status})`);
+      throw requestFailed("googleDrive", res.status);
     }
     return JSON.parse(text);
   }
@@ -355,7 +356,7 @@ async function uploadBytes(
     body: JSON.stringify(metadata),
   });
   if (!initRes.ok) {
-    throw new Error(`googleDrive: resumable init failed (HTTP ${initRes.status})`);
+    throw requestFailed("googleDrive", initRes.status);
   }
   const uploadUrl = uploadSession(initRes.headers.get("location"));
 
@@ -386,7 +387,7 @@ async function uploadBytes(
       // Discard body, keep streaming.
       await res.text();
     } else {
-      throw new Error(`googleDrive: resumable chunk failed (HTTP ${res.status})`);
+      throw requestFailed("googleDrive", res.status);
     }
     void isLast;
   };
@@ -635,9 +636,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
           },
         );
         if (!res.ok) {
-          throw new Error(
-            `googleDrive: docs.batchUpdate failed (HTTP ${res.status})`,
-          );
+          throw requestFailed("googleDrive", res.status);
         }
         return { id: doc.id };
       }
@@ -710,7 +709,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       }
       const res = await driveResponse(ctx, url);
       if (!res.ok) {
-        throw new Error(`googleDrive: download failed (HTTP ${res.status})`);
+        throw requestFailed("googleDrive", res.status);
       }
       const bytes = Buffer.from(await res.arrayBuffer());
       const fileName = meta.name;
@@ -881,9 +880,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
             body: new Uint8Array(c.buffer),
           });
           if (!res.ok) {
-            throw new Error(
-              `googleDrive: content update failed (HTTP ${res.status})`,
-            );
+            throw requestFailed("googleDrive", res.status);
           }
         } else if (c.path) {
           // Resumable PATCH
@@ -907,9 +904,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
             },
           });
           if (!initRes.ok) {
-            throw new Error(
-              `googleDrive: resumable update init failed (HTTP ${initRes.status})`,
-            );
+            throw requestFailed("googleDrive", initRes.status);
           }
           const uploadUrl = uploadSession(initRes.headers.get("location"));
           const CHUNK = 2 * 1024 * 1024;
@@ -928,9 +923,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
             offset += chunk.byteLength;
             lastStatus = res.status;
             if (res.status !== 200 && res.status !== 201 && res.status !== 308) {
-              throw new Error(
-                `googleDrive: resumable chunk failed (HTTP ${res.status})`,
-              );
+              throw requestFailed("googleDrive", res.status);
             }
             await res.text();
           };
@@ -1824,9 +1817,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       url.searchParams.set("alt", "media");
       const res = await driveResponse(ctx, url.toString());
       if (!res.ok) {
-        throw new Error(
-          `googleDrive: revision download failed (HTTP ${res.status})`,
-        );
+        throw requestFailed("googleDrive", res.status);
       }
       const bytes = Buffer.from(await res.arrayBuffer());
       const mimeType = res.headers.get("content-type") ?? "application/octet-stream";
@@ -1923,9 +1914,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         `${API_BASE}/drive/v3/files/${pathSegment(fileId)}/revisions/${pathSegment(revisionId)}?alt=media`,
       );
       if (!dl.ok) {
-        throw new Error(
-          `googleDrive: revision restore download failed (HTTP ${dl.status})`,
-        );
+        throw requestFailed("googleDrive", dl.status);
       }
       const bytes = Buffer.from(await dl.arrayBuffer());
       const mime =
@@ -1950,9 +1939,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         body: new Uint8Array(body),
       });
       if (!res.ok) {
-        throw new Error(
-          `googleDrive: revision restore upload failed (HTTP ${res.status})`,
-        );
+        throw requestFailed("googleDrive", res.status);
       }
       const head = (await jsonAnswer(res)) as Record<string, unknown>;
       return { fileId, restoredFromRevisionId: revisionId, head };
@@ -2231,7 +2218,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       u.searchParams.set("mimeType", p.mimeType as string);
       const res = await driveResponse(ctx, u.toString());
       if (!res.ok) {
-        throw new Error(`googleDrive: export failed (HTTP ${res.status})`);
+        throw requestFailed("googleDrive", res.status);
       }
       const bytes = Buffer.from(await res.arrayBuffer());
       const contentType = res.headers.get("content-type") ?? (p.mimeType as string);

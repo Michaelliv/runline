@@ -626,7 +626,9 @@ applied twice. Parallel calls that find an expired credential renew it once.
   presigned download): `presignedRequest(url, { allowedOrigins, fetch, method,
   headers, body })`, or `downloadResource` for a GET. No credential or cookie
   is sent with it, the origin must be one you list, and errors never include
-  the URL.
+  the URL. Report its failure without `status` (a plain `Error`): a refused
+  presigned URL is the link expiring, not the connection's credential, and a
+  host that reads `status` would mark a working login broken.
 - **Resumable uploads** (Google's `308` with `Content-Range`): the target
   declares `resumableUpload: true`, allows `PUT` and allows `Content-Range`.
 - **WebDAV**: a target may allow `MKCOL`, `COPY` and `MOVE`; `COPY` and `MOVE`
