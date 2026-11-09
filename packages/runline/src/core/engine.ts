@@ -573,30 +573,34 @@ export class ExecutionEngine {
     const started = performance.now();
     try {
       const value = await action.execute(args, ctx);
-      this.fireOnAction(plugin.name, action.name, path, started, false);
+      this.fireOnAction(plugin.name, action.name, path, started);
       return value;
     } catch (err) {
-      // `failed` is a flag, not `error !== undefined` — a plugin that
-      // does `throw undefined` still failed.
-      this.fireOnAction(plugin.name, action.name, path, started, true, err);
+      // A plugin that does `throw undefined` still failed: observers get
+      // an Error in its place, never a value that reads as success.
+      const failure = err ?? new Error("Unknown error");
+      this.fireOnAction(plugin.name, action.name, path, started, failure);
+      // The connection the call acted through hears of it, so its host can
+      // judge whether the failure is the credential's own.
+      notifyObserver(handle.failed?.bind(handle), failure);
       throw err;
     }
   }
 
+  /** `failure` is set exactly when execute rejected. */
   private fireOnAction(
     pluginName: string,
     actionName: string,
     path: string,
     started: number,
-    failed: boolean,
-    error?: unknown,
+    failure?: unknown,
   ): void {
     notifyObserver(this.hooks.onAction, {
       plugin: pluginName,
       action: actionName,
       path,
       durationMs: performance.now() - started,
-      ...(failed ? { error: error ?? new Error("Unknown error") } : {}),
+      ...(failure !== undefined ? { error: failure } : {}),
     });
   }
 

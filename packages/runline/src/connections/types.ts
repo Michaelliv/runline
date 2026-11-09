@@ -41,6 +41,15 @@ export interface ConnectionHandle {
    * report the replacement token as durably saved or replay the callback.
    */
   update(change: ConnectionUpdate): Promise<ConnectionConfig>;
+  /**
+   * An action that acted through this connection threw: its error, with an
+   * Error in place of a nullish throw. Whether the failure is the
+   * connection's own (its provider refusing the credential) is the host's
+   * to judge, from the error and the identity this handle holds. Called at
+   * most once per action call, after any `update` the call made. The call
+   * never waits on it, and a throw or rejection here is swallowed.
+   */
+  failed?(error: unknown): void | Promise<void>;
 }
 
 /**
