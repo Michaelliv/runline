@@ -19,7 +19,7 @@ runline exec 'return await brandfetch.brand.getColors({ domain: "nike.com" })'
 # => [{ hex: "#E5E5E5", type: "accent" }, { hex: "#111111", type: "dark" }, ...]
 ```
 
-All 204 built-in plugins ship bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS runtime: each configured plugin is a top-level global, dot-chain into resource and action. Configure the built-in `node` plugin for host work like `node.fs.readFile`, `node.process.execFile`, `node.path.join`, `node.crypto.hash`, and `node.fetch`.
+Every built-in plugin ships bundled inside `runline` — no per-plugin install step. Just add a connection for the one you want to use. Agent code runs in a QuickJS runtime: each configured plugin is a top-level global, dot-chain into resource and action. Configure the built-in `node` plugin for host work like `node.fs.readFile`, `node.process.execFile`, `node.path.join`, `node.crypto.hash`, and `node.fetch`.
 
 ```js
 // agent writes this
@@ -35,7 +35,7 @@ return { company: company.name, issue: issue.number };
 
 ## Plugins
 
-204 built-in plugins covering popular SaaS, DevOps, productivity, image-generation APIs, and host Node capabilities. All ship with the package — no separate install needed.
+Built-in plugins covering popular SaaS, DevOps, productivity, image-generation APIs, and host Node capabilities. All ship with the package — no separate install needed.
 
 Set the env var shown in the Auth column, add a connection, and go:
 
@@ -401,66 +401,7 @@ export default function orders(rl: RunlinePluginAPI) {
 }
 ```
 
-The credential kit is exported from `runline` for every plugin, bundled or custom:
-
-| Helper | Use |
-|---|---|
-| `staticCredential(spec)` | Declare a static secret: `bearer`, `apiKey` (named header, optional prefix), `queryKey`, `basic`, or the general form of named parts and placements. `local` names the flat config fields it signs from; `targets` may be a function of public config. |
-| `grantSchema` | The stored shape of an OAuth method's revisioned grant, for plugins declaring `oauth2`. |
-| `cookieSessionSchema` | The stored shape of a cookie method's jar, in `session`, for plugins declaring `cookie`. |
-| `credentialJson` / `credentialOk` / `credentialRequest` | Send one request through the declared credential: JSON answer, successful `Response`, or raw `Response`. `query`, `json`, `form`, `body`, `headers` and WebDAV `destination` are built for you. |
-| `credentialSocketUrl` | A signed (or host-relayed) URL for a declared `wss://` target. |
-| `brokerFor(ctx, declaration)` | The broker one action call signs through, for requests and probes the helpers above do not shape: the host's, or the local signer. |
-| `pathSegment` / `pathSegments` / `slashEncodedSegment` | Put caller input into a path as exactly one segment (or slash-separated segments); `..`, empty segments and separators are refused. |
-| `pathWithin` | Turn an API-returned next-page URL back into a path beneath the declared target, refusing anything outside it. |
-| `httpsBase` / `hostLabel` / `configChoice` / `configFlag` | Derive a target from public config, refusing anything that could send the credential to another host. |
-| `responseFailed` / `requestFailed` / `failureMessage` / `errorIdentifier` | Report a failed response by status and identifier-shaped codes only: provider free text, where a secret may be echoed, never reaches the error. |
-| `answerFailed` / `graphqlFailed` | Report a failure inside a 2xx answer (`ok: false`, GraphQL `errors`) by code, field and a one-line message. |
-| `jsonAnswer` / `jsonOrAcknowledged` | Read a successful answer; an empty or 204 answer is `{ success: true }`. |
-| `multipartBody` | Buffer `FormData` into the bytes and boundary the transport accepts. |
-| `refuseUnderHost` | Refuse an owner-login step when a host keeps the credential. |
-| `awsCredential(spec)` / `awsTarget(service, region)` | Declare an AWS connection: an access key (`accessKeyId`, `secretAccessKey`, a session's `sessionToken`) or, signing locally, an AWS CLI profile (`awsProfile`, e.g. an SSO login) in its place; with `roleArn`, a role that key assumes, signing with the role's sessions. Targets are regional service endpoints, each signed for its service and region. |
-| `awsJson` / `awsQuery` | Call an AWS JSON-protocol service by operation (`AmazonSSM.SendCommand`), or a Query-protocol service by action (`DescribeInstances`), its XML answer read as data. |
-| `awsFailed` / `awsList` / `parseAwsXml` / `awsEndpoint` / `awsRegion` | Report a failed AWS call by status and AWS error code; read an XML list's `item` or `member` entries; parse AWS XML; build and validate endpoints and regions. |
-
-An AWS plugin declares its credential the same way, and signs through SigV4:
-
-```typescript
-import {
-  awsCredential,
-  awsJson,
-  awsRegion,
-  awsTarget,
-  type RunlinePluginAPI,
-} from "runline";
-import * as t from "typebox";
-
-// An access key, or with `roleArn` in the connection a role it assumes.
-const credential = awsCredential({
-  id: "aws",
-  targets: (config) => ({
-    ssm: awsTarget("ssm", awsRegion(config.region ?? "us-east-1")),
-  }),
-});
-
-export default function fleet(rl: RunlinePluginAPI) {
-  rl.setName("fleet");
-  rl.setCredential(credential);
-  rl.registerAction("instances.list", {
-    access: "read",
-    description: "Instances managed by Systems Manager.",
-    inputSchema: t.Object({}, { additionalProperties: false }),
-    execute: (_input, ctx) =>
-      awsJson(ctx, credential, "fleet", {
-        target: "ssm",
-        operation: "AmazonSSM.DescribeInstanceInformation",
-        version: "1.1",
-      }),
-  });
-}
-```
-
-See [Host-signed requests](#host-signed-requests) for the declaration model itself: authentication kinds, placements and targets.
+**[docs/credentials.md](docs/credentials.md)** is the full guide: which declaration fits your API (a key, several parts, an optional key, a host from config, OAuth with or without a person, AWS, a web app's cookie session), the request and path helpers, reporting failures without leaking provider text, what each `AuthError` code means, and where the secret lives when signing locally or under a host.
 
 Custom plugins are discovered from the nearest project `.runline/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then the bundled built-ins named by configured connections. Project-local plugins win over same-named global or built-in plugins; duplicates discovered later are skipped and reported on stderr.
 
@@ -496,7 +437,7 @@ A plugin may export the default registration function shown above, or a plain pl
 
 Actions can include optional `access: "read" | "write"` metadata. Use `read` for actions that only retrieve data, and `write` for anything that creates, updates, deletes, sends, uploads, executes, triggers, deploys, imports, changes config, writes local files, or may otherwise affect an external system. Omit it only for legacy compatibility; built-in plugins include it.
 
-Plugin `execute` handlers run **outside** the QuickJS runtime with full Node.js access (`fetch`, `fs`, npm dependencies available to the host process, etc). Agent code calls them through configured plugin globals. `ctx.connection.config` contains the resolved connection config with env var overrides applied, and `ctx.updateConnection(patch)` can persist refreshed credentials. Add a `node` connection only when you explicitly want to expose host APIs through the built-in `node` plugin.
+Plugin `execute` handlers run **outside** the QuickJS runtime with full Node.js access (`fetch`, `fs`, npm dependencies available to the host process, etc). Agent code calls them through configured plugin globals. `ctx.connection.config` contains the resolved connection config with env var overrides applied, and `ctx.updateConnection(patch)` persists a config patch through the host's connection provider. A plugin that declares its credential never calls it for tokens: the signer renews and stores them. Add a `node` connection only when you explicitly want to expose host APIs through the built-in `node` plugin.
 
 Agents can inspect custom plugins from inside `runline exec` before calling them:
 
@@ -510,7 +451,7 @@ runline exec 'return await orders.list({ orgId: "acme", status: "open" })'
 
 For debugging, run `runline actions --json` to see loaded actions, access metadata, and schemas. Loader failures include the plugin path and reason on stderr. A broken plugin does not stop discovery of healthy plugins in the same directory; common failures include invalid exports, invalid plugin names, malformed `package.json`/`plugins.json`, missing entrypoints, and duplicate plugin names.
 
-See [`packages/runline-plugins/`](packages/runline-plugins) for 211 real-world examples.
+See [`packages/runline-plugins/`](packages/runline-plugins) for every built-in plugin, each a real-world example.
 
 ## Sandbox
 
@@ -553,83 +494,7 @@ console.log(result.result);  // [{ hex: "#635BFF", type: "accent", brightness: 1
 
 ### Host-signed requests
 
-A host that keeps credentials outside the process running actions — a server signing for a sandboxed worker — passes `credentialBroker`. The engine calls it once per action call of a plugin that declares its credential (`setCredential`), with `{ plugin, action, context }` (`context` is whatever that `execute()` passed) and hands the result to the action as `ctx.credentials`. Every built-in that declares its credential then sends every request and probe through it and signs nothing itself, so its connection config carries public settings only.
-
-```typescript
-const rl = Runline.create({
-  plugins: [gmail],
-  credentialBroker: ({ plugin, action, context }) => ({
-    request: (req) => signOnServer({ plugin, action, context, req }),
-    probe: () => probeOnServer({ plugin, context }),
-  }),
-});
-```
-
-The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application, JWT identity and AWS role — never with anything the plugin's process sends.
-
-Each method's `authentication.field` names the one config field a host stores the secret in. There are five kinds:
-
-| kind | stored shape | sent as |
-|---|---|---|
-| `none` | nothing | unsigned, still held to the method's targets: the method of a connection without an optional credential |
-| `static` | its named `parts`, each a string, `optionalParts` allowed to be absent (`staticSecretSchema(parts, optionalParts)`) | each part through its `placements` |
-| `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed on every rejection (`rejectionStatus`, 401 by default) by its declared `renewal`; the rejected request is sent again once only if it is a GET or HEAD or a write with an `idempotencyKey`, and any other is answered with its rejection while the next call signs with the renewal. Renewal is by a refresh token, client credentials, a JWT bearer assertion (`jwtIdentity`), or the resource owner's username and password (`resourceOwner`, under the endpoint's own `fields` names) |
-| `awsSigV4` | an `AwsAccessKeySchema` key: `accessKeyId`, `secretAccessKey`, and a session's `sessionToken` | AWS Signature Version 4 for each target's declared `aws: { service, region }`. With `assumeRole: { sessionField }`, the key only assumes the binding's `awsRole` through STS; requests sign with the role's session (`AwsSessionSchema`, in `sessionField`), renewed five minutes before it expires |
-| `cookie` | a revisioned `CookieSession` jar (`CookieSessionSchema`; `cookieSessionSchema` stores it in `session`) | the jar's cookies in `Cookie`, after a login the transport performs with the `resourceOwner`, renewed once on a declared rejection. See below |
-
-A static placement is one of:
-
-| placement | sent as |
-|---|---|
-| `{ in: "header", part, name, prefix? }` | `<name>: <prefix><part>` |
-| `{ in: "query", part, name }` | `?<name>=<part>` |
-| `{ in: "body", part, name }` | a top-level field of a JSON-object or form body; `?<name>=<part>` when the request has no body |
-| `{ in: "jsonPointer", part, pointer }` | the value at an RFC 6901 pointer in a JSON body (`/params/args/2`), where the request carries null for the transport to fill |
-| `{ in: "path", part, prefix? }` | the first path segment beneath the base, `<prefix><part>`; at most one per method. A secret in a URL can reach access logs, so a host may refuse this placement |
-| `{ in: "basic", username, password }` | `Authorization: Basic base64(username:password)`; either part may be empty |
-| `{ in: "jwt", part, name, prefix?, audience }` | `<name>: <prefix><JWT>`: an HS256 JWT signed per request from a `<key id>:<hex secret>` part, for `audience`, valid five minutes |
-| `{ in: "querySignature", part, name }` | `<name>: base64(HMAC-SHA256(query))`, keyed by the part, over the query as sent, after every other placement |
-
-Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. A placement may name `targets` it alone signs, so a connection holding two credentials for two APIs keeps them as two parts scoped to their own targets; every target of a static method must be signed by at least one placement. A part listed in `optionalParts` may be missing, which refuses only the targets that place it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`). With `optional: true` the type also declares a `none` method, which a connection selects unless it holds the flat secret fields or says `authenticated: true` in its public config.
-
-A `cookie` method is a web app that keeps its session in a cookie. The plugin never handles the password or a cookie value:
-
-```typescript
-authentication: {
-  kind: "cookie",
-  field: "session",
-  login: {
-    target: "app",            // one of the method's targets, allowing POST (and GET with a preflight)
-    path: "accounts/login/",  // beneath the target, like any request path
-    encoding: "form",         // or "json"
-    fields: { username: "email" },  // the app's names; username/password by default
-    parameters: { remember: "1" },  // fixed extra fields, never a secret
-    preflight: "accounts/login/",   // optional GET first, e.g. for a CSRF cookie
-  },
-  rejection: {                // at least one signal
-    statuses: [401, 403],     // 4xx only (419, 440 included)
-    loginPaths: ["accounts/login/"],  // a 3xx whose Location falls beneath one
-    marker: 'id="login-form"',       // in a 2xx text/html answer, ≤128 chars
-  },
-  csrf: { cookie: "csrftoken", header: "X-CSRFToken" },  // optional
-}
-```
-
-The login sends the jar it already holds, so a long-lived device-trust cookie rides along, and merges what it sets into the jar rather than replacing it. The jar takes `Set-Cookie` from every response of the method's targets, after RFC 6265: a rotated cookie replaces its namesake, `Max-Age=0` or a past `Expires` deletes, a `Domain` the host does not match, or a bare top-level label, is ignored, and each request carries only the cookies whose domain and path match it. A rotation never changes the jar's `revision` and lands only on the login it came from, so a slow response of an old session cannot undo a newer login; only a login does. A store failure while saving a rotation leaves the response standing.
-
-A response that shows a declared rejection always triggers one login, since the session is dead, and then one replay by the same rule as `oauth2`: a GET or HEAD, or a write with an `idempotencyKey` on a target that declares idempotency. Any other write is answered with the rejection and never sent again; the next call signs with the new session. Parallel calls on an expired session log in once. A rejection by status reaches the plugin as the app's own answer; one by redirect or marker, as a bare `401`. Any other 3xx is refused as `transport_failed`, as every transport redirect is. A login answered with a 4xx or 5xx is `provider_rejected` with that status; one the app answers with a rejection signal, or that leaves no live cookie, is `reconnect_required`. With `csrf`, the named cookie's value is copied into its header on every unsafe request, the login included; the header is reserved. Signing locally, the jar is kept in the flat field `cookieSession`, bound to the selection it was logged in under, so a changed user, password or login never reuses it. Logins that need HTML extraction, multi-host SSO or a one-time code are not declared logins.
-
-A public config field that picks a host — a region, an environment, a hosting mode, a sandbox flag — accepts only its documented values; anything else makes the declaration throw `invalid_credentials` rather than fall back to a default host.
-
-Without a broker, a plugin signs locally from its flat CLI config; the selection's `localSecret` names which flat fields (or fixed values) make up the stored shape.
-
-A target with `socket: true` is a `wss://` endpoint, such as a browser's CDP socket. The broker's optional `socketUrl({ target, path })` returns a URL the plugin may open: the local signer returns it signed by the method's query placements, the only placements such a target may have; a host keeping the credential returns a relay it controls. A broker without `socketUrl` serves no sockets, and plugins refuse those actions as `unsupported_operation`.
-
-A target may allow the WebDAV methods `MKCOL`, `COPY` and `MOVE`. A `COPY` or `MOVE` names its `destination`, a path beneath the same target checked as `path` is, and the transport alone sends it as the absolute `Destination` header; a caller never sets that header.
-
-A target that the provider holds open longer, or answers larger, than the transport defaults declares its own `timeoutMs` or `maxResponseBytes`; the host caps both with `maxTargetTimeoutMs` and `maxTargetResponseBytes` on `CredentialTransport`.
-
-Every target of an `awsSigV4` method names the service and region it is signed for, and no other method's target may; none is a socket. SigV4 owns `Authorization`, `X-Amz-Date`, `X-Amz-Security-Token` and `X-Amz-Content-Sha256`, and refuses a presigned URL's `X-Amz-*` query parameters; the query goes out in the canonical encoding it was signed in. An STS refusal of the key itself (`InvalidClientTokenId`, `SignatureDoesNotMatch`, an expired session token) is `reconnect_required`; any other refusal to assume the role is `provider_rejected`. Signing locally, an `assumeRole` connection keeps its session in the flat field `awsSession`, bound to the key and role it was issued for. A selection's `awsProfile` (local signing only, ignored by hosts, like `localSecret`) takes the key from an AWS CLI profile through `aws configure export-credentials`, held until five minutes before it expires; a CLI with no login is `reconnect_required`, mended by `aws sso login`.
+A host that keeps credentials outside the process running actions (a server signing for a sandboxed worker) passes `credentialBroker` to `Runline.create`; every plugin that declares its credential then sends its requests through it and signs nothing itself. See [For hosts](docs/credentials.md#for-hosts).
 
 ## CLI Reference
 
@@ -666,7 +531,7 @@ Env vars override config values. Plugins declare env var names in their connecti
 
 ## Development
 
-Runline is a bun workspace monorepo: `packages/runline` (library + CLI), `packages/runline-plugins` (204 built-in plugins, bundled into runline's dist at build time), and `packages/pi-runline` (pi extension that exposes runline to agents).
+Runline is a bun workspace monorepo: `packages/runline` (library + CLI), `packages/runline-plugins` (the built-in plugins, bundled into runline's dist at build time), and `packages/pi-runline` (pi extension that exposes runline to agents).
 
 ```bash
 bun install
@@ -681,7 +546,7 @@ The [`pi-runline`](packages/pi-runline) package is a [pi](https://github.com/mar
 
 - **`execute_runline`** — run JavaScript in the runline runtime. Discovery happens inside the runtime via `actions.list / find / describe / check`, so the agent never needs a separate listing tool.
 
-It ships with `/runline-plugins`, a fuzzy multi-select picker for choosing which of the 202 plugins the agent should see, plus a guided credential prompt for the ones you enable.
+It ships with `/runline-plugins`, a fuzzy multi-select picker for choosing which built-in plugins the agent should see, plus a guided credential prompt for the ones you enable.
 
 ```bash
 pi install npm:pi-runline
