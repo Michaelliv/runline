@@ -405,6 +405,7 @@ The credential kit is exported from `runline` for every plugin, bundled or custo
 |---|---|
 | `staticCredential(spec)` | Declare a static secret: `bearer`, `apiKey` (named header, optional prefix), `queryKey`, `basic`, or the general form of named parts and placements. `local` names the flat config fields it signs from; `targets` may be a function of public config. |
 | `grantSchema` | The stored shape of an OAuth method's revisioned grant, for plugins declaring `oauth2`. |
+| `cookieSessionSchema` | The stored shape of a cookie method's jar, in `session`, for plugins declaring `cookie`. |
 | `credentialJson` / `credentialOk` / `credentialRequest` | Send one request through the declared credential: JSON answer, successful `Response`, or raw `Response`. `query`, `json`, `form`, `body`, `headers` and WebDAV `destination` are built for you. |
 | `credentialSocketUrl` | A signed (or host-relayed) URL for a declared `wss://` target. |
 | `brokerFor(ctx, declaration)` | The broker one action call signs through, for requests and probes the helpers above do not shape: the host's, or the local signer. |
@@ -564,14 +565,15 @@ const rl = Runline.create({
 
 The broker is the authority: authorize the call from `context` and `action` before signing, because plugin code chooses the request. Sign with what the plugin declares — `plugin.credential(config)` on the definition the host loaded itself gives the credential type (allowed targets, token endpoints, scopes), method, application, JWT identity and AWS role — never with anything the plugin's process sends.
 
-Each method's `authentication.field` names the one config field a host stores the secret in. There are four kinds:
+Each method's `authentication.field` names the one config field a host stores the secret in. There are five kinds:
 
 | kind | stored shape | sent as |
 |---|---|---|
 | `none` | nothing | unsigned, still held to the method's targets: the method of a connection without an optional credential |
 | `static` | its named `parts`, each a string, `optionalParts` allowed to be absent (`staticSecretSchema(parts, optionalParts)`) | each part through its `placements` |
-| `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed once on rejection by its declared `renewal`: a refresh token, client credentials, a JWT bearer assertion (`jwtIdentity`), or the resource owner's username and password (`resourceOwner`, under the endpoint's own `fields` names) |
+| `oauth2` | a revisioned `OAuthGrant` | `Authorization: Bearer <access token>`, renewed on every rejection (`rejectionStatus`, 401 by default) by its declared `renewal`; the rejected request is sent again once only if it is a GET or HEAD or a write with an `idempotencyKey`, and any other is answered with its rejection while the next call signs with the renewal. Renewal is by a refresh token, client credentials, a JWT bearer assertion (`jwtIdentity`), or the resource owner's username and password (`resourceOwner`, under the endpoint's own `fields` names) |
 | `awsSigV4` | an `AwsAccessKeySchema` key: `accessKeyId`, `secretAccessKey`, and a session's `sessionToken` | AWS Signature Version 4 for each target's declared `aws: { service, region }`. With `assumeRole: { sessionField }`, the key only assumes the binding's `awsRole` through STS; requests sign with the role's session (`AwsSessionSchema`, in `sessionField`), renewed five minutes before it expires |
+| `cookie` | a revisioned `CookieSession` jar (`CookieSessionSchema`; `cookieSessionSchema` stores it in `session`) | the jar's cookies in `Cookie`, after a login the transport performs with the `resourceOwner`, renewed once on a declared rejection. See below |
 
 A static placement is one of:
 
@@ -587,6 +589,33 @@ A static placement is one of:
 | `{ in: "querySignature", part, name }` | `<name>: base64(HMAC-SHA256(query))`, keyed by the part, over the query as sent, after every other placement |
 
 Every header, query parameter and body field a placement sets is reserved: a caller may never supply it. A placement may name `targets` it alone signs, so a connection holding two credentials for two APIs keeps them as two parts scoped to their own targets; every target of a static method must be signed by at least one placement. A part listed in `optionalParts` may be missing, which refuses only the targets that place it. `staticCredential` declares the common single-secret cases by shorthand, which also names the method: `bearer` (`{ secret }` in `Authorization: Bearer`), `apiKey` (`{ secret }` in a named header with an optional prefix), `queryKey` (`{ secret }` as a query parameter) and `basic` (`{ username, password }`). With `optional: true` the type also declares a `none` method, which a connection selects unless it holds the flat secret fields or says `authenticated: true` in its public config.
+
+A `cookie` method is a web app that keeps its session in a cookie. The plugin never handles the password or a cookie value:
+
+```typescript
+authentication: {
+  kind: "cookie",
+  field: "session",
+  login: {
+    target: "app",            // one of the method's targets, allowing POST (and GET with a preflight)
+    path: "accounts/login/",  // beneath the target, like any request path
+    encoding: "form",         // or "json"
+    fields: { username: "email" },  // the app's names; username/password by default
+    parameters: { remember: "1" },  // fixed extra fields, never a secret
+    preflight: "accounts/login/",   // optional GET first, e.g. for a CSRF cookie
+  },
+  rejection: {                // at least one signal
+    statuses: [401, 403],     // 4xx only (419, 440 included)
+    loginPaths: ["accounts/login/"],  // a 3xx whose Location falls beneath one
+    marker: 'id="login-form"',       // in a 2xx text/html answer, ≤128 chars
+  },
+  csrf: { cookie: "csrftoken", header: "X-CSRFToken" },  // optional
+}
+```
+
+The login sends the jar it already holds, so a long-lived device-trust cookie rides along, and merges what it sets into the jar rather than replacing it. The jar takes `Set-Cookie` from every response of the method's targets, after RFC 6265: a rotated cookie replaces its namesake, `Max-Age=0` or a past `Expires` deletes, a `Domain` the host does not match, or a bare top-level label, is ignored, and each request carries only the cookies whose domain and path match it. A rotation never changes the jar's `revision` and lands only on the login it came from, so a slow response of an old session cannot undo a newer login; only a login does. A store failure while saving a rotation leaves the response standing.
+
+A response that shows a declared rejection always triggers one login, since the session is dead, and then one replay by the same rule as `oauth2`: a GET or HEAD, or a write with an `idempotencyKey` on a target that declares idempotency. Any other write is answered with the rejection and never sent again; the next call signs with the new session. Parallel calls on an expired session log in once. A rejection by status reaches the plugin as the app's own answer; one by redirect or marker, as a bare `401`. Any other 3xx is refused as `transport_failed`, as every transport redirect is. A login answered with a 4xx or 5xx is `provider_rejected` with that status; one the app answers with a rejection signal, or that leaves no live cookie, is `reconnect_required`. With `csrf`, the named cookie's value is copied into its header on every unsafe request, the login included; the header is reserved. Signing locally, the jar is kept in the flat field `cookieSession`, bound to the selection it was logged in under, so a changed user, password or login never reuses it. Logins that need HTML extraction, multi-host SSO or a one-time code are not declared logins.
 
 A public config field that picks a host — a region, an environment, a hosting mode, a sandbox flag — accepts only its documented values; anything else makes the declaration throw `invalid_credentials` rather than fall back to a default host.
 

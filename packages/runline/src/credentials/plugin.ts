@@ -1,15 +1,19 @@
 /**
  * The plugin side of the credential broker, public to every plugin —
  * bundled or custom: one declaration factory for static keys, one stored
- * grant shape for OAuth methods, one way to turn public config into an
- * HTTPS target, one request path.
+ * shape each for OAuth and cookie methods, one way to turn public config
+ * into an HTTPS target, one request path.
  */
 
 import * as t from "typebox";
 import { AuthError } from "../auth/errors.js";
 import type { ActionContext } from "../plugin/types.js";
 import { brokerFor } from "./broker.js";
-import { OAuthGrantSchema, staticSecretSchema } from "./registry.js";
+import {
+  CookieSessionSchema,
+  OAuthGrantSchema,
+  staticSecretSchema,
+} from "./registry.js";
 import type {
   CredentialDeclaration,
   CredentialProbe,
@@ -25,6 +29,15 @@ import type {
  */
 export const grantSchema = t.Object(
   { grant: t.Optional(OAuthGrantSchema) },
+  { additionalProperties: false },
+);
+
+/**
+ * The stored shape of a cookie method: one optional cookie jar in the
+ * `session` field, absent until the first login.
+ */
+export const cookieSessionSchema = t.Object(
+  { session: t.Optional(CookieSessionSchema) },
   { additionalProperties: false },
 );
 

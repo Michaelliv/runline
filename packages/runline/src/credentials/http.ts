@@ -6,6 +6,17 @@ export interface ResourceOptions {
   timeoutMs: number;
   maxResponseBytes: number;
   resumableUpload?: boolean;
+  /**
+   * The 3xx that come back as they are, Location and all, judged by their
+   * Location; nothing is followed. Without it, or when it refuses, a 3xx
+   * fails as transport_failed, bar a resumable upload's 308.
+   */
+  redirect?: (location: string | null) => boolean;
+  /**
+   * Receives the response's `Set-Cookie` values before they are stripped:
+   * the only way a cookie leaves this function, and never to a caller.
+   */
+  setCookie?: (values: string[]) => void;
 }
 
 /** Internal send primitive. Callers validate destination policy before reaching it. */
@@ -29,7 +40,7 @@ export async function sendResource(
       method,
       headers,
       body: body === undefined ? undefined : Buffer.from(body),
-      redirect: "error",
+      redirect: options.redirect ? "manual" : "error",
       credentials: "omit",
       signal: controller.signal,
     });
@@ -38,6 +49,7 @@ export async function sendResource(
       response.redirected ||
       (response.status >= 300 &&
         response.status < 400 &&
+        !options.redirect?.(response.headers.get("location")) &&
         !(
           options.resumableUpload &&
           method === "PUT" &&
@@ -72,6 +84,7 @@ export async function sendResource(
       controller.signal.removeEventListener("abort", cancel);
       reader?.releaseLock();
     }
+    options.setCookie?.(response.headers.getSetCookie());
     const responseHeaders = new Headers(response.headers);
     // Fetch supplies decoded bytes, not the original wire representation.
     responseHeaders.delete("content-encoding");
