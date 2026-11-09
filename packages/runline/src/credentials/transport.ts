@@ -659,15 +659,8 @@ export class CredentialTransport {
       const url = resourceUrl(target, path);
       const headers = new Headers({ accept: "*/*" });
       if (body) headers.set("content-type", body.type);
-      cookieSigner(
-        auth,
-        cookies,
-      )({
-        method: verb,
-        headers,
-        url,
-        base: targetBase(target).pathname,
-      });
+      const sign = cookieSigner(auth, cookies);
+      sign({ method: verb, headers, url, base: targetBase(target).pathname });
       let set: string[] = [];
       const response = await sendResource(
         url.toString(),
@@ -919,12 +912,10 @@ export class CredentialTransport {
     const replay =
       input.retry !== "never" &&
       (verb === "GET" || verb === "HEAD" || input.idempotencyKey !== undefined);
-    /**
-     * A rejected credential is dead whether or not this request may be sent
-     * again, so it is renewed either way and the next call signs with the
-     * renewal. Only a replayable request is sent again, exactly once; any
-     * other is answered with its rejection.
-     */
+    // A rejected credential is dead whether or not this request may be sent
+    // again, so it is renewed either way and the next call signs with the
+    // renewal. Only a replayable request is sent again, exactly once; any
+    // other is answered with its rejection.
     const afterRejection = async <T>(
       rejection: Response,
       renew: () => Promise<T>,
