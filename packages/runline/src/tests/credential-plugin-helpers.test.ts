@@ -398,7 +398,7 @@ describe("credentialRequest and credentialJson", () => {
         target: "api",
         path: "x",
       }),
-      { message: "example: request failed (HTTP 404)" },
+      { message: "example: request failed (HTTP 404)", status: 404 },
     );
   });
 

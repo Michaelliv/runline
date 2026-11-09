@@ -110,11 +110,14 @@ Four things make it work:
 ## Recipes
 
 Every declaration here passes runline's own validation, the same a host runs,
-which rejects a malformed one with `invalid_definition`; [Trying it](#trying-it)
-shows how to run it on yours.
+which rejects a malformed one with `invalid_definition`, and signs a request
+beneath its target: `packages/runline/src/tests/credentials-docs.test.ts` runs
+each recipe's block as written. [Trying it](#trying-it) shows how to check
+yours.
 
 ### A key or token
 
+<!-- check: {"apiKey": "k-1", "apiToken": "t-1", "domain": "acme"} -->
 ```typescript
 // Authorization: Bearer <secret>
 staticCredential({
@@ -164,6 +167,7 @@ part, or a missing part, throws `invalid_definition` when the module loads.
 
 The general form names its `parts` and where each is placed:
 
+<!-- check: {"email": "me@acme.example", "apiToken": "z-1", "subdomain": "acme", "botToken": "123:abc", "trackingKey": "t-1", "appKey": "a-1"} -->
 ```typescript
 // Zendesk: Basic "<email>/token:<api token>"; one part is two things joined.
 staticCredential({
@@ -227,6 +231,7 @@ one placement.
 
 ### An optional key
 
+<!-- check: {} -->
 ```typescript
 staticCredential({
   id: "coingecko",
@@ -249,6 +254,7 @@ When a connection names its host, `targets` is a function of config, and the
 config values pass through a helper that refuses anything that could send the
 secret elsewhere:
 
+<!-- check: {"url": "https://grafana.acme.example", "apiKey": "g-1"} -->
 ```typescript
 staticCredential({
   id: "grafana",
@@ -275,6 +281,7 @@ or the API rejects it. Two declarations work together: `setOAuth` drives
 `runline auth <plugin>`, which runs the consent and stores the tokens, and
 `setCredential` says how requests are signed and renewed.
 
+<!-- check: {"clientId": "c-1", "clientSecret": "s-1", "refreshToken": "r-1"} -->
 ```typescript
 import {
   type CredentialDeclaration,
@@ -390,6 +397,7 @@ The same `oauth2` declaration, with a renewal that needs no browser. The
 signer gets a token on the first request and again whenever it expires or is
 rejected.
 
+<!-- check: {"clientId": "c-1", "clientSecret": "s-1"} -->
 ```typescript
 // Client credentials: the client is the identity.
 const credential: CredentialDeclaration = (config) => ({
@@ -447,6 +455,7 @@ config.
 
 ### AWS
 
+<!-- check: {"accessKeyId": "AKIAEXAMPLE", "secretAccessKey": "s-1", "region": "eu-west-1"} -->
 ```typescript
 import { awsCredential, awsJson, awsRegion, awsTarget } from "runline";
 
@@ -456,8 +465,11 @@ const credential = awsCredential({
     ssm: awsTarget("ssm", awsRegion(config.region ?? "us-east-1")),
   }),
 });
+```
 
-// in an action:
+In an action:
+
+```typescript
 awsJson(ctx, credential, "fleet", {
   target: "ssm",
   operation: "AmazonSSM.DescribeInstanceInformation",
@@ -492,6 +504,7 @@ in with the owner's username and password, keeps the cookie jar, sends each
 cookie only where it belongs, and logs in again when the app shows the session
 was rejected. The plugin never sees the password, a cookie, or a `Set-Cookie`.
 
+<!-- check: {"username": "me@acme.example", "password": "pw-1"} -->
 ```typescript
 import { type CredentialDeclaration, cookieSessionSchema } from "runline";
 
@@ -553,7 +566,7 @@ const credential: CredentialDeclaration = (config) => ({
 
 | Helper | Returns | Throws |
 |---|---|---|
-| `credentialJson<T>(ctx, declaration, plugin, call)` | the answer's JSON; `{ success: true }` for an empty or 204 answer | on a non-2xx: `<plugin>: request failed (HTTP <status>)` |
+| `credentialJson<T>(ctx, declaration, plugin, call)` | the answer's JSON; `{ success: true }` for an empty or 204 answer | on a non-2xx: `<plugin>: request failed (HTTP <status>)`, with `status` on the error |
 | `credentialOk(ctx, declaration, plugin, call)` | the `Response`, for headers, text or bytes | the same |
 | `credentialRequest(ctx, declaration, call)` | the `Response`, whatever its status | only `AuthError`: refused before sending, or no answer |
 | `brokerFor(ctx, declaration)` | the broker itself: `request`, `probe`, `socketUrl` | |
@@ -633,7 +646,7 @@ so failures are reported by status and identifiers only:
 | Helper | For | Message |
 |---|---|---|
 | `responseFailed(plugin, response, read)` | a failed response whose JSON names a code or a field; `read` picks them from the provider's envelope | `<plugin>: request failed (HTTP 422 invalid_email, param: email)`, with `status` on the error |
-| `requestFailed(plugin, status)` | a failed response, by status alone | `<plugin>: request failed (HTTP 404)` |
+| `requestFailed(plugin, status)` | a failed response, by status alone | `<plugin>: request failed (HTTP 404)`, with `status` on the error |
 | `answerFailed(plugin, { code, param, message })` | a 2xx answer that reports failure (Slack's `ok: false`) | the code, the field, and one line of the message (data the plugin already holds) |
 | `graphqlFailed(plugin, errors)` | a GraphQL `errors` array | the first error, by `answerFailed` |
 | `awsFailed(plugin, response)` | a failed AWS response | the status and the AWS error code |
@@ -649,9 +662,9 @@ if (!response.ok)
 return jsonAnswer(response);
 ```
 
-Keep the status in the message (and on the error, as `responseFailed` does):
-a host reads `HTTP 401` to tell a refused login from any other failure, and
-marks the connection broken.
+Keep the status in the message and on the error, as `responseFailed`,
+`requestFailed` and `awsFailed` do: a host reads it to tell a refused login
+(`401`) from any other failure, and marks the connection broken.
 
 Anything the credential layer refuses is an `AuthError`, with a fixed message
 and a `code` (and the provider's `status` where it has one):

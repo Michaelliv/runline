@@ -479,9 +479,15 @@ export function graphqlFailed(plugin: string, errors: unknown): Error {
   });
 }
 
-/** A failed request, reported by status alone. */
-export function requestFailed(plugin: string, status: number): Error {
-  return new Error(failureMessage(plugin, status));
+/**
+ * A failed request, reported by status alone. The status rides on the
+ * error, as on `responseFailed`'s, for callers that branch on it.
+ */
+export function requestFailed(
+  plugin: string,
+  status: number,
+): Error & { status: number } {
+  return Object.assign(new Error(failureMessage(plugin, status)), { status });
 }
 
 /** What a provider's error envelope names, before it is reduced to identifiers. */
