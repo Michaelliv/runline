@@ -10,6 +10,45 @@ import { linearCredential } from "./credentials.js";
 
 export type Ctx = ActionContext;
 
+/**
+ * JSON scalar fields: an integration's or a view's own JSON, which the
+ * plugin returns exactly as stored and never reshapes.
+ */
+const OPAQUE_JSON_FIELDS = new Set([
+  "metadata",
+  "filterData",
+  "projectFilterData",
+  "initiativeFilterData",
+  "feedItemFilterData",
+]);
+
+/**
+ * Linear's nested lists as plain arrays. A list inside an entity (an
+ * issue's labels, a project's teams) arrives as a connection, and the
+ * plugin selects only its `nodes`; every list the plugin pages selects
+ * `pageInfo` or `totalCount` beside them. So an object holding nothing but
+ * `nodes` is a nested list and becomes the array of its nodes, while a page
+ * keeps `{ nodes, pageInfo }`, the cursor its caller pages with.
+ */
+function flattenLists(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(flattenLists);
+  if (!value || typeof value !== "object") return value;
+  const entries = Object.entries(value);
+  if (
+    entries.length === 1 &&
+    entries[0][0] === "nodes" &&
+    Array.isArray(entries[0][1])
+  )
+    return flattenLists(entries[0][1]);
+  return Object.fromEntries(
+    entries.map(([key, field]) => [
+      key,
+      OPAQUE_JSON_FIELDS.has(key) ? field : flattenLists(field),
+    ]),
+  );
+}
+
+/** One GraphQL call; its data has every nested list as an array (`flattenLists`). */
 export async function gql(
   ctx: Ctx,
   query: string,
@@ -24,7 +63,7 @@ export async function gql(
     json: body,
   })) as Record<string, unknown>;
   if (data.errors) throw graphqlFailed("linear", data.errors);
-  return data.data as Record<string, unknown>;
+  return flattenLists(data.data) as Record<string, unknown>;
 }
 
 /**
@@ -203,11 +242,7 @@ export async function issueHasScope(
 ): Promise<boolean> {
   const ids = new Set(await resolveScopeLabelIds(ctx));
   if (ids.size === 0) return true;
-  const labels = (
-    (issue as Record<string, unknown> | null)?.labels as
-      | Record<string, unknown>
-      | undefined
-  )?.nodes;
+  const labels = (issue as Record<string, unknown> | null)?.labels;
   return (
     Array.isArray(labels) &&
     labels.some((label) =>
@@ -322,7 +357,7 @@ export const ISSUE_FIELDS = `id identifier title description url priority estima
   projectMilestone { id name } parent { id identifier }
   labels { nodes { id name color } }
   createdAt updatedAt completedAt canceledAt archivedAt`;
-export const ISSUE_LITE = `id identifier title url priority state { id name type } assignee { id name } team { key } cycle { id number name } updatedAt`;
+export const ISSUE_LITE = `id identifier title url priority state { id name type } assignee { id name } team { id key } cycle { id number name } updatedAt`;
 export const COMMENT_FIELDS = `id body url issue { id identifier } user { id name } parent { id } createdAt updatedAt editedAt resolvedAt`;
 export const STATE_FIELDS = `id name type color position description team { id key }`;
 export const LABEL_FIELDS = `id name color description isGroup parent { id name } team { id key } createdAt`;

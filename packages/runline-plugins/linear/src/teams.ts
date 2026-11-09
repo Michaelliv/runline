@@ -195,12 +195,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
         }`,
         { id: teamId, first: limit ?? 50 },
       );
-      return (
-        (data.team as Record<string, unknown>)?.members as Record<
-          string,
-          unknown
-        >
-      )?.nodes;
+      return (data.team as Record<string, unknown> | null)?.members;
     },
   });
 }
