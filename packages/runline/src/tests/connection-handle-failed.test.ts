@@ -9,7 +9,7 @@
  *   - fires once for a call whose execute() rejects, with the thrown value
  *     (an Error in place of a nullish throw), the same value onAction sees
  *   - is told only on the handle the failing call resolved
- *   - after any update the call made
+ *   - after every update the call awaited
  *   - never for a success, an unknown action or failed input validation
  *   - a handle without `failed`, or one that throws or rejects, changes
  *     nothing about the call's outcome
@@ -76,10 +76,12 @@ function recording(failed?: (error: unknown) => void | Promise<void>) {
           events.push(`update ${call}`);
           return inner.update(change);
         },
-        async failed(error) {
+        // Forwards the host's own behaviour, so a synchronous throw stays
+        // synchronous.
+        failed(error) {
           events.push(`failed ${call}`);
           errors.push(error);
-          await failed?.(error);
+          return failed?.(error);
         },
       };
       return handle;
@@ -136,7 +138,7 @@ describe("ConnectionHandle.failed", () => {
     expect(r.errors[0]).toBeInstanceOf(Error);
   });
 
-  test("comes after the updates the failing call made", async () => {
+  test("comes after the updates the failing call awaited", async () => {
     const r = recording();
     const rl = runline(r.provider);
     try {
