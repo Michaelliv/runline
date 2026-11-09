@@ -24,7 +24,7 @@ import type {
 } from "../connections/types.js";
 import type { ActionInvocation } from "../index.js";
 import { Runline } from "../index.js";
-import type { PluginDef } from "../plugin/types.js";
+import type { ActionContext, PluginDef } from "../plugin/types.js";
 
 const demo: PluginDef = {
   name: "demo",
@@ -45,7 +45,7 @@ const demo: PluginDef = {
     },
     {
       name: "renewThenBoom",
-      execute: async (_input, ctx) => {
+      execute: async (_input: unknown, ctx: ActionContext) => {
         await ctx.updateConnection({ token: "renewed" });
         throw new Error("still refused");
       },
