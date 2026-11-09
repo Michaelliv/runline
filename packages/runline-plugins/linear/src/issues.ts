@@ -154,16 +154,15 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     description:
       "Get an issue by ID or identifier (e.g. 'THE-154'). labels is an array of { id, name, color }, as in issue.create and issue.update; every nested list in the plugin's results is a plain array.",
     inputSchema: t.Object({
-      issueId: t.String({
-        description:
-          "Required parameter name. Pass either the Linear issue UUID or issue identifier, e.g. 'THE-154'.",
+      id: t.String({
+        description: "The issue's UUID or identifier, e.g. 'THE-154'.",
       }),
     }),
     async execute(input, ctx) {
       const data = await gql(
         ctx,
         `query($id: String!) { issue(id: $id) { ${ISSUE_FIELDS} } }`,
-        { id: (input as { issueId: string }).issueId },
+        { id: (input as { id: string }).id },
       );
       const issue = data.issue;
       if (!(await issueHasScope(ctx, issue)))
@@ -222,7 +221,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     description:
       "Update an issue. All fields optional; only provided fields are updated.",
     inputSchema: t.Object({
-      issueId: t.String({
+      id: t.String({
         description: "The identifier of the issue to update",
       }),
       title: t.Optional(t.String({ description: "The issue title" })),
@@ -328,8 +327,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       ),
     }),
     async execute(input, ctx) {
-      const { issueId, ...fields } = input as Record<string, unknown>;
-      await assertIssueInScope(ctx, String(issueId));
+      const { id, ...fields } = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(id));
       if (fields.removedLabelIds)
         await forbidScopeLabelRemoval(ctx, fields.removedLabelIds);
       if (fields.labelIds)
@@ -340,7 +339,7 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
       const data = await gql(
         ctx,
         `mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { ${ISSUE_FIELDS} } } }`,
-        { id: issueId, input: fields },
+        { id, input: fields },
       );
       return (data.issueUpdate as Record<string, unknown>)?.issue;
     },
@@ -351,19 +350,19 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     description:
       "Trash (soft-delete) an issue. Pass permanentlyDelete=true to bypass 30d grace period (admin only).",
     inputSchema: t.Object({
-      issueId: t.String(),
+      id: t.String(),
       permanentlyDelete: t.Optional(t.Boolean()),
     }),
     async execute(input, ctx) {
-      const { issueId, permanentlyDelete } = input as {
-        issueId: string;
+      const { id, permanentlyDelete } = input as {
+        id: string;
         permanentlyDelete?: boolean;
       };
-      await assertIssueInScope(ctx, issueId);
+      await assertIssueInScope(ctx, id);
       const data = await gql(
         ctx,
         `mutation($id: String!, $perm: Boolean) { issueDelete(id: $id, permanentlyDelete: $perm) { success } }`,
-        { id: issueId, perm: permanentlyDelete ?? null },
+        { id, perm: permanentlyDelete ?? null },
       );
       return data.issueDelete;
     },
@@ -373,16 +372,16 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     access: "write",
     description: "Archive an issue.",
     inputSchema: t.Object({
-      issueId: t.String(),
+      id: t.String(),
       trash: t.Optional(t.Boolean()),
     }),
     async execute(input, ctx) {
-      const { issueId, trash } = input as { issueId: string; trash?: boolean };
-      await assertIssueInScope(ctx, issueId);
+      const { id, trash } = input as { id: string; trash?: boolean };
+      await assertIssueInScope(ctx, id);
       const data = await gql(
         ctx,
         `mutation($id: String!, $trash: Boolean) { issueArchive(id: $id, trash: $trash) { success } }`,
-        { id: issueId, trash: trash ?? null },
+        { id, trash: trash ?? null },
       );
       return data.issueArchive;
     },
@@ -391,14 +390,14 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
   rl.registerAction("issue.unarchive", {
     access: "write",
     description: "Unarchive an issue.",
-    inputSchema: t.Object({ issueId: t.String() }),
+    inputSchema: t.Object({ id: t.String() }),
     async execute(input, ctx) {
-      const issueId = (input as { issueId: string }).issueId;
-      await assertIssueInScope(ctx, issueId);
+      const id = (input as { id: string }).id;
+      await assertIssueInScope(ctx, id);
       const data = await gql(
         ctx,
         `mutation($id: String!) { issueUnarchive(id: $id) { success } }`,
-        { id: issueId },
+        { id },
       );
       return data.issueUnarchive;
     },
@@ -474,19 +473,19 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     access: "write",
     description: "Add a single label to an issue.",
     inputSchema: t.Object({
-      issueId: t.String(),
+      id: t.String(),
       labelId: t.String(),
     }),
     async execute(input, ctx) {
-      const { issueId, labelId } = input as {
-        issueId: string;
+      const { id, labelId } = input as {
+        id: string;
         labelId: string;
       };
-      await assertIssueInScope(ctx, issueId);
+      await assertIssueInScope(ctx, id);
       const data = await gql(
         ctx,
         `mutation($id: String!, $labelId: String!) { issueAddLabel(id: $id, labelId: $labelId) { success } }`,
-        { id: issueId, labelId },
+        { id, labelId },
       );
       return data.issueAddLabel;
     },
@@ -496,20 +495,20 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     access: "write",
     description: "Remove a single label from an issue.",
     inputSchema: t.Object({
-      issueId: t.String(),
+      id: t.String(),
       labelId: t.String(),
     }),
     async execute(input, ctx) {
-      const { issueId, labelId } = input as {
-        issueId: string;
+      const { id, labelId } = input as {
+        id: string;
         labelId: string;
       };
-      await assertIssueInScope(ctx, issueId);
+      await assertIssueInScope(ctx, id);
       await forbidScopeLabelRemoval(ctx, labelId);
       const data = await gql(
         ctx,
         `mutation($id: String!, $labelId: String!) { issueRemoveLabel(id: $id, labelId: $labelId) { success } }`,
-        { id: issueId, labelId },
+        { id, labelId },
       );
       return data.issueRemoveLabel;
     },
@@ -520,19 +519,19 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     description:
       "Subscribe a user to issue notifications (defaults to current user).",
     inputSchema: t.Object({
-      issueId: t.String(),
+      id: t.String(),
       userId: t.Optional(t.String()),
       userEmail: t.Optional(t.String()),
     }),
     async execute(input, ctx) {
-      const { issueId, userId, userEmail } = input as Record<string, unknown>;
-      await assertIssueInScope(ctx, String(issueId));
+      const { id, userId, userEmail } = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(id));
       const data = await gql(
         ctx,
         `mutation($id: String!, $userId: String, $userEmail: String) {
           issueSubscribe(id: $id, userId: $userId, userEmail: $userEmail) { success }
         }`,
-        { id: issueId, userId: userId ?? null, userEmail: userEmail ?? null },
+        { id, userId: userId ?? null, userEmail: userEmail ?? null },
       );
       return data.issueSubscribe;
     },
@@ -543,19 +542,19 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
     description:
       "Unsubscribe a user from issue notifications (defaults to current user).",
     inputSchema: t.Object({
-      issueId: t.String(),
+      id: t.String(),
       userId: t.Optional(t.String()),
       userEmail: t.Optional(t.String()),
     }),
     async execute(input, ctx) {
-      const { issueId, userId, userEmail } = input as Record<string, unknown>;
-      await assertIssueInScope(ctx, String(issueId));
+      const { id, userId, userEmail } = input as Record<string, unknown>;
+      await assertIssueInScope(ctx, String(id));
       const data = await gql(
         ctx,
         `mutation($id: String!, $userId: String, $userEmail: String) {
           issueUnsubscribe(id: $id, userId: $userId, userEmail: $userEmail) { success }
         }`,
-        { id: issueId, userId: userId ?? null, userEmail: userEmail ?? null },
+        { id, userId: userId ?? null, userEmail: userEmail ?? null },
       );
       return data.issueUnsubscribe;
     },
