@@ -1354,10 +1354,10 @@ describe("linear plugin scoped issue access", () => {
   });
 });
 
-// SHFT-1262: agents read an issue before mutating it. A nested list that
-// came back as a GraphQL connection (`labels: { nodes }`) read as "no
-// labels", and the label the agent then added was already there. Every
-// nested list is a plain array; a page keeps { nodes, pageInfo }.
+// SHFT-1262: agents read an issue before mutating it, so its lists must
+// read as lists: a GraphQL connection (`labels: { nodes }`) reads as "no
+// labels", and re-adding a label that is present fails. Every nested list
+// is a plain array; a page keeps { nodes, pageInfo }.
 describe("linear response contract", () => {
   const LABELS = [
     { id: "label-1", name: "scope:small", color: "#16A34A" },

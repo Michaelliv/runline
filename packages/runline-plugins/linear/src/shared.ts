@@ -24,11 +24,12 @@ const OPAQUE_JSON_FIELDS = new Set([
 
 /**
  * Linear's nested lists as plain arrays. A list inside an entity (an
- * issue's labels, a project's teams) arrives as a connection, and the
- * plugin selects only its `nodes`; every list the plugin pages selects
- * `pageInfo` or `totalCount` beside them. So an object holding nothing but
- * `nodes` is a nested list and becomes the array of its nodes, while a page
- * keeps `{ nodes, pageInfo }`, the cursor its caller pages with.
+ * issue's labels, a project's teams, a team's members) arrives as a
+ * connection, and the plugin selects only its `nodes`; every list the
+ * plugin returns as a page selects `pageInfo` or `totalCount` beside them.
+ * So an object holding nothing but `nodes` is a nested list and becomes the
+ * array of its nodes, while a page keeps `{ nodes, pageInfo }`, the cursor
+ * its caller pages with.
  */
 function flattenLists(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(flattenLists);
