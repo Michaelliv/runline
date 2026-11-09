@@ -151,7 +151,8 @@ export function registerIssueActions(rl: RunlinePluginAPI) {
 
   rl.registerAction("issue.get", {
     access: "read",
-    description: "Get an issue by ID or identifier (e.g. 'THE-154').",
+    description:
+      "Get an issue by ID or identifier (e.g. 'THE-154'). labels is an array of { id, name, color }, as in issue.create and issue.update; every nested list in the plugin's results is a plain array.",
     inputSchema: t.Object({
       issueId: t.String({
         description:

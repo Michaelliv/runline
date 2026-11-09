@@ -453,7 +453,7 @@ describe("linear plugin initiative actions", () => {
           initiative: {
             id: "init-1",
             name: "Initiative",
-            projects: { nodes: [{ id: "project-1", name: "Project" }] },
+            projects: [{ id: "project-1", name: "Project" }],
           },
           project: { id: "project-1", name: "Project" },
         },
@@ -1064,7 +1064,14 @@ describe("linear plugin scoped issue access", () => {
       },
       (body) => {
         assert.match(body.query, /comments\(first: \$first\)/);
-        return { issue: { comments: { nodes: [{ id: "comment-1" }] } } };
+        return {
+          issue: {
+            comments: {
+              nodes: [{ id: "comment-1" }],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        };
       },
     ]);
 
@@ -1077,7 +1084,10 @@ describe("linear plugin scoped issue access", () => {
     );
     assert.deepEqual(
       await listComments.execute({ issueId: "ISS-1" }, scopedCtx()),
-      { nodes: [{ id: "comment-1" }] },
+      {
+        nodes: [{ id: "comment-1" }],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
     );
   });
 
@@ -1341,6 +1351,143 @@ describe("linear plugin scoped issue access", () => {
       nodes: [],
       pageInfo: { hasNextPage: false },
     });
+  });
+});
+
+// SHFT-1262: agents read an issue before mutating it, so its lists must
+// read as lists: a GraphQL connection (`labels: { nodes }`) reads as "no
+// labels", and re-adding a label that is present fails. Every nested list
+// is a plain array; a page keeps { nodes, pageInfo }.
+describe("linear response contract", () => {
+  const LABELS = [
+    { id: "label-1", name: "scope:small", color: "#16A34A" },
+    { id: "label-2", name: "Bug", color: "#EB5757" },
+  ];
+  const issueOnWire = {
+    id: "issue-1",
+    identifier: "SHFT-1",
+    state: { id: "state-1", name: "Todo", type: "unstarted" },
+    team: { id: "team-1", key: "SHFT", name: "Shift" },
+    parent: null,
+    labels: { nodes: LABELS },
+  };
+  const issueReturned = { ...issueOnWire, labels: LABELS };
+
+  it("returns one issue shape, labels an array, from get, create and update", async () => {
+    mockLinearSequence([
+      () => ({ issue: issueOnWire }),
+      () => ({ issueCreate: { success: true, issue: issueOnWire } }),
+      () => ({ issueUpdate: { success: true, issue: issueOnWire } }),
+    ]);
+    const plugin = makeLinear();
+    assert.deepEqual(
+      await getAction(plugin, "issue.get").execute(
+        { issueId: "SHFT-1" },
+        ctx(),
+      ),
+      issueReturned,
+    );
+    assert.deepEqual(
+      await getAction(plugin, "issue.create").execute(
+        { teamId: "team-1", title: "T" },
+        ctx(),
+      ),
+      issueReturned,
+    );
+    assert.deepEqual(
+      await getAction(plugin, "issue.update").execute(
+        { issueId: "SHFT-1", title: "T" },
+        ctx(),
+      ),
+      issueReturned,
+    );
+  });
+
+  it("returns every other nested list as an array", async () => {
+    const plugin = makeLinear();
+    for (const [name, input, wire, returned] of [
+      [
+        "project.get",
+        { id: "project-1" },
+        {
+          project: {
+            id: "project-1",
+            teams: { nodes: [{ id: "t", key: "K" }] },
+          },
+        },
+        { id: "project-1", teams: [{ id: "t", key: "K" }] },
+      ],
+      [
+        "initiative.get",
+        { id: "init-1" },
+        { initiative: { id: "init-1", projects: { nodes: [] } } },
+        { id: "init-1", projects: [] },
+      ],
+      [
+        "team.members",
+        { teamId: "team-1" },
+        { team: { members: { nodes: [{ id: "user-1" }] } } },
+        [{ id: "user-1" }],
+      ],
+    ] as const) {
+      mockLinear(() => wire);
+      assert.deepEqual(
+        await getAction(plugin, name).execute(input, ctx()),
+        returned,
+        name,
+      );
+    }
+  });
+
+  it("keeps a page's nodes beside its cursor, its rows flattened", async () => {
+    const plugin = makeLinear();
+    const pageInfo = { hasNextPage: true, endCursor: "c1" };
+    mockLinear((body) => {
+      // A list row names its team by id, which a follow-up mutation needs.
+      assert.match(body.query, /team \{ id key \}/);
+      return {
+        issues: {
+          nodes: [{ id: "issue-1", team: { id: "team-1", key: "SHFT" } }],
+          pageInfo,
+        },
+      };
+    });
+    assert.deepEqual(await getAction(plugin, "issue.list").execute({}, ctx()), {
+      nodes: [{ id: "issue-1", team: { id: "team-1", key: "SHFT" } }],
+      pageInfo,
+    });
+    mockLinear(() => ({
+      projects: {
+        nodes: [{ id: "p", teams: { nodes: [{ id: "t", key: "K" }] } }],
+        pageInfo,
+      },
+    }));
+    assert.deepEqual(
+      await getAction(plugin, "project.list").execute({}, ctx()),
+      { nodes: [{ id: "p", teams: [{ id: "t", key: "K" }] }], pageInfo },
+    );
+    mockLinear(() => ({
+      searchProjects: { nodes: [{ id: "p" }], totalCount: 1 },
+    }));
+    assert.deepEqual(
+      await getAction(plugin, "project.search").execute({ term: "p" }, ctx()),
+      { nodes: [{ id: "p" }], totalCount: 1 },
+    );
+  });
+
+  it("returns an attachment's metadata and a view's filters exactly as stored", async () => {
+    const plugin = makeLinear();
+    const stored = { nodes: [{ id: "from-an-integration" }] };
+    mockLinear(() => ({ attachment: { id: "att-1", metadata: stored } }));
+    assert.deepEqual(
+      await getAction(plugin, "attachment.get").execute({ id: "att-1" }, ctx()),
+      { id: "att-1", metadata: stored },
+    );
+    mockLinear(() => ({ customView: { id: "view-1", filterData: stored } }));
+    assert.deepEqual(
+      await getAction(plugin, "view.get").execute({ id: "view-1" }, ctx()),
+      { id: "view-1", filterData: stored },
+    );
   });
 });
 
