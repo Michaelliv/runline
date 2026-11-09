@@ -96,11 +96,16 @@ it("all nine Google consumers durably renew once and replay reads", async () => 
   }
 });
 
-it("never replays writes or retries quota/server/network failures, and keeps Gmail send guidance", async () => {
+it("never replays writes or retries quota/server/network failures, renews a rejected token, and keeps Gmail send guidance", async () => {
   for (const status of [401, 403, 429, 500]) {
     const ctx = await context();
     let calls = 0;
-    mock(() => {
+    let renewals = 0;
+    mock((url) => {
+      if (url === "https://oauth2.googleapis.com/token") {
+        renewals++;
+        return Response.json({ access_token: "new" });
+      }
       calls++;
       return new Response("SECRET", { status });
     });
@@ -118,6 +123,8 @@ it("never replays writes or retries quota/server/network failures, and keeps Gma
       },
     );
     assert.equal(calls, 1);
+    // A rejected token is renewed for the next call; the write is not resent.
+    assert.equal(renewals, status === 401 ? 1 : 0);
   }
   for (const status of [403, 429, 500]) {
     let calls = 0;

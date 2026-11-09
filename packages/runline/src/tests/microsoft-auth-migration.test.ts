@@ -58,7 +58,7 @@ function action(plugin: PluginFunction, name: string) {
 }
 
 describe("Microsoft credential migration", () => {
-  it("migrates every Graph consumer onto one-replay reads without retrying writes", async () => {
+  it("migrates every Graph consumer onto one-replay reads, and renews a rejected write's token without resending it", async () => {
     for (const spec of [
       {
         plugin: microsoftMail,
@@ -100,7 +100,12 @@ describe("Microsoft credential migration", () => {
     }
     const { ctx } = await context();
     let calls = 0;
-    mock(() => {
+    let renewals = 0;
+    mock((url) => {
+      if (url.includes("login.microsoftonline.com")) {
+        renewals++;
+        return Response.json({ access_token: "new", refresh_token: "r2" });
+      }
       calls++;
       return new Response("private-error", { status: 401 });
     });
@@ -112,6 +117,8 @@ describe("Microsoft credential migration", () => {
       { message: "microsoftMail: request failed (HTTP 401)" },
     );
     assert.equal(calls, 1);
+    assert.equal(renewals, 1);
+    assert.equal(ctx.connection.config.refreshToken, "r2");
   });
 
   it("honors explicit methods even when fields from another method remain", async () => {
