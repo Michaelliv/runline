@@ -214,7 +214,7 @@ describe("registry-backed plugins send through the broker", () => {
       googleTasks,
       "googleTasks",
       "taskList.get",
-      { taskListId: "id" },
+      { tasklist: "id" },
       {},
       "tasks",
     ],

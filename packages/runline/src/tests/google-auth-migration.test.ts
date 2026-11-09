@@ -74,7 +74,7 @@ it("all nine Google consumers durably renew once and replay reads", async () => 
     [googleDrive, "file.get", { fileId: "id" }, {}],
     [googleSheets, "spreadsheet.get", { spreadsheetId: "id" }, {}],
     [googleSlides, "presentation.get", { presentation: "id" }, {}],
-    [googleTasks, "taskList.get", { taskListId: "id" }, {}],
+    [googleTasks, "taskList.get", { tasklist: "id" }, {}],
   ];
   for (const [plugin, name, input, result] of specs) {
     const ctx = await context();
