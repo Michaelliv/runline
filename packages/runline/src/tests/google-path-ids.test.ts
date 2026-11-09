@@ -55,13 +55,8 @@ const cases: Array<[string, PluginFunction, string, Record<string, unknown>]> =
       "project.getContent",
       { scriptId: "a?b" },
     ],
-    [
-      "googleTasks",
-      googleTasks,
-      "task.get",
-      { taskListId: "l", taskId: "a?b" },
-    ],
-    ["googleTasks", googleTasks, "taskList.get", { taskListId: "a/b" }],
+    ["googleTasks", googleTasks, "task.get", { tasklist: "l", task: "a?b" }],
+    ["googleTasks", googleTasks, "taskList.get", { tasklist: "a/b" }],
     ["googleSlides", googleSlides, "presentation.get", { presentation: "a?b" }],
     [
       "googleSlides",

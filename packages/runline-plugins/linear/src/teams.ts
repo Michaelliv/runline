@@ -179,7 +179,7 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
     description:
       "List members of a team. Same people surface as user.list, narrowed to one team.",
     inputSchema: t.Object({
-      teamId: t.String({ description: "The identifier of the team" }),
+      id: t.String({ description: "The identifier of the team" }),
       limit: t.Optional(
         t.Number({ description: "Max members to return (default 50)" }),
       ),
@@ -187,13 +187,13 @@ export function registerTeamActions(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       // Team membership is workspace metadata, like user.list: readable
       // under a scoped connection (SHFT-1644).
-      const { teamId, limit } = input as { teamId: string; limit?: number };
+      const { id, limit } = input as { id: string; limit?: number };
       const data = await gql(
         ctx,
         `query($id: String!, $first: Int) {
           team(id: $id) { members(first: $first) { nodes { ${USER_FIELDS} } } }
         }`,
-        { id: teamId, first: limit ?? 50 },
+        { id, first: limit ?? 50 },
       );
       return (data.team as Record<string, unknown> | null)?.members;
     },

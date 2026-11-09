@@ -325,6 +325,8 @@ runline exec 'return await github.repo.list({ owner: "torvalds" })' --json
 
 Plugins export a function that receives a `RunlinePluginAPI` and registers actions. Use TypeBox schemas for both connection config and action input; Runline uses them for action discovery, `actions.check(...)`, and validation before `execute` runs.
 
+Name each input as the provider's reference names that parameter, in camelCase: Linear's `issue(id:)` is `linear.issue.get({ id })`, Google Drive's `files/{fileId}` is `googleDrive.file.get({ fileId })`, AgentMail's `inbox_id` is `inboxId`. An agent that knows the API then already knows the action, and a value the provider returns feeds back under the provider's name. A deliberate exception names its reason in the plugin, as `linear.team.cyclesDeleteAll` keeps `teamId` so its team-wide reach stays obvious.
+
 A plugin that calls an authenticated API **declares** its credential instead of building auth headers itself. The declaration says what the secret is, how it is placed, and the exact HTTPS targets it may be sent to; every request goes through `credentialJson` / `credentialRequest`, which sign it — through the host's broker when there is one, else locally from the connection config. The plugin never touches the secret, and nothing outside its declared targets can receive it.
 
 ```typescript

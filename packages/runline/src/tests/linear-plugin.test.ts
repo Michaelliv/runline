@@ -205,10 +205,40 @@ describe("linear plugin action surface", () => {
     assert.deepEqual(actions, [...LINEAR_ACTIONS]);
   });
 
-  it("describes issue.get issueId as the required parameter for UUIDs or identifiers", () => {
-    assert.equal(
-      typedSchema(makeLinear(), "issue.get").properties?.issueId?.description,
-      "Required parameter name. Pass either the Linear issue UUID or issue identifier, e.g. 'THE-154'.",
+  // SHFT-1066: an input is named as Linear names that argument, so a
+  // result's `id` goes straight back in: `issue(id:)`, `customView(id:)`,
+  // `team(id:)`. Fields of Linear's own input types keep Linear's names
+  // (`IssueRelationCreateInput.issueId`), and team.cyclesDeleteAll keeps
+  // `teamId` so its team-wide blast radius stays in plain sight.
+  it("names each input as Linear names that argument", () => {
+    const plugin = makeLinear();
+    const inputs = (name: string) =>
+      Object.keys(typedSchema(plugin, name).properties ?? {});
+    for (const name of [
+      "issue.get",
+      "issue.update",
+      "issue.delete",
+      "issue.archive",
+      "issue.unarchive",
+      "issue.addLabel",
+      "issue.removeLabel",
+      "issue.subscribe",
+      "issue.unsubscribe",
+      "view.issues",
+      "view.projects",
+      "view.initiatives",
+      "view.updates",
+      "team.members",
+    ]) {
+      const own = `${name.split(".")[0]}Id`;
+      assert.ok(inputs(name).includes("id"), `${name} takes id`);
+      assert.ok(!inputs(name).includes(own), `${name} takes no ${own}`);
+    }
+    assert.ok(inputs("issue.addLink").includes("issueId"));
+    assert.ok(inputs("team.cyclesDeleteAll").includes("teamId"));
+    assert.match(
+      String(typedSchema(plugin, "issue.get").properties?.id?.description),
+      /UUID or identifier/,
     );
   });
 
@@ -587,7 +617,7 @@ describe("linear plugin scoped issue access", () => {
     });
 
     await assert.rejects(
-      action.execute({ issueId: "ISS-1" }, scopedCtx()),
+      action.execute({ id: "ISS-1" }, scopedCtx()),
       /not available to this scoped connection/,
     );
   });
@@ -613,7 +643,7 @@ describe("linear plugin scoped issue access", () => {
       },
     ]);
 
-    const result = await action.execute({ issueId: "ISS-1" }, scopedCtx());
+    const result = await action.execute({ id: "ISS-1" }, scopedCtx());
     assert.deepEqual(result, { success: true });
   });
 
@@ -631,10 +661,7 @@ describe("linear plugin scoped issue access", () => {
     });
 
     await assert.rejects(
-      action.execute(
-        { issueId: "ISS-1", labelId: "label-allowed" },
-        scopedCtx(),
-      ),
+      action.execute({ id: "ISS-1", labelId: "label-allowed" }, scopedCtx()),
       /Cannot remove a required Linear scope label/,
     );
   });
@@ -672,12 +699,7 @@ describe("linear plugin scoped issue access", () => {
       ["cycle.get", { id: "cycle-1" }, "cycle", { id: "cycle-1" }],
       ["user.list", {}, "users", { nodes: [], pageInfo: {} }],
       ["user.get", { id: "me" }, "user", { id: "user-1" }],
-      [
-        "team.members",
-        { teamId: "team-1" },
-        "team",
-        { members: { nodes: [] } },
-      ],
+      ["team.members", { id: "team-1" }, "team", { members: { nodes: [] } }],
     ] as const;
 
     for (const [name, input, rootField, payload] of reads) {
@@ -1006,7 +1028,7 @@ describe("linear plugin scoped issue access", () => {
     ]);
 
     await action.execute(
-      { issueId: "ISS-1", title: "Updated", labelIds: ["label-other"] },
+      { id: "ISS-1", title: "Updated", labelIds: ["label-other"] },
       scopedCtx(),
     );
   });
@@ -1026,7 +1048,7 @@ describe("linear plugin scoped issue access", () => {
 
     await assert.rejects(
       action.execute(
-        { issueId: "ISS-1", removedLabelIds: ["label-allowed"] },
+        { id: "ISS-1", removedLabelIds: ["label-allowed"] },
         scopedCtx(),
       ),
       /Cannot remove a required Linear scope label/,
@@ -1324,7 +1346,7 @@ describe("linear plugin scoped issue access", () => {
       };
     });
 
-    await issues.execute({ viewId: "view-1" }, scopedCtx());
+    await issues.execute({ id: "view-1" }, scopedCtx());
 
     for (const name of [
       "view.projects",
@@ -1333,7 +1355,7 @@ describe("linear plugin scoped issue access", () => {
     ] as const) {
       const action = getAction(makeLinear(), name);
       await assert.rejects(
-        action.execute({ viewId: "view-1" }, scopedCtx()),
+        action.execute({ id: "view-1" }, scopedCtx()),
         /not available to scoped Linear connections/,
       );
     }
@@ -1381,10 +1403,7 @@ describe("linear response contract", () => {
     ]);
     const plugin = makeLinear();
     assert.deepEqual(
-      await getAction(plugin, "issue.get").execute(
-        { issueId: "SHFT-1" },
-        ctx(),
-      ),
+      await getAction(plugin, "issue.get").execute({ id: "SHFT-1" }, ctx()),
       issueReturned,
     );
     assert.deepEqual(
@@ -1396,7 +1415,7 @@ describe("linear response contract", () => {
     );
     assert.deepEqual(
       await getAction(plugin, "issue.update").execute(
-        { issueId: "SHFT-1", title: "T" },
+        { id: "SHFT-1", title: "T" },
         ctx(),
       ),
       issueReturned,
@@ -1425,7 +1444,7 @@ describe("linear response contract", () => {
       ],
       [
         "team.members",
-        { teamId: "team-1" },
+        { id: "team-1" },
         { team: { members: { nodes: [{ id: "user-1" }] } } },
         [{ id: "user-1" }],
       ],
@@ -1513,7 +1532,7 @@ describe("linear issue.update nullable clearable fields", () => {
     assert.ok(isTypedInputSchema(action.inputSchema));
     for (const field of CLEARABLE_FIELDS) {
       const validation = validateTypedInput(action.inputSchema, {
-        issueId: "SHFT-1",
+        id: "SHFT-1",
         [field]: null,
       });
       assert.equal(
@@ -1529,7 +1548,7 @@ describe("linear issue.update nullable clearable fields", () => {
     assert.ok(isTypedInputSchema(action.inputSchema));
     for (const field of ["title", "stateId", "teamId"] as const) {
       const validation = validateTypedInput(action.inputSchema, {
-        issueId: "SHFT-1",
+        id: "SHFT-1",
         [field]: null,
       });
       assert.equal(validation.ok, false, `${field}: null must be rejected`);
@@ -1548,10 +1567,7 @@ describe("linear issue.update nullable clearable fields", () => {
       return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
     });
 
-    const result = await action.execute(
-      { issueId: "SHFT-1", cycleId: null },
-      ctx(),
-    );
+    const result = await action.execute({ id: "SHFT-1", cycleId: null }, ctx());
     assert.deepEqual(result, { id: "issue-1" });
   });
 
@@ -1566,7 +1582,7 @@ describe("linear issue.update nullable clearable fields", () => {
       return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
     });
 
-    await action.execute({ issueId: "SHFT-1", title: "Only title" }, ctx());
+    await action.execute({ id: "SHFT-1", title: "Only title" }, ctx());
   });
 });
 
