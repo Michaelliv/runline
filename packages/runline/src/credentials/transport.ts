@@ -10,7 +10,13 @@ import {
 import type { OAuthRuntimeOptions, OAuthTokens } from "../auth/types.js";
 import type { ConnectionConfig } from "../plugin/types.js";
 import { assumeAwsRole, awsAccessKey } from "./aws.js";
-import { sendResource } from "./http.js";
+import {
+  applySetCookies,
+  cookieFor,
+  cookieHeader,
+  liveCookies,
+} from "./cookies.js";
+import { type ResourceOptions, sendResource } from "./http.js";
 import {
   bodyFields,
   bodyFormat,
@@ -32,6 +38,7 @@ import {
   targetOf,
 } from "./policy.js";
 import {
+  CookieSessionSchema,
   type CredentialRegistry,
   OAuthGrantSchema,
   validateCredential,
@@ -40,12 +47,15 @@ import { canonicalQuery, signSigV4 } from "./sigv4.js";
 import type {
   AwsScope,
   AwsSession,
+  CookieSession,
   CredentialAuthentication,
   CredentialBinding,
   CredentialMethod,
   CredentialProbeResult,
+  CredentialTarget,
   HttpMethod,
   OAuthGrant,
+  StoredCookie,
 } from "./types.js";
 
 export interface AuthenticatedRequest {
@@ -144,6 +154,91 @@ function grantFrom(
   )
     throw new AuthError("unsupported_operation");
   return result;
+}
+
+type CookieAuthentication = Extract<
+  CredentialAuthentication,
+  { kind: "cookie" }
+>;
+
+function cookieSessionFrom(
+  auth: CookieAuthentication,
+  config: Readonly<Record<string, unknown>>,
+): CookieSession | undefined {
+  const session = config[auth.field];
+  if (session === undefined) return undefined;
+  if (!Check(CookieSessionSchema, session))
+    throw new AuthError("invalid_credentials");
+  return session as CookieSession;
+}
+
+/** Methods that change state, on which a CSRF header is sent. */
+function unsafe(method: HttpMethod): boolean {
+  return method !== "GET" && method !== "HEAD";
+}
+
+/** Signs with the jar's cookies for the request's URL, and the CSRF header on an unsafe one. */
+function cookieSigner(
+  auth: CookieAuthentication,
+  cookies: readonly StoredCookie[],
+): Signer {
+  return ({ method, headers, url }) => {
+    const now = Date.now();
+    const cookie = cookieHeader(cookies, url, now);
+    if (cookie) headers.set("cookie", cookie);
+    if (auth.csrf && unsafe(method)) {
+      const token = cookieFor(cookies, auth.csrf.cookie, url, now);
+      if (token) headers.set(headerName(auth.csrf.header), token);
+    }
+  };
+}
+
+/** Whether a Location, read against the request's `url`, falls beneath a declared login path. */
+function toLogin(
+  auth: CookieAuthentication,
+  loginTarget: CredentialTarget,
+  location: string | null,
+  url: URL,
+): boolean {
+  if (!location || !auth.rejection.loginPaths) return false;
+  let next: URL;
+  try {
+    next = new URL(location, url);
+  } catch {
+    return false;
+  }
+  return auth.rejection.loginPaths.some((path) => {
+    const login = resourceUrl(loginTarget, path);
+    return (
+      next.origin === login.origin && next.pathname.startsWith(login.pathname)
+    );
+  });
+}
+
+/**
+ * How a response shows a cookie session was rejected, by the method's
+ * declared signals: its status, a redirect to a login path, or a body
+ * marker on an HTML answer. Null when it shows none.
+ */
+async function sessionRejection(
+  auth: CookieAuthentication,
+  loginTarget: CredentialTarget,
+  response: Response,
+  url: URL,
+): Promise<"status" | "redirect" | "marker" | null> {
+  const { statuses, marker } = auth.rejection;
+  if (statuses?.includes(response.status)) return "status";
+  if (toLogin(auth, loginTarget, response.headers.get("location"), url))
+    return "redirect";
+  if (
+    marker &&
+    response.status >= 200 &&
+    response.status < 300 &&
+    (response.headers.get("content-type") ?? "").includes("text/html") &&
+    (await response.clone().text()).includes(marker)
+  )
+    return "marker";
+  return null;
 }
 
 function pinBinding(selection: CredentialBinding): CredentialBinding {
@@ -510,6 +605,145 @@ export class CredentialTransport {
     });
   }
 
+  /**
+   * A cookie session logged in under the connection's update ownership, so
+   * parallel calls on an expired session log in once: one another caller
+   * committed meanwhile is kept. With `rejected`, the jar sent at
+   * `observedRevision` was refused and only a newer login is kept.
+   */
+  private loginSession(
+    binding: CredentialBinding,
+    method: CredentialMethod,
+    observedRevision?: string,
+    rejected = false,
+  ): Promise<CookieSession> {
+    const auth = method.authentication;
+    if (auth.kind !== "cookie") throw new AuthError("invalid_definition");
+    return this.commitIssued(binding, method, {
+      field: auth.field,
+      read: (config) => cookieSessionFrom(auth, config),
+      usable: (previous) =>
+        !!previous &&
+        liveCookies(previous.cookies, Date.now()).length > 0 &&
+        (!rejected || previous.revision !== observedRevision),
+      issue: (previous) => this.logIn(auth, method, binding, previous),
+    });
+  }
+
+  /**
+   * The declared login: a preflight GET when declared, then the owner's
+   * POST, both carrying the jar and absorbing what they set. The jar is
+   * merged into, never replaced, so a device-trust cookie survives. A
+   * login refused by status is `provider_rejected` with it; one the app
+   * answers with a rejection signal, or that leaves no cookie, is
+   * `reconnect_required`. The password goes in this one request only.
+   */
+  private async logIn(
+    auth: CookieAuthentication,
+    method: CredentialMethod,
+    binding: CredentialBinding,
+    previous: CookieSession | undefined,
+  ): Promise<CookieSession> {
+    const owner = binding.resourceOwner;
+    if (!owner?.username || !owner.password)
+      throw new AuthError("invalid_credentials");
+    const { login } = auth;
+    const target = targetOf(method, login.target);
+    if (!target) throw new AuthError("invalid_definition");
+    let cookies = liveCookies(previous?.cookies ?? [], Date.now());
+    const exchange = async (
+      path: string,
+      verb: "GET" | "POST",
+      body?: { type: string; bytes: Buffer },
+    ) => {
+      const url = resourceUrl(target, path);
+      const headers = new Headers({ accept: "*/*" });
+      if (body) headers.set("content-type", body.type);
+      const sign = cookieSigner(auth, cookies);
+      sign({ method: verb, headers, url, base: targetBase(target).pathname });
+      let set: string[] = [];
+      const response = await sendResource(
+        url.toString(),
+        verb,
+        headers,
+        body?.bytes,
+        {
+          fetch: this.options.fetch,
+          timeoutMs: this.options.timeoutMs,
+          maxResponseBytes: this.options.maxResponseBytes,
+          redirect: () => true,
+          setCookie: (values) => {
+            set = values;
+          },
+        },
+      );
+      cookies = applySetCookies(cookies, set, url, Date.now());
+      return { response, url };
+    };
+    if (login.preflight !== undefined) {
+      const { response } = await exchange(login.preflight, "GET");
+      if (response.status >= 400)
+        throw new AuthError("provider_rejected", response.status);
+    }
+    const fields: Record<string, string> = {
+      ...login.parameters,
+      [login.fields?.username ?? "username"]: owner.username,
+      [login.fields?.password ?? "password"]: owner.password,
+    };
+    const body =
+      login.encoding === "json"
+        ? {
+            type: "application/json",
+            bytes: Buffer.from(JSON.stringify(fields)),
+          }
+        : {
+            type: "application/x-www-form-urlencoded",
+            bytes: Buffer.from(new URLSearchParams(fields).toString()),
+          };
+    const { response, url } = await exchange(login.path, "POST", body);
+    if (response.status >= 400)
+      throw new AuthError("provider_rejected", response.status);
+    if (
+      (await sessionRejection(auth, target, response, url)) ||
+      !liveCookies(cookies, Date.now()).length
+    )
+      throw new AuthError("reconnect_required");
+    return { cookies, revision: randomUUID() };
+  }
+
+  /**
+   * What a response of the session sent at `revision` set, merged into the
+   * stored jar: a rotated, added or deleted cookie. Only while the jar is
+   * still that login's, so a stale response never undoes a newer login.
+   * Best effort: a store that fails leaves the response standing, and the
+   * session is renewed when it is next rejected.
+   */
+  private async absorb(
+    binding: CredentialBinding,
+    method: CredentialMethod,
+    revision: string,
+    values: string[],
+    url: URL,
+  ): Promise<void> {
+    const auth = method.authentication;
+    if (auth.kind !== "cookie" || !values.length) return;
+    try {
+      await binding.connection.update(async (current) => {
+        validateCredential(method, current);
+        const stored = cookieSessionFrom(auth, current);
+        if (stored?.revision !== revision) return undefined;
+        return {
+          [auth.field]: {
+            cookies: applySetCookies(stored.cookies, values, url, Date.now()),
+            revision,
+          },
+        };
+      });
+    } catch {
+      // The response stands; the jar catches up at the next rejection.
+    }
+  }
+
   /** A role session for the binding's `awsRole`, assumed with the stored key. */
   private renewAwsSession(
     binding: CredentialBinding,
@@ -678,9 +912,28 @@ export class CredentialTransport {
     const replay =
       input.retry !== "never" &&
       (verb === "GET" || verb === "HEAD" || input.idempotencyKey !== undefined);
+    // A rejected credential is dead whether or not this request may be sent
+    // again, so it is renewed either way and the next call signs with the
+    // renewal. Only a replayable request is sent again, exactly once; any
+    // other is answered with its rejection.
+    const afterRejection = async <T>(
+      rejection: Response,
+      renew: () => Promise<T>,
+      resend: (renewed: T) => Promise<Response>,
+    ): Promise<Response> => {
+      const renewed = await renew();
+      return replay ? resend(renewed) : rejection;
+    };
     const base = targetBase(target).pathname;
-    let { sign, grant } = await this.authorize(binding, method, input.target);
-    const send = async (signer: Signer) => {
+    const { sign, grant, session } = await this.authorize(
+      binding,
+      method,
+      input.target,
+    );
+    const send = async (
+      signer: Signer,
+      cookies?: Pick<ResourceOptions, "redirect" | "setCookie">,
+    ) => {
       const outgoing: Outgoing = {
         method: verb,
         headers: new Headers(headers),
@@ -705,20 +958,58 @@ export class CredentialTransport {
             this.options.maxTargetResponseBytes,
           ),
           resumableUpload: target.resumableUpload,
+          ...cookies,
         },
       );
     };
+    if (auth.kind === "cookie" && session) {
+      const loginTarget = targetOf(method, auth.login.target);
+      if (!loginTarget) throw new AuthError("invalid_definition");
+      const attempt = async (current: CookieSession) => {
+        let set: string[] = [];
+        const response = await send(cookieSigner(auth, current.cookies), {
+          redirect: (location) => toLogin(auth, loginTarget, location, url),
+          setCookie: (values) => {
+            set = values;
+          },
+        });
+        await this.absorb(binding, method, current.revision, set, url);
+        const rejection = await sessionRejection(
+          auth,
+          loginTarget,
+          response,
+          url,
+        );
+        // A rejection by redirect or marker reads as the 401 it means; one
+        // by status keeps the app's own answer.
+        return {
+          rejection,
+          response:
+            rejection === "redirect" || rejection === "marker"
+              ? new Response(null, { status: 401 })
+              : response,
+        };
+      };
+      const first = await attempt(session);
+      if (!first.rejection) return first.response;
+      return afterRejection(
+        first.response,
+        () => this.loginSession(binding, method, session.revision, true),
+        async (renewed) => (await attempt(renewed)).response,
+      );
+    }
     const first = await send(sign);
     if (
       auth.kind !== "oauth2" ||
       !grant ||
-      !replay ||
       first.status !== (auth.rejectionStatus ?? 401)
     )
       return first;
-    // Exactly one replay, only after durable renewal (or a newer committed revision).
-    grant = await this.renew(binding, method, grant.revision, true);
-    return send(bearer(secret(grant.tokens.accessToken)));
+    return afterRejection(
+      first,
+      () => this.renew(binding, method, grant.revision, true),
+      (renewed) => send(bearer(secret(renewed.tokens.accessToken))),
+    );
   }
 
   /**
@@ -777,10 +1068,18 @@ export class CredentialTransport {
     binding: CredentialBinding,
     method: CredentialMethod,
     target: string,
-  ): Promise<{ sign: Signer; grant?: OAuthGrant }> {
+  ): Promise<{ sign: Signer; grant?: OAuthGrant; session?: CookieSession }> {
     const config = await this.read(binding, method);
     const auth = method.authentication;
     if (auth.kind === "none") return { sign: () => {} };
+    if (auth.kind === "cookie") {
+      const stored = cookieSessionFrom(auth, config);
+      const session =
+        stored && liveCookies(stored.cookies, Date.now()).length
+          ? stored
+          : await this.loginSession(binding, method, stored?.revision);
+      return { sign: cookieSigner(auth, session.cookies), session };
+    }
     if (auth.kind === "awsSigV4") {
       const scope = targetOf(method, target)?.aws;
       if (!scope) throw new AuthError("invalid_definition");

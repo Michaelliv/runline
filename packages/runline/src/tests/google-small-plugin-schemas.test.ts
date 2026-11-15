@@ -41,17 +41,17 @@ const imageFixtures: Record<string, Record<string, unknown>> = {
 
 const tasksFixtures: Record<string, Record<string, unknown>> = {
   "taskList.list": {},
-  "taskList.get": { taskListId: "list-1" },
+  "taskList.get": { tasklist: "list-1" },
   "taskList.create": { title: "Inbox" },
-  "taskList.update": { taskListId: "list-1", title: "Work" },
-  "taskList.delete": { taskListId: "list-1" },
-  "task.create": { taskListId: "list-1", title: "Call supplier" },
-  "task.get": { taskListId: "list-1", taskId: "task-1" },
-  "task.list": { taskListId: "list-1" },
-  "task.update": { taskListId: "list-1", taskId: "task-1", notes: "" },
-  "task.delete": { taskListId: "list-1", taskId: "task-1" },
-  "task.move": { taskListId: "list-1", taskId: "task-1" },
-  "task.clear": { taskListId: "list-1" },
+  "taskList.update": { tasklist: "list-1", title: "Work" },
+  "taskList.delete": { tasklist: "list-1" },
+  "task.create": { tasklist: "list-1", title: "Call supplier" },
+  "task.get": { tasklist: "list-1", task: "task-1" },
+  "task.list": { tasklist: "list-1" },
+  "task.update": { tasklist: "list-1", task: "task-1", notes: "" },
+  "task.delete": { tasklist: "list-1", task: "task-1" },
+  "task.move": { tasklist: "list-1", task: "task-1" },
+  "task.clear": { tasklist: "list-1" },
 };
 
 function assertStrictSchemaSurface(
@@ -231,7 +231,7 @@ describe("small Google plugin TypeBox schemas", () => {
     const create = typedSchema(tasks, "task.create");
     assert.equal(
       Check(create, {
-        taskListId: "list-1",
+        tasklist: "list-1",
         title: "Task",
         due: "2026-07-14T12:00:00Z",
         completed: 1_752_499_200_000,
@@ -241,7 +241,7 @@ describe("small Google plugin TypeBox schemas", () => {
     );
     assert.equal(
       Check(create, {
-        taskListId: "list-1",
+        tasklist: "list-1",
         title: "Task",
         status: "done",
       }),
@@ -249,7 +249,7 @@ describe("small Google plugin TypeBox schemas", () => {
     );
     assert.equal(
       Check(create, {
-        taskListId: "list-1",
+        tasklist: "list-1",
         title: "Task",
         due: { year: 2026 },
       }),
@@ -257,7 +257,7 @@ describe("small Google plugin TypeBox schemas", () => {
     );
     assert.equal(
       Check(create, {
-        taskListId: "list-1",
+        tasklist: "list-1",
         title: "Task",
         due: "",
       }),
@@ -266,40 +266,34 @@ describe("small Google plugin TypeBox schemas", () => {
 
     const list = typedSchema(tasks, "task.list");
     assert.equal(
-      Check(list, { taskListId: "list-1", dueMin: 0, maxResults: 100 }),
+      Check(list, { tasklist: "list-1", dueMin: 0, maxResults: 100 }),
       true,
     );
-    assert.equal(Check(list, { taskListId: "list-1", maxResults: 101 }), false);
-    assert.equal(
-      Check(list, { taskListId: "list-1", maxResults: 1.25 }),
-      false,
-    );
+    assert.equal(Check(list, { tasklist: "list-1", maxResults: 101 }), false);
+    assert.equal(Check(list, { tasklist: "list-1", maxResults: 1.25 }), false);
 
     const update = typedSchema(tasks, "task.update");
-    assert.equal(
-      Check(update, { taskListId: "list-1", taskId: "task-1" }),
-      false,
-    );
+    assert.equal(Check(update, { tasklist: "list-1", task: "task-1" }), false);
     assert.equal(
       Check(update, {
-        taskListId: "list-1",
-        taskId: "task-1",
+        tasklist: "list-1",
+        task: "task-1",
         previous: "task-0",
       }),
       false,
     );
     assert.equal(
       Check(update, {
-        taskListId: "list-1",
-        taskId: "task-1",
+        tasklist: "list-1",
+        task: "task-1",
         deleted: false,
       }),
       true,
     );
     assert.equal(
       Check(update, {
-        taskListId: "list-1",
-        taskId: "task-1",
+        tasklist: "list-1",
+        task: "task-1",
         status: "needsAction",
         previous: "task-0",
       }),
@@ -307,6 +301,6 @@ describe("small Google plugin TypeBox schemas", () => {
     );
 
     const get = typedSchema(tasks, "task.get");
-    assert.equal(Check(get, { taskListId: "", taskId: "task-1" }), false);
+    assert.equal(Check(get, { tasklist: "", task: "task-1" }), false);
   });
 });

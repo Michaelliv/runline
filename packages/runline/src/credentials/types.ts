@@ -135,7 +135,8 @@ export type SecretPlacement = (
  * How a request is signed. `field` names the one top-level config field
  * holding the secret: for `static`, a record of the named `parts`
  * (`staticSecretSchema(parts)`), each sent through its placements; for
- * `oauth2`, a revisioned OAuthGrant; for `awsSigV4`, an AWS access key.
+ * `oauth2`, a revisioned OAuthGrant; for `awsSigV4`, an AWS access key;
+ * for `cookie`, a revisioned `CookieSession` jar.
  * `none` signs nothing: the method of a connection that holds no optional
  * credential, still pinned to its targets.
  */
@@ -186,7 +187,78 @@ export type CredentialAuthentication =
        * expires, is held in `sessionField` (`AwsSessionSchema`).
        */
       assumeRole?: { sessionField: string };
+    }
+  | {
+      /**
+       * A web app's cookie session. The transport logs in with the
+       * binding's `resourceOwner` as `login` declares, keeps every cookie
+       * the method's targets set in a jar in `field` (`CookieSessionSchema`),
+       * sends each only where RFC 6265 matches it, and logs in again when a
+       * response shows the session was rejected. The plugin never sees the
+       * password, the jar, or a `Set-Cookie`.
+       */
+      kind: "cookie";
+      field: string;
+      login: CookieLogin;
+      rejection: CookieRejection;
+      /**
+       * Cookie-based CSRF (Django's `csrftoken`, `XSRF-TOKEN`): the named
+       * cookie's value is copied into `header` on every unsafe request, the
+       * login included. The header is reserved: callers never set it.
+       */
+      csrf?: { cookie: string; header: string };
     };
+
+/**
+ * How the transport logs in: an optional preflight GET (a CSRF cookie, a
+ * session to log into), then one POST of the owner's username and password
+ * under the app's own field names, beside fixed `parameters`. Both go to
+ * `target` and carry the jar, so a device-trust cookie rides along.
+ */
+export interface CookieLogin {
+  target: string;
+  /** Relative to the target's base, as a request path is. */
+  path: string;
+  encoding: "form" | "json";
+  /** The app's names for the owner's fields; `username` and `password` when absent. */
+  fields?: { username?: string; password?: string };
+  /** Fixed extra fields, such as `remember: "1"`. Never a secret. */
+  parameters?: Record<string, string>;
+  /** A path on `target` to GET before the POST. */
+  preflight?: string;
+}
+
+/**
+ * What a rejected session looks like, at least one of: a status; a 3xx
+ * whose Location falls under one of `loginPaths` (relative to the login
+ * target, as `login.path` is); or a 2xx HTML answer containing `marker`.
+ */
+export interface CookieRejection {
+  /** 4xx statuses, such as 401, 403, Laravel's 419 or IIS's 440. */
+  statuses?: number[];
+  loginPaths?: string[];
+  marker?: string;
+}
+
+/** One cookie in a session's jar, as RFC 6265 stores it. */
+export interface StoredCookie {
+  name: string;
+  value: string;
+  /** Lowercased: the exact host when `hostOnly`, else the Domain attribute. */
+  domain: string;
+  hostOnly: boolean;
+  path: string;
+  secure: boolean;
+  httpOnly: boolean;
+  /** Milliseconds since epoch; absent for a session cookie, kept until replaced. */
+  expiresAt?: number;
+}
+
+/** A cookie jar as stored. `revision` changes on every login, never on a rotated cookie. */
+export interface CookieSession {
+  cookies: StoredCookie[];
+  revision: string;
+}
 
 export interface CredentialProbe {
   target: string;

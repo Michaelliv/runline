@@ -205,10 +205,40 @@ describe("linear plugin action surface", () => {
     assert.deepEqual(actions, [...LINEAR_ACTIONS]);
   });
 
-  it("describes issue.get issueId as the required parameter for UUIDs or identifiers", () => {
-    assert.equal(
-      typedSchema(makeLinear(), "issue.get").properties?.issueId?.description,
-      "Required parameter name. Pass either the Linear issue UUID or issue identifier, e.g. 'THE-154'.",
+  // SHFT-1066: an input is named as Linear names that argument, so a
+  // result's `id` goes straight back in: `issue(id:)`, `customView(id:)`,
+  // `team(id:)`. Fields of Linear's own input types keep Linear's names
+  // (`IssueRelationCreateInput.issueId`), and team.cyclesDeleteAll keeps
+  // `teamId` so its team-wide blast radius stays in plain sight.
+  it("names each input as Linear names that argument", () => {
+    const plugin = makeLinear();
+    const inputs = (name: string) =>
+      Object.keys(typedSchema(plugin, name).properties ?? {});
+    for (const name of [
+      "issue.get",
+      "issue.update",
+      "issue.delete",
+      "issue.archive",
+      "issue.unarchive",
+      "issue.addLabel",
+      "issue.removeLabel",
+      "issue.subscribe",
+      "issue.unsubscribe",
+      "view.issues",
+      "view.projects",
+      "view.initiatives",
+      "view.updates",
+      "team.members",
+    ]) {
+      const own = `${name.split(".")[0]}Id`;
+      assert.ok(inputs(name).includes("id"), `${name} takes id`);
+      assert.ok(!inputs(name).includes(own), `${name} takes no ${own}`);
+    }
+    assert.ok(inputs("issue.addLink").includes("issueId"));
+    assert.ok(inputs("team.cyclesDeleteAll").includes("teamId"));
+    assert.match(
+      String(typedSchema(plugin, "issue.get").properties?.id?.description),
+      /UUID or identifier/,
     );
   });
 
@@ -453,7 +483,7 @@ describe("linear plugin initiative actions", () => {
           initiative: {
             id: "init-1",
             name: "Initiative",
-            projects: { nodes: [{ id: "project-1", name: "Project" }] },
+            projects: [{ id: "project-1", name: "Project" }],
           },
           project: { id: "project-1", name: "Project" },
         },
@@ -587,7 +617,7 @@ describe("linear plugin scoped issue access", () => {
     });
 
     await assert.rejects(
-      action.execute({ issueId: "ISS-1" }, scopedCtx()),
+      action.execute({ id: "ISS-1" }, scopedCtx()),
       /not available to this scoped connection/,
     );
   });
@@ -613,7 +643,7 @@ describe("linear plugin scoped issue access", () => {
       },
     ]);
 
-    const result = await action.execute({ issueId: "ISS-1" }, scopedCtx());
+    const result = await action.execute({ id: "ISS-1" }, scopedCtx());
     assert.deepEqual(result, { success: true });
   });
 
@@ -631,10 +661,7 @@ describe("linear plugin scoped issue access", () => {
     });
 
     await assert.rejects(
-      action.execute(
-        { issueId: "ISS-1", labelId: "label-allowed" },
-        scopedCtx(),
-      ),
+      action.execute({ id: "ISS-1", labelId: "label-allowed" }, scopedCtx()),
       /Cannot remove a required Linear scope label/,
     );
   });
@@ -672,12 +699,7 @@ describe("linear plugin scoped issue access", () => {
       ["cycle.get", { id: "cycle-1" }, "cycle", { id: "cycle-1" }],
       ["user.list", {}, "users", { nodes: [], pageInfo: {} }],
       ["user.get", { id: "me" }, "user", { id: "user-1" }],
-      [
-        "team.members",
-        { teamId: "team-1" },
-        "team",
-        { members: { nodes: [] } },
-      ],
+      ["team.members", { id: "team-1" }, "team", { members: { nodes: [] } }],
     ] as const;
 
     for (const [name, input, rootField, payload] of reads) {
@@ -1006,7 +1028,7 @@ describe("linear plugin scoped issue access", () => {
     ]);
 
     await action.execute(
-      { issueId: "ISS-1", title: "Updated", labelIds: ["label-other"] },
+      { id: "ISS-1", title: "Updated", labelIds: ["label-other"] },
       scopedCtx(),
     );
   });
@@ -1026,7 +1048,7 @@ describe("linear plugin scoped issue access", () => {
 
     await assert.rejects(
       action.execute(
-        { issueId: "ISS-1", removedLabelIds: ["label-allowed"] },
+        { id: "ISS-1", removedLabelIds: ["label-allowed"] },
         scopedCtx(),
       ),
       /Cannot remove a required Linear scope label/,
@@ -1064,7 +1086,14 @@ describe("linear plugin scoped issue access", () => {
       },
       (body) => {
         assert.match(body.query, /comments\(first: \$first\)/);
-        return { issue: { comments: { nodes: [{ id: "comment-1" }] } } };
+        return {
+          issue: {
+            comments: {
+              nodes: [{ id: "comment-1" }],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        };
       },
     ]);
 
@@ -1077,7 +1106,10 @@ describe("linear plugin scoped issue access", () => {
     );
     assert.deepEqual(
       await listComments.execute({ issueId: "ISS-1" }, scopedCtx()),
-      { nodes: [{ id: "comment-1" }] },
+      {
+        nodes: [{ id: "comment-1" }],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
     );
   });
 
@@ -1314,7 +1346,7 @@ describe("linear plugin scoped issue access", () => {
       };
     });
 
-    await issues.execute({ viewId: "view-1" }, scopedCtx());
+    await issues.execute({ id: "view-1" }, scopedCtx());
 
     for (const name of [
       "view.projects",
@@ -1323,7 +1355,7 @@ describe("linear plugin scoped issue access", () => {
     ] as const) {
       const action = getAction(makeLinear(), name);
       await assert.rejects(
-        action.execute({ viewId: "view-1" }, scopedCtx()),
+        action.execute({ id: "view-1" }, scopedCtx()),
         /not available to scoped Linear connections/,
       );
     }
@@ -1341,6 +1373,140 @@ describe("linear plugin scoped issue access", () => {
       nodes: [],
       pageInfo: { hasNextPage: false },
     });
+  });
+});
+
+// SHFT-1262: agents read an issue before mutating it, so its lists must
+// read as lists: a GraphQL connection (`labels: { nodes }`) reads as "no
+// labels", and re-adding a label that is present fails. Every nested list
+// is a plain array; a page keeps { nodes, pageInfo }.
+describe("linear response contract", () => {
+  const LABELS = [
+    { id: "label-1", name: "scope:small", color: "#16A34A" },
+    { id: "label-2", name: "Bug", color: "#EB5757" },
+  ];
+  const issueOnWire = {
+    id: "issue-1",
+    identifier: "SHFT-1",
+    state: { id: "state-1", name: "Todo", type: "unstarted" },
+    team: { id: "team-1", key: "SHFT", name: "Shift" },
+    parent: null,
+    labels: { nodes: LABELS },
+  };
+  const issueReturned = { ...issueOnWire, labels: LABELS };
+
+  it("returns one issue shape, labels an array, from get, create and update", async () => {
+    mockLinearSequence([
+      () => ({ issue: issueOnWire }),
+      () => ({ issueCreate: { success: true, issue: issueOnWire } }),
+      () => ({ issueUpdate: { success: true, issue: issueOnWire } }),
+    ]);
+    const plugin = makeLinear();
+    assert.deepEqual(
+      await getAction(plugin, "issue.get").execute({ id: "SHFT-1" }, ctx()),
+      issueReturned,
+    );
+    assert.deepEqual(
+      await getAction(plugin, "issue.create").execute(
+        { teamId: "team-1", title: "T" },
+        ctx(),
+      ),
+      issueReturned,
+    );
+    assert.deepEqual(
+      await getAction(plugin, "issue.update").execute(
+        { id: "SHFT-1", title: "T" },
+        ctx(),
+      ),
+      issueReturned,
+    );
+  });
+
+  it("returns every other nested list as an array", async () => {
+    const plugin = makeLinear();
+    for (const [name, input, wire, returned] of [
+      [
+        "project.get",
+        { id: "project-1" },
+        {
+          project: {
+            id: "project-1",
+            teams: { nodes: [{ id: "t", key: "K" }] },
+          },
+        },
+        { id: "project-1", teams: [{ id: "t", key: "K" }] },
+      ],
+      [
+        "initiative.get",
+        { id: "init-1" },
+        { initiative: { id: "init-1", projects: { nodes: [] } } },
+        { id: "init-1", projects: [] },
+      ],
+      [
+        "team.members",
+        { id: "team-1" },
+        { team: { members: { nodes: [{ id: "user-1" }] } } },
+        [{ id: "user-1" }],
+      ],
+    ] as const) {
+      mockLinear(() => wire);
+      assert.deepEqual(
+        await getAction(plugin, name).execute(input, ctx()),
+        returned,
+        name,
+      );
+    }
+  });
+
+  it("keeps a page's nodes beside its cursor, its rows flattened", async () => {
+    const plugin = makeLinear();
+    const pageInfo = { hasNextPage: true, endCursor: "c1" };
+    mockLinear((body) => {
+      // A list row names its team by id, which a follow-up mutation needs.
+      assert.match(body.query, /team \{ id key \}/);
+      return {
+        issues: {
+          nodes: [{ id: "issue-1", team: { id: "team-1", key: "SHFT" } }],
+          pageInfo,
+        },
+      };
+    });
+    assert.deepEqual(await getAction(plugin, "issue.list").execute({}, ctx()), {
+      nodes: [{ id: "issue-1", team: { id: "team-1", key: "SHFT" } }],
+      pageInfo,
+    });
+    mockLinear(() => ({
+      projects: {
+        nodes: [{ id: "p", teams: { nodes: [{ id: "t", key: "K" }] } }],
+        pageInfo,
+      },
+    }));
+    assert.deepEqual(
+      await getAction(plugin, "project.list").execute({}, ctx()),
+      { nodes: [{ id: "p", teams: [{ id: "t", key: "K" }] }], pageInfo },
+    );
+    mockLinear(() => ({
+      searchProjects: { nodes: [{ id: "p" }], totalCount: 1 },
+    }));
+    assert.deepEqual(
+      await getAction(plugin, "project.search").execute({ term: "p" }, ctx()),
+      { nodes: [{ id: "p" }], totalCount: 1 },
+    );
+  });
+
+  it("returns an attachment's metadata and a view's filters exactly as stored", async () => {
+    const plugin = makeLinear();
+    const stored = { nodes: [{ id: "from-an-integration" }] };
+    mockLinear(() => ({ attachment: { id: "att-1", metadata: stored } }));
+    assert.deepEqual(
+      await getAction(plugin, "attachment.get").execute({ id: "att-1" }, ctx()),
+      { id: "att-1", metadata: stored },
+    );
+    mockLinear(() => ({ customView: { id: "view-1", filterData: stored } }));
+    assert.deepEqual(
+      await getAction(plugin, "view.get").execute({ id: "view-1" }, ctx()),
+      { id: "view-1", filterData: stored },
+    );
   });
 });
 
@@ -1366,7 +1532,7 @@ describe("linear issue.update nullable clearable fields", () => {
     assert.ok(isTypedInputSchema(action.inputSchema));
     for (const field of CLEARABLE_FIELDS) {
       const validation = validateTypedInput(action.inputSchema, {
-        issueId: "SHFT-1",
+        id: "SHFT-1",
         [field]: null,
       });
       assert.equal(
@@ -1382,7 +1548,7 @@ describe("linear issue.update nullable clearable fields", () => {
     assert.ok(isTypedInputSchema(action.inputSchema));
     for (const field of ["title", "stateId", "teamId"] as const) {
       const validation = validateTypedInput(action.inputSchema, {
-        issueId: "SHFT-1",
+        id: "SHFT-1",
         [field]: null,
       });
       assert.equal(validation.ok, false, `${field}: null must be rejected`);
@@ -1401,10 +1567,7 @@ describe("linear issue.update nullable clearable fields", () => {
       return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
     });
 
-    const result = await action.execute(
-      { issueId: "SHFT-1", cycleId: null },
-      ctx(),
-    );
+    const result = await action.execute({ id: "SHFT-1", cycleId: null }, ctx());
     assert.deepEqual(result, { id: "issue-1" });
   });
 
@@ -1419,7 +1582,7 @@ describe("linear issue.update nullable clearable fields", () => {
       return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
     });
 
-    await action.execute({ issueId: "SHFT-1", title: "Only title" }, ctx());
+    await action.execute({ id: "SHFT-1", title: "Only title" }, ctx());
   });
 });
 

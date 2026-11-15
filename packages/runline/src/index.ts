@@ -90,6 +90,7 @@ export {
   answerFailed,
   configChoice,
   configFlag,
+  cookieSessionSchema,
   credentialJson,
   credentialOk,
   credentialRequest,
@@ -115,9 +116,11 @@ export {
 export {
   AwsAccessKeySchema,
   AwsSessionSchema,
+  CookieSessionSchema,
   CredentialRegistry,
   OAuthGrantSchema,
   OAuthTokensSchema,
+  StoredCookieSchema,
   staticSecretSchema,
   validateCredential,
 } from "./credentials/registry.js";
@@ -134,6 +137,9 @@ export type {
   AwsRole,
   AwsScope,
   AwsSession,
+  CookieLogin,
+  CookieRejection,
+  CookieSession,
   CredentialAuthentication,
   CredentialBinding,
   CredentialDeclaration,
@@ -148,6 +154,7 @@ export type {
   LocalSecretSource,
   OAuthGrant,
   SecretPlacement,
+  StoredCookie,
 } from "./credentials/types.js";
 export type {
   ActionDefinition,

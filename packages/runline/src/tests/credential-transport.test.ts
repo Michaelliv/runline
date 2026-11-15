@@ -1375,22 +1375,27 @@ describe("constrained credential transport", () => {
     assert.equal(renewals, 1);
   });
 
-  it("never retries unsafe writes, 403 by default, 429, 5xx, or explicitly disabled retries", async () => {
+  it("never resends an unsafe write or a request with retries disabled, but renews the token it rejected", async () => {
     for (const spec of [
-      { method: "POST", status: 401 },
-      { method: "PUT", status: 401 },
-      { method: "PATCH", status: 401 },
-      { method: "DELETE", status: 401 },
-      { method: "GET", status: 403 },
-      { method: "GET", status: 429 },
-      { method: "GET", status: 500 },
-      { method: "GET", status: 401, retry: "never" },
+      { method: "POST" },
+      { method: "PUT" },
+      { method: "PATCH" },
+      { method: "DELETE" },
+      { method: "GET", retry: "never" },
     ] as const) {
-      let calls = 0;
+      const sent: string[] = [];
+      let renewals = 0;
       const h = await harness(
-        mock(() => {
-          calls++;
-          return new Response(null, { status: spec.status });
+        mock((url, init) => {
+          if (url.includes("auth.example")) {
+            renewals++;
+            return Response.json({ access_token: "new" });
+          }
+          const token = new Headers(init.headers).get("authorization") ?? "";
+          sent.push(`${init.method} ${token}`);
+          return new Response(null, {
+            status: token === "Bearer old" ? 401 : 200,
+          });
         }),
       );
       const result = await h.transport.request(h.binding, {
@@ -1398,9 +1403,60 @@ describe("constrained credential transport", () => {
         method: spec.method,
         retry: "retry" in spec ? spec.retry : undefined,
       });
-      assert.equal(result.status, spec.status);
+      assert.equal(result.status, 401);
+      assert.deepEqual(sent, [`${spec.method} Bearer old`]);
+      assert.equal(renewals, 1);
+      // The next call signs with the renewal, with no second renewal.
+      assert.equal(
+        (
+          await h.transport.request(h.binding, {
+            ...request,
+            method: spec.method,
+          })
+        ).status,
+        200,
+      );
+      assert.deepEqual(sent, [
+        `${spec.method} Bearer old`,
+        `${spec.method} Bearer new`,
+      ]);
+      assert.equal(renewals, 1);
+    }
+  });
+
+  it("neither renews nor resends on 403 by default, 429 or 5xx", async () => {
+    for (const status of [403, 429, 500]) {
+      let calls = 0;
+      const h = await harness(
+        mock(() => {
+          calls++;
+          return new Response(null, { status });
+        }),
+      );
+      const result = await h.transport.request(h.binding, request);
+      assert.equal(result.status, status);
       assert.equal(calls, 1);
     }
+  });
+
+  it("surfaces a revoked grant behind a rejected write as reconnect_required, without resending the write", async () => {
+    let writes = 0;
+    const h = await harness(
+      mock((url) => {
+        if (url.includes("auth.example"))
+          return Response.json(
+            { error: "invalid_grant", error_description: "private" },
+            { status: 400 },
+          );
+        writes++;
+        return new Response(null, { status: 401 });
+      }),
+    );
+    await assert.rejects(
+      h.transport.request(h.binding, { ...request, method: "POST" }),
+      errorCode("reconnect_required"),
+    );
+    assert.equal(writes, 1);
   });
 
   it("replays declared idempotent writes once with identical pinned bytes and key", async () => {

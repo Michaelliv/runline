@@ -159,6 +159,8 @@ export function injectedHeaders(
   if (auth.kind === "none") return [];
   if (auth.kind === "oauth2") return ["authorization"];
   if (auth.kind === "awsSigV4") return [...SIGV4_HEADERS];
+  if (auth.kind === "cookie")
+    return auth.csrf ? [headerName(auth.csrf.header)] : [];
   return placementsFor(auth, target).flatMap((placement) =>
     placement.in === "header" ||
     placement.in === "jwt" ||

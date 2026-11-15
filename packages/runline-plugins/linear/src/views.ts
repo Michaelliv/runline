@@ -39,7 +39,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
           ? description
           : withScopedNote(description),
       inputSchema: t.Object({
-        viewId: t.String({ description: "The custom view ID or slug" }),
+        id: t.String({ description: "The custom view ID or slug" }),
         ...LIST_INPUT_SCHEMA,
         ...(includeSubTeamsDescription
           ? {
@@ -51,7 +51,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
       }),
       async execute(input, ctx) {
         const opts = (input ?? {}) as ListOpts & {
-          viewId: string;
+          id: string;
           includeSubTeams?: boolean;
         };
         if (connectionField !== "issues") requireUnscoped(ctx, name);
@@ -78,7 +78,7 @@ export function registerViewActions(rl: RunlinePluginAPI) {
           `query(${declParts.join(", ")}) {
             customView(id: $id) { ${connectionField}(${callParts.join(", ")}) { nodes { ${selection} } pageInfo { hasNextPage endCursor } } }
           }`,
-          { id: opts.viewId, ...vars },
+          { id: opts.id, ...vars },
         );
         const conn = ((data.customView as Record<string, unknown>)?.[
           connectionField
