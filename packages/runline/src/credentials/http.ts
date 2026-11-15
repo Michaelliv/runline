@@ -35,6 +35,10 @@ export async function sendResource(
       reject(new AuthError("transport_failed"));
     }, options.timeoutMs);
   });
+  // A range counts bytes of the content as stored, so a ranged request
+  // asks for it uncoded, as the Fetch standard specifies; not every
+  // runtime's fetch does.
+  if (headers.has("range")) headers.set("accept-encoding", "identity");
   const work = async () => {
     const response = await options.fetch(url, {
       method,

@@ -52,3 +52,31 @@ export function stubFetch(
 ): void {
   globalThis.fetch = handler as typeof fetch;
 }
+
+/**
+ * A server's answer to a request for `content` with this `Range` header:
+ * 206 with its Content-Range, 416 past the end, and the whole content
+ * when there is no range.
+ */
+export function rangeResponse(
+  content: Uint8Array,
+  range: string | null,
+  headers: Record<string, string> = {},
+): Response {
+  const match = /^bytes=(\d+)-(\d+)$/.exec(range ?? "");
+  if (!match) return new Response(Buffer.from(content), { headers });
+  const start = Number(match[1]);
+  if (start >= content.byteLength)
+    return new Response(null, {
+      status: 416,
+      headers: { "content-range": `bytes */${content.byteLength}` },
+    });
+  const end = Math.min(Number(match[2]), content.byteLength - 1);
+  return new Response(Buffer.from(content.subarray(start, end + 1)), {
+    status: 206,
+    headers: {
+      ...headers,
+      "content-range": `bytes ${start}-${end}/${content.byteLength}`,
+    },
+  });
+}

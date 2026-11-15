@@ -639,6 +639,33 @@ applied twice. Parallel calls that find an expired credential renew it once.
   controls, or refuse with `unsupported_operation`.
 - **Slow or large answers**: the target declares `timeoutMs` or
   `maxResponseBytes`; a host caps both.
+- **Files of any size**: a signed answer is held in memory and bounded by the
+  signer, so a file is downloaded as byte ranges, 8 MiB a request, each
+  signed, renewed and retried on its own. The target allows `Range`:
+
+  ```typescript
+  const { size, headers } = await rangedDownload(
+    {
+      plugin: "files",
+      request: (range) =>
+        credentialRequest(ctx, credential, {
+          target: "api",
+          path: `files/${pathSegment(id)}/content`,
+          headers: { Range: range },
+        }),
+      failed: (response) => requestFailed("files", response.status),
+    },
+    { savePath },      // or { maxBytes, oversize } to get `bytes` in memory
+    { md5 },           // the provider's checksum of the content, when it states one
+  );
+  ```
+
+  The file appears at `savePath` only when complete. Content that changes
+  between ranges is refused, as is content that does not match `md5`. A
+  server that ignores `Range` and answers the whole content is taken as it
+  is, up to the response ceiling. `request` may equally fetch a
+  provider-issued URL through `presignedRequest`, with `failed` returning a
+  plain `Error`.
 
 ## Reporting failures
 
