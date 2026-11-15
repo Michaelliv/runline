@@ -2,11 +2,13 @@ import {
   type ActionContext,
   AuthError,
   brokerFor,
-  downloadResource,
+  type Downloaded,
+  type DownloadTo,
   type HttpMethod,
   jsonAnswer,
   type OAuthConfig,
   presignedRequest,
+  rangedDownload,
   responseFailed,
 } from "runline";
 import {
@@ -102,8 +104,15 @@ export async function graphRequest<T = unknown>(
   return jsonAnswer<T>(res);
 }
 
-/** Graph-issued signed download URLs carry their own authority, never a bearer header. */
-export async function microsoftDownload(value: unknown): Promise<Response> {
+/**
+ * The content behind a Graph-issued signed download URL, fetched by byte
+ * ranges. The URL carries its own authority, never a bearer header.
+ */
+export async function microsoftDownload(
+  plugin: string,
+  value: unknown,
+  to: DownloadTo,
+): Promise<Downloaded & { bytes?: Buffer }> {
   if (typeof value !== "string") throw new AuthError("invalid_response");
   let url: URL;
   try {
@@ -125,10 +134,22 @@ export async function microsoftDownload(value: unknown): Promise<Response> {
   } catch {
     throw new AuthError("request_not_allowed");
   }
-  return downloadResource(value, {
-    allowedOrigins: [url.origin],
-    fetch: globalThis.fetch,
-  });
+  return rangedDownload(
+    {
+      plugin,
+      request: (range) =>
+        presignedRequest(value, {
+          allowedOrigins: [url.origin],
+          fetch: globalThis.fetch,
+          headers: { Range: range },
+        }),
+      // No status on the error: a refused link is the link expiring, not
+      // the connection's credential.
+      failed: (response) =>
+        new Error(`${plugin}: download failed (HTTP ${response.status})`),
+    },
+    to,
+  );
 }
 
 /** Where Graph's Outlook attachment upload sessions live, as Microsoft documents them. */

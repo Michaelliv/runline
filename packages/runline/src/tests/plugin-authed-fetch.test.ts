@@ -45,10 +45,6 @@ const CREDENTIAL_FREE_FETCH = new Map<string, string>([
     "downloads prediction outputs from signed CDN URLs",
   ],
   [
-    "shiftObjects/src/objects.ts",
-    "downloads object bytes from a signed grant URL",
-  ],
-  [
     "shiftTranscription/src/transcription.ts",
     "downloads the transcript from a signed URL",
   ],

@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import {
   graphRequest,
@@ -13,7 +16,7 @@ import microsoftMail from "../../../runline-plugins/microsoftMail/src/index.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import { createPluginAPI, type PluginFunction } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
-import { stubFetch } from "./helpers/plugin.js";
+import { rangeResponse, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -232,10 +235,55 @@ describe("Microsoft credential migration", () => {
       "http://tenant.sharepoint.com/",
       "https://user:password@tenant.sharepoint.com/",
     ])
-      await assert.rejects(microsoftDownload(url), {
-        code: "request_not_allowed",
-      });
+      await assert.rejects(
+        microsoftDownload("microsoftFiles", url, {
+          maxBytes: 1,
+          oversize: "too large",
+        }),
+        { code: "request_not_allowed" },
+      );
     assert.equal(calls.length, 3);
+  });
+
+  it("downloads a file to disk by ranges, without credentials on the signed URL", async () => {
+    const { ctx } = await context();
+    const content = Buffer.alloc(9 * 1024 * 1024, 5);
+    const dir = mkdtempSync(join(tmpdir(), "runline-microsoft-download-"));
+    const savePath = join(dir, "big.bin");
+    const ranges: string[] = [];
+    mock((url, init) => {
+      const headers = new Headers(init.headers);
+      if (!url.includes("sharepoint.com"))
+        return Response.json({
+          id: "item",
+          name: "big.bin",
+          size: content.byteLength,
+          "@microsoft.graph.downloadUrl":
+            "https://tenant.sharepoint.com/download?secret=signed",
+        });
+      assert.equal(headers.has("authorization"), false);
+      ranges.push(String(headers.get("range")));
+      return rangeResponse(content, headers.get("range"));
+    });
+    try {
+      assert.deepEqual(
+        await action(microsoftFiles, "files.get").execute(
+          { id: "item", savePath },
+          ctx,
+        ),
+        {
+          id: "item",
+          name: "big.bin",
+          size: content.byteLength,
+          contentType: undefined,
+          path: savePath,
+        },
+      );
+      assert.ok(readFileSync(savePath).equals(content));
+      assert.equal(ranges.length, 2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("reports Graph's error code for JSON and upload failures, never its message", async () => {

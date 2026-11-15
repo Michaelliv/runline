@@ -7,7 +7,7 @@ import { Check } from "typebox/value";
 import shiftObjects from "../../../runline-plugins/shiftObjects/src/index.js";
 import { createPluginAPI } from "../plugin/api.js";
 import type { ActionContext, PluginDef } from "../plugin/types.js";
-import { getAction, stubFetch } from "./helpers/plugin.js";
+import { getAction, rangeResponse, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -186,6 +186,8 @@ describe("shiftObjects plugin", () => {
       url: "https://downloads.invalid/object_1",
       expiresAt: "2026-07-20T12:05:00.000Z",
     };
+    const content = Buffer.alloc(9 * 1024 * 1024, 9);
+    const ranges: string[] = [];
 
     stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -193,16 +195,22 @@ describe("shiftObjects plugin", () => {
         assert.equal(init?.method, "POST");
         return Response.json(grant);
       }
-      if (url === grant.url) return new Response("image-bytes");
+      if (url === grant.url) {
+        const headers = new Headers(init?.headers);
+        assert.equal(headers.has("authorization"), false);
+        ranges.push(String(headers.get("range")));
+        return rangeResponse(content, headers.get("range"));
+      }
       throw new Error(`unexpected request: ${url}`);
     });
 
     assert.deepEqual(await action.execute({ id: "object_1" }, ctx()), grant);
     assert.deepEqual(
       await action.execute({ id: "object_1", savePath }, ctx()),
-      { savedTo: savePath, sizeBytes: 11 },
+      { savedTo: savePath, sizeBytes: content.byteLength },
     );
-    assert.equal(await readFile(savePath, "utf8"), "image-bytes");
+    assert.ok((await readFile(savePath)).equals(content));
+    assert.equal(ranges.length, 2);
   });
 
   it("lists objects with service filters", async () => {

@@ -75,6 +75,13 @@ export {
   awsTarget,
 } from "./credentials/aws-plugin.js";
 export { brokerFor } from "./credentials/broker.js";
+export type {
+  DownloadCheck,
+  Downloaded,
+  DownloadSource,
+  DownloadTo,
+} from "./credentials/download.js";
+export { rangedDownload } from "./credentials/download.js";
 export {
   downloadResource,
   type PresignedRequestOptions,

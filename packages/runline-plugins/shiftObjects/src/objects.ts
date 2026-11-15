@@ -1,6 +1,10 @@
-import { writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { pathSegment, type RunlinePluginAPI } from "runline";
+import {
+  pathSegment,
+  presignedRequest,
+  type RunlinePluginAPI,
+  rangedDownload,
+} from "runline";
 import * as t from "typebox";
 import { enumSchema, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
 import {
@@ -223,13 +227,24 @@ export function registerObjectActions(rl: RunlinePluginAPI) {
       });
       if (!fields.savePath) return grant;
 
-      const response = await fetch(grant.url, { method: grant.method });
-      if (!response.ok) {
-        throw new Error(`Object download failed: HTTP ${response.status}`);
-      }
-      const bytes = Buffer.from(await response.arrayBuffer());
-      await writeFile(fields.savePath, bytes);
-      return { savedTo: fields.savePath, sizeBytes: bytes.byteLength };
+      // The signed link is the service's own answer; it is fetched by byte
+      // ranges, so an object of any size is written without being held
+      // whole in memory.
+      const { size } = await rangedDownload(
+        {
+          plugin: "shiftObjects",
+          request: (range) =>
+            presignedRequest(grant.url, {
+              allowedOrigins: [new URL(grant.url).origin],
+              fetch: globalThis.fetch,
+              headers: { Range: range },
+            }),
+          failed: (response) =>
+            new Error(`Object download failed: HTTP ${response.status}`),
+        },
+        { savePath: fields.savePath },
+      );
+      return { savedTo: fields.savePath, sizeBytes: size };
     },
   });
 
