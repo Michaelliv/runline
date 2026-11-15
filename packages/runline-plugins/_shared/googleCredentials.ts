@@ -98,6 +98,21 @@ const API_SERVICES: Record<string, string> = {
   calendar: "calendar-json.googleapis.com",
   gmail: "gmail.googleapis.com",
 };
+/**
+ * What a target allows beyond plain JSON calls: Drive content is
+ * downloaded by byte ranges, and uploaded in resumable sessions.
+ */
+const TARGET_EXTRAS: Record<string, Partial<CredentialTarget>> = {
+  drive: { allowedHeaders: ["Range"] },
+  upload: {
+    allowedHeaders: [
+      "X-Upload-Content-Type",
+      "X-Upload-Content-Length",
+      "Content-Range",
+    ],
+    resumableUpload: true,
+  },
+};
 const PLUGIN_TARGETS: Record<string, string[]> = {
   googleDrive: ["drive", "upload", "docs"],
   googleDocs: ["docs", "drive"],
@@ -134,16 +149,7 @@ export function googleResources(plugin: string): {
       {
         baseUrl: API_BASES[name],
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-        ...(name === "upload"
-          ? {
-              allowedHeaders: [
-                "X-Upload-Content-Type",
-                "X-Upload-Content-Length",
-                "Content-Range",
-              ],
-              resumableUpload: true,
-            }
-          : {}),
+        ...TARGET_EXTRAS[name],
       },
     ]),
   ) as Record<string, CredentialTarget>;

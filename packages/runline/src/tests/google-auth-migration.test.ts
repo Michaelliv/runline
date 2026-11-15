@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, generateKeyPairSync } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, it } from "node:test";
@@ -21,7 +21,7 @@ import googleTasks from "../../../runline-plugins/googleTasks/src/index.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
 import { createPluginAPI, type PluginFunction } from "../plugin/api.js";
 import type { ActionContext } from "../plugin/types.js";
-import { stubFetch } from "./helpers/plugin.js";
+import { rangeResponse, stubFetch } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -342,6 +342,143 @@ it("Drive binary downloads, exports, revision restores, and multipart uploads us
     ctx,
   );
   assert.ok(methods.includes("PATCH") && methods.includes("POST"));
+});
+
+it("Drive downloads a file larger than one signed response, by ranges", async () => {
+  const MiB = 1024 * 1024;
+  const content = Buffer.alloc(65 * MiB, 7);
+  const md5Checksum = createHash("md5").update(content).digest("hex");
+  const dir = mkdtempSync(join(tmpdir(), "runline-google-download-"));
+  const savePath = join(dir, "big.bin");
+  let stated = md5Checksum;
+  const ranges: string[] = [];
+  mock((value, init) => {
+    const url = new URL(value);
+    const headers = new Headers(init.headers);
+    assert.equal(headers.get("authorization"), "Bearer old");
+    if (url.searchParams.get("alt") !== "media")
+      return Response.json({
+        name: "big.bin",
+        mimeType: "video/mp4",
+        md5Checksum: stated,
+      });
+    ranges.push(String(headers.get("range")));
+    return rangeResponse(content, headers.get("range"), {
+      "content-type": "video/mp4",
+    });
+  });
+  try {
+    const download = action(googleDrive, "file.download");
+    assert.deepEqual(
+      await download.execute({ fileId: "file", savePath }, await context()),
+      {
+        path: savePath,
+        name: "big.bin",
+        mimeType: "video/mp4",
+        size: content.byteLength,
+      },
+    );
+    assert.ok(readFileSync(savePath).equals(content));
+    assert.equal(ranges.length, 9);
+    assert.equal(ranges[8], `bytes=${64 * MiB}-${72 * MiB - 1}`);
+
+    ranges.length = 0;
+    await assert.rejects(
+      Promise.resolve(download.execute({ fileId: "file" }, await context())),
+      /exceeds 64 MiB; pass savePath/,
+    );
+    assert.equal(ranges.length, 1);
+
+    stated = "0".repeat(32);
+    await assert.rejects(
+      Promise.resolve(
+        download.execute({ fileId: "file", savePath }, await context()),
+      ),
+      /does not match the content's checksum/,
+    );
+    assert.ok(readFileSync(savePath).equals(content));
+
+    const revision = (await action(googleDrive, "revision.download").execute(
+      { fileId: "file", revisionId: "rev", savePath },
+      await context(),
+    )) as { size: number; mimeType: string; savedTo: string };
+    assert.deepEqual(revision, {
+      fileId: "file",
+      revisionId: "rev",
+      mimeType: "video/mp4",
+      size: content.byteLength,
+      savedTo: savePath,
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it("Drive sends content over 5 MiB in a resumable session, from memory or a restored revision", async () => {
+  const MiB = 1024 * 1024;
+  const content = Buffer.alloc(6 * MiB, 3);
+  const session =
+    "https://www.googleapis.com/upload/drive/v3/files?upload_id=session";
+  const sent: Buffer[] = [];
+  let started: { method?: string; url: URL; body: string } | undefined;
+  mock((value, init) => {
+    const url = new URL(value);
+    const headers = new Headers(init.headers);
+    if (url.searchParams.get("alt") === "media")
+      return rangeResponse(content, headers.get("range"), {
+        "content-type": "application/pdf",
+      });
+    if (init.method === "PUT") {
+      sent.push(Buffer.from(init.body as Uint8Array));
+      const received = Buffer.concat(sent).byteLength;
+      assert.equal(
+        headers.get("content-range"),
+        `bytes ${received - 2 * MiB}-${received - 1}/${content.byteLength}`,
+      );
+      return received < content.byteLength
+        ? new Response(null, { status: 308 })
+        : Response.json({ id: "file" });
+    }
+    if (url.searchParams.get("uploadType") === "resumable") {
+      assert.equal(
+        headers.get("x-upload-content-length"),
+        String(content.byteLength),
+      );
+      started = {
+        method: init.method,
+        url,
+        body: init.body ? Buffer.from(init.body as Uint8Array).toString() : "",
+      };
+      return new Response(null, { headers: { location: session } });
+    }
+    assert.notEqual(url.pathname.split("/")[1], "upload");
+    return Response.json({ id: "file" });
+  });
+
+  await action(googleDrive, "file.upload").execute(
+    { name: "big.bin", contentBase64: content.toString("base64") },
+    await context(),
+  );
+  assert.equal(started?.method, "POST");
+  assert.equal(JSON.parse(started?.body ?? "").name, "big.bin");
+  assert.ok(Buffer.concat(sent).equals(content));
+
+  sent.length = 0;
+  const restored = await action(googleDrive, "revision.restore").execute(
+    { fileId: "file", revisionId: "rev" },
+    await context(),
+  );
+  assert.equal(started?.method, "PATCH");
+  assert.equal(started?.url.pathname, "/upload/drive/v3/files/file");
+  assert.deepEqual(JSON.parse(started?.body ?? ""), {
+    mimeType: "application/pdf",
+  });
+  assert.ok(Buffer.concat(sent).equals(content));
+  assert.deepEqual(restored, {
+    fileId: "file",
+    restoredFromRevisionId: "rev",
+    head: { id: "file" },
+  });
 });
 
 it("Drive resumable create/update accept 308 acknowledgements but require final completion", async () => {

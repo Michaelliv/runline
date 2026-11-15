@@ -32,6 +32,9 @@ const SCOPES = [
 ];
 type Ctx = ActionContext;
 
+/** The most files.get answers as base64; larger files are written to a savePath. */
+const INLINE_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+
 /** A Graph collection answer; items pass through to the caller unchanged. */
 interface GraphList {
   value: unknown[];
@@ -189,10 +192,17 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
   rl.registerAction("files.get", {
     access: "read",
     description:
-      "Download a file by id. Returns {id,name,size,contentType,base64}. base64 is the file bytes.",
-    inputSchema: { id: { type: "string", required: true } },
+      "Download a file by id. Returns {id,name,size,contentType,base64}, base64 being the file bytes (files up to 64 MiB); with savePath the bytes are written to disk, at any size, and {id,name,size,contentType,path} is returned.",
+    inputSchema: {
+      id: { type: "string", required: true },
+      savePath: {
+        type: "string",
+        required: false,
+        description: "Local path to write the bytes to",
+      },
+    },
     async execute(input, ctx: Ctx) {
-      const p = input as { id: string };
+      const p = input as { id: string; savePath?: string };
       const meta = await graphRequest<DriveItem>(
         ctx,
         NAME,
@@ -200,16 +210,22 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
         "GET",
         `${driveBase(ctx)}/items/${pathSegment(p.id)}`,
       );
-      const res = await microsoftDownload(meta["@microsoft.graph.downloadUrl"]);
-      if (!res.ok)
-        throw new Error(`${NAME}: download failed (HTTP ${res.status})`);
-      const buf = Buffer.from(await res.arrayBuffer());
+      const { bytes } = await microsoftDownload(
+        NAME,
+        meta["@microsoft.graph.downloadUrl"],
+        p.savePath === undefined
+          ? {
+              maxBytes: INLINE_DOWNLOAD_BYTES,
+              oversize: `${NAME}: the file exceeds 64 MiB; pass savePath to write it to disk`,
+            }
+          : { savePath: p.savePath },
+      );
       return {
         id: meta.id,
         name: meta.name,
         size: meta.size,
         contentType: meta.file?.mimeType,
-        base64: buf.toString("base64"),
+        ...(bytes ? { base64: bytes.toString("base64") } : { path: p.savePath }),
       };
     },
   });

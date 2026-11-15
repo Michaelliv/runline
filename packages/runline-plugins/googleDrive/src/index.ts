@@ -48,17 +48,22 @@
  *     or writes to disk when `savePath` is provided and returns the
  *     path it wrote to.
  *
- * Uploads use multipart/related (`uploadType=multipart`) up to ~5 MB,
- * and resumable uploads (`uploadType=resumable`) with 2 MiB chunks
- * for larger files, driven off whether the caller supplies bytes
- * (Buffer) vs a path (streamed).
+ * Content of any size moves in bounded requests. Uploads up to 5 MiB go
+ * in one request (`uploadType=multipart`, or `media` without metadata);
+ * larger ones in a resumable session of 2 MiB chunks, a file's read as
+ * they are sent. Downloads are fetched by byte ranges; exports of
+ * Google-native files, which Drive caps at 10 MB and serves whole, in one.
  */
 
 import { createReadStream, statSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type ActionContext,
   jsonAnswer,
   pathSegment,
+  rangedDownload,
   requestFailed,
   type RunlinePluginAPI,
 } from "runline";
@@ -211,19 +216,28 @@ async function paginateAll(
 
 // ─── Binary I/O helpers ─────────────────────────────────────────
 
-/**
- * Resolve whichever of `contentBase64` / `contentPath` / `content` the
- * caller provided into a Buffer, plus a best-guess filename and
- * mimeType. For resumable uploads we keep paths as paths so we can
- * stream instead of buffering 500 MB in memory.
- */
-async function resolveContent(p: Record<string, unknown>): Promise<{
+/** The most one upload request carries; larger content goes up in a resumable session. */
+const SIMPLE_UPLOAD_BYTES = 5 * 1024 * 1024;
+/** A resumable session's chunk: a multiple of 256 KiB, as Drive requires. */
+const UPLOAD_CHUNK_BYTES = 2 * 1024 * 1024;
+/** The most a download answers as base64; larger content is written to a savePath. */
+const INLINE_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+
+/** Content to upload: bytes held in memory, or a file read as it is sent. */
+interface Content {
   buffer?: Buffer;
   path?: string;
   size: number;
   mimeType?: string;
   fileName?: string;
-}> {
+}
+
+/**
+ * Whichever of `contentBase64` / `contentPath` / `content` the caller
+ * provided, with a best-guess filename and mimeType. A file larger than
+ * one upload request stays a path, so it is never held whole in memory.
+ */
+async function resolveContent(p: Record<string, unknown>): Promise<Content> {
   if (typeof p.contentBase64 === "string") {
     const base64 = standardBase64(p.contentBase64);
     if (base64 === undefined)
@@ -247,14 +261,11 @@ async function resolveContent(p: Record<string, unknown>): Promise<{
   }
   if (typeof p.contentPath === "string") {
     const stat = statSync(p.contentPath);
-    // Under 5 MiB → buffer it for a simple multipart upload. Larger
-    // files go through resumable with a streamed ReadStream.
-    const BUFFER_THRESHOLD = 5 * 1024 * 1024;
     const fileName = (p.name as string | undefined) ?? p.contentPath.split("/").pop();
-    if (stat.size <= BUFFER_THRESHOLD) {
+    if (stat.size <= SIMPLE_UPLOAD_BYTES) {
       const buffer = await readLocalFile(p.contentPath, {
         subject: "googleDrive: contentPath",
-        maxBytes: BUFFER_THRESHOLD,
+        maxBytes: SIMPLE_UPLOAD_BYTES,
         oversize: "googleDrive: contentPath grew while reading; retry the upload",
       });
       return {
@@ -298,117 +309,128 @@ function buildMultipart(
   return Buffer.concat([Buffer.from(meta, "utf-8"), content, Buffer.from(tail, "utf-8")]);
 }
 
+/** `c`'s bytes in upload chunks; a file's are read as they are sent. */
+async function* contentChunks(c: Content): AsyncGenerator<Buffer> {
+  if (c.buffer) {
+    for (let at = 0; at < c.buffer.byteLength; at += UPLOAD_CHUNK_BYTES)
+      yield c.buffer.subarray(at, at + UPLOAD_CHUNK_BYTES);
+    return;
+  }
+  let pending: Buffer = Buffer.alloc(0);
+  for await (const piece of createReadStream(c.path as string, {
+    highWaterMark: UPLOAD_CHUNK_BYTES,
+  })) {
+    pending = Buffer.concat([pending, piece as Buffer]);
+    while (pending.byteLength >= UPLOAD_CHUNK_BYTES) {
+      yield pending.subarray(0, UPLOAD_CHUNK_BYTES);
+      pending = pending.subarray(UPLOAD_CHUNK_BYTES);
+    }
+  }
+  if (pending.byteLength > 0) yield pending;
+}
+
 /**
- * Upload bytes to Drive. Picks multipart vs resumable based on whether
- * `c` holds an in-memory Buffer (small) or a filesystem path (streamed).
- * Returns Drive's file resource (`{ id, name, ... }`).
+ * Send content to Drive: a new file, or the bytes of `to.fileId`, with
+ * `to.metadata` when given. Up to 5 MiB held in memory goes in one
+ * request; anything else in a resumable session, so no request outgrows
+ * what a signer carries. Returns Drive's file resource.
+ * Spec: https://developers.google.com/workspace/drive/api/guides/manage-uploads
  */
-async function uploadBytes(
+async function uploadContent(
   ctx: Ctx,
-  metadata: Record<string, unknown>,
-  c: {
-    buffer?: Buffer;
-    path?: string;
-    size: number;
-    mimeType?: string;
-  },
-  extraQs: Record<string, unknown> = {},
+  to: { fileId?: string; metadata?: Record<string, unknown> },
+  c: Content,
+  qs: Record<string, unknown> = {},
 ): Promise<{ id: string } & Record<string, unknown>> {
   const mimeType = c.mimeType ?? "application/octet-stream";
+  const method = to.fileId === undefined ? "POST" : "PATCH";
+  const url = new URL(
+    `${API_BASE}/upload/drive/v3/files${to.fileId === undefined ? "" : `/${pathSegment(to.fileId)}`}`,
+  );
+  url.searchParams.set("supportsAllDrives", "true");
+  for (const [k, v] of Object.entries(qs)) {
+    if (v !== undefined) url.searchParams.set(k, String(v));
+  }
 
-  if (c.buffer) {
-    const body = buildMultipart(metadata, c.buffer, mimeType);
-    const url = new URL(`${API_BASE}/upload/drive/v3/files`);
-    url.searchParams.set("uploadType", "multipart");
-    url.searchParams.set("supportsAllDrives", "true");
-    for (const [k, v] of Object.entries(extraQs)) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
+  if (c.buffer && c.size <= SIMPLE_UPLOAD_BYTES) {
+    url.searchParams.set("uploadType", to.metadata ? "multipart" : "media");
     const res = await driveResponse(ctx, url.toString(), {
-      method: "POST",
+      method,
       headers: {
-        "Content-Type": `multipart/related; boundary=${MULTIPART_BOUNDARY}`,
+        "Content-Type": to.metadata
+          ? `multipart/related; boundary=${MULTIPART_BOUNDARY}`
+          : mimeType,
       },
-      // Buffer is a Uint8Array so it's a valid BodyInit.
-      body: new Uint8Array(body),
+      body: new Uint8Array(
+        to.metadata ? buildMultipart(to.metadata, c.buffer, mimeType) : c.buffer,
+      ),
     });
-    const text = await res.text();
-    if (!res.ok) {
-      throw requestFailed("googleDrive", res.status);
-    }
-    return JSON.parse(text);
+    if (!res.ok) throw requestFailed("googleDrive", res.status);
+    return jsonAnswer(res);
   }
 
-  // Resumable: initiate, then PUT chunks.
-  const initUrl = new URL(`${API_BASE}/upload/drive/v3/files`);
-  initUrl.searchParams.set("uploadType", "resumable");
-  initUrl.searchParams.set("supportsAllDrives", "true");
-  for (const [k, v] of Object.entries(extraQs)) {
-    if (v !== undefined) initUrl.searchParams.set(k, String(v));
-  }
-  const initRes = await driveResponse(ctx, initUrl.toString(), {
-    method: "POST",
+  url.searchParams.set("uploadType", "resumable");
+  const initRes = await driveResponse(ctx, url.toString(), {
+    method,
     headers: {
-      "Content-Type": "application/json; charset=UTF-8",
+      ...(to.metadata
+        ? { "Content-Type": "application/json; charset=UTF-8" }
+        : {}),
       "X-Upload-Content-Type": mimeType,
       "X-Upload-Content-Length": String(c.size),
     },
-    body: JSON.stringify(metadata),
+    ...(to.metadata ? { body: JSON.stringify(to.metadata) } : {}),
   });
-  if (!initRes.ok) {
-    throw requestFailed("googleDrive", initRes.status);
-  }
-  const uploadUrl = uploadSession(initRes.headers.get("location"));
+  if (!initRes.ok) throw requestFailed("googleDrive", initRes.status);
+  const session = uploadSession(initRes.headers.get("location"));
 
-  // Stream in 2 MiB chunks. Must be a multiple of 256 KiB per Drive docs.
-  const CHUNK_SIZE = 2 * 1024 * 1024;
-  const stream = createReadStream(c.path!, { highWaterMark: CHUNK_SIZE });
   let offset = 0;
-  let pending: Buffer = Buffer.alloc(0);
-  let lastBody = "";
-  let lastStatus = 0;
-
-  const flushChunk = async (chunk: Buffer, isLast: boolean): Promise<void> => {
-    const start = offset;
-    const end = offset + chunk.byteLength - 1;
-    const res = await driveResponse(ctx, uploadUrl, {
+  for await (const chunk of contentChunks(c)) {
+    const res = await driveResponse(ctx, session, {
       method: "PUT",
       headers: {
-        "Content-Range": `bytes ${start}-${end}/${c.size}`,
+        "Content-Range": `bytes ${offset}-${offset + chunk.byteLength - 1}/${c.size}`,
       },
       body: new Uint8Array(chunk),
     });
     offset += chunk.byteLength;
-    lastStatus = res.status;
-    // 308 == "Resume Incomplete" — expected for all but the final chunk.
+    // 308 acknowledges a chunk; the last one answers the file resource.
     if (res.status === 200 || res.status === 201) {
-      lastBody = await res.text();
-    } else if (res.status === 308) {
-      // Discard body, keep streaming.
-      await res.text();
-    } else {
-      throw requestFailed("googleDrive", res.status);
+      if (offset !== c.size) break;
+      return jsonAnswer(res);
     }
-    void isLast;
-  };
+    if (res.status !== 308) throw requestFailed("googleDrive", res.status);
+  }
+  throw new Error("googleDrive: resumable upload did not complete");
+}
 
-  for await (const chunk of stream) {
-    pending = Buffer.concat([pending, chunk as Buffer]);
-    while (pending.byteLength >= CHUNK_SIZE) {
-      const head = pending.subarray(0, CHUNK_SIZE);
-      pending = pending.subarray(CHUNK_SIZE);
-      await flushChunk(head, false);
-    }
-  }
-  if (pending.byteLength > 0) {
-    await flushChunk(pending, true);
-  }
-  if (lastStatus !== 200 && lastStatus !== 201) {
-    throw new Error(
-      `googleDrive: resumable upload ended with status ${lastStatus} and no file resource`,
-    );
-  }
-  return JSON.parse(lastBody);
+/**
+ * A blob's bytes (`alt=media`), fetched by byte ranges: written to
+ * `savePath`, or answered in memory when there is none. `md5` is Drive's
+ * checksum of the content, checked against what arrived.
+ */
+async function downloadMedia(
+  ctx: Ctx,
+  url: string,
+  savePath: string | undefined,
+  md5?: string,
+): Promise<{ size: number; headers: Headers; bytes?: Buffer }> {
+  return rangedDownload(
+    {
+      plugin: "googleDrive",
+      request: (range) =>
+        driveResponse(ctx, url, { headers: { Range: range } }),
+      failed: (response) => requestFailed("googleDrive", response.status),
+    },
+    savePath === undefined
+      ? {
+          maxBytes: INLINE_DOWNLOAD_BYTES,
+          oversize:
+            "googleDrive: the file exceeds 64 MiB; pass savePath to write it to disk",
+        }
+      : { savePath },
+    md5 === undefined ? {} : { md5 },
+  );
 }
 
 // ─── Shared helpers ─────────────────────────────────────────────
@@ -524,7 +546,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   rl.registerAction("file.upload", {
     access: "write",
     description:
-      "Upload a file to Drive. Supply one of contentBase64 / contentPath / content. Uses multipart for small files, resumable (2 MiB chunks) for large streamed paths.",
+      "Upload a file to Drive. Supply one of contentBase64 / contentPath / content. Content up to 5 MiB goes in one request, larger content in a resumable session of 2 MiB chunks; use contentPath for large files so they are read as they are sent.",
     inputSchema: t.Object(
       {
         name: t.Optional(NonEmptyString),
@@ -560,7 +582,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       if (p.mimeType) metadata.mimeType = p.mimeType;
       if (p.properties) metadata.properties = p.properties;
       if (p.appProperties) metadata.appProperties = p.appProperties;
-      const uploaded = await uploadBytes(ctx, metadata, content);
+      const uploaded = await uploadContent(ctx, { metadata }, content);
 
       // The multipart upload endpoint returns a minimal resource
       // (id, name, mimeType) and doesn't honor the `keepRevisionForever`
@@ -650,18 +672,18 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       };
       if (p.properties) metadata.properties = p.properties;
       if (p.appProperties) metadata.appProperties = p.appProperties;
-      return uploadBytes(ctx, metadata, {
-        buffer,
-        size: buffer.byteLength,
-        mimeType,
-      });
+      return uploadContent(
+        ctx,
+        { metadata },
+        { buffer, size: buffer.byteLength, mimeType },
+      );
     },
   });
 
   rl.registerAction("file.download", {
     access: "write",
     description:
-      "Download a file. Google-native docs are exported to the chosen format; regular files are downloaded as-is. Returns base64 by default, or writes to disk when savePath is set.",
+      "Download a file. Google-native docs are exported to the chosen format (Drive caps an export at 10 MB); regular files are downloaded as-is, at any size when savePath is set. Returns base64 by default (files up to 64 MiB), or writes to disk when savePath is set.",
     inputSchema: t.Object(
       {
         fileId: Id,
@@ -678,12 +700,14 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         "GET",
         `/drive/v3/files/${pathSegment(fileId)}`,
         undefined,
-        { fields: "mimeType,name", supportsAllDrives: true },
-      )) as { mimeType: string; name: string };
+        { fields: "mimeType,name,md5Checksum", supportsAllDrives: true },
+      )) as { mimeType: string; name: string; md5Checksum?: string };
+      const savePath = p.savePath as string | undefined;
 
       const isGoogleNative = meta.mimeType?.includes("vnd.google-apps");
-      let url: string;
       let contentType = meta.mimeType;
+      let size: number;
+      let bytes: Buffer | undefined;
       if (isGoogleNative) {
         const type = meta.mimeType.split(".")[2];
         const defaults: Record<string, string> = {
@@ -700,29 +724,33 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         const u = new URL(`${API_BASE}/drive/v3/files/${pathSegment(fileId)}/export`);
         u.searchParams.set("mimeType", mime);
         u.searchParams.set("supportsAllDrives", "true");
-        url = u.toString();
+        const res = await driveResponse(ctx, u.toString());
+        if (!res.ok) {
+          throw requestFailed("googleDrive", res.status);
+        }
+        bytes = Buffer.from(await res.arrayBuffer());
+        size = bytes.byteLength;
+        if (savePath !== undefined) writeFileSync(savePath, bytes);
       } else {
         const u = new URL(`${API_BASE}/drive/v3/files/${pathSegment(fileId)}`);
         u.searchParams.set("alt", "media");
         u.searchParams.set("supportsAllDrives", "true");
-        url = u.toString();
+        ({ size, bytes } = await downloadMedia(
+          ctx,
+          u.toString(),
+          savePath,
+          meta.md5Checksum,
+        ));
       }
-      const res = await driveResponse(ctx, url);
-      if (!res.ok) {
-        throw requestFailed("googleDrive", res.status);
-      }
-      const bytes = Buffer.from(await res.arrayBuffer());
-      const fileName = meta.name;
 
-      if (typeof p.savePath === "string") {
-        writeFileSync(p.savePath, bytes);
-        return { path: p.savePath, name: fileName, mimeType: contentType, size: bytes.byteLength };
+      if (savePath !== undefined) {
+        return { path: savePath, name: meta.name, mimeType: contentType, size };
       }
       return {
-        name: fileName,
+        name: meta.name,
         mimeType: contentType,
-        size: bytes.byteLength,
-        contentBase64: bytes.toString("base64"),
+        size,
+        contentBase64: (bytes as Buffer).toString("base64"),
       };
     },
   });
@@ -854,90 +882,19 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       const fileId = p.fileId as string;
       const hasBytes = p.contentBase64 !== undefined || p.contentPath !== undefined;
 
-      // Step 1: upload new bytes if provided. Drive requires PATCH on
-      // the upload endpoint for content replacement.
+      // Step 1: replace the bytes, on the upload endpoint.
       if (hasBytes) {
         const c = await resolveContent(p);
-        const mimeType = c.mimeType ?? (p.mimeType as string) ?? "application/octet-stream";
-        if (c.buffer) {
-          const url = new URL(`${API_BASE}/upload/drive/v3/files/${pathSegment(fileId)}`);
-          url.searchParams.set("uploadType", "media");
-          url.searchParams.set("supportsAllDrives", "true");
-          for (const key of [
-            "keepRevisionForever",
-            "ocrLanguage",
-            "useContentAsIndexableText",
-          ] as const) {
-            if (p[key] !== undefined) {
-              url.searchParams.set(key, String(p[key]));
-            }
-          }
-          const res = await driveResponse(ctx, url.toString(), {
-            method: "PATCH",
-            headers: {
-              "Content-Type": mimeType,
-            },
-            body: new Uint8Array(c.buffer),
-          });
-          if (!res.ok) {
-            throw requestFailed("googleDrive", res.status);
-          }
-        } else if (c.path) {
-          // Resumable PATCH
-          const initUrl = new URL(`${API_BASE}/upload/drive/v3/files/${pathSegment(fileId)}`);
-          initUrl.searchParams.set("uploadType", "resumable");
-          initUrl.searchParams.set("supportsAllDrives", "true");
-          for (const key of [
-            "keepRevisionForever",
-            "ocrLanguage",
-            "useContentAsIndexableText",
-          ] as const) {
-            if (p[key] !== undefined) {
-              initUrl.searchParams.set(key, String(p[key]));
-            }
-          }
-          const initRes = await driveResponse(ctx, initUrl.toString(), {
-            method: "PATCH",
-            headers: {
-              "X-Upload-Content-Type": mimeType,
-              "X-Upload-Content-Length": String(c.size),
-            },
-          });
-          if (!initRes.ok) {
-            throw requestFailed("googleDrive", initRes.status);
-          }
-          const uploadUrl = uploadSession(initRes.headers.get("location"));
-          const CHUNK = 2 * 1024 * 1024;
-          const stream = createReadStream(c.path, { highWaterMark: CHUNK });
-          let offset = 0;
-          let pending = Buffer.alloc(0);
-          let lastStatus = 0;
-          const flush = async (chunk: Buffer) => {
-            const res = await driveResponse(ctx, uploadUrl, {
-              method: "PUT",
-              headers: {
-                "Content-Range": `bytes ${offset}-${offset + chunk.byteLength - 1}/${c.size}`,
-              },
-              body: new Uint8Array(chunk),
-            });
-            offset += chunk.byteLength;
-            lastStatus = res.status;
-            if (res.status !== 200 && res.status !== 201 && res.status !== 308) {
-              throw requestFailed("googleDrive", res.status);
-            }
-            await res.text();
-          };
-          for await (const chunk of stream) {
-            pending = Buffer.concat([pending, chunk as Buffer]);
-            while (pending.byteLength >= CHUNK) {
-              await flush(pending.subarray(0, CHUNK));
-              pending = pending.subarray(CHUNK);
-            }
-          }
-          if (pending.byteLength > 0) await flush(pending);
-          if (offset !== c.size || (lastStatus !== 200 && lastStatus !== 201))
-            throw new Error("googleDrive: resumable update did not complete");
-        }
+        await uploadContent(
+          ctx,
+          { fileId },
+          { ...c, mimeType: c.mimeType ?? (p.mimeType as string | undefined) },
+          {
+            keepRevisionForever: p.keepRevisionForever,
+            ocrLanguage: p.ocrLanguage,
+            useContentAsIndexableText: p.useContentAsIndexableText,
+          },
+        );
       }
 
       // Step 2: metadata patch
@@ -1804,7 +1761,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   rl.registerAction("revision.download", {
     access: "write",
     description:
-      "Download the bytes of a specific revision. Pass savePath to write to disk and get back the path; otherwise returns { contentBase64, mimeType, size }. This is the recovery path when an in-place file.update has overwritten in-document comments on an Office file.",
+      "Download the bytes of a specific revision. Pass savePath to write to disk and get back the path (any size); otherwise returns { contentBase64, mimeType, size } for revisions up to 64 MiB. This is the recovery path when an in-place file.update has overwritten in-document comments on an Office file.",
     inputSchema: t.Object(
       { fileId: Id, revisionId: Id, savePath: t.Optional(NonEmptyString) },
       { additionalProperties: false },
@@ -1815,22 +1772,18 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       const revisionId = p.revisionId as string;
       const url = new URL(`${API_BASE}/drive/v3/files/${pathSegment(fileId)}/revisions/${pathSegment(revisionId)}`);
       url.searchParams.set("alt", "media");
-      const res = await driveResponse(ctx, url.toString());
-      if (!res.ok) {
-        throw requestFailed("googleDrive", res.status);
-      }
-      const bytes = Buffer.from(await res.arrayBuffer());
-      const mimeType = res.headers.get("content-type") ?? "application/octet-stream";
-      if (typeof p.savePath === "string") {
-        writeFileSync(p.savePath, bytes);
-        return { fileId, revisionId, mimeType, size: bytes.byteLength, savedTo: p.savePath };
+      const savePath = p.savePath as string | undefined;
+      const { size, bytes, headers } = await downloadMedia(ctx, url.toString(), savePath);
+      const mimeType = headers.get("content-type") ?? "application/octet-stream";
+      if (savePath !== undefined) {
+        return { fileId, revisionId, mimeType, size, savedTo: savePath };
       }
       return {
         fileId,
         revisionId,
         mimeType,
-        size: bytes.byteLength,
-        contentBase64: bytes.toString("base64"),
+        size,
+        contentBase64: (bytes as Buffer).toString("base64"),
       };
     },
   });
@@ -1900,7 +1853,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   rl.registerAction("revision.restore", {
     access: "write",
     description:
-      "Restore an older revision as the head of the file. Downloads the revision bytes and re-uploads them via multipart so the head moves to that content. Drive's REST API has no native restore endpoint for binary files; this performs the equivalent in two calls. Returns the new head file resource.",
+      "Restore an older revision as the head of the file. Downloads the revision bytes and re-uploads them so the head moves to that content. Drive's REST API has no native restore endpoint for binary files; this performs the equivalent. Returns the new head file resource.",
     inputSchema: t.Object(
       { fileId: Id, revisionId: Id, mimeType: t.Optional(NonEmptyString) },
       { additionalProperties: false },
@@ -1909,40 +1862,35 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       const p = (input ?? {}) as Record<string, unknown>;
       const fileId = p.fileId as string;
       const revisionId = p.revisionId as string;
-      // 1. Pull the chosen revision's bytes.
-      const dl = await driveResponse(ctx,
-        `${API_BASE}/drive/v3/files/${pathSegment(fileId)}/revisions/${pathSegment(revisionId)}?alt=media`,
-      );
-      if (!dl.ok) {
-        throw requestFailed("googleDrive", dl.status);
-      }
-      const bytes = Buffer.from(await dl.arrayBuffer());
-      const mime =
-        (p.mimeType as string | undefined) ??
-        dl.headers.get("content-type") ??
-        "application/octet-stream";
+      // 1. Pull the chosen revision's bytes into a scratch file, so a large
+      //    revision is never held whole in memory.
+      const scratch = await mkdtemp(join(tmpdir(), "runline-drive-"));
+      try {
+        const contentPath = join(scratch, "revision");
+        const { headers } = await downloadMedia(
+          ctx,
+          `${API_BASE}/drive/v3/files/${pathSegment(fileId)}/revisions/${pathSegment(revisionId)}?alt=media`,
+          contentPath,
+        );
+        const mimeType =
+          (p.mimeType as string | undefined) ??
+          headers.get("content-type") ??
+          "application/octet-stream";
 
-      // 2. Multipart-PATCH them as the new head of the same file.
-      const url = new URL(`${API_BASE}/upload/drive/v3/files/${pathSegment(fileId)}`);
-      url.searchParams.set("uploadType", "multipart");
-      url.searchParams.set("supportsAllDrives", "true");
-      url.searchParams.set(
-        "fields",
-        "id,name,mimeType,modifiedTime,size,headRevisionId,webViewLink",
-      );
-      const body = buildMultipart({ mimeType: mime }, bytes, mime);
-      const res = await driveResponse(ctx, url.toString(), {
-        method: "PATCH",
-        headers: {
-          "Content-Type": `multipart/related; boundary=${MULTIPART_BOUNDARY}`,
-        },
-        body: new Uint8Array(body),
-      });
-      if (!res.ok) {
-        throw requestFailed("googleDrive", res.status);
+        // 2. Send them as the new head of the same file.
+        const head = await uploadContent(
+          ctx,
+          { fileId, metadata: { mimeType } },
+          await resolveContent({ contentPath, mimeType }),
+          {
+            fields:
+              "id,name,mimeType,modifiedTime,size,headRevisionId,webViewLink",
+          },
+        );
+        return { fileId, restoredFromRevisionId: revisionId, head };
+      } finally {
+        await rm(scratch, { recursive: true, force: true });
       }
-      const head = (await jsonAnswer(res)) as Record<string, unknown>;
-      return { fileId, restoredFromRevisionId: revisionId, head };
     },
   });
 
