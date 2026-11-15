@@ -13,8 +13,8 @@ export const DROPBOX_AUTH_URL = "https://www.dropbox.com/oauth2/authorize";
 
 /**
  * Scopes a scoped app must have ticked on its Permissions tab. Dropbox
- * grants the app's configured scopes regardless of what is requested, but
- * asking for fewer than the actions need fails at call time, not at login.
+ * grants the app's configured scopes regardless of what is requested, and
+ * a scope the app lacks fails at call time (`missing_scope`), not at login.
  */
 export const SCOPES = [
   "account_info.read",
@@ -22,6 +22,8 @@ export const SCOPES = [
   "files.metadata.write",
   "files.content.read",
   "files.content.write",
+  "sharing.read",
+  "sharing.write",
 ];
 
 /**
@@ -35,14 +37,13 @@ const TARGETS: Record<string, CredentialTarget> = {
     baseUrl: "https://content.dropboxapi.com/2/",
     methods: ["POST"],
     allowedHeaders: ["Dropbox-API-Arg"],
-    // Downloads are read whole; 150 MB matches the single-request upload cap.
+    // A download is read whole into memory, so it is bounded.
     maxResponseBytes: 150 * 1024 * 1024,
     timeoutMs: 10 * 60_000,
   },
 };
 
-
-/** A pasted access token. Since 2021 Dropbox issues these for 4 hours only. */
+/** A pasted access token. Dropbox's access tokens last 4 hours. */
 const accessToken = staticCredential({
   id: "dropbox",
   auth: { kind: "bearer" },
@@ -57,9 +58,6 @@ const accessToken = staticCredential({
  * without it a connection holding a refresh token uses the grant (the
  * renewed access token is stored as `accessToken` too, so a token alone
  * does not decide), and any other uses its token.
- *
- * The client secret is optional: a PKCE (public) client refreshes with
- * its client ID alone, which Dropbox accepts as a form field.
  */
 export const dropboxCredential: CredentialDeclaration = (config) => {
   const token = accessToken(config);
@@ -68,7 +66,6 @@ export const dropboxCredential: CredentialDeclaration = (config) => {
     ["bearer", "oauth2"],
     "bearer",
   );
-  const secret = typeof config.clientSecret === "string" && config.clientSecret;
   const type: CredentialType = {
     id: "dropbox",
     methods: {
@@ -85,13 +82,12 @@ export const dropboxCredential: CredentialDeclaration = (config) => {
             provider: "dropbox",
             refresh: {
               url: DROPBOX_TOKEN_URL,
-              clientAuthentication: secret ? "client_secret_post" : "client_id",
-              encoding: "form",
+              clientAuthentication: "client_secret_post",
             },
           },
         },
-        // No probe: the registry only probes with GET/HEAD and every
-        // Dropbox endpoint is POST. account.get is the connection check.
+        // No probe: a probe is a GET or HEAD, and every Dropbox endpoint is
+        // POST. account.get is the connection check.
         targets: TARGETS,
       },
     },
@@ -102,7 +98,9 @@ export const dropboxCredential: CredentialDeclaration = (config) => {
     method: "oauth2",
     application: {
       clientId: config.clientId as string,
-      ...(secret ? { clientSecret: secret } : {}),
+      ...(typeof config.clientSecret === "string"
+        ? { clientSecret: config.clientSecret }
+        : {}),
     },
   };
 };

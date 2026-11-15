@@ -58,7 +58,6 @@
       "!packages/runline-plugins/dist",
       "!packages/runline-plugins/docker",
       "!packages/runline-plugins/drift",
-      "!packages/runline-plugins/dropbox",
       "!packages/runline-plugins/dropcontact",
       "!packages/runline-plugins/egoi",
       "!packages/runline-plugins/elasticsearch",
