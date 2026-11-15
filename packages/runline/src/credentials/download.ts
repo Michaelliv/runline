@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { type FileHandle, open, rename, rm } from "node:fs/promises";
+import { open, rename, rm } from "node:fs/promises";
 import { AuthError } from "../auth/errors.js";
 
 /**
@@ -57,7 +57,7 @@ interface Sink {
  */
 async function fileSink(savePath: string): Promise<Sink> {
   const partial = `${savePath}.${randomUUID()}.part`;
-  const file: FileHandle = await open(partial, "wx");
+  const file = await open(partial, "wx");
   return {
     async write(bytes) {
       await file.writeFile(bytes);

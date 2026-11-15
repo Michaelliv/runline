@@ -69,6 +69,7 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { standardBase64 } from "../../_shared/base64.js";
+import { downloadTo } from "../../_shared/download.js";
 import {
   googleCredential,
   googleJsonRequest,
@@ -220,8 +221,6 @@ async function paginateAll(
 const SIMPLE_UPLOAD_BYTES = 5 * 1024 * 1024;
 /** A resumable session's chunk: a multiple of 256 KiB, as Drive requires. */
 const UPLOAD_CHUNK_BYTES = 2 * 1024 * 1024;
-/** The most a download answers as base64; larger content is written to a savePath. */
-const INLINE_DOWNLOAD_BYTES = 64 * 1024 * 1024;
 
 /** Content to upload: bytes held in memory, or a file read as it is sent. */
 interface Content {
@@ -422,13 +421,7 @@ async function downloadMedia(
         driveResponse(ctx, url, { headers: { Range: range } }),
       failed: (response) => requestFailed("googleDrive", response.status),
     },
-    savePath === undefined
-      ? {
-          maxBytes: INLINE_DOWNLOAD_BYTES,
-          oversize:
-            "googleDrive: the file exceeds 64 MiB; pass savePath to write it to disk",
-        }
-      : { savePath },
+    downloadTo("googleDrive", savePath),
     md5 === undefined ? {} : { md5 },
   );
 }
@@ -663,7 +656,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         return { id: doc.id };
       }
 
-      // Plain text: ordinary multipart upload.
+      // Plain text: uploaded as it is.
       const buffer = Buffer.from(String(p.content), "utf-8");
       const metadata: Record<string, unknown> = {
         name,

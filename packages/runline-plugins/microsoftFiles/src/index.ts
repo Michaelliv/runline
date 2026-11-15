@@ -15,6 +15,7 @@ import {
   type RunlinePluginAPI,
 } from "runline";
 import { standardBase64 } from "../../_shared/base64.js";
+import { downloadTo } from "../../_shared/download.js";
 import {
   graphFailed,
   graphRequest,
@@ -31,9 +32,6 @@ const SCOPES = [
   "https://graph.microsoft.com/Sites.ReadWrite.All",
 ];
 type Ctx = ActionContext;
-
-/** The most files.get answers as base64; larger files are written to a savePath. */
-const INLINE_DOWNLOAD_BYTES = 64 * 1024 * 1024;
 
 /** A Graph collection answer; items pass through to the caller unchanged. */
 interface GraphList {
@@ -213,12 +211,7 @@ export default function microsoftFiles(rl: RunlinePluginAPI): void {
       const { bytes } = await microsoftDownload(
         NAME,
         meta["@microsoft.graph.downloadUrl"],
-        p.savePath === undefined
-          ? {
-              maxBytes: INLINE_DOWNLOAD_BYTES,
-              oversize: `${NAME}: the file exceeds 64 MiB; pass savePath to write it to disk`,
-            }
-          : { savePath: p.savePath },
+        downloadTo(NAME, p.savePath),
       );
       return {
         id: meta.id,
