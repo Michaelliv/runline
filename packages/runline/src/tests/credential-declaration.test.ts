@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { describe, it } from "node:test";
 import gmail from "../../../runline-plugins/gmail/src/index.js";
+import googleAds from "../../../runline-plugins/googleAds/src/index.js";
 import googleAppsScript from "../../../runline-plugins/googleAppsScript/src/index.js";
 import googleCalendar from "../../../runline-plugins/googleCalendar/src/index.js";
 import googleContacts from "../../../runline-plugins/googleContacts/src/index.js";
@@ -61,6 +62,7 @@ describe("the plugin API carries a credential declaration", () => {
 describe("registry-backed plugins declare their credential", () => {
   const specs: Array<[PluginFunction, string, string, string[]]> = [
     [gmail, "gmail", "google.oauth", ["gmail"]],
+    [googleAds, "googleAds", "google.oauth", ["ads"]],
     [googleAppsScript, "googleAppsScript", "google.oauth", ["drive", "script"]],
     [googleCalendar, "googleCalendar", "google.oauth", ["calendar"]],
     [googleContacts, "googleContacts", "google.oauth", ["people"]],
@@ -100,6 +102,7 @@ describe("registry-backed plugins declare their credential", () => {
     };
     for (const plugin of [
       gmail,
+      googleAds,
       googleCalendar,
       googleContacts,
       googleDocs,

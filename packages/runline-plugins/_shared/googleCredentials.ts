@@ -73,7 +73,16 @@ export function googleIdentity(cfg: GoogleAuthConfig): OAuthJwtIdentity {
   }
 }
 
+/**
+ * The Google Ads API version every googleAds path starts with. Google
+ * sunsets each major version about a year after its release.
+ */
+export const GOOGLE_ADS_VERSION = "v26";
+
 const API_BASES: Record<string, string> = {
+  // The origin alone: Ads paths begin with a method (`customers:list…`),
+  // which a path directly beneath a base would read as a URL scheme.
+  ads: "https://googleads.googleapis.com/",
   drive: "https://www.googleapis.com/drive/v3/",
   upload: "https://www.googleapis.com/upload/drive/v3/",
   docs: "https://docs.googleapis.com/v1/",
@@ -87,6 +96,7 @@ const API_BASES: Record<string, string> = {
 };
 /** The Cloud Console service each API base belongs to, to enable it by. */
 const API_SERVICES: Record<string, string> = {
+  ads: "googleads.googleapis.com",
   drive: "drive.googleapis.com",
   upload: "drive.googleapis.com",
   docs: "docs.googleapis.com",
@@ -99,10 +109,12 @@ const API_SERVICES: Record<string, string> = {
   gmail: "gmail.googleapis.com",
 };
 /**
- * What a target allows beyond plain JSON calls: Drive content is
- * downloaded by byte ranges, and uploaded in resumable sessions.
+ * What a target allows beyond plain JSON calls: Ads names the manager
+ * account a call acts through, and Drive content is downloaded by byte
+ * ranges and uploaded in resumable sessions.
  */
 const TARGET_EXTRAS: Record<string, Partial<CredentialTarget>> = {
+  ads: { allowedHeaders: ["login-customer-id"] },
   drive: { allowedHeaders: ["Range"] },
   upload: {
     allowedHeaders: [
@@ -114,6 +126,7 @@ const TARGET_EXTRAS: Record<string, Partial<CredentialTarget>> = {
   },
 };
 const PLUGIN_TARGETS: Record<string, string[]> = {
+  googleAds: ["ads"],
   googleDrive: ["drive", "upload", "docs"],
   googleDocs: ["docs", "drive"],
   googleSheets: ["sheets", "drive"],
@@ -154,6 +167,10 @@ export function googleResources(plugin: string): {
     ]),
   ) as Record<string, CredentialTarget>;
   const probes: Record<string, [string, string]> = {
+    googleAds: [
+      "ads",
+      `${GOOGLE_ADS_VERSION}/customers:listAccessibleCustomers`,
+    ],
     googleDrive: ["drive", "files?pageSize=1&fields=files(id)"],
     googleTasks: ["tasks", "users/@me/lists?maxResults=1"],
     googleContacts: [
