@@ -22,6 +22,18 @@ export const GoogleTimestamp = t.Union([NonEmptyString, t.Number()], {
   description: "ISO datetime, epoch milliseconds, or epoch seconds",
 });
 
-export function stringEnum<const T extends readonly string[]>(values: T) {
-  return t.Union(values.map((value) => t.Literal(value)));
+/**
+ * One of `values`, typed as their union: `t.Union` over a mapped array
+ * widens each branch, which would make the input's static type `never`.
+ */
+export function stringEnum<const T extends readonly string[]>(
+  values: T,
+  options?: t.TSchemaOptions,
+) {
+  return t.Unsafe<T[number]>(
+    t.Union(
+      values.map((value) => t.Literal(value)),
+      options,
+    ),
+  );
 }

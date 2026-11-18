@@ -146,6 +146,15 @@ describe("registry-backed plugins declare their credential", () => {
     assert.equal(selection?.jwtIdentity?.subject, "dana@example.com");
   });
 
+  it("a service account whose key a host keeps selects without an identity", () => {
+    const selection = definition(gmail).credential?.({
+      authMethod: "serviceAccount",
+      serviceAccountEmail: "robot@example.com",
+    });
+    assert.equal(selection?.method, "serviceAccount");
+    assert.equal(selection?.jwtIdentity, undefined);
+  });
+
   it("Microsoft app-only refuses a multi-tenant authority at declaration", () => {
     const declare = definition(microsoftMail).credential;
     for (const tenantId of [

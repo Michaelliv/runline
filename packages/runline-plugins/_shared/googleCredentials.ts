@@ -185,7 +185,9 @@ export function googleResources(plugin: string): {
 /**
  * A Google plugin's credential declaration: its own targets and the scopes
  * it signs service-account requests for, the method its config selects,
- * and — for a service account — the JWT identity, subject included.
+ * and — for a service account whose key the config holds — the JWT
+ * identity, subject included. A host that keeps the key supplies the
+ * identity itself.
  */
 export function googleCredential(
   plugin: string,
@@ -201,7 +203,8 @@ export function googleCredential(
         clientId: cfg.clientId as string,
         clientSecret: cfg.clientSecret,
       },
-      ...(method === "serviceAccount"
+      ...(method === "serviceAccount" &&
+      (cfg.serviceAccountJson || cfg.serviceAccountPrivateKey)
         ? { jwtIdentity: googleIdentity(cfg) }
         : {}),
     };
