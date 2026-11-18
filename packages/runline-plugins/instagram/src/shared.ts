@@ -1,20 +1,10 @@
 /**
- * The Instagram API over Meta's Graph API: one signed request path, node
- * and edge reads with the fields a call names, and cursor-paged edges.
+ * The Instagram API's own part of Meta's Graph API: the account a call is
+ * about, and what Meta's publishing failures mean.
  */
-import {
-  type ActionContext,
-  AuthError,
-  type CredentialCall,
-  credentialRequest,
-  errorIdentifier,
-  jsonAnswer,
-  pathSegment,
-  responseFailed,
-} from "runline";
+import { type ActionContext, pathSegment } from "runline";
 import * as t from "typebox";
-import { withoutAccessTokens } from "../../_shared/metaGraph.js";
-import { obj } from "../../_shared/provider.js";
+import { metaGraph } from "../../_shared/metaGraph.js";
 import { apiHost, instagramCredential } from "./credentials.js";
 
 export const PLUGIN = "instagram";
@@ -34,49 +24,6 @@ export const igUserId = t.Optional(
     "Instagram professional account ID (default: the connection's igUserId; on graph.instagram.com, the token's own account)",
   ),
 );
-
-/**
- * A field name, or an edge expanded with its own fields
- * (`children{id,media_url}`).
- */
-const FIELD = "^[A-Za-z0-9_.(){},]+$";
-
-/**
- * The fields a read returns, in place of the action's defaults. `note`
- * says what else the caller should know about them.
- */
-export const fields = (
-  what: string,
-  defaults: readonly string[],
-  note?: string,
-) =>
-  t.Optional(
-    t.Array(t.String({ pattern: FIELD }), {
-      minItems: 1,
-      description: `${what} fields to return (default ${defaults.join(", ")})${note ? `. ${note}` : ""}`,
-    }),
-  );
-
-/** One page of an edge: its size, and the cursor the page before answered. */
-export const paging = {
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      description:
-        "Page size. Meta may answer fewer, and caps some edges at 50",
-    }),
-  ),
-  after: t.Optional(
-    t.String({
-      minLength: 1,
-      description: "The `after` a page answered, for the page that follows it",
-    }),
-  ),
-};
-
-/** A Unix timestamp in seconds. */
-export const unixTime = (description: string) =>
-  t.Integer({ minimum: 0, description: `${description} (Unix seconds)` });
 
 // ─── Accounts ───────────────────────────────────────────────────
 
@@ -116,11 +63,9 @@ export function accountPath(ctx: ActionContext, igUserId?: string): string {
 
 // ─── Requests ───────────────────────────────────────────────────
 
-const UNKNOWN_OUTCOME =
-  "The change may have been applied: check before sending it again.";
-
-/** What Meta's documented error subcodes mean for the call that got them. */
-const SUBCODE_HINTS: Record<number, string> = {
+/** What Meta's documented failures mean for the call that got them. */
+const HINTS: Record<number, string> = {
+  10: "the token lacks a permission this call needs; a story's insights answer this while it has fewer than 5 viewers",
   2207003: "Meta timed out downloading the media; try again",
   2207004: "the image is larger than 8 MiB",
   2207005: "the image format is not supported; only JPEG is",
@@ -142,177 +87,8 @@ const SUBCODE_HINTS: Record<number, string> = {
   2207057: "thumbOffset is outside the video's duration",
 };
 
-/** A hint for a failure, from its subcode, else from its code's class. */
-function hint(code: unknown, subcode: unknown): string | undefined {
-  if (typeof subcode === "number" && SUBCODE_HINTS[subcode])
-    return SUBCODE_HINTS[subcode];
-  if (typeof code !== "number") return undefined;
-  if (code === 4 || code === 17 || code === 341)
-    return "the call was rate limited; wait before trying again";
-  if (code === 10)
-    return "the token lacks a permission this call needs; a story's insights answer this while it has fewer than 5 viewers";
-  if (code >= 200 && code <= 299)
-    return "the token lacks a permission this call needs";
-  return undefined;
-}
-
-/** The codes that say the token itself is expired, revoked or invalid. */
-const DEAD_TOKEN_CODES = [102, 190];
-
-/**
- * A failed response by Meta's error code and subcode (`9007.2207027`) and
- * the fbtrace_id support asks for, with a hint where Meta documents the
- * code. Meta's messages are never read: they can echo what was sent. A
- * dead token is reported as the login it is, and a change answered by a
- * 5xx says its outcome is unknown.
- */
-async function failed(response: Response, changes: boolean): Promise<Error> {
-  let error: Record<string, unknown> = {};
-  const failure = await responseFailed(PLUGIN, response, (body) => {
-    error = obj(obj(body).error);
-    const { code, error_subcode: subcode } = error;
-    return { code: subcode === undefined ? code : `${code}.${subcode}` };
-  });
-  if (DEAD_TOKEN_CODES.includes(error.code as number))
-    return new AuthError("reconnect_required", response.status);
-  const advice = hint(error.code, error.error_subcode);
-  if (advice) failure.message += `: ${advice}`;
-  const trace = errorIdentifier(error.fbtrace_id);
-  if (trace) failure.message += ` (fbtrace_id ${trace})`;
-  if (changes && response.status >= 500)
-    failure.message += `. ${UNKNOWN_OUTCOME}`;
-  return failure;
-}
-
-/**
- * A signed call that must succeed. Anything but a GET changes the
- * account, so when such a call gets no answer its outcome is unknown and
- * the failure says so.
- */
-export async function send(
-  ctx: ActionContext,
-  call: CredentialCall,
-): Promise<Response> {
-  const changes = (call.method ?? "GET") !== "GET";
-  let response: Response;
-  try {
-    response = await credentialRequest(ctx, instagramCredential, call);
-  } catch (error) {
-    const code = (error as { code?: unknown }).code;
-    if (!changes || code !== "transport_failed") throw error;
-    throw Object.assign(
-      new Error(`${(error as Error).message}. ${UNKNOWN_OUTCOME}`, {
-        cause: error,
-      }),
-      { code },
-    );
-  }
-  if (!response.ok) throw await failed(response, changes);
-  return response;
-}
-
-/**
- * A change carries its parameters the way Meta documents that endpoint:
- * a JSON body where its examples send one, the query string where its
- * syntax is one.
- */
-interface GraphCall {
-  method?: "GET" | "POST" | "DELETE";
-  /** Beneath `https://<host>/<version>/`. */
-  path: string;
-  /** Query parameters; undefined ones are skipped. */
-  query?: Record<string, unknown>;
-  /** A JSON body, in Meta's snake_case names. */
-  json?: unknown;
-}
-
-/**
- * A Graph API call's JSON answer, without any access token in it: an ID
- * or a field a caller names can reach a Page, whose answer carries one.
- */
-export async function graph<T = unknown>(
-  ctx: ActionContext,
-  call: GraphCall,
-): Promise<T> {
-  const response = await send(ctx, { target: "graph", ...call });
-  return withoutAccessTokens(await jsonAnswer(response)) as T;
-}
-
-/** A node: one object by its ID, with the fields named. */
-export function node(
-  ctx: ActionContext,
-  nodeId: string,
-  fieldList: readonly string[],
-): Promise<unknown> {
-  return graph(ctx, {
-    path: pathSegment(nodeId),
-    query: { fields: fieldList.join(",") },
-  });
-}
-
-/**
- * A read that is a field expansion of a node, not an edge of its own:
- * `business_discovery.username(bluebottle){followers_count}`. Answers
- * what the expansion found, or null.
- */
-export async function expansion(
-  ctx: ActionContext,
-  path: string,
-  call: { field: string; by: string; value: string },
-  fieldList: readonly string[],
-): Promise<unknown> {
-  const body = obj(
-    await graph(ctx, {
-      path,
-      query: {
-        fields: `${call.field}.${call.by}(${call.value}){${fieldList.join(",")}}`,
-      },
-    }),
-  );
-  return body[call.field] ?? null;
-}
-
-interface Page {
-  data: unknown[];
-  /** The cursor for the page that follows; absent on the last page. */
-  after?: string;
-}
-
-/**
- * One page of an edge, or the whole of one that does not page by cursor
- * (insights), without Meta's paging links. A page is followed by another
- * when Meta links to one or, on the edges that never link (tags), when
- * the page has items and a cursor; an edge that pages by cursor ends
- * with an empty page.
- */
-export async function edge(
-  ctx: ActionContext,
-  path: string,
-  query: Record<string, unknown>,
-): Promise<Page> {
-  const body = obj(await graph(ctx, { path, query }));
-  const data = Array.isArray(body.data) ? body.data : [];
-  const links = obj(body.paging);
-  const after = obj(links.cursors).after;
-  const more = links.next !== undefined || data.length > 0;
-  return typeof after === "string" && after !== "" && more
-    ? { data, after }
-    : { data };
-}
-
-/**
- * A request body in Meta's names: every key in snake_case, nested ones
- * too, and nothing left undefined.
- */
-export function snake(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(snake);
-  if (value === null || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, entry]) => entry !== undefined)
-      .map(([key, entry]) => [
-        key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
-        snake(entry),
-      ]),
-  );
-}
+export const { send, graph, node, expansion, edge } = metaGraph({
+  plugin: PLUGIN,
+  credential: instagramCredential,
+  hints: HINTS,
+});

@@ -25,6 +25,7 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { readLocalFile } from "../../_shared/localFile.js";
+import { fields, paging, snake, unixTime } from "../../_shared/metaGraph.js";
 import { obj } from "../../_shared/provider.js";
 import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 import {
@@ -38,17 +39,13 @@ import {
   accountPath,
   edge,
   expansion,
-  fields,
   graph,
   id,
   igUserId,
   node,
   PLUGIN,
-  paging,
   STRICT,
   send,
-  snake,
-  unixTime,
 } from "./shared.js";
 
 type In<S extends t.TSchema> = t.Static<S>;
