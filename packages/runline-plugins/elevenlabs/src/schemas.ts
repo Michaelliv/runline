@@ -1,4 +1,5 @@
 import * as t from "typebox";
+import { stringEnum } from "../../_shared/schemas.js";
 import { MAX_TIMEOUT_MS } from "./credentials.js";
 
 export const STRICT = { additionalProperties: false } as const;
@@ -39,14 +40,14 @@ const compressedAndRaw = [
   ...[32, 64, 96, 128, 192].map((rate) => `opus_48000_${rate}`),
 ];
 export const formatSchema = (kind: "speech" | "music" | "sound") =>
-  t.Union(
+  stringEnum(
     [
       ...compressedAndRaw,
       ...(kind === "speech" ? rates.map((rate) => `wav_${rate}`) : []),
       ...(kind === "music"
         ? ["auto", ...[128, 192, 240, 320].map((rate) => `mp3_48000_${rate}`)]
         : []),
-    ].map((value) => t.Literal(value)),
+    ],
     {
       default: kind === "music" ? "auto" : "mp3_44100_128",
       description:

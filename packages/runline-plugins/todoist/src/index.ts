@@ -15,7 +15,7 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
-import { atLeastOne } from "../../_shared/schemas.js";
+import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 import { todoistCredential } from "./credentials.js";
 
 /** API v1's largest page. */
@@ -74,9 +74,7 @@ const COLORS = [
   "grey",
   "taupe",
 ] as const;
-const Color = t.Unsafe<(typeof COLORS)[number]>(
-  t.Union(COLORS.map((color) => t.Literal(color))),
-);
+const Color = stringEnum(COLORS);
 const ViewStyle = t.Union([
   t.Literal("list"),
   t.Literal("board"),

@@ -24,8 +24,8 @@ import {
   Id,
   NonEmptyString,
   PositiveInteger,
-  stringEnum,
 } from "../../_shared/googleSchemas.js";
+import { stringEnum } from "../../_shared/schemas.js";
 
 const SCRIPT_API = "https://script.googleapis.com/v1";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";

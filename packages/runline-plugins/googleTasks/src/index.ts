@@ -31,11 +31,8 @@ import {
   googleJsonRequest,
   googleOAuth,
 } from "../../_shared/googleAuth.js";
-import {
-  GoogleTimestamp,
-  Id,
-  stringEnum,
-} from "../../_shared/googleSchemas.js";
+import { GoogleTimestamp, Id } from "../../_shared/googleSchemas.js";
+import { stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 

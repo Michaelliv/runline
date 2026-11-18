@@ -21,7 +21,3 @@ export const StringMap = t.Record(t.String(), t.String());
 export const GoogleTimestamp = t.Union([NonEmptyString, t.Number()], {
   description: "ISO datetime, epoch milliseconds, or epoch seconds",
 });
-
-export function stringEnum<const T extends readonly string[]>(values: T) {
-  return t.Union(values.map((value) => t.Literal(value)));
-}

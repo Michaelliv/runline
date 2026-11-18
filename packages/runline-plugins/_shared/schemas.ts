@@ -1,4 +1,4 @@
-import type * as t from "typebox";
+import * as t from "typebox";
 
 /**
  * At least one of `fields` must be given: "provide a change", "name a
@@ -7,4 +7,20 @@ import type * as t from "typebox";
  */
 export function atLeastOne(fields: Record<string, t.TSchema>) {
   return { anyOf: Object.keys(fields).map((key) => ({ required: [key] })) };
+}
+
+/**
+ * One of `values`, typed as their union: `t.Union` over a mapped array
+ * widens each branch, which would make the input's static type `never`.
+ */
+export function stringEnum<const T extends readonly string[]>(
+  values: T,
+  options?: t.TSchemaOptions,
+) {
+  return t.Unsafe<T[number]>(
+    t.Union(
+      values.map((value) => t.Literal(value)),
+      options,
+    ),
+  );
 }

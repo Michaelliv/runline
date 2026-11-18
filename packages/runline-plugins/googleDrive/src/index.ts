@@ -82,9 +82,9 @@ import {
   RawGoogleObject,
   StringMap,
   StringOrStringArray,
-  stringEnum,
 } from "../../_shared/googleSchemas.js";
 import { readLocalFile } from "../../_shared/localFile.js";
+import { stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 

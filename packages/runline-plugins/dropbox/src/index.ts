@@ -17,6 +17,7 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { readLocalFile } from "../../_shared/localFile.js";
+import { stringEnum } from "../../_shared/schemas.js";
 import {
   DROPBOX_AUTH_URL,
   DROPBOX_TOKEN_URL,
@@ -203,7 +204,7 @@ const searchQuery = t.Object(
     limit: Limit,
     path: t.Optional(Path("Limit search to this folder path")),
     fileCategories: t.Optional(
-      t.Array(t.Union(CATEGORIES.map((category) => t.Literal(category))), {
+      t.Array(stringEnum(CATEGORIES), {
         description: `Filter by categories: ${CATEGORIES.join(", ")}`,
       }),
     ),
