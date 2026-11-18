@@ -3,8 +3,9 @@ import { afterEach, describe, it } from "node:test";
 import facebookGraph from "../../../runline-plugins/facebookGraph/src/index.js";
 import graphql from "../../../runline-plugins/graphql/src/index.js";
 import { createPluginAPI, type RunlinePluginAPI } from "../plugin/api.js";
+import { validateTypedInput } from "../plugin/schema.js";
 import type { ActionContext } from "../plugin/types.js";
-import { stubFetch } from "./helpers/plugin.js";
+import { stubFetch, typedSchema } from "./helpers/plugin.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -118,6 +119,40 @@ describe("graphql", () => {
 });
 
 describe("facebookGraph", () => {
+  it("takes one of Meta's hosts, a method, a version and plain parameters", () => {
+    const { api, resolve } = createPluginAPI("facebookGraph");
+    facebookGraph(api);
+    const schema = typedSchema(resolve(), "request");
+    const valid = (input: unknown) => validateTypedInput(schema, input).ok;
+    assert.ok(valid({ node: "me" }));
+    assert.ok(
+      valid({
+        hostUrl: "graph-video.facebook.com",
+        method: "POST",
+        graphApiVersion: "v27.0",
+        node: "123",
+        edge: "videos",
+        fields: ["id", "name"],
+        queryParameters: { limit: 5, summary: true, after: "a" },
+        body: { title: "t", tags: ["a"] },
+      }),
+    );
+    for (const input of [
+      {},
+      { node: "" },
+      { node: "me", hostUrl: "evil.example" },
+      { node: "me", method: "PUT" },
+      { node: "me", method: "post" },
+      { node: "me", graphApiVersion: "../v1" },
+      { node: "me", fields: [] },
+      { node: "me", fields: "id" },
+      { node: "me", queryParameters: { nested: { a: 1 } } },
+      { node: "me", body: ["a"] },
+      { node: "me", extra: 1 },
+    ])
+      assert.equal(valid(input), false, JSON.stringify(input));
+  });
+
   it("signs the chosen Meta host, with the version and node as segments", async () => {
     const seen = capture({ id: "v1" });
     await run(
@@ -168,6 +203,40 @@ describe("facebookGraph", () => {
         },
       },
     );
+  });
+
+  it("sends fields as one parameter beside the caller's, and a body only with POST", async () => {
+    const seen = capture({ id: "1" });
+    const config = { accessToken: "fb" };
+    await run(
+      facebookGraph,
+      "facebookGraph",
+      "request",
+      {
+        node: "me",
+        fields: ["id", "name"],
+        queryParameters: { limit: 5 },
+        body: { ignored: true },
+      },
+      config,
+    );
+    await run(
+      facebookGraph,
+      "facebookGraph",
+      "request",
+      { method: "POST", node: "1", edge: "feed", body: {} },
+      config,
+    );
+    assert.equal(
+      seen[0].url,
+      "https://graph.facebook.com/me?limit=5&fields=id%2Cname&access_token=fb",
+    );
+    assert.equal(seen[0].body, undefined);
+    assert.equal(
+      seen[1].url,
+      "https://graph.facebook.com/1/feed?access_token=fb",
+    );
+    assert.equal(seen[1].body, undefined);
   });
 
   it("refuses any other host, a malformed version, or a caller copy of the token, before any request", async () => {
