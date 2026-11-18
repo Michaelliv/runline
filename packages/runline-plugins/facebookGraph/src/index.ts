@@ -5,6 +5,7 @@ import {
   pathSegment,
   type RunlinePluginAPI,
 } from "runline";
+import { withoutAccessTokens } from "../../_shared/metaGraph.js";
 import { facebookGraphCredential } from "./credentials.js";
 
 /** Meta's hosts, by the target each is declared as. */
@@ -103,23 +104,31 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
       ]
         .filter(Boolean)
         .join("/");
-      return credentialJson(ctx, facebookGraphCredential, "facebookGraph", {
-        target,
-        path,
-        method: httpMethod,
-        query: {
-          ...(queryParameters as Record<string, unknown> | undefined),
-          ...(Array.isArray(fields) && fields.length
-            ? { fields: fields.join(",") }
+      // The token travels in the query, so Meta repeats it in paging
+      // links, and a Page's answer carries the Page's own.
+      const answer = await credentialJson(
+        ctx,
+        facebookGraphCredential,
+        "facebookGraph",
+        {
+          target,
+          path,
+          method: httpMethod,
+          query: {
+            ...(queryParameters as Record<string, unknown> | undefined),
+            ...(Array.isArray(fields) && fields.length
+              ? { fields: fields.join(",") }
+              : {}),
+          },
+          ...(httpMethod === "POST" &&
+          body &&
+          typeof body === "object" &&
+          Object.keys(body).length
+            ? { json: body }
             : {}),
         },
-        ...(httpMethod === "POST" &&
-        body &&
-        typeof body === "object" &&
-        Object.keys(body).length
-          ? { json: body }
-          : {}),
-      });
+      );
+      return withoutAccessTokens(answer);
     },
   });
 }

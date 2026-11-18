@@ -13,6 +13,7 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
+import { withoutAccessTokens } from "../../_shared/metaGraph.js";
 import { obj } from "../../_shared/provider.js";
 import { apiHost, instagramCredential } from "./credentials.js";
 
@@ -34,19 +35,11 @@ export const igUserId = t.Optional(
   ),
 );
 
-/** A word in either case, as a pattern: schemas carry no regex flags. */
-const anyCase = (word: string) =>
-  [...word]
-    .map((letter) =>
-      /[a-z]/.test(letter) ? `[${letter.toUpperCase()}${letter}]` : letter,
-    )
-    .join("");
 /**
  * A field name, or an edge expanded with its own fields
- * (`children{id,media_url}`). `access_token` is refused: on a Page it
- * answers the Page's token, which no action may return.
+ * (`children{id,media_url}`).
  */
-const FIELD = `^(?!.*${anyCase("access_token")})[A-Za-z0-9_.(){},]+$`;
+const FIELD = "^[A-Za-z0-9_.(){},]+$";
 
 /**
  * The fields a read returns, in place of the action's defaults. `note`
@@ -87,13 +80,19 @@ export const unixTime = (description: string) =>
 
 // ─── Accounts ───────────────────────────────────────────────────
 
+/** The account a call names, else the connection's, if either names one. */
+function named(ctx: ActionContext, igUserId?: string): unknown {
+  const value = igUserId ?? ctx.connection.config.igUserId;
+  return value === "" ? undefined : value;
+}
+
 /**
- * The account a call names, or the connection's. Throws without one: a
- * parameter such as `user_id` takes a real ID, never `me`.
+ * The ID of the account a call is about. Throws without one: a parameter
+ * such as `user_id` takes a real ID, never `me`.
  */
 export function accountId(ctx: ActionContext, igUserId?: string): string {
-  const value = igUserId ?? ctx.connection.config.igUserId;
-  if (value === undefined || value === "")
+  const value = named(ctx, igUserId);
+  if (value === undefined)
     throw new Error(
       "instagram: igUserId is required: pass it, or set it on the connection (account.list finds it)",
     );
@@ -109,13 +108,10 @@ export function accountId(ctx: ActionContext, igUserId?: string): string {
  * or system user, so an ID is required.
  */
 export function accountPath(ctx: ActionContext, igUserId?: string): string {
-  const named = igUserId ?? ctx.connection.config.igUserId;
-  if (
-    (named === undefined || named === "") &&
+  return named(ctx, igUserId) === undefined &&
     apiHost(ctx.connection.config) === "graph.instagram.com"
-  )
-    return "me";
-  return pathSegment(accountId(ctx, igUserId));
+    ? "me"
+    : pathSegment(accountId(ctx, igUserId));
 }
 
 // ─── Requests ───────────────────────────────────────────────────
@@ -230,12 +226,16 @@ interface GraphCall {
   json?: unknown;
 }
 
-/** A Graph API call's JSON answer. */
+/**
+ * A Graph API call's JSON answer, without any access token in it: an ID
+ * or a field a caller names can reach a Page, whose answer carries one.
+ */
 export async function graph<T = unknown>(
   ctx: ActionContext,
   call: GraphCall,
 ): Promise<T> {
-  return jsonAnswer<T>(await send(ctx, { target: "graph", ...call }));
+  const response = await send(ctx, { target: "graph", ...call });
+  return withoutAccessTokens(await jsonAnswer(response)) as T;
 }
 
 /** A node: one object by its ID, with the fields named. */
@@ -250,6 +250,28 @@ export function node(
   });
 }
 
+/**
+ * A read that is a field expansion of a node, not an edge of its own:
+ * `business_discovery.username(bluebottle){followers_count}`. Answers
+ * what the expansion found, or null.
+ */
+export async function expansion(
+  ctx: ActionContext,
+  path: string,
+  call: { field: string; by: string; value: string },
+  fieldList: readonly string[],
+): Promise<unknown> {
+  const body = obj(
+    await graph(ctx, {
+      path,
+      query: {
+        fields: `${call.field}.${call.by}(${call.value}){${fieldList.join(",")}}`,
+      },
+    }),
+  );
+  return body[call.field] ?? null;
+}
+
 interface Page {
   data: unknown[];
   /** The cursor for the page that follows; absent on the last page. */
@@ -257,10 +279,11 @@ interface Page {
 }
 
 /**
- * One page of an edge, without Meta's paging links. A page is followed
- * by another when Meta links to one or, on the edges that never link
- * (tags), when the page has items and a cursor; an edge that pages by
- * cursor ends with an empty page.
+ * One page of an edge, or the whole of one that does not page by cursor
+ * (insights), without Meta's paging links. A page is followed by another
+ * when Meta links to one or, on the edges that never link (tags), when
+ * the page has items and a cursor; an edge that pages by cursor ends
+ * with an empty page.
  */
 export async function edge(
   ctx: ActionContext,

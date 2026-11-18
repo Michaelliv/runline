@@ -141,6 +141,35 @@ describe("facebookGraph", () => {
     assert.deepEqual(seen[0].body, { title: "t" });
   });
 
+  it("answers without the connection's token or a Page's", async () => {
+    capture({
+      data: [{ id: "1", name: "Page", access_token: "page-token" }],
+      paging: {
+        cursors: { after: "a" },
+        next: "https://graph.facebook.com/me/accounts?access_token=fb&after=a",
+        previous:
+          "https://graph.facebook.com/me/accounts?before=b&access_token=fb",
+      },
+    });
+    assert.deepEqual(
+      await run(
+        facebookGraph,
+        "facebookGraph",
+        "request",
+        { node: "me", edge: "accounts" },
+        { accessToken: "fb" },
+      ),
+      {
+        data: [{ id: "1", name: "Page" }],
+        paging: {
+          cursors: { after: "a" },
+          next: "https://graph.facebook.com/me/accounts?after=a",
+          previous: "https://graph.facebook.com/me/accounts?before=b",
+        },
+      },
+    );
+  });
+
   it("refuses any other host, a malformed version, or a caller copy of the token, before any request", async () => {
     const seen = capture({});
     for (const input of [

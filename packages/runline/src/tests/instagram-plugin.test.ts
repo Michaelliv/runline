@@ -81,7 +81,7 @@ describe("instagram inputs", () => {
     assert.equal(valid("media.list", { igUserId: "me" }), false);
   });
 
-  it("takes field names and edge expansions, never access_token", () => {
+  it("takes field names and edge expansions, and nothing else", () => {
     const fields = (list: string[]) =>
       valid("media.get", { mediaId: MEDIA, fields: list });
     assert.ok(fields(["id", "caption"]));
@@ -89,9 +89,7 @@ describe("instagram inputs", () => {
     assert.equal(fields([]), false);
     assert.equal(fields(["id caption"]), false);
     assert.equal(fields(["id&access_token=x"]), false);
-    assert.equal(fields(["access_token"]), false);
-    assert.equal(fields(["ACCESS_TOKEN"]), false);
-    assert.equal(fields(["owner{Access_Token}"]), false);
+    assert.equal(fields(['id"']), false);
   });
 
   it("needs a container's media to come from somewhere", () => {
@@ -270,6 +268,35 @@ describe("instagram accounts", () => {
     );
     assert.equal(valid("page.list", { fields: ["access_token"] }), false);
   });
+
+  it("never answers a Page's token, however a call reaches the Page", async () => {
+    // An ID is free text for a conversation, so it can name `me`, and a
+    // field can be an edge whose default answer includes each token.
+    const calls = mock([
+      json({
+        id: "1",
+        access_token: "page-token",
+        accounts: {
+          data: [{ id: "2", access_token: "page-token-2", name: "Page" }],
+          paging: { next: `${GRAPH}/1/accounts?after=a&access_token=token` },
+        },
+      }),
+    ]);
+    assert.deepEqual(
+      await run("conversation.get", {
+        conversationId: "me",
+        fields: ["accounts", "access_token"],
+      }),
+      {
+        id: "1",
+        accounts: {
+          data: [{ id: "2", name: "Page" }],
+          paging: { next: `${GRAPH}/1/accounts?after=a` },
+        },
+      },
+    );
+    assert.equal(query(calls[0]).fields, "accounts,access_token");
+  });
 });
 
 describe("instagram reads", () => {
@@ -396,7 +423,7 @@ describe("instagram reads", () => {
       null,
     );
     assert.equal(
-      valid("user.businessDiscovery", { username: "a){id},access_token" }),
+      valid("user.businessDiscovery", { username: "a){id},followers_count" }),
       false,
     );
   });

@@ -37,6 +37,7 @@ import {
   accountId,
   accountPath,
   edge,
+  expansion,
   fields,
   graph,
   id,
@@ -806,7 +807,6 @@ export default function instagram(rl: RunlinePluginAPI) {
     inputSchema: page,
     async execute(input, ctx) {
       const { limit, after } = input as In<typeof page>;
-      // The fields are fixed: a Page's default answer includes its token.
       return edge(ctx, "me/accounts", {
         fields: "id,name,instagram_business_account{id,username}",
         limit,
@@ -842,18 +842,12 @@ export default function instagram(rl: RunlinePluginAPI) {
       const { igUserId, metric, metricType, breakdown, ...rest } = input as In<
         typeof userInsights
       >;
-      const body = obj(
-        await graph(ctx, {
-          path: `${accountPath(ctx, igUserId)}/insights`,
-          query: {
-            metric: metric.join(","),
-            metric_type: metricType,
-            breakdown: breakdown?.join(","),
-            ...rest,
-          },
-        }),
-      );
-      return { data: body.data };
+      return edge(ctx, `${accountPath(ctx, igUserId)}/insights`, {
+        metric: metric.join(","),
+        metric_type: metricType,
+        breakdown: breakdown?.join(","),
+        ...rest,
+      });
     },
   });
 
@@ -864,13 +858,11 @@ export default function instagram(rl: RunlinePluginAPI) {
     inputSchema: publishingLimit,
     async execute(input, ctx) {
       const { igUserId, since } = input as In<typeof publishingLimit>;
-      const body = obj(
-        await graph(ctx, {
-          path: `${accountPath(ctx, igUserId)}/content_publishing_limit`,
-          query: { fields: "quota_usage,config", since },
-        }),
+      return edge(
+        ctx,
+        `${accountPath(ctx, igUserId)}/content_publishing_limit`,
+        { fields: "quota_usage,config", since },
       );
-      return { data: body.data };
     },
   });
 
@@ -883,15 +875,12 @@ export default function instagram(rl: RunlinePluginAPI) {
       const { igUserId, username, fields } = input as In<
         typeof businessDiscovery
       >;
-      const body = obj(
-        await graph(ctx, {
-          path: accountPath(ctx, igUserId),
-          query: {
-            fields: `business_discovery.username(${username}){${(fields ?? DISCOVERY_FIELDS).join(",")}}`,
-          },
-        }),
+      return expansion(
+        ctx,
+        accountPath(ctx, igUserId),
+        { field: "business_discovery", by: "username", value: username },
+        fields ?? DISCOVERY_FIELDS,
       );
-      return body.business_discovery ?? null;
     },
   });
 
@@ -967,13 +956,10 @@ export default function instagram(rl: RunlinePluginAPI) {
     inputSchema: mediaInsights,
     async execute(input, ctx) {
       const { mediaId, metric, breakdown } = input as In<typeof mediaInsights>;
-      const body = obj(
-        await graph(ctx, {
-          path: `${pathSegment(mediaId)}/insights`,
-          query: { metric: metric.join(","), breakdown: breakdown?.join(",") },
-        }),
-      );
-      return { data: body.data };
+      return edge(ctx, `${pathSegment(mediaId)}/insights`, {
+        metric: metric.join(","),
+        breakdown: breakdown?.join(","),
+      });
     },
   });
 
@@ -1209,15 +1195,12 @@ export default function instagram(rl: RunlinePluginAPI) {
       const { igUserId, commentId, fields } = input as In<
         typeof mentionedComment
       >;
-      const body = obj(
-        await graph(ctx, {
-          path: accountPath(ctx, igUserId),
-          query: {
-            fields: `mentioned_comment.comment_id(${commentId}){${(fields ?? MENTIONED_COMMENT_FIELDS).join(",")}}`,
-          },
-        }),
+      return expansion(
+        ctx,
+        accountPath(ctx, igUserId),
+        { field: "mentioned_comment", by: "comment_id", value: commentId },
+        fields ?? MENTIONED_COMMENT_FIELDS,
       );
-      return body.mentioned_comment ?? null;
     },
   });
 
@@ -1228,15 +1211,12 @@ export default function instagram(rl: RunlinePluginAPI) {
     inputSchema: mentionedMedia,
     async execute(input, ctx) {
       const { igUserId, mediaId, fields } = input as In<typeof mentionedMedia>;
-      const body = obj(
-        await graph(ctx, {
-          path: accountPath(ctx, igUserId),
-          query: {
-            fields: `mentioned_media.media_id(${mediaId}){${(fields ?? MENTIONED_MEDIA_FIELDS).join(",")}}`,
-          },
-        }),
+      return expansion(
+        ctx,
+        accountPath(ctx, igUserId),
+        { field: "mentioned_media", by: "media_id", value: mediaId },
+        fields ?? MENTIONED_MEDIA_FIELDS,
       );
-      return body.mentioned_media ?? null;
     },
   });
 
@@ -1266,13 +1246,10 @@ export default function instagram(rl: RunlinePluginAPI) {
     inputSchema: hashtagSearch,
     async execute(input, ctx) {
       const { igUserId, q } = input as In<typeof hashtagSearch>;
-      const body = obj(
-        await graph(ctx, {
-          path: "ig_hashtag_search",
-          query: { user_id: accountId(ctx, igUserId), q },
-        }),
-      );
-      return { data: body.data };
+      return edge(ctx, "ig_hashtag_search", {
+        user_id: accountId(ctx, igUserId),
+        q,
+      });
     },
   });
 
