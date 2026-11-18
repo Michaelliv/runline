@@ -10,6 +10,14 @@ export function atLeastOne(fields: Record<string, t.TSchema>) {
 }
 
 /**
+ * Exactly one of `fields` must be given: "a file or a URL, never both".
+ * Keyed off the field record itself, as `atLeastOne` is.
+ */
+export function exactlyOne(fields: Record<string, t.TSchema>) {
+  return { oneOf: Object.keys(fields).map((key) => ({ required: [key] })) };
+}
+
+/**
  * One of `values`, typed as their union: `t.Union` over a mapped array
  * widens each branch, which would make the input's static type `never`.
  */

@@ -1,7 +1,8 @@
 /**
  * Facebook Graph API plugin for runline: one action that reads or changes
  * any node or edge the connection's token reaches. Typed plugins exist
- * for parts of the graph (instagram); this is the rest of it.
+ * for parts of the graph (instagram, facebookPages); this is the rest of
+ * it.
  */
 import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";

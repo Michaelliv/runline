@@ -15,7 +15,7 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
-import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
 import { todoistCredential } from "./credentials.js";
 
 /** API v1's largest page. */
@@ -248,10 +248,7 @@ const taskQuickAdd = t.Object(
 );
 const taskMove = t.Object(
   { id: Id(), ...taskPlace },
-  {
-    ...STRICT,
-    oneOf: Object.keys(taskPlace).map((key) => ({ required: [key] })),
-  },
+  { ...STRICT, ...exactlyOne(taskPlace) },
 );
 const taskListCompleted = t.Object(
   {
@@ -304,9 +301,7 @@ const commentOwner = {
   taskId: t.Optional(Id()),
   projectId: t.Optional(Id()),
 };
-const ownerRule = {
-  oneOf: Object.keys(commentOwner).map((key) => ({ required: [key] })),
-};
+const ownerRule = exactlyOne(commentOwner);
 const commentCreate = t.Object(
   { ...commentOwner, content: Id() },
   { ...STRICT, ...ownerRule },

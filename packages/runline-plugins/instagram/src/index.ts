@@ -25,9 +25,16 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { readLocalFile } from "../../_shared/localFile.js";
-import { fields, paging, snake, unixTime } from "../../_shared/metaGraph.js";
+import {
+  fields,
+  names,
+  paging,
+  snake,
+  unixTime,
+  url,
+} from "../../_shared/metaGraph.js";
 import { obj } from "../../_shared/provider.js";
-import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
 import {
   apiHost,
   HOSTS,
@@ -165,23 +172,9 @@ const containerId = id("IG Container ID, as container.create answers it");
 const hashtagId = id("IG Hashtag ID, as hashtag.search answers it");
 const username = (description: string) =>
   t.String({ pattern: "^[A-Za-z0-9._]{1,30}$", description });
-const url = (description: string) =>
-  t.String({ pattern: "^https?://", description });
 const message = t.String({
   minLength: 1,
   description: "The comment's text",
-});
-
-/** Metric and breakdown names, as Meta spells them. */
-const names = (description: string) =>
-  t.Array(t.String({ pattern: "^[a-z0-9_]+$" }), { minItems: 1, description });
-
-/** Exactly one of two fields. */
-const exactlyOne = (a: string, b: string) => ({
-  anyOf: [
-    { required: [a], not: { required: [b] } },
-    { required: [b], not: { required: [a] } },
-  ],
 });
 
 const page = t.Object(paging, STRICT);
@@ -533,18 +526,19 @@ const containerGet = t.Object(
 );
 /** The most one signed request carries. */
 const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
+/** Where an upload's video comes from. */
+const uploadSource = {
+  contentPath: t.Optional(
+    t.String({
+      minLength: 1,
+      description: "Local video file, at most 64 MiB",
+    }),
+  ),
+  fileUrl: t.Optional(url("Public URL of the video, for Meta to fetch")),
+};
 const containerUpload = t.Object(
-  {
-    containerId,
-    contentPath: t.Optional(
-      t.String({
-        minLength: 1,
-        description: "Local video file, at most 64 MiB",
-      }),
-    ),
-    fileUrl: t.Optional(url("Public URL of the video, for Meta to fetch")),
-  },
-  { ...STRICT, ...exactlyOne("contentPath", "fileUrl") },
+  { containerId, ...uploadSource },
+  { ...STRICT, ...exactlyOne(uploadSource) },
 );
 
 const commentList = t.Object(
@@ -663,68 +657,68 @@ const messageGet = t.Object(
   },
   STRICT,
 );
-const messageSend = t.Object(
-  {
-    igUserId,
-    recipient: t.Object(
-      {
-        id: t.Optional(
-          t.String({
-            minLength: 1,
-            description:
-              "Instagram-scoped ID of a person who messaged the account",
-          }),
-        ),
-        commentId: t.Optional(
-          id(
-            "ID of a comment on the account's media: a private reply to its author, once, within 7 days of the comment",
-          ),
-        ),
-      },
-      { ...STRICT, ...exactlyOne("id", "commentId") },
+/** Who a message goes to: a person, or a comment's author. */
+const recipient = {
+  id: t.Optional(
+    t.String({
+      minLength: 1,
+      description: "Instagram-scoped ID of a person who messaged the account",
+    }),
+  ),
+  commentId: t.Optional(
+    id(
+      "ID of a comment on the account's media: a private reply to its author, once, within 7 days of the comment",
     ),
-    message: t.Object(
+  ),
+};
+/** What a message carries: text, or one attachment. */
+const messageContent = {
+  text: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 1000,
+      description: "Text or a link, at most 1000 bytes of UTF-8",
+    }),
+  ),
+  attachment: t.Optional(
+    t.Object(
       {
-        text: t.Optional(
-          t.String({
-            minLength: 1,
-            maxLength: 1000,
-            description: "Text or a link, at most 1000 bytes of UTF-8",
-          }),
+        type: stringEnum(
+          [
+            "image",
+            "audio",
+            "video",
+            "file",
+            "like_heart",
+            "MEDIA_SHARE",
+          ] as const,
+          {
+            description:
+              "image (PNG or JPEG, 8 MB), audio, video or file (PDF), each 25 MB, by payload.url; like_heart, a heart sticker with no payload; MEDIA_SHARE, one of the account's posts by payload.id",
+          },
         ),
-        attachment: t.Optional(
+        payload: t.Optional(
           t.Object(
             {
-              type: stringEnum(
-                [
-                  "image",
-                  "audio",
-                  "video",
-                  "file",
-                  "like_heart",
-                  "MEDIA_SHARE",
-                ] as const,
-                {
-                  description:
-                    "image (PNG or JPEG, 8 MB), audio, video or file (PDF), each 25 MB, by payload.url; like_heart, a heart sticker with no payload; MEDIA_SHARE, one of the account's posts by payload.id",
-                },
-              ),
-              payload: t.Optional(
-                t.Object(
-                  {
-                    url: t.Optional(url("Public URL of the file")),
-                    id: t.Optional(id("ID of the account's post to share")),
-                  },
-                  STRICT,
-                ),
-              ),
+              url: t.Optional(url("Public URL of the file")),
+              id: t.Optional(id("ID of the account's post to share")),
             },
             STRICT,
           ),
         ),
       },
-      { ...STRICT, ...exactlyOne("text", "attachment") },
+      STRICT,
     ),
+  ),
+};
+const messageSend = t.Object(
+  {
+    igUserId,
+    recipient: t.Object(recipient, { ...STRICT, ...exactlyOne(recipient) }),
+    message: t.Object(messageContent, {
+      ...STRICT,
+      ...exactlyOne(messageContent),
+    }),
     replyTo: t.Optional(
       t.Object(
         {

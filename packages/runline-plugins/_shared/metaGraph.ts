@@ -65,6 +65,14 @@ export const paging = {
   ),
 };
 
+/** A URL Meta fetches, or shows as a link. */
+export const url = (description: string) =>
+  t.String({ pattern: "^https?://", description });
+
+/** Metric and breakdown names, as Meta spells them. */
+export const names = (description: string) =>
+  t.Array(t.String({ pattern: "^[a-z0-9_]+$" }), { minItems: 1, description });
+
 /** A Unix timestamp in seconds. */
 export const unixTime = (description: string) =>
   t.Integer({ minimum: 0, description: `${description} (Unix seconds)` });
@@ -154,10 +162,15 @@ export interface MetaGraphOptions {
 export function metaGraph(options: MetaGraphOptions) {
   const { plugin, credential, hints = {} } = options;
 
-  /** A hint for a failure: the plugin's, else one for its code's class. */
-  function hint(code: unknown, subcode: unknown): string | undefined {
+  /** The plugin's own hint for a failure, by its subcode, else its code. */
+  function ownHint(code: unknown, subcode: unknown): string | undefined {
     for (const value of [subcode, code])
       if (typeof value === "number" && hints[value]) return hints[value];
+    return undefined;
+  }
+
+  /** A hint for any plugin's failure, by its code's class. */
+  function classHint(code: unknown): string | undefined {
     if (typeof code !== "number") return undefined;
     if (code === 4 || code === 17 || code === 341 || code === 80001)
       return "the call was rate limited; wait before trying again";
@@ -170,8 +183,9 @@ export function metaGraph(options: MetaGraphOptions) {
    * A failed response by Meta's error code and subcode (`9007.2207027`)
    * and the fbtrace_id support asks for, with a hint where Meta documents
    * the code. Meta's messages are never read: they can echo what was
-   * sent. A dead token is reported as the login it is, and a change
-   * answered by a 5xx says its outcome is unknown.
+   * sent. A dead token is reported as the login it is, unless the plugin
+   * names the failure as the call's; a change answered by a 5xx says its
+   * outcome is unknown.
    */
   async function failed(response: Response, changes: boolean): Promise<Error> {
     let error: Record<string, unknown> = {};
@@ -180,12 +194,10 @@ export function metaGraph(options: MetaGraphOptions) {
       const { code, error_subcode: subcode } = error;
       return { code: subcode === undefined ? code : `${code}.${subcode}` };
     });
-    const advice = hint(error.code, error.error_subcode);
-    const named = [error.error_subcode, error.code].some(
-      (value) => typeof value === "number" && hints[value] !== undefined,
-    );
-    if (!named && DEAD_TOKEN_CODES.includes(error.code as number))
+    const own = ownHint(error.code, error.error_subcode);
+    if (!own && DEAD_TOKEN_CODES.includes(error.code as number))
       return new AuthError("reconnect_required", response.status);
+    const advice = own ?? classHint(error.code);
     if (advice) failure.message += `: ${advice}`;
     const trace = errorIdentifier(error.fbtrace_id);
     if (trace) failure.message += ` (fbtrace_id ${trace})`;
@@ -274,10 +286,9 @@ export function metaGraph(options: MetaGraphOptions) {
   /**
    * One page of an edge, or the whole of one that does not page by
    * cursor (insights), with its summary and without Meta's paging links.
-   * A page is followed
-   * by another when Meta links to one or, on the edges that never link,
-   * when the page has items and a cursor; an edge that pages by cursor
-   * ends with an empty page.
+   * A page is followed by another when Meta links to one or, on the
+   * edges that never link, when the page has items and a cursor; an edge
+   * that pages by cursor ends with an empty page.
    */
   async function edge(
     ctx: ActionContext,

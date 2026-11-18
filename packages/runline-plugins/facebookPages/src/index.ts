@@ -17,11 +17,13 @@ import { readLocalFile } from "../../_shared/localFile.js";
 import {
   fields,
   metaGraph,
+  names,
   paging,
   snake,
   unixTime,
+  url,
 } from "../../_shared/metaGraph.js";
-import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
 import { facebookPagesCredential } from "./credentials.js";
 
 const PLUGIN = "facebookPages";
@@ -90,14 +92,8 @@ const id = (description: string) =>
   t.String({ pattern: "^\\d+(_\\d+)*$", description });
 const postId = id("Page post ID, as {page-id}_{post-id}");
 const commentId = id("Comment ID");
-const url = (description: string) =>
-  t.String({ pattern: "^https?://", description });
-/** Metric names, as Meta spells them. */
 const metric = (examples: string) =>
-  t.Array(t.String({ pattern: "^[a-z0-9_]+$" }), {
-    minItems: 1,
-    description: `Metrics, as Meta names them: ${examples}`,
-  });
+  names(`Metrics, as Meta names them: ${examples}`);
 const range = {
   since: t.Optional(unixTime("Start of the range")),
   until: t.Optional(unixTime("End of the range")),
@@ -234,16 +230,20 @@ const postInsights = t.Object(
 
 /** The most Meta takes for one photo. */
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+/** Where a photo comes from. */
+const photoSource = {
+  url: t.Optional(url("Public URL of the photo, for Meta to fetch")),
+  contentPath: t.Optional(
+    t.String({
+      minLength: 1,
+      description:
+        "Local photo file (JPEG, PNG, GIF, BMP or TIFF), at most 10 MB",
+    }),
+  ),
+};
 const photoCreate = t.Object(
   {
-    url: t.Optional(url("Public URL of the photo, for Meta to fetch")),
-    contentPath: t.Optional(
-      t.String({
-        minLength: 1,
-        description:
-          "Local photo file (JPEG, PNG, GIF, BMP or TIFF), at most 10 MB",
-      }),
-    ),
+    ...photoSource,
     caption: t.Optional(t.String({ description: "The photo's description" })),
     altTextCustom: t.Optional(
       t.String({ description: "Alternative text for the photo" }),
@@ -258,15 +258,7 @@ const photoCreate = t.Object(
   },
   {
     ...STRICT,
-    allOf: [
-      {
-        anyOf: [
-          { required: ["url"], not: { required: ["contentPath"] } },
-          { required: ["contentPath"], not: { required: ["url"] } },
-        ],
-      },
-      SCHEDULED_IS_UNPUBLISHED,
-    ],
+    allOf: [exactlyOne(photoSource), SCHEDULED_IS_UNPUBLISHED],
   },
 );
 
