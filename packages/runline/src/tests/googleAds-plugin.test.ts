@@ -365,6 +365,21 @@ describe("googleAds requests", () => {
     );
   });
 
+  it("gets an account, or null", async () => {
+    const row = { customer: { id: "1234567890", manager: true } };
+    const calls = mock([
+      () => Response.json({ results: [row] }),
+      () => Response.json({ results: [] }),
+    ]);
+    assert.deepEqual(await run("customer.get", acct), row);
+    assert.equal(calls[0].url.href, SEARCH);
+    assert.match(
+      String(calls[0].body.query),
+      /^SELECT customer\.id, .* FROM customer$/,
+    );
+    assert.equal(await run("customer.get", acct), null);
+  });
+
   it("lists a manager's clients, all or the direct ones", async () => {
     const calls = mock([() => Response.json({ results: [] })]);
     await run("customer.listClients", acct);
@@ -372,6 +387,7 @@ describe("googleAds requests", () => {
       ...acct,
       directOnly: true,
       status: "ENABLED",
+      limit: 20,
     });
     assert.match(
       String(calls[0].body.query),
@@ -379,7 +395,7 @@ describe("googleAds requests", () => {
     );
     assert.match(
       String(calls[1].body.query),
-      /WHERE customer_client\.level = 1 AND customer_client\.status = 'ENABLED'/,
+      /WHERE customer_client\.level = 1 AND customer_client\.status = 'ENABLED' ORDER BY customer_client\.level LIMIT 20$/,
     );
   });
 
@@ -684,7 +700,7 @@ describe("googleAds failures", () => {
         status: 503,
       },
     );
-    // A read, or a change that was only validated, applied nothing.
+    // A read, or a change that was only validated, applies nothing.
     await assert.rejects(
       run("search", { ...acct, query: "SELECT campaign.id FROM campaign" }),
       {
@@ -702,6 +718,28 @@ describe("googleAds failures", () => {
       {
         message:
           "googleAds: request failed (HTTP 503 UNAVAILABLE) (request-id rq-7)",
+      },
+    );
+  });
+
+  it("says a change's outcome is unknown when it gets no answer, keeping the code", async () => {
+    stubFetch(async () => {
+      throw new TypeError("fetch failed");
+    });
+    await assert.rejects(
+      run("keyword.remove", { ...acct, adGroupId: "7", criterionId: "5" }),
+      (error: Error & { code?: string }) => {
+        assert.equal(error.code, "transport_failed");
+        assert.match(error.message, /The change may have been applied/);
+        return true;
+      },
+    );
+    await assert.rejects(
+      run("search", { ...acct, query: "SELECT campaign.id FROM campaign" }),
+      (error: Error & { code?: string }) => {
+        assert.equal(error.code, "transport_failed");
+        assert.doesNotMatch(error.message, /may have been applied/);
+        return true;
       },
     );
   });
