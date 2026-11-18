@@ -36,7 +36,7 @@ const request = t.Object(
       t.String({
         pattern: "^v\\d+\\.\\d+$",
         description:
-          "API version, as v27.0. Omit for the oldest version the app may use",
+          "API version, as v27.0. Omit for the app's default version",
       }),
     ),
     node: t.String({
@@ -66,12 +66,19 @@ const request = t.Object(
         {},
         {
           additionalProperties: true,
-          description: "JSON body of a POST",
+          description: "JSON body; with method POST only",
         },
       ),
     ),
   },
-  STRICT,
+  {
+    ...STRICT,
+    // A body goes out with a POST alone, so any other method refuses one.
+    anyOf: [
+      { not: { required: ["body"] } },
+      { required: ["method"], properties: { method: { const: "POST" } } },
+    ],
+  },
 );
 
 export default function facebookGraph(rl: RunlinePluginAPI) {
@@ -120,9 +127,7 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
           path,
           method,
           query: { ...queryParameters, fields: fields?.join(",") },
-          ...(method === "POST" && body && Object.keys(body).length
-            ? { json: body }
-            : {}),
+          json: body,
         }),
       );
     },

@@ -148,6 +148,8 @@ describe("facebookGraph", () => {
       { node: "me", fields: "id" },
       { node: "me", queryParameters: { nested: { a: 1 } } },
       { node: "me", body: ["a"] },
+      { node: "me", body: { a: 1 } },
+      { node: "me", method: "DELETE", body: { a: 1 } },
       { node: "me", extra: 1 },
     ])
       assert.equal(valid(input), false, JSON.stringify(input));
@@ -205,7 +207,7 @@ describe("facebookGraph", () => {
     );
   });
 
-  it("sends fields as one parameter beside the caller's, and a body only with POST", async () => {
+  it("sends fields as one parameter beside the caller's", async () => {
     const seen = capture({ id: "1" });
     const config = { accessToken: "fb" };
     await run(
@@ -216,7 +218,6 @@ describe("facebookGraph", () => {
         node: "me",
         fields: ["id", "name"],
         queryParameters: { limit: 5 },
-        body: { ignored: true },
       },
       config,
     );
@@ -224,7 +225,7 @@ describe("facebookGraph", () => {
       facebookGraph,
       "facebookGraph",
       "request",
-      { method: "POST", node: "1", edge: "feed", body: {} },
+      { method: "POST", node: "1", edge: "feed" },
       config,
     );
     assert.equal(
