@@ -135,6 +135,8 @@ export interface Page {
   data: unknown[];
   /** The cursor for the page that follows; absent on the last page. */
   after?: string;
+  /** What the edge says of the whole, when the call asks for it. */
+  summary?: unknown;
 }
 
 export interface MetaGraphOptions {
@@ -271,7 +273,8 @@ export function metaGraph(options: MetaGraphOptions) {
 
   /**
    * One page of an edge, or the whole of one that does not page by
-   * cursor (insights), without Meta's paging links. A page is followed
+   * cursor (insights), with its summary and without Meta's paging links.
+   * A page is followed
    * by another when Meta links to one or, on the edges that never link,
    * when the page has items and a cursor; an edge that pages by cursor
    * ends with an empty page.
@@ -286,9 +289,11 @@ export function metaGraph(options: MetaGraphOptions) {
     const links = obj(body.paging);
     const after = obj(links.cursors).after;
     const more = links.next !== undefined || data.length > 0;
-    return typeof after === "string" && after !== "" && more
-      ? { data, after }
-      : { data };
+    return {
+      data,
+      ...(typeof after === "string" && after !== "" && more ? { after } : {}),
+      ...(body.summary === undefined ? {} : { summary: body.summary }),
+    };
   }
 
   return { send, request, graph, node, expansion, edge };
