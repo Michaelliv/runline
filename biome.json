@@ -63,7 +63,6 @@
       "!packages/runline-plugins/elasticsearch",
       "!packages/runline-plugins/emelia",
       "!packages/runline-plugins/erpnext",
-      "!packages/runline-plugins/facebookGraph",
       "!packages/runline-plugins/freshdesk",
       "!packages/runline-plugins/freshservice",
       "!packages/runline-plugins/freshworksCrm",

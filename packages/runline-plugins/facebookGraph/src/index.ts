@@ -1,125 +1,135 @@
-import {
-  AuthError,
-  credentialJson,
-  type HttpMethod,
-  pathSegment,
-  type RunlinePluginAPI,
-} from "runline";
+/**
+ * Facebook Graph API plugin for runline: one action that reads or changes
+ * any node or edge the connection's token reaches. Typed plugins exist
+ * for parts of the graph (instagram); this is the rest of it.
+ */
+import { credentialJson, pathSegment, type RunlinePluginAPI } from "runline";
+import * as t from "typebox";
+import { withoutAccessTokens } from "../../_shared/metaGraph.js";
+import { stringEnum } from "../../_shared/schemas.js";
 import { facebookGraphCredential } from "./credentials.js";
 
-/** Meta's hosts, by the target each is declared as. */
-const HOSTS: Record<string, "graph" | "video"> = {
+const PLUGIN = "facebookGraph";
+const STRICT = { additionalProperties: false } as const;
+
+const HOSTS = ["graph.facebook.com", "graph-video.facebook.com"] as const;
+/** The credential target each of Meta's hosts is declared as. */
+const TARGETS = {
   "graph.facebook.com": "graph",
   "graph-video.facebook.com": "video",
-};
+} as const satisfies Record<(typeof HOSTS)[number], string>;
+
+const request = t.Object(
+  {
+    hostUrl: t.Optional(
+      stringEnum(HOSTS, {
+        description:
+          "graph.facebook.com (default), or graph-video.facebook.com for video uploads",
+      }),
+    ),
+    method: t.Optional(
+      stringEnum(["GET", "POST", "DELETE"] as const, {
+        description: "HTTP method (default GET)",
+      }),
+    ),
+    graphApiVersion: t.Optional(
+      t.String({
+        pattern: "^v\\d+\\.\\d+$",
+        description:
+          "API version, as v27.0. Omit for the app's default version",
+      }),
+    ),
+    node: t.String({
+      minLength: 1,
+      description: "Node: me, or a Page, user or object ID",
+    }),
+    edge: t.Optional(
+      t.String({
+        minLength: 1,
+        description: "Edge of the node: posts, feed, videos",
+      }),
+    ),
+    fields: t.Optional(
+      t.Array(t.String({ minLength: 1 }), {
+        minItems: 1,
+        description:
+          "Fields to return, sent as the comma-separated fields parameter",
+      }),
+    ),
+    queryParameters: t.Optional(
+      t.Record(t.String(), t.Union([t.String(), t.Number(), t.Boolean()]), {
+        description: "Further query parameters, by name",
+      }),
+    ),
+    body: t.Optional(
+      t.Object(
+        {},
+        {
+          additionalProperties: true,
+          description: "JSON body; with method POST only",
+        },
+      ),
+    ),
+  },
+  {
+    ...STRICT,
+    // A body goes out with a POST alone, so any other method refuses one.
+    anyOf: [
+      { not: { required: ["body"] } },
+      { required: ["method"], properties: { method: { const: "POST" } } },
+    ],
+  },
+);
 
 export default function facebookGraph(rl: RunlinePluginAPI) {
-  rl.setName("facebookGraph");
+  rl.setName(PLUGIN);
   rl.setVersion("0.1.0");
   rl.setCredential(facebookGraphCredential);
 
-  rl.setConnectionSchema({
-    accessToken: {
-      type: "string",
-      required: true,
-      description: "Facebook/Meta access token",
-      env: "FACEBOOK_ACCESS_TOKEN",
-    },
-  });
+  rl.setConnectionSchema(
+    t.Object({
+      accessToken: t.String({
+        minLength: 1,
+        env: "FACEBOOK_ACCESS_TOKEN",
+        description: "Meta access token",
+      }),
+    }),
+  );
 
   rl.registerAction("request", {
     access: "write",
     description:
-      "Make a request to the Facebook Graph API. Supports GET, POST, DELETE against any node/edge combination.",
-    inputSchema: {
-      hostUrl: {
-        type: "string",
-        required: false,
-        description:
-          "Host URL: 'graph.facebook.com' (default) or 'graph-video.facebook.com' for video uploads",
-      },
-      method: {
-        type: "string",
-        required: false,
-        description: "HTTP method: GET (default), POST, DELETE",
-      },
-      graphApiVersion: {
-        type: "string",
-        required: false,
-        description: "API version (e.g. 'v19.0'). Omit for default.",
-      },
-      node: {
-        type: "string",
-        required: true,
-        description: "Node ID (e.g. 'me', a page/user/object ID)",
-      },
-      edge: {
-        type: "string",
-        required: false,
-        description: "Edge name (e.g. 'posts', 'feed', 'videos')",
-      },
-      fields: {
-        type: "array",
-        required: false,
-        description:
-          "Fields to request (GET only), sent as comma-separated 'fields' param",
-      },
-      queryParameters: {
-        type: "object",
-        required: false,
-        description: "Additional query parameters as key-value pairs",
-      },
-      body: {
-        type: "object",
-        required: false,
-        description: "Request body for POST requests (sent as JSON)",
-      },
-    },
+      "A Facebook Graph API request: GET, POST or DELETE on any node, or an edge of it. The answer carries no access token: Meta's paging links and Page objects are returned without theirs.",
+    inputSchema: request,
     async execute(input, ctx) {
       const {
         hostUrl = "graph.facebook.com",
         method = "GET",
-        graphApiVersion = "",
+        graphApiVersion,
         node,
         edge,
         fields,
         queryParameters,
         body,
-      } = input as Record<string, unknown>;
-
-      const target = Object.hasOwn(HOSTS, String(hostUrl))
-        ? HOSTS[String(hostUrl)]
-        : undefined;
-      if (
-        !target ||
-        (graphApiVersion && !/^v\d+\.\d+$/.test(String(graphApiVersion)))
-      )
-        throw new AuthError("request_not_allowed");
-      const httpMethod = String(method).toUpperCase() as HttpMethod;
+      } = input as t.Static<typeof request>;
       const path = [
         graphApiVersion,
         pathSegment(node),
-        edge ? pathSegment(edge) : "",
+        edge === undefined ? undefined : pathSegment(edge),
       ]
-        .filter(Boolean)
+        .filter((segment) => segment !== undefined)
         .join("/");
-      return credentialJson(ctx, facebookGraphCredential, "facebookGraph", {
-        target,
-        path,
-        method: httpMethod,
-        query: {
-          ...(queryParameters as Record<string, unknown> | undefined),
-          ...(Array.isArray(fields) && fields.length
-            ? { fields: fields.join(",") }
-            : {}),
-        },
-        ...(httpMethod === "POST" &&
-        body &&
-        typeof body === "object" &&
-        Object.keys(body).length
-          ? { json: body }
-          : {}),
-      });
+      // The token travels in the query, so Meta repeats it in paging
+      // links, and a Page's answer carries the Page's own.
+      return withoutAccessTokens(
+        await credentialJson(ctx, facebookGraphCredential, PLUGIN, {
+          target: TARGETS[hostUrl],
+          path,
+          method,
+          query: { ...queryParameters, fields: fields?.join(",") },
+          json: body,
+        }),
+      );
     },
   });
 }
