@@ -207,6 +207,38 @@ describe("facebookGraph", () => {
     );
   });
 
+  it("reports a failure by Meta's code and trace, never its text", async () => {
+    stubFetch(async () =>
+      Response.json(
+        {
+          error: {
+            message: "Unsupported get request, token=fb",
+            code: 100,
+            error_subcode: 33,
+            fbtrace_id: "AbC-123",
+          },
+        },
+        { status: 400 },
+      ),
+    );
+    await assert.rejects(
+      run(
+        facebookGraph,
+        "facebookGraph",
+        "request",
+        { node: "1" },
+        {
+          accessToken: "fb",
+        },
+      ),
+      {
+        message:
+          "facebookGraph: request failed (HTTP 400 100.33) (fbtrace_id AbC-123)",
+        status: 400,
+      },
+    );
+  });
+
   it("sends fields as one parameter beside the caller's", async () => {
     const seen = capture({ id: "1" });
     const config = { accessToken: "fb" };

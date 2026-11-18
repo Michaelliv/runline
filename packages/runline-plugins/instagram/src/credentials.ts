@@ -1,10 +1,5 @@
 import { configChoice, staticCredential } from "runline";
-
-/**
- * The Graph API version every request names. Meta retires a version about
- * two years after its release, so this moves forward with the plugin.
- */
-export const GRAPH_VERSION = "v27.0";
+import { GRAPH_VERSION } from "../../_shared/metaGraph.js";
 
 /**
  * Meta's two hosts for the Instagram API. Which one a token works on is

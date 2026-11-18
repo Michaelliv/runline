@@ -1,16 +1,21 @@
 /**
  * Facebook Graph API plugin for runline: one action that reads or changes
  * any node or edge the connection's token reaches. Typed plugins exist
- * for parts of the graph (instagram); this is the rest of it.
+ * for parts of the graph (instagram, facebookPages); this is the rest of
+ * it.
  */
-import { credentialJson, pathSegment, type RunlinePluginAPI } from "runline";
+import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { withoutAccessTokens } from "../../_shared/metaGraph.js";
+import { metaGraph } from "../../_shared/metaGraph.js";
 import { stringEnum } from "../../_shared/schemas.js";
 import { facebookGraphCredential } from "./credentials.js";
 
 const PLUGIN = "facebookGraph";
 const STRICT = { additionalProperties: false } as const;
+const { request } = metaGraph({
+  plugin: PLUGIN,
+  credential: facebookGraphCredential,
+});
 
 const HOSTS = ["graph.facebook.com", "graph-video.facebook.com"] as const;
 /** The credential target each of Meta's hosts is declared as. */
@@ -19,7 +24,7 @@ const TARGETS = {
   "graph-video.facebook.com": "video",
 } as const satisfies Record<(typeof HOSTS)[number], string>;
 
-const request = t.Object(
+const requestInput = t.Object(
   {
     hostUrl: t.Optional(
       stringEnum(HOSTS, {
@@ -100,7 +105,7 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "A Facebook Graph API request: GET, POST or DELETE on any node, or an edge of it. The answer carries no access token: Meta's paging links and Page objects are returned without theirs.",
-    inputSchema: request,
+    inputSchema: requestInput,
     async execute(input, ctx) {
       const {
         hostUrl = "graph.facebook.com",
@@ -111,7 +116,7 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
         fields,
         queryParameters,
         body,
-      } = input as t.Static<typeof request>;
+      } = input as t.Static<typeof requestInput>;
       const path = [
         graphApiVersion,
         pathSegment(node),
@@ -120,16 +125,15 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
         .filter((segment) => segment !== undefined)
         .join("/");
       // The token travels in the query, so Meta repeats it in paging
-      // links, and a Page's answer carries the Page's own.
-      return withoutAccessTokens(
-        await credentialJson(ctx, facebookGraphCredential, PLUGIN, {
-          target: TARGETS[hostUrl],
-          path,
-          method,
-          query: { ...queryParameters, fields: fields?.join(",") },
-          json: body,
-        }),
-      );
+      // links, and a Page's answer carries the Page's own: the answer
+      // comes back without either.
+      return request(ctx, {
+        target: TARGETS[hostUrl],
+        path,
+        method,
+        query: { ...queryParameters, fields: fields?.join(",") },
+        json: body,
+      });
     },
   });
 }
