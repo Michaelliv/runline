@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { stringEnum } from "../../_shared/schemas.js";
 import { typesafeCredential } from "./credentials.js";
 import { GUIDE, GUIDE_TOPICS, type GuideTopic } from "./guide.js";
 import {
@@ -252,20 +253,14 @@ export default function typesafe(rl: RunlinePluginAPI): void {
     inputSchema: t.Object(
       {
         topic: t.Optional(
-          t.Union(
-            GUIDE_TOPICS.map((topic) => t.Literal(topic)) as [
-              ReturnType<typeof t.Literal>,
-              ReturnType<typeof t.Literal>,
-            ],
-            {
-              description:
-                "design (atomic questions, which primitive to use) | confidence (bands, thresholds by risk) | " +
-                "jaggedness (what jev-1.13 gets wrong and what to do instead) | patterns (fan-out, confidence-gated " +
-                "routing, composite scoring, intent routing, cascade) | cookbooks (worked examples) | limits (context, " +
-                "rate, price, accuracy) | sources (live docs index, the .md convention, TypeSafe's official agent skill, " +
-                "and how far to trust this snapshot). Omit for all of it — it is small.",
-            },
-          ),
+          stringEnum(GUIDE_TOPICS, {
+            description:
+              "design (atomic questions, which primitive to use) | confidence (bands, thresholds by risk) | " +
+              "jaggedness (what jev-1.13 gets wrong and what to do instead) | patterns (fan-out, confidence-gated " +
+              "routing, composite scoring, intent routing, cascade) | cookbooks (worked examples) | limits (context, " +
+              "rate, price, accuracy) | sources (live docs index, the .md convention, TypeSafe's official agent skill, " +
+              "and how far to trust this snapshot). Omit for all of it — it is small.",
+          }),
         ),
       },
       STRICT,

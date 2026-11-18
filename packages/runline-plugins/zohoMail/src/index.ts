@@ -7,6 +7,7 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
+import { stringEnum } from "../../_shared/schemas.js";
 import { DCS, SCOPES, zohoMailCredential } from "./credentials.js";
 
 /**
@@ -157,14 +158,11 @@ export default function zohoMail(rl: RunlinePluginAPI) {
   rl.setConnectionSchema(
     t.Object({
       dc: t.Optional(
-        t.Union(
-          DCS.map((k) => t.Literal(k)),
-          {
-            env: "ZOHOMAIL_DC",
-            description:
-              'Data centre the account lives in. Must match the API console the client was created in — a token from one region is rejected by the others. Default "com".',
-          },
-        ),
+        stringEnum(DCS, {
+          env: "ZOHOMAIL_DC",
+          description:
+            'Data centre the account lives in. Must match the API console the client was created in — a token from one region is rejected by the others. Default "com".',
+        }),
       ),
       clientId: t.Optional(
         t.String({

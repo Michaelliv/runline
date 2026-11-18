@@ -13,8 +13,8 @@ import {
 import * as t from "typebox";
 import { googleResponse } from "../../_shared/googleAuth.js";
 import { GOOGLE_ADS_VERSION } from "../../_shared/googleCredentials.js";
-import { stringEnum } from "../../_shared/googleSchemas.js";
 import { obj } from "../../_shared/provider.js";
+import { stringEnum } from "../../_shared/schemas.js";
 
 export const PLUGIN = "googleAds";
 /**
@@ -46,7 +46,7 @@ export const account = {
     ),
   ),
 };
-export type Account = { customerId: string; loginCustomerId?: string };
+export type Account = t.Static<t.TObject<typeof account>>;
 
 /** A resource's numeric ID, as Google Ads returns it. */
 export const resourceId = (what: string) =>
@@ -102,11 +102,7 @@ export const period = {
     day("Report metrics through this day (YYYY-MM-DD), with startDate"),
   ),
 };
-export type Period = {
-  dateRange?: (typeof DATE_RANGES)[number];
-  startDate?: string;
-  endDate?: string;
-};
+export type Period = t.Static<t.TObject<typeof period>>;
 /** A period is a dateRange, or startDate with endDate, or none at all. */
 export const PERIOD_RULE = {
   anyOf: [
@@ -408,15 +404,22 @@ export function statusCondition(field: string, status?: Status): string {
   return status ? `${field} = '${status}'` : `${field} != 'REMOVED'`;
 }
 
+/** What a mutate answers for each operation. */
+export const RESPONSE_CONTENT_TYPES = [
+  "RESOURCE_NAME_ONLY",
+  "MUTABLE_RESOURCE",
+] as const;
+
 export interface ChangeOptions extends Account {
   validateOnly?: boolean;
   partialFailure?: boolean;
-  responseContentType?: "RESOURCE_NAME_ONLY" | "MUTABLE_RESOURCE";
+  responseContentType?: (typeof RESPONSE_CONTENT_TYPES)[number];
 }
 
 /**
  * GoogleAdsService.Mutate: the operations run in one transaction (or each
  * on its own with partialFailure); validateOnly checks without applying.
+ * Options left undefined drop out of the JSON body.
  */
 export async function mutate(
   ctx: ActionContext,
@@ -429,22 +432,26 @@ export async function mutate(
     path: `${customerPath(options.customerId)}/googleAds:mutate`,
     body: {
       mutateOperations,
-      ...(partialFailure === undefined ? {} : { partialFailure }),
-      ...(validateOnly === undefined ? {} : { validateOnly }),
-      ...(responseContentType === undefined ? {} : { responseContentType }),
+      partialFailure,
+      validateOnly,
+      responseContentType,
     },
     account: options,
     changes: validateOnly !== true,
   });
 }
 
-/** `customers/{id}/{collection}/{key}`, a resource a change names. */
+/**
+ * `customers/{id}/{collection}/{key}`, a resource a change names. A
+ * resource whose ID is unique only within its parent has a composite key,
+ * the parent's ID and its own joined by `~` (`adGroupAds/123~45678`).
+ */
 export function resourceName(
   customerId: string,
   collection: string,
-  key: string,
+  ...ids: string[]
 ): string {
-  return `customers/${customerDigits(customerId)}/${collection}/${key}`;
+  return `customers/${customerDigits(customerId)}/${collection}/${ids.join("~")}`;
 }
 
 /** An update operation: the fields given, and the mask that names them. */

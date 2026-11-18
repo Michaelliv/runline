@@ -7,6 +7,7 @@ import {
   type HttpMethod,
 } from "runline";
 import * as t from "typebox";
+import { stringEnum } from "../../_shared/schemas.js";
 import { SHIFT_API_URL, STRICT_OBJECT } from "../../_shared/shiftCloud.js";
 import { shiftCredential, shiftPath } from "../../_shared/shiftCredentials.js";
 import {
@@ -225,12 +226,9 @@ export function filtersSchema() {
             "Field or relationship key, e.g. $name, $email, tier, $account",
         }),
         operator: t.Optional(
-          t.Union(
-            operators.map((op) => t.Literal(op)),
-            {
-              description: `${operators.join(" | ")}. Omit it and the API picks equal where valid, contains otherwise. Multi-value fields (EMAIL, TELEPHONE, URL) reject equal (unsupported_filter_operator): omit the operator or use contains.`,
-            },
-          ),
+          stringEnum(operators, {
+            description: `${operators.join(" | ")}. Omit it and the API picks equal where valid, contains otherwise. Multi-value fields (EMAIL, TELEPHONE, URL) reject equal (unsupported_filter_operator): omit the operator or use contains.`,
+          }),
         ),
         negate: t.Optional(t.Boolean({ description: "Negate the operator" })),
         value: t.String({

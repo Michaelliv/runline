@@ -36,8 +36,8 @@ import {
   GoogleTimestamp,
   Id,
   NonEmptyString,
-  stringEnum,
 } from "../../_shared/googleSchemas.js";
+import { stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 

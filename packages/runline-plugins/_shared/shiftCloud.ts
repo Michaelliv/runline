@@ -1,5 +1,6 @@
 import { type ActionContext, errorIdentifier, responseFailed } from "runline";
 import * as t from "typebox";
+import { stringEnum } from "./schemas.js";
 
 /**
  * Shared helpers for plugins that talk to the Shift cloud API: one base
@@ -39,14 +40,12 @@ export function enumDescription(
   return `${name}: ${values.join(" | ")}`;
 }
 
-export function enumSchema(name: string, values: readonly string[]) {
-  return t.Union(
-    values.map((value) => t.Literal(value)) as [
-      ReturnType<typeof t.Literal>,
-      ReturnType<typeof t.Literal>,
-    ],
-    { description: enumDescription(name, values) },
-  );
+/** One of `values`, described by listing them. */
+export function enumSchema<const T extends readonly string[]>(
+  name: string,
+  values: T,
+) {
+  return stringEnum(values, { description: enumDescription(name, values) });
 }
 
 export const SHIFT_API_URL = "https://cloud.shift-labs.ai";

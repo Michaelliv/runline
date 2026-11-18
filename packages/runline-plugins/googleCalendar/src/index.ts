@@ -43,8 +43,8 @@ import {
   NonEmptyStringArray,
   PositiveInteger,
   StringOrStringArray,
-  stringEnum,
 } from "../../_shared/googleSchemas.js";
+import { stringEnum } from "../../_shared/schemas.js";
 
 // `rrule` ships as CJS; named imports fail under Node ESM.
 const { RRule } = rrulePkg as unknown as { RRule: typeof import("rrule").RRule };

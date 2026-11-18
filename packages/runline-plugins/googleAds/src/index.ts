@@ -22,8 +22,8 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { googleCredential, googleOAuth } from "../../_shared/googleAuth.js";
-import { RawGoogleObject, stringEnum } from "../../_shared/googleSchemas.js";
-import { atLeastOne } from "../../_shared/schemas.js";
+import { RawGoogleObject } from "../../_shared/googleSchemas.js";
+import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 import {
   type Account,
   account,
@@ -41,6 +41,7 @@ import {
   PLUGIN,
   period,
   periodCondition,
+  RESPONSE_CONTENT_TYPES,
   resourceId,
   resourceName,
   SCOPES,
@@ -60,7 +61,7 @@ interface Report {
   select: string[];
   from: string;
   where?: (string | undefined)[];
-  orderBy: string;
+  orderBy?: string;
 }
 
 /**
@@ -263,7 +264,7 @@ const mutateInput = t.Object(
     ),
     validateOnly,
     responseContentType: t.Optional(
-      stringEnum(["RESOURCE_NAME_ONLY", "MUTABLE_RESOURCE"] as const, {
+      stringEnum(RESPONSE_CONTENT_TYPES, {
         description:
           "MUTABLE_RESOURCE answers each changed resource, not just its name",
       }),
@@ -518,26 +519,20 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "An account's name, currency, time zone, status, and whether it is a manager or a test account",
     inputSchema: customerGet,
     async execute(input, ctx) {
-      const p = input as In<typeof customerGet>;
-      const { results } = await search(
-        ctx,
-        p,
-        gaql({
-          select: [
-            "customer.id",
-            "customer.descriptive_name",
-            "customer.currency_code",
-            "customer.time_zone",
-            "customer.status",
-            "customer.manager",
-            "customer.test_account",
-            "customer.auto_tagging_enabled",
-            "customer.optimization_score",
-          ],
-          from: "customer",
-        }),
-      );
-      return results[0] ?? null;
+      return get(ctx, input as In<typeof customerGet>, {
+        select: [
+          "customer.id",
+          "customer.descriptive_name",
+          "customer.currency_code",
+          "customer.time_zone",
+          "customer.status",
+          "customer.manager",
+          "customer.test_account",
+          "customer.auto_tagging_enabled",
+          "customer.optimization_score",
+        ],
+        from: "customer",
+      });
     },
   });
 
@@ -548,34 +543,28 @@ export default function googleAds(rl: RunlinePluginAPI) {
     inputSchema: customerListClients,
     async execute(input, ctx) {
       const p = input as In<typeof customerListClients>;
-      const { results } = await search(
-        ctx,
-        p,
-        gaql({
-          select: [
-            "customer_client.id",
-            "customer_client.client_customer",
-            "customer_client.descriptive_name",
-            "customer_client.level",
-            "customer_client.manager",
-            "customer_client.status",
-            "customer_client.currency_code",
-            "customer_client.time_zone",
-            "customer_client.test_account",
-          ],
-          from: "customer_client",
-          where: [
-            // Level 0 is the manager itself.
-            p.directOnly
-              ? "customer_client.level = 1"
-              : "customer_client.level > 0",
-            p.status ? `customer_client.status = '${p.status}'` : undefined,
-          ],
-          orderBy: "customer_client.level",
-        }),
-        { limit: p.limit },
-      );
-      return results;
+      return report(ctx, p, {
+        select: [
+          "customer_client.id",
+          "customer_client.client_customer",
+          "customer_client.descriptive_name",
+          "customer_client.level",
+          "customer_client.manager",
+          "customer_client.status",
+          "customer_client.currency_code",
+          "customer_client.time_zone",
+          "customer_client.test_account",
+        ],
+        from: "customer_client",
+        where: [
+          // Level 0 is the manager itself.
+          p.directOnly
+            ? "customer_client.level = 1"
+            : "customer_client.level > 0",
+          p.status ? `customer_client.status = '${p.status}'` : undefined,
+        ],
+        orderBy: "customer_client.level",
+      });
     },
   });
 
@@ -846,7 +835,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       return mutate(ctx, options, [
         {
           adGroupAdOperation: update(
-            resourceName(options.customerId, "adGroupAds", `${group}~${adId}`),
+            resourceName(options.customerId, "adGroupAds", group, adId),
             { status },
           ),
         },
@@ -868,11 +857,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       return mutate(ctx, options, [
         {
           adGroupAdOperation: {
-            remove: resourceName(
-              options.customerId,
-              "adGroupAds",
-              `${group}~${adId}`,
-            ),
+            remove: resourceName(options.customerId, "adGroupAds", group, adId),
           },
         },
       ]);
@@ -921,13 +906,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
         options,
         keywords.map((keyword) => ({
           adGroupCriterionOperation: {
-            create: {
-              adGroup,
-              keyword,
-              ...(negative === undefined ? {} : { negative }),
-              ...(status === undefined ? {} : { status }),
-              ...(cpcBidMicros === undefined ? {} : { cpcBidMicros }),
-            },
+            create: { adGroup, keyword, negative, status, cpcBidMicros },
           },
         })),
       );
@@ -949,11 +928,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       return mutate(ctx, options, [
         {
           adGroupCriterionOperation: update(
-            resourceName(
-              options.customerId,
-              "adGroupCriteria",
-              `${group}~${id}`,
-            ),
+            resourceName(options.customerId, "adGroupCriteria", group, id),
             { status, cpc_bid_micros: cpcBidMicros },
           ),
         },
@@ -977,7 +952,8 @@ export default function googleAds(rl: RunlinePluginAPI) {
             remove: resourceName(
               options.customerId,
               "adGroupCriteria",
-              `${group}~${id}`,
+              group,
+              id,
             ),
           },
         },
@@ -996,18 +972,13 @@ export default function googleAds(rl: RunlinePluginAPI) {
         ctx,
         {
           path: `${customerPath(p.customerId)}:generateKeywordIdeas`,
+          // Options left undefined drop out of the JSON body.
           body: {
             ...seed(p),
-            ...(p.language === undefined ? {} : { language: p.language }),
-            ...(p.geoTargetConstants === undefined
-              ? {}
-              : { geoTargetConstants: p.geoTargetConstants }),
-            ...(p.keywordPlanNetwork === undefined
-              ? {}
-              : { keywordPlanNetwork: p.keywordPlanNetwork }),
-            ...(p.includeAdultKeywords === undefined
-              ? {}
-              : { includeAdultKeywords: p.includeAdultKeywords }),
+            language: p.language,
+            geoTargetConstants: p.geoTargetConstants,
+            keywordPlanNetwork: p.keywordPlanNetwork,
+            includeAdultKeywords: p.includeAdultKeywords,
           },
           account: p,
         },
