@@ -83,6 +83,8 @@ const API_BASES: Record<string, string> = {
   // The origin alone: Ads paths begin with a method (`customers:list…`),
   // which a path directly beneath a base would read as a URL scheme.
   ads: "https://googleads.googleapis.com/",
+  analyticsData: "https://analyticsdata.googleapis.com/v1beta/",
+  analyticsAdmin: "https://analyticsadmin.googleapis.com/v1beta/",
   drive: "https://www.googleapis.com/drive/v3/",
   upload: "https://www.googleapis.com/upload/drive/v3/",
   docs: "https://docs.googleapis.com/v1/",
@@ -97,6 +99,8 @@ const API_BASES: Record<string, string> = {
 /** The Cloud Console service each API base belongs to, to enable it by. */
 const API_SERVICES: Record<string, string> = {
   ads: "googleads.googleapis.com",
+  analyticsData: "analyticsdata.googleapis.com",
+  analyticsAdmin: "analyticsadmin.googleapis.com",
   drive: "drive.googleapis.com",
   upload: "drive.googleapis.com",
   docs: "docs.googleapis.com",
@@ -127,6 +131,7 @@ const TARGET_EXTRAS: Record<string, Partial<CredentialTarget>> = {
 };
 const PLUGIN_TARGETS: Record<string, string[]> = {
   googleAds: ["ads"],
+  googleAnalytics: ["analyticsData", "analyticsAdmin"],
   googleDrive: ["drive", "upload", "docs"],
   googleDocs: ["docs", "drive"],
   googleSheets: ["sheets", "drive"],
@@ -171,6 +176,7 @@ export function googleResources(plugin: string): {
       "ads",
       `${GOOGLE_ADS_VERSION}/customers:listAccessibleCustomers`,
     ],
+    googleAnalytics: ["analyticsAdmin", "accountSummaries?pageSize=1"],
     googleDrive: ["drive", "files?pageSize=1&fields=files(id)"],
     googleTasks: ["tasks", "users/@me/lists?maxResults=1"],
     googleContacts: [

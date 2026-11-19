@@ -14,6 +14,7 @@ import { googleCredential } from "../../../runline-plugins/_shared/googleAuth.js
 import { microsoftCredential } from "../../../runline-plugins/_shared/microsoftAuth.js";
 import gmail from "../../../runline-plugins/gmail/src/index.js";
 import googleAds from "../../../runline-plugins/googleAds/src/index.js";
+import googleAnalytics from "../../../runline-plugins/googleAnalytics/src/index.js";
 import googleAppsScript from "../../../runline-plugins/googleAppsScript/src/index.js";
 import googleCalendar from "../../../runline-plugins/googleCalendar/src/index.js";
 import googleContacts from "../../../runline-plugins/googleContacts/src/index.js";
@@ -271,6 +272,7 @@ describe("a grant is declared", () => {
   const plugins: Array<[string, PluginFunction, string]> = [
     ["gmail", gmail, "google"],
     ["googleAds", googleAds, "google"],
+    ["googleAnalytics", googleAnalytics, "google"],
     ["googleAppsScript", googleAppsScript, "google"],
     ["googleCalendar", googleCalendar, "google"],
     ["googleContacts", googleContacts, "google"],

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import gmail from "../../../runline-plugins/gmail/src/index.js";
 import googleAds from "../../../runline-plugins/googleAds/src/index.js";
+import googleAnalytics from "../../../runline-plugins/googleAnalytics/src/index.js";
 import googleAppsScript from "../../../runline-plugins/googleAppsScript/src/index.js";
 import googleCalendar from "../../../runline-plugins/googleCalendar/src/index.js";
 import googleContacts from "../../../runline-plugins/googleContacts/src/index.js";
@@ -52,6 +53,13 @@ const cases: Array<[string, PluginFunction, string, Record<string, unknown>]> =
   [
     ["googleAds", googleAds, "customer.get", { customerId: "a?b" }],
     ["googleAds", googleAds, "field.get", { name: "a/b" }],
+    ["googleAnalytics", googleAnalytics, "account.get", { accountId: "a?b" }],
+    [
+      "googleAnalytics",
+      googleAnalytics,
+      "keyEvent.get",
+      { name: "properties/1/keyEvents/a/b" },
+    ],
     [
       "googleAppsScript",
       googleAppsScript,
