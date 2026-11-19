@@ -11,10 +11,12 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
-import { googleResponse } from "../../_shared/googleAuth.js";
+import { failedChange, unansweredChange } from "../../_shared/changes.js";
+import { googleFailure, googleJsonResponse } from "../../_shared/googleAuth.js";
 import { GOOGLE_ADS_VERSION } from "../../_shared/googleCredentials.js";
-import { obj } from "../../_shared/provider.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { maskedFields } from "../../_shared/googleFieldMask.js";
+import { arr, obj } from "../../_shared/provider.js";
+import { isoDay, stringEnum } from "../../_shared/schemas.js";
 
 export const PLUGIN = "googleAds";
 /**
@@ -25,8 +27,6 @@ export const SCOPES = ["https://www.googleapis.com/auth/adwords"];
 const BASE = `https://googleads.googleapis.com/${GOOGLE_ADS_VERSION}/`;
 
 // ─── Inputs ─────────────────────────────────────────────────────
-
-export const STRICT = { additionalProperties: false } as const;
 
 const CUSTOMER_ID = /^\d{3}-?\d{3}-?\d{4}$/;
 /** A Google Ads customer ID, with or without its hyphens. */
@@ -85,8 +85,6 @@ const DATE_RANGES = [
   "THIS_WEEK_MON_TODAY",
   "THIS_WEEK_SUN_TODAY",
 ] as const;
-const day = (description: string) =>
-  t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description });
 
 /** The period a list reports metrics for; without one it reports none. */
 export const period = {
@@ -96,10 +94,10 @@ export const period = {
     }),
   ),
   startDate: t.Optional(
-    day("Report metrics from this day (YYYY-MM-DD), with endDate"),
+    isoDay("Report metrics from this day (YYYY-MM-DD), with endDate"),
   ),
   endDate: t.Optional(
-    day("Report metrics through this day (YYYY-MM-DD), with startDate"),
+    isoDay("Report metrics through this day (YYYY-MM-DD), with startDate"),
   ),
 };
 export type Period = t.Static<t.TObject<typeof period>>;
@@ -166,22 +164,17 @@ interface AdsCall {
   changes?: boolean;
 }
 
-const UNKNOWN_OUTCOME =
-  "The change may have been applied: check with search before sending it again.";
-
 /**
- * Google's error status, and its GoogleAdsFailure: each error's code as
- * `<type>.<value>` (`queryError.UNRECOGNIZED_FIELD`) and the request field
- * it concerns (`mutateOperations.0.campaignOperation.update.name`). The
- * messages are never read: they can echo what was sent.
+ * A GoogleAdsFailure: each error's code as `<type>.<value>`
+ * (`queryError.UNRECOGNIZED_FIELD`) and the request field it concerns
+ * (`mutateOperations.0.campaignOperation.update.name`). A failure that
+ * carries none reads as any Google API's does. The messages are never
+ * read: they can echo what was sent.
  */
 export function adsFailure(body: unknown): { code?: unknown; param?: unknown } {
   const error = obj(obj(body).error);
-  const errors = (Array.isArray(error.details) ? error.details : []).flatMap(
-    (detail) => {
-      const list = obj(detail).errors;
-      return Array.isArray(list) ? list.map(obj) : [];
-    },
+  const errors = arr(error.details).flatMap((detail) =>
+    arr(obj(detail).errors).map(obj),
   );
   const fields = errors
     .map((entry) => fieldPath(entry.location))
@@ -189,7 +182,7 @@ export function adsFailure(body: unknown): { code?: unknown; param?: unknown } {
   return {
     code:
       errors.map((entry) => errorCode(entry.errorCode)).find(Boolean) ??
-      error.status,
+      googleFailure(body).code,
     param: [...new Set(fields)],
   };
 }
@@ -203,9 +196,7 @@ function errorCode(value: unknown): string | undefined {
 }
 
 function fieldPath(location: unknown): string | undefined {
-  const elements = obj(location).fieldPathElements;
-  if (!Array.isArray(elements)) return undefined;
-  const names = elements
+  const names = arr(obj(location).fieldPathElements)
     .map(obj)
     .flatMap((element) =>
       typeof element.fieldName !== "string"
@@ -226,43 +217,28 @@ export async function adsRequest<T = unknown>(
   ctx: ActionContext,
   call: AdsCall,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    ...(call.body === undefined ? {} : { "Content-Type": "application/json" }),
-    ...(call.account ? loginHeader(ctx, call.account.loginCustomerId) : {}),
-  };
   let response: Response;
   try {
-    response = await googleResponse(
+    response = await googleJsonResponse(
       ctx,
       PLUGIN,
       SCOPES,
+      call.method ?? "GET",
       `${BASE}${call.path}`,
-      {
-        method: call.method ?? "GET",
-        headers,
-        body: call.body === undefined ? undefined : JSON.stringify(call.body),
-      },
+      call.body,
+      undefined,
+      call.account ? loginHeader(ctx, call.account.loginCustomerId) : {},
     );
   } catch (error) {
-    const code = (error as { code?: unknown }).code;
-    if (!call.changes || code !== "transport_failed") throw error;
-    throw Object.assign(
-      new Error(`${(error as Error).message}. ${UNKNOWN_OUTCOME}`, {
-        cause: error,
-      }),
-      { code },
-    );
+    throw call.changes ? unansweredChange(error) : error;
   }
   if (!response.ok) {
     const failure = await responseFailed(PLUGIN, response, adsFailure);
     const requestId = errorIdentifier(response.headers.get("request-id"));
     if (requestId) failure.message += ` (request-id ${requestId})`;
-    if (call.changes && response.status >= 500)
-      failure.message += `. ${UNKNOWN_OUTCOME}`;
-    throw failure;
+    throw call.changes ? failedChange(failure) : failure;
   }
-  return (await jsonAnswer(response)) as T;
+  return jsonAnswer<T>(response);
 }
 
 type Page = { nextPageToken?: string } & Record<string, unknown>;
@@ -459,21 +435,8 @@ export function update(
   name: string,
   fields: Record<string, unknown>,
 ): { update: Record<string, unknown>; updateMask: string } {
-  const set = Object.entries(fields).filter(([, value]) => value !== undefined);
-  return {
-    update: {
-      resourceName: name,
-      ...Object.fromEntries(set.map(([key, value]) => [camel(key), value])),
-    },
-    // Google's REST examples name mask paths in snake_case, as GAQL does.
-    updateMask: set.map(([key]) => key).join(","),
-  };
-}
-
-function camel(field: string): string {
-  return field.replace(/_([a-z])/g, (_, letter: string) =>
-    letter.toUpperCase(),
-  );
+  const { body, updateMask } = maskedFields(fields);
+  return { update: { resourceName: name, ...body }, updateMask };
 }
 
 export const validateOnly = t.Optional(

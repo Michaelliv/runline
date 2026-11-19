@@ -25,6 +25,7 @@
  * call `event.listInstances`.
  */
 
+import { randomUUID } from "node:crypto";
 import rrulePkg from "rrule";
 import {
   type ActionContext,
@@ -35,35 +36,34 @@ import * as t from "typebox";
 import {
   googleCredential,
   googleJsonRequest,
+  googleListAll,
   googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
+  googleConnection,
   Id,
   NonEmptyString,
   NonEmptyStringArray,
+  optionalBoolean,
+  optionalString,
   PositiveInteger,
   StringOrStringArray,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  strictObject,
+  stringEnum,
+} from "../../_shared/schemas.js";
 
 // `rrule` ships as CJS; named imports fail under Node ESM.
-const { RRule } = rrulePkg as unknown as { RRule: typeof import("rrule").RRule };
+const { RRule } = rrulePkg as unknown as {
+  RRule: typeof import("rrule").RRule;
+};
 
 // ─── Types ───────────────────────────────────────────────────────
 
 type Ctx = ActionContext;
-
-type GoogleCalendarConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
 
 interface EventDateTime {
   dateTime?: string;
@@ -83,7 +83,7 @@ interface ConferenceCreateRequest {
   };
 }
 
-interface EventBody {
+type EventBody = {
   id?: string;
   summary?: string;
   description?: string;
@@ -100,7 +100,7 @@ interface EventBody {
   transparency?: string;
   visibility?: string;
   conferenceData?: ConferenceCreateRequest;
-}
+};
 
 // ─── Request ─────────────────────────────────────────────────────
 
@@ -113,27 +113,28 @@ async function calRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  return googleJsonRequest(ctx, "googleCalendar", SCOPES, method, `${API_BASE}${path}`, body, qs);
+  return googleJsonRequest(
+    ctx,
+    "googleCalendar",
+    SCOPES,
+    method,
+    `${API_BASE}${path}`,
+    body,
+    qs,
+  );
 }
 
-async function paginateAll(
+function paginateAll(
   ctx: Ctx,
   path: string,
   key: string,
   qs: Record<string, unknown>,
 ): Promise<Record<string, unknown>[]> {
-  const out: Record<string, unknown>[] = [];
-  const query: Record<string, unknown> = { ...qs, maxResults: 100 };
-  do {
-    const page = (await calRequest(ctx, "GET", path, undefined, query)) as {
-      [k: string]: unknown;
-      nextPageToken?: string;
-    };
-    const items = (page[key] as Record<string, unknown>[]) ?? [];
-    out.push(...items);
-    query.pageToken = page.nextPageToken;
-  } while (query.pageToken);
-  return out;
+  return googleListAll(
+    (query) => calRequest(ctx, "GET", path, undefined, query),
+    key,
+    { ...qs, maxResults: qs.maxResults ?? 100 },
+  );
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -144,39 +145,32 @@ function encodeCalendarId(id: string): string {
   return pathSegment(decodeURIComponent(id));
 }
 
-function splitAttendees(input: unknown): Array<{ email: string }> | undefined {
-  if (input === undefined || input === null) return undefined;
-  const raw: string[] = Array.isArray(input)
-    ? (input as string[])
-    : String(input).split(",");
-  const emails = raw
+/** Attendees from addresses, each of which may itself be a comma-separated list. */
+function splitAttendees(input: string | string[]): Array<{ email: string }> {
+  return (typeof input === "string" ? [input] : input)
     .flatMap((s) => s.split(","))
     .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  if (emails.length === 0) return undefined;
-  return emails.map((email) => ({ email }));
+    .filter((s) => s.length > 0)
+    .map((email) => ({ email }));
 }
 
-function buildRecurrence(p: Record<string, unknown>): string[] | undefined {
-  if (typeof p.rrule === "string" && p.rrule.length > 0) {
+function buildRecurrence(
+  p: t.Static<t.TObject<typeof recurrenceFields>>,
+): string[] | undefined {
+  if (p.rrule) {
     const s = p.rrule.startsWith("RRULE:") ? p.rrule : `RRULE:${p.rrule}`;
     return [s];
   }
   const parts: string[] = [];
   if (p.repeatFrequency) {
-    parts.push(`FREQ=${String(p.repeatFrequency).toUpperCase()}`);
-  }
-  if (p.repeatHowManyTimes !== undefined && p.repeatUntil !== undefined) {
-    throw new Error(
-      "googleCalendar: set either repeatHowManyTimes or repeatUntil, not both",
-    );
+    parts.push(`FREQ=${p.repeatFrequency.toUpperCase()}`);
   }
   if (p.repeatHowManyTimes !== undefined) {
     parts.push(`COUNT=${p.repeatHowManyTimes}`);
   }
   if (p.repeatUntil) {
     // Google wants UTC basic-format: YYYYMMDDTHHMMSSZ.
-    const d = new Date(String(p.repeatUntil));
+    const d = new Date(p.repeatUntil);
     if (Number.isNaN(d.getTime())) {
       throw new Error(`googleCalendar: invalid repeatUntil "${p.repeatUntil}"`);
     }
@@ -189,22 +183,24 @@ function buildRecurrence(p: Record<string, unknown>): string[] | undefined {
 }
 
 function buildEventTimes(
-  start: unknown,
-  end: unknown,
+  start: string | undefined,
+  end: string | undefined,
   allDay: boolean,
   timeZone?: string,
 ): { start: EventDateTime; end: EventDateTime } {
   if (allDay) {
-    const fmt = (v: unknown) => {
+    const fmt = (v: string | undefined) => {
       const d = new Date(String(v));
-      if (Number.isNaN(d.getTime())) throw new Error(`googleCalendar: invalid date "${v}"`);
+      if (Number.isNaN(d.getTime()))
+        throw new Error(`googleCalendar: invalid date "${v}"`);
       return d.toISOString().slice(0, 10);
     };
     return { start: { date: fmt(start) }, end: { date: fmt(end) } };
   }
-  const toISO = (v: unknown) => {
+  const toISO = (v: string | undefined) => {
     const d = new Date(String(v));
-    if (Number.isNaN(d.getTime())) throw new Error(`googleCalendar: invalid dateTime "${v}"`);
+    if (Number.isNaN(d.getTime()))
+      throw new Error(`googleCalendar: invalid dateTime "${v}"`);
     return d.toISOString();
   };
   return {
@@ -240,7 +236,9 @@ function addNextOccurrence<T extends RecurringEvent>(items: T[]): T[] {
   const now = new Date();
   for (const item of items) {
     if (!item.recurrence) continue;
-    const rule = item.recurrence.find((r) => r.toUpperCase().startsWith("RRULE"));
+    const rule = item.recurrence.find((r) =>
+      r.toUpperCase().startsWith("RRULE"),
+    );
     if (!rule) continue;
     try {
       const startISO = item.start?.dateTime ?? item.start?.date;
@@ -260,7 +258,10 @@ function addNextOccurrence<T extends RecurringEvent>(items: T[]): T[] {
       const duration = end.getTime() - start.getTime();
       const nextEnd = new Date(nextStart.getTime() + duration);
       item.nextOccurrence = {
-        start: { dateTime: nextStart.toISOString(), timeZone: item.start?.timeZone },
+        start: {
+          dateTime: nextStart.toISOString(),
+          timeZone: item.start?.timeZone,
+        },
         end: { dateTime: nextEnd.toISOString(), timeZone: item.end?.timeZone },
       };
     } catch (err) {
@@ -272,45 +273,43 @@ function addNextOccurrence<T extends RecurringEvent>(items: T[]): T[] {
   return items;
 }
 
-function uuid(): string {
-  // Good enough for conferenceData.createRequest.requestId — Google
-  // just wants a per-event unique string.
-  const g = globalThis as { crypto?: { randomUUID?: () => string } };
-  if (g.crypto?.randomUUID) return g.crypto.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
-
-function applyEventFields(body: EventBody, p: Record<string, unknown>): void {
-  if (typeof p.summary === "string") body.summary = p.summary;
-  if (typeof p.description === "string") body.description = p.description;
-  if (typeof p.location === "string") body.location = p.location;
-  if (typeof p.colorId === "string") body.colorId = p.colorId;
-  if (typeof p.id === "string") body.id = p.id;
-  if (typeof p.transparency === "string") body.transparency = p.transparency;
-  if (typeof p.visibility === "string") body.visibility = p.visibility;
-  if (typeof p.guestsCanInviteOthers === "boolean")
+function applyEventFields(
+  body: EventBody,
+  p: t.Static<t.TObject<typeof eventMutableFields>> & {
+    id?: string;
+    conferenceSolution?: string;
+  },
+): void {
+  if (p.summary !== undefined) body.summary = p.summary;
+  if (p.description !== undefined) body.description = p.description;
+  if (p.location !== undefined) body.location = p.location;
+  if (p.colorId !== undefined) body.colorId = p.colorId;
+  if (p.id !== undefined) body.id = p.id;
+  if (p.transparency !== undefined) body.transparency = p.transparency;
+  if (p.visibility !== undefined) body.visibility = p.visibility;
+  if (p.guestsCanInviteOthers !== undefined)
     body.guestsCanInviteOthers = p.guestsCanInviteOthers;
-  if (typeof p.guestsCanModify === "boolean") body.guestsCanModify = p.guestsCanModify;
-  if (typeof p.guestsCanSeeOtherGuests === "boolean")
+  if (p.guestsCanModify !== undefined) body.guestsCanModify = p.guestsCanModify;
+  if (p.guestsCanSeeOtherGuests !== undefined)
     body.guestsCanSeeOtherGuests = p.guestsCanSeeOtherGuests;
 
   if (p.attendees !== undefined) {
-    body.attendees = splitAttendees(p.attendees) ?? [];
+    body.attendees = splitAttendees(p.attendees);
   }
 
   if (p.reminders !== undefined || p.useDefaultReminders !== undefined) {
-    const useDefault = p.useDefaultReminders !== false && !Array.isArray(p.reminders);
+    const useDefault = p.useDefaultReminders !== false && !p.reminders;
     body.reminders = { useDefault };
-    if (Array.isArray(p.reminders)) {
-      body.reminders.overrides = p.reminders as Reminder[];
+    if (p.reminders) {
+      body.reminders.overrides = p.reminders;
     }
   }
 
   if (p.conferenceSolution) {
     body.conferenceData = {
       createRequest: {
-        requestId: uuid(),
-        conferenceSolutionKey: { type: String(p.conferenceSolution) },
+        requestId: randomUUID(),
+        conferenceSolutionKey: { type: p.conferenceSolution },
       },
     };
   }
@@ -320,11 +319,6 @@ function applyEventFields(body: EventBody, p: Record<string, unknown>): void {
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 
-const strictObject = <T extends t.TProperties>(properties: T, options = {}) =>
-  t.Object(properties, { ...options, additionalProperties: false });
-const optionalString = (description?: string) =>
-  t.Optional(t.String(description ? { description } : {}));
-const optionalBoolean = t.Optional(t.Boolean());
 const optionalPositiveInteger = t.Optional(PositiveInteger);
 const calendarId = NonEmptyString;
 const accessRole = stringEnum([
@@ -402,6 +396,11 @@ const eventListFields = {
   nextOccurrence: optionalBoolean,
 };
 
+/** The calendars an availability check is about: one, or several. */
+const availabilityCalendars = {
+  calendarId: t.Optional(calendarId),
+  calendarIds: t.Optional(NonEmptyStringArray),
+};
 const calendarSchemas = {
   list: strictObject({
     returnAll: optionalBoolean,
@@ -414,8 +413,7 @@ const calendarSchemas = {
   get: strictObject({ calendarId }),
   availability: strictObject(
     {
-      calendarId: t.Optional(calendarId),
-      calendarIds: t.Optional(NonEmptyStringArray),
+      ...availabilityCalendars,
       timeMin: NonEmptyString,
       timeMax: NonEmptyString,
       timeZone: optionalString(),
@@ -423,22 +421,18 @@ const calendarSchemas = {
         stringEnum(["availability", "bookedSlots", "raw"] as const),
       ),
     },
-    {
-      oneOf: [
-        {
-          required: ["calendarId"],
-          not: { required: ["calendarIds"] },
-        },
-        {
-          required: ["calendarIds"],
-          not: { required: ["calendarId"] },
-        },
-      ],
-    },
+    exactlyOne(availabilityCalendars),
   ),
   listColors: strictObject({}),
 };
 
+/** What makes an event.update a change: a field, new times, or a recurrence. */
+const eventChanges = {
+  ...eventMutableFields,
+  start: optionalString(),
+  rrule: recurrenceFields.rrule,
+  repeatFrequency: recurrenceFields.repeatFrequency,
+};
 const eventSchemas = {
   create: strictObject(
     {
@@ -486,8 +480,7 @@ const eventSchemas = {
       calendarId,
       eventId: Id,
       modifyTarget: t.Optional(stringEnum(["instance", "series"] as const)),
-      ...eventMutableFields,
-      start: optionalString(),
+      ...eventChanges,
       end: optionalString(),
       allDay: optionalBoolean,
       timeZone: optionalString(),
@@ -522,12 +515,7 @@ const eventSchemas = {
           },
         },
       ],
-      anyOf: [
-        ...Object.keys(eventMutableFields).map((key) => ({ required: [key] })),
-        { required: ["start"] },
-        { required: ["rrule"] },
-        { required: ["repeatFrequency"] },
-      ],
+      ...atLeastOne(eventChanges),
     },
   ),
   delete: strictObject({
@@ -552,6 +540,15 @@ const freeBusySchema = strictObject({
   calendarExpansionMax: optionalPositiveInteger,
 });
 
+const calendarListChanges = {
+  colorId: optionalString(),
+  backgroundColor: optionalString(),
+  foregroundColor: optionalString(),
+  summaryOverride: optionalString(),
+  selected: optionalBoolean,
+  hidden: optionalBoolean,
+  defaultReminders: t.Optional(reminders),
+};
 const calendarListSchemas = {
   list: strictObject({
     minAccessRole: t.Optional(accessRole),
@@ -566,27 +563,8 @@ const calendarListSchemas = {
     summaryOverride: optionalString(),
   }),
   patch: strictObject(
-    {
-      calendarId,
-      colorId: optionalString(),
-      backgroundColor: optionalString(),
-      foregroundColor: optionalString(),
-      summaryOverride: optionalString(),
-      selected: optionalBoolean,
-      hidden: optionalBoolean,
-      defaultReminders: t.Optional(reminders),
-    },
-    {
-      anyOf: [
-        { required: ["colorId"] },
-        { required: ["backgroundColor"] },
-        { required: ["foregroundColor"] },
-        { required: ["summaryOverride"] },
-        { required: ["selected"] },
-        { required: ["hidden"] },
-        { required: ["defaultReminders"] },
-      ],
-    },
+    { calendarId, ...calendarListChanges },
+    atLeastOne(calendarListChanges),
   ),
   delete: strictObject({ calendarId }),
 };
@@ -639,61 +617,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
 
   rl.setOAuth(googleOAuth("googleCalendar", SCOPES, "GOOGLE_CALENDAR"));
 
-  rl.setConnectionSchema({
-    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
-    clientId: {
-      type: "string",
-      required: false,
-      description: "Google OAuth2 client ID",
-      env: "GOOGLE_CALENDAR_CLIENT_ID",
-    },
-    clientSecret: {
-      type: "string",
-      required: false,
-      description: "Google OAuth2 client secret",
-      env: "GOOGLE_CALENDAR_CLIENT_SECRET",
-    },
-    refreshToken: {
-      type: "string",
-      required: false,
-      description: "OAuth2 refresh token (obtained via login flow)",
-      env: "GOOGLE_CALENDAR_REFRESH_TOKEN",
-    },
-    serviceAccountJson: {
-      type: "string",
-      required: false,
-      description: "Google service account JSON credential",
-      env: "GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON",
-    },
-    serviceAccountEmail: {
-      type: "string",
-      required: false,
-      description: "Google service account email",
-      env: "GOOGLE_CALENDAR_SERVICE_ACCOUNT_EMAIL",
-    },
-    serviceAccountPrivateKey: {
-      type: "string",
-      required: false,
-      description: "Google service account private key",
-      env: "GOOGLE_CALENDAR_SERVICE_ACCOUNT_PRIVATE_KEY",
-    },
-    serviceAccountSubject: {
-      type: "string",
-      required: false,
-      description: "User email to impersonate with domain-wide delegation",
-      env: "GOOGLE_CALENDAR_SERVICE_ACCOUNT_SUBJECT",
-    },
-    accessToken: {
-      type: "string",
-      required: false,
-      description: "Cached access token (auto-refreshed)",
-    },
-    accessTokenExpiresAt: {
-      type: "number",
-      required: false,
-      description: "Cached access token expiry (ms since epoch)",
-    },
-  });
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_CALENDAR")));
 
   // ── Calendar ──────────────────────────────────────────
 
@@ -701,14 +625,14 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "read",
     description: "List calendars the authenticated user has access to",
     inputSchema: calendarSchemas.list,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.showHidden) qs.showHidden = p.showHidden;
       if (p.showDeleted) qs.showDeleted = p.showDeleted;
       if (p.minAccessRole) qs.minAccessRole = p.minAccessRole;
       if (p.pageToken) qs.pageToken = p.pageToken;
-      if (p.returnAll) return paginateAll(ctx, "/users/me/calendarList", "items", qs);
+      if (p.returnAll)
+        return paginateAll(ctx, "/users/me/calendarList", "items", qs);
       if (p.maxResults) qs.maxResults = p.maxResults;
       return calRequest(ctx, "GET", "/users/me/calendarList", undefined, qs);
     },
@@ -718,8 +642,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get a calendar's metadata (including conference solutions)",
     inputSchema: calendarSchemas.get,
-    async execute(input, ctx) {
-      const { calendarId } = input as { calendarId: string };
+    async execute({ calendarId }, ctx) {
       return calRequest(
         ctx,
         "GET",
@@ -733,33 +656,30 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     description:
       "Check free/busy information for one or more calendars over a time range",
     inputSchema: calendarSchemas.availability,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const ids: string[] = Array.isArray(p.calendarIds)
-        ? (p.calendarIds as string[])
-        : p.calendarId
-          ? [p.calendarId as string]
-          : [];
-      if (ids.length === 0) {
-        throw new Error("googleCalendar: calendarId or calendarIds is required");
-      }
+    async execute(p, ctx) {
+      const ids = p.calendarIds ?? (p.calendarId ? [p.calendarId] : []);
       const body: Record<string, unknown> = {
-        timeMin: new Date(String(p.timeMin)).toISOString(),
-        timeMax: new Date(String(p.timeMax)).toISOString(),
+        timeMin: new Date(p.timeMin).toISOString(),
+        timeMax: new Date(p.timeMax).toISOString(),
         items: ids.map((id) => ({ id })),
       };
       if (p.timeZone) body.timeZone = p.timeZone;
 
       const res = (await calRequest(ctx, "POST", "/freeBusy", body)) as {
-        calendars: Record<string, { busy?: Array<{ start: string; end: string }>; errors?: unknown }>;
+        calendars: Record<
+          string,
+          { busy?: Array<{ start: string; end: string }>; errors?: unknown }
+        >;
       };
 
-      const fmt = (p.outputFormat as string | undefined) ?? "raw";
+      const fmt = p.outputFormat ?? "raw";
       if (fmt === "raw") return res;
       if (ids.length === 1) {
         const entry = res.calendars?.[ids[0]];
         if (entry?.errors) {
-          throw new Error(`googleCalendar: freeBusy error ${JSON.stringify(entry.errors)}`);
+          throw new Error(
+            `googleCalendar: freeBusy error ${JSON.stringify(entry.errors)}`,
+          );
         }
         const busy = entry?.busy ?? [];
         if (fmt === "availability") return { available: busy.length === 0 };
@@ -779,7 +699,8 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
 
   rl.registerAction("calendar.listColors", {
     access: "read",
-    description: "List event and calendar color palettes available in Google Calendar",
+    description:
+      "List event and calendar color palettes available in Google Calendar",
     inputSchema: calendarSchemas.listColors,
     async execute(_input, ctx) {
       return calRequest(ctx, "GET", "/colors");
@@ -792,14 +713,13 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "write",
     description: "Create a calendar event",
     inputSchema: eventSchemas.create,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const body: EventBody = {};
       const times = buildEventTimes(
         p.start,
         p.end,
         p.allDay === true,
-        p.timeZone as string | undefined,
+        p.timeZone,
       );
       body.start = times.start;
       body.end = times.end;
@@ -815,8 +735,8 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       return calRequest(
         ctx,
         "POST",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/events`,
-        body as unknown as Record<string, unknown>,
+        `/calendars/${encodeCalendarId(p.calendarId)}/events`,
+        body,
         qs,
       );
     },
@@ -826,15 +746,14 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get a single event",
     inputSchema: eventSchemas.get,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.timeZone) qs.timeZone = p.timeZone;
       if (p.maxAttendees) qs.maxAttendees = p.maxAttendees;
       const res = (await calRequest(
         ctx,
         "GET",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${pathSegment(p.eventId)}`,
+        `/calendars/${encodeCalendarId(p.calendarId)}/events/${pathSegment(p.eventId)}`,
         undefined,
         qs,
       )) as RecurringEvent;
@@ -848,8 +767,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     description:
       "List events in a calendar. Set `singleEvents=true` to expand recurring events into instances.",
     inputSchema: eventSchemas.list,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       for (const k of [
         "q",
@@ -865,14 +783,19 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       ] as const) {
         if (p[k] !== undefined) qs[k] = p[k];
       }
-      if (p.timeMin) qs.timeMin = new Date(String(p.timeMin)).toISOString();
-      if (p.timeMax) qs.timeMax = new Date(String(p.timeMax)).toISOString();
-      if (p.updatedMin) qs.updatedMin = new Date(String(p.updatedMin)).toISOString();
+      if (p.timeMin) qs.timeMin = new Date(p.timeMin).toISOString();
+      if (p.timeMax) qs.timeMax = new Date(p.timeMax).toISOString();
+      if (p.updatedMin) qs.updatedMin = new Date(p.updatedMin).toISOString();
 
-      const path = `/calendars/${encodeCalendarId(p.calendarId as string)}/events`;
+      const path = `/calendars/${encodeCalendarId(p.calendarId)}/events`;
       const attachNext = p.nextOccurrence !== false && p.singleEvents !== true;
       if (p.returnAll) {
-        const items = (await paginateAll(ctx, path, "items", qs)) as RecurringEvent[];
+        const items = (await paginateAll(
+          ctx,
+          path,
+          "items",
+          qs,
+        )) as RecurringEvent[];
         if (attachNext) addNextOccurrence(items);
         return items;
       }
@@ -889,16 +812,15 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "read",
     description: "List instances of a recurring event",
     inputSchema: eventSchemas.listInstances,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
-      if (p.timeMin) qs.timeMin = new Date(String(p.timeMin)).toISOString();
-      if (p.timeMax) qs.timeMax = new Date(String(p.timeMax)).toISOString();
+      if (p.timeMin) qs.timeMin = new Date(p.timeMin).toISOString();
+      if (p.timeMax) qs.timeMax = new Date(p.timeMax).toISOString();
       if (p.timeZone) qs.timeZone = p.timeZone;
       if (p.showDeleted) qs.showDeleted = p.showDeleted;
       if (p.pageToken) qs.pageToken = p.pageToken;
       const path = `/calendars/${encodeCalendarId(
-        p.calendarId as string,
+        p.calendarId,
       )}/events/${pathSegment(p.eventId)}/instances`;
       if (p.returnAll) return paginateAll(ctx, path, "items", qs);
       if (p.maxResults) qs.maxResults = p.maxResults;
@@ -911,10 +833,9 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     description:
       "Patch an event (only supplied fields are changed). Set modifyTarget='series' to edit the entire recurrence instead of a single instance.",
     inputSchema: eventSchemas.update,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      let eventId = p.eventId as string;
-      const calendarId = encodeCalendarId(p.calendarId as string);
+    async execute(p, ctx) {
+      let eventId = p.eventId;
+      const calendarId = encodeCalendarId(p.calendarId);
 
       // Series edit: resolve the instance's recurringEventId and patch that instead.
       if (p.modifyTarget === "series") {
@@ -933,16 +854,11 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
 
       const body: EventBody = {};
       if (p.start !== undefined || p.end !== undefined) {
-        if (p.start === undefined || p.end === undefined) {
-          throw new Error(
-            "googleCalendar: start and end must be provided together on update",
-          );
-        }
         const times = buildEventTimes(
           p.start,
           p.end,
           p.allDay === true,
-          p.timeZone as string | undefined,
+          p.timeZone,
         );
         body.start = times.start;
         body.end = times.end;
@@ -953,14 +869,15 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
 
       const qs: Record<string, unknown> = {};
       if (p.sendUpdates) qs.sendUpdates = p.sendUpdates;
-      if (p.sendNotifications !== undefined) qs.sendNotifications = p.sendNotifications;
+      if (p.sendNotifications !== undefined)
+        qs.sendNotifications = p.sendNotifications;
       if (p.maxAttendees) qs.maxAttendees = p.maxAttendees;
 
       return calRequest(
         ctx,
         "PATCH",
         `/calendars/${calendarId}/events/${pathSegment(eventId)}`,
-        body as unknown as Record<string, unknown>,
+        body,
         qs,
       );
     },
@@ -970,14 +887,13 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "write",
     description: "Delete an event",
     inputSchema: eventSchemas.delete,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.sendUpdates) qs.sendUpdates = p.sendUpdates;
       return calRequest(
         ctx,
         "DELETE",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${pathSegment(p.eventId)}`,
+        `/calendars/${encodeCalendarId(p.calendarId)}/events/${pathSegment(p.eventId)}`,
         undefined,
         qs,
       );
@@ -988,8 +904,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "write",
     description: "Move an event from one calendar to another",
     inputSchema: eventSchemas.move,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {
         destination: p.destinationCalendarId,
       };
@@ -997,7 +912,7 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
       return calRequest(
         ctx,
         "POST",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/events/${pathSegment(p.eventId)}/move`,
+        `/calendars/${encodeCalendarId(p.calendarId)}/events/${pathSegment(p.eventId)}/move`,
         undefined,
         qs,
       );
@@ -1011,15 +926,14 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     description:
       "Query free/busy windows across one or more calendars in a time range. Returns an array of busy intervals per calendar id, plus any errors.",
     inputSchema: freeBusySchema,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const body = {
         timeMin: p.timeMin,
         timeMax: p.timeMax,
         timeZone: p.timeZone,
         groupExpansionMax: p.groupExpansionMax,
         calendarExpansionMax: p.calendarExpansionMax,
-        items: (p.calendarIds as string[]).map((id) => ({ id })),
+        items: p.calendarIds.map((id) => ({ id })),
       };
       return calRequest(ctx, "POST", `/freeBusy`, body);
     },
@@ -1029,18 +943,25 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
 
   rl.registerAction("calendarList.list", {
     access: "read",
-    description: "List calendars on the user's calendar list (the user's left sidebar).",
+    description:
+      "List calendars on the user's calendar list (the user's left sidebar).",
     inputSchema: calendarListSchemas.list,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const qs = {
         minAccessRole: p.minAccessRole,
         showDeleted: p.showDeleted,
         showHidden: p.showHidden,
         maxResults: 250,
       };
-      if (p.returnAll ?? true) return paginateAll(ctx, "/users/me/calendarList", "items", qs);
-      const res = (await calRequest(ctx, "GET", "/users/me/calendarList", undefined, qs)) as { items?: unknown[] };
+      if (p.returnAll ?? true)
+        return paginateAll(ctx, "/users/me/calendarList", "items", qs);
+      const res = (await calRequest(
+        ctx,
+        "GET",
+        "/users/me/calendarList",
+        undefined,
+        qs,
+      )) as { items?: unknown[] };
       return res.items ?? [];
     },
   });
@@ -1049,41 +970,58 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "write",
     description: "Add a calendar (by id) to the user's calendar list.",
     inputSchema: calendarListSchemas.insert,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = { id: p.calendarId };
       if (p.summaryOverride) body.summaryOverride = p.summaryOverride;
-      if (Array.isArray(p.defaultReminders)) body.defaultReminders = p.defaultReminders;
-      return calRequest(ctx, "POST", "/users/me/calendarList", body, { colorRgbFormat: p.colorRgbFormat });
+      if (p.defaultReminders) body.defaultReminders = p.defaultReminders;
+      return calRequest(ctx, "POST", "/users/me/calendarList", body, {
+        colorRgbFormat: p.colorRgbFormat,
+      });
     },
   });
 
   rl.registerAction("calendarList.patch", {
     access: "write",
-    description: "Patch a calendar entry on the user's calendar list (colors, summary override, reminders, selected).",
+    description:
+      "Patch a calendar entry on the user's calendar list (colors, summary override, reminders, selected).",
     inputSchema: calendarListSchemas.patch,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {};
-      for (const k of ["colorId","backgroundColor","foregroundColor","summaryOverride","selected","hidden","defaultReminders"] as const) {
-        if ((p as Record<string, unknown>)[k] !== undefined) body[k] = (p as Record<string, unknown>)[k];
+      for (const k of [
+        "colorId",
+        "backgroundColor",
+        "foregroundColor",
+        "summaryOverride",
+        "selected",
+        "hidden",
+        "defaultReminders",
+      ] as const) {
+        if (p[k] !== undefined) body[k] = p[k];
       }
       return calRequest(
-        ctx, "PATCH",
-        `/users/me/calendarList/${encodeCalendarId(p.calendarId as string)}`,
+        ctx,
+        "PATCH",
+        `/users/me/calendarList/${encodeCalendarId(p.calendarId)}`,
         body,
-        { colorRgbFormat: p.backgroundColor || p.foregroundColor ? true : undefined },
+        {
+          colorRgbFormat:
+            p.backgroundColor || p.foregroundColor ? true : undefined,
+        },
       );
     },
   });
 
   rl.registerAction("calendarList.delete", {
     access: "write",
-    description: "Remove a calendar from the user's calendar list (does not delete the underlying calendar).",
+    description:
+      "Remove a calendar from the user's calendar list (does not delete the underlying calendar).",
     inputSchema: calendarListSchemas.delete,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      await calRequest(ctx, "DELETE", `/users/me/calendarList/${encodeCalendarId(p.calendarId as string)}`);
+    async execute(p, ctx) {
+      await calRequest(
+        ctx,
+        "DELETE",
+        `/users/me/calendarList/${encodeCalendarId(p.calendarId)}`,
+      );
       return { success: true };
     },
   });
@@ -1094,10 +1032,10 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "read",
     description: "List ACL rules on a calendar.",
     inputSchema: aclSchemas.list,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const path = `/calendars/${encodeCalendarId(p.calendarId as string)}/acl`;
-      if (p.returnAll ?? true) return paginateAll(ctx, path, "items", { maxResults: 250 });
+    async execute(p, ctx) {
+      const path = `/calendars/${encodeCalendarId(p.calendarId)}/acl`;
+      if (p.returnAll ?? true)
+        return paginateAll(ctx, path, "items", { maxResults: 250 });
       const res = (await calRequest(ctx, "GET", path)) as { items?: unknown[] };
       return res.items ?? [];
     },
@@ -1105,14 +1043,18 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
 
   rl.registerAction("acl.insert", {
     access: "write",
-    description: "Add an ACL rule to a calendar. Roles: 'none' | 'freeBusyReader' | 'reader' | 'writer' | 'owner'.",
+    description:
+      "Add an ACL rule to a calendar. Roles: 'none' | 'freeBusyReader' | 'reader' | 'writer' | 'owner'.",
     inputSchema: aclSchemas.insert,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const body = { role: p.role, scope: { type: p.scopeType, value: p.scopeValue } };
+    async execute(p, ctx) {
+      const body = {
+        role: p.role,
+        scope: { type: p.scopeType, value: p.scopeValue },
+      };
       return calRequest(
-        ctx, "POST",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl`,
+        ctx,
+        "POST",
+        `/calendars/${encodeCalendarId(p.calendarId)}/acl`,
         body,
         { sendNotifications: p.sendNotifications },
       );
@@ -1123,11 +1065,11 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "write",
     description: "Patch an ACL rule's role.",
     inputSchema: aclSchemas.update,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       return calRequest(
-        ctx, "PATCH",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl/${pathSegment(p.ruleId)}`,
+        ctx,
+        "PATCH",
+        `/calendars/${encodeCalendarId(p.calendarId)}/acl/${pathSegment(p.ruleId)}`,
         { role: p.role },
       );
     },
@@ -1137,11 +1079,11 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     access: "write",
     description: "Remove an ACL rule.",
     inputSchema: aclSchemas.delete,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       await calRequest(
-        ctx, "DELETE",
-        `/calendars/${encodeCalendarId(p.calendarId as string)}/acl/${pathSegment(p.ruleId)}`,
+        ctx,
+        "DELETE",
+        `/calendars/${encodeCalendarId(p.calendarId)}/acl/${pathSegment(p.ruleId)}`,
       );
       return { success: true };
     },
@@ -1151,20 +1093,27 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
 
   rl.registerAction("settings.list", {
     access: "read",
-    description: "List the user's calendar settings (timezone, week start, working location, etc.).",
+    description:
+      "List the user's calendar settings (timezone, week start, working location, etc.).",
     inputSchema: settingsSchemas.list,
     async execute(_input, ctx) {
-      return paginateAll(ctx, "/users/me/settings", "items", { maxResults: 100 });
+      return paginateAll(ctx, "/users/me/settings", "items", {
+        maxResults: 100,
+      });
     },
   });
 
   rl.registerAction("settings.get", {
     access: "read",
-    description: "Get a single setting by key (e.g. 'timezone', 'weekStart', 'locale').",
+    description:
+      "Get a single setting by key (e.g. 'timezone', 'weekStart', 'locale').",
     inputSchema: settingsSchemas.get,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      return calRequest(ctx, "GET", `/users/me/settings/${pathSegment(p.setting)}`);
+    async execute(p, ctx) {
+      return calRequest(
+        ctx,
+        "GET",
+        `/users/me/settings/${pathSegment(p.setting)}`,
+      );
     },
   });
 }

@@ -34,36 +34,18 @@ import {
   googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
+  googleConnection,
   Id,
   NonEmptyString,
   PositiveInteger,
   RawGoogleObject,
   StringArray,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { STRICT, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
 type Ctx = ActionContext;
-
-type GoogleSlidesConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
-
-interface ReplaceTextEntry {
-  text: string;
-  replaceText: string;
-  matchCase?: boolean;
-  pageObjectIds?: string[];
-}
 
 // ─── Request ─────────────────────────────────────────────────────
 
@@ -76,7 +58,15 @@ async function slidesRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  return googleJsonRequest(ctx, "googleSlides", SCOPES, method, `${API_BASE}${path}`, body, qs);
+  return googleJsonRequest(
+    ctx,
+    "googleSlides",
+    SCOPES,
+    method,
+    `${API_BASE}${path}`,
+    body,
+    qs,
+  );
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -89,8 +79,6 @@ const PRES_URL_REGEX =
  * Falls through to the input unchanged if no URL is detected.
  */
 function extractPresentationId(input: string): string {
-  if (!input)
-    throw new Error("googleSlides: presentationId or URL is required");
   const m = input.match(PRES_URL_REGEX);
   return pathSegment(m ? m[1] : input);
 }
@@ -106,58 +94,15 @@ export default function googleSlides(rl: RunlinePluginAPI) {
 
   rl.setOAuth(googleOAuth("googleSlides", SCOPES, "GOOGLE_SLIDES"));
 
-  rl.setConnectionSchema({
-    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
-    clientId: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_SLIDES_CLIENT_ID",
-    },
-    clientSecret: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_SLIDES_CLIENT_SECRET",
-    },
-    refreshToken: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_SLIDES_REFRESH_TOKEN",
-    },
-    serviceAccountJson: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_SLIDES_SERVICE_ACCOUNT_JSON",
-    },
-    serviceAccountEmail: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_SLIDES_SERVICE_ACCOUNT_EMAIL",
-    },
-    serviceAccountPrivateKey: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_SLIDES_SERVICE_ACCOUNT_PRIVATE_KEY",
-    },
-    serviceAccountSubject: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_SLIDES_SERVICE_ACCOUNT_SUBJECT",
-    },
-    accessToken: { type: "string", required: false },
-    accessTokenExpiresAt: { type: "number", required: false },
-  });
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_SLIDES")));
 
   // ── Presentation ──────────────────────────────────────
 
   rl.registerAction("presentation.create", {
     access: "write",
     description: "Create a new empty presentation",
-    inputSchema: t.Object(
-      { title: NonEmptyString },
-      { additionalProperties: false },
-    ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    inputSchema: t.Object({ title: NonEmptyString }, STRICT),
+    async execute(p, ctx) {
       return slidesRequest(ctx, "POST", "/presentations", { title: p.title });
     },
   });
@@ -171,11 +116,10 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         presentation: Id,
         fields: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+    async execute(p, ctx) {
+      const id = extractPresentationId(p.presentation);
       const qs: Record<string, unknown> = {};
       if (p.fields) qs.fields = p.fields;
       return slidesRequest(ctx, "GET", `/presentations/${id}`, undefined, qs);
@@ -190,11 +134,10 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         presentation: Id,
         limit: t.Optional(PositiveInteger),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+    async execute(p, ctx) {
+      const id = extractPresentationId(p.presentation);
       const res = (await slidesRequest(
         ctx,
         "GET",
@@ -203,7 +146,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         { fields: "slides" },
       )) as { slides?: unknown[] };
       const slides = res.slides ?? [];
-      if (typeof p.limit === "number") return slides.slice(0, p.limit);
+      if (p.limit !== undefined) return slides.slice(0, p.limit);
       return slides;
     },
   });
@@ -223,22 +166,17 @@ export default function googleSlides(rl: RunlinePluginAPI) {
               matchCase: t.Optional(t.Boolean()),
               pageObjectIds: t.Optional(StringArray),
             },
-            { additionalProperties: false },
+            STRICT,
           ),
           { minItems: 1 },
         ),
         revisionId: t.Optional(Id),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
-      const replacements = p.replacements as ReplaceTextEntry[];
-      if (!Array.isArray(replacements) || replacements.length === 0) {
-        throw new Error("googleSlides: replacements must be a non-empty array");
-      }
-      const requests = replacements.map((r) => ({
+    async execute(p, ctx) {
+      const id = extractPresentationId(p.presentation);
+      const requests = p.replacements.map((r) => ({
         replaceAllText: {
           replaceText: r.replaceText,
           pageObjectIds: r.pageObjectIds ?? [],
@@ -269,15 +207,12 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       {
         presentation: Id,
         requests: t.Array(RawGoogleObject, { minItems: 1 }),
-        writeControl: t.Optional(
-          t.Object({ requiredRevisionId: Id }, { additionalProperties: false }),
-        ),
+        writeControl: t.Optional(t.Object({ requiredRevisionId: Id }, STRICT)),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+    async execute(p, ctx) {
+      const id = extractPresentationId(p.presentation);
       const body: Record<string, unknown> = { requests: p.requests };
       if (p.writeControl) body.writeControl = p.writeControl;
       return slidesRequest(
@@ -299,11 +234,10 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         presentation: Id,
         pageObjectId: Id,
       },
-      { additionalProperties: false },
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+    async execute(p, ctx) {
+      const id = extractPresentationId(p.presentation);
       return slidesRequest(
         ctx,
         "GET",
@@ -332,11 +266,10 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         savePath: t.Optional(NonEmptyString),
         download: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+    async execute(p, ctx) {
+      const id = extractPresentationId(p.presentation);
       const qs: Record<string, unknown> = {};
       if (p.mimeType) qs["thumbnailProperties.mimeType"] = p.mimeType;
       if (p.thumbnailSize)
@@ -359,7 +292,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         );
       }
       const bytes = Buffer.from(await imgRes.arrayBuffer());
-      if (typeof p.savePath === "string") {
+      if (p.savePath) {
         writeFileSync(p.savePath, bytes);
         return { ...res, path: p.savePath, size: bytes.byteLength };
       }

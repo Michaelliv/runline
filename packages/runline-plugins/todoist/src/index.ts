@@ -15,13 +15,19 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
-import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
+import { obj } from "../../_shared/provider.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  isoDay,
+  STRICT,
+  stringEnum,
+} from "../../_shared/schemas.js";
 import { todoistCredential } from "./credentials.js";
 
 /** API v1's largest page. */
 const PAGE = 200;
 
-const STRICT = { additionalProperties: false } as const;
 const Id = (description?: string) =>
   t.String({ minLength: 1, ...(description ? { description } : {}) });
 const Limit = t.Optional(
@@ -35,7 +41,6 @@ const Priority = t.Integer({
   maximum: 4,
   description: "1 (normal) to 4 (urgent)",
 });
-const DueDate = t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" });
 const Filter = (description: string) =>
   t.String({ minLength: 1, maxLength: 1024, description });
 const FilterLang = t.Optional(
@@ -83,7 +88,7 @@ const ViewStyle = t.Union([
 
 /** Todoist's error envelope: only its `error_tag` is read. */
 function todoistError(body: unknown) {
-  return { code: (body as { error_tag?: unknown } | undefined)?.error_tag };
+  return { code: obj(body).error_tag };
 }
 
 /** One request; a failure reports the status and Todoist's error_tag. */
@@ -182,7 +187,7 @@ const taskChanges = {
   description: t.Optional(t.String()),
   priority: t.Optional(Priority),
   dueString: t.Optional(Id('Natural language, e.g. "every monday"')),
-  dueDate: t.Optional(DueDate),
+  dueDate: t.Optional(isoDay()),
   labels: t.Optional(Labels),
   assigneeId: t.Optional(AssigneeId),
 };
@@ -356,7 +361,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: taskCreate,
     async execute(input, ctx) {
       return api(ctx, "POST", "tasks", {
-        body: taskBody(input as t.Static<typeof taskCreate>),
+        body: taskBody(input),
       });
     },
   });
@@ -366,7 +371,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Get a task by ID",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return api(ctx, "GET", `tasks/${pathSegment(id)}`);
     },
   });
@@ -376,8 +381,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description:
       "List active tasks, by project, section, parent or label, or by a Todoist filter query instead",
     inputSchema: taskList,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as t.Static<typeof taskList>;
+    async execute(p, ctx) {
       if (p.filter !== undefined)
         return listAll(
           ctx,
@@ -399,7 +403,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Update a task; only the fields given change",
     inputSchema: taskUpdate,
     async execute(input, ctx) {
-      const { id, ...fields } = input as t.Static<typeof taskUpdate>;
+      const { id, ...fields } = input;
       return api(ctx, "POST", `tasks/${pathSegment(id)}`, {
         body: taskBody(fields),
       });
@@ -411,7 +415,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Close (complete) a task",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "POST", `tasks/${pathSegment(id)}/close`);
     },
   });
@@ -421,7 +425,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Reopen a task",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "POST", `tasks/${pathSegment(id)}/reopen`);
     },
   });
@@ -431,7 +435,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Delete a task",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "DELETE", `tasks/${pathSegment(id)}`);
     },
   });
@@ -440,8 +444,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     access: "write",
     description: "Quick add a task using natural language",
     inputSchema: taskQuickAdd,
-    async execute(input, ctx) {
-      const p = input as t.Static<typeof taskQuickAdd>;
+    async execute(p, ctx) {
       return api(ctx, "POST", "tasks/quick", {
         body: wire(p, {
           text: "text",
@@ -459,7 +462,7 @@ export default function todoist(rl: RunlinePluginAPI) {
       "Move a task to another project, section or parent task (exactly one)",
     inputSchema: taskMove,
     async execute(input, ctx) {
-      const { id, ...place } = input as t.Static<typeof taskMove>;
+      const { id, ...place } = input;
       return api(ctx, "POST", `tasks/${pathSegment(id)}/move`, {
         body: wire(place, placeNames),
       });
@@ -471,8 +474,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description:
       "List tasks completed in a time window of at most 3 months, by completion date",
     inputSchema: taskListCompleted,
-    async execute(input, ctx) {
-      const p = input as t.Static<typeof taskListCompleted>;
+    async execute(p, ctx) {
       return listAll(
         ctx,
         "tasks/completed/by_completion_date",
@@ -497,7 +499,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: projectCreate,
     async execute(input, ctx) {
       return api(ctx, "POST", "projects", {
-        body: wire(input as t.Static<typeof projectCreate>, projectNames),
+        body: wire(input, projectNames),
       });
     },
   });
@@ -507,7 +509,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Get a project",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return api(ctx, "GET", `projects/${pathSegment(id)}`);
     },
   });
@@ -526,7 +528,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Update a project; only the fields given change",
     inputSchema: projectUpdate,
     async execute(input, ctx) {
-      const { id, ...fields } = input as t.Static<typeof projectUpdate>;
+      const { id, ...fields } = input;
       return api(ctx, "POST", `projects/${pathSegment(id)}`, {
         body: wire(fields, projectNames),
       });
@@ -538,7 +540,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Delete a project",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "DELETE", `projects/${pathSegment(id)}`);
     },
   });
@@ -548,7 +550,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Archive a project",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "POST", `projects/${pathSegment(id)}/archive`);
     },
   });
@@ -558,7 +560,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Unarchive a project",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "POST", `projects/${pathSegment(id)}/unarchive`);
     },
   });
@@ -568,7 +570,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Get project collaborators: [{id,name,email}]",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return listAll(ctx, `projects/${pathSegment(id)}/collaborators`);
     },
   });
@@ -579,8 +581,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     access: "write",
     description: "Create a section",
     inputSchema: sectionCreate,
-    async execute(input, ctx) {
-      const p = input as t.Static<typeof sectionCreate>;
+    async execute(p, ctx) {
       return api(ctx, "POST", "sections", {
         body: wire(p, {
           projectId: "project_id",
@@ -596,7 +597,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Get a section",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return api(ctx, "GET", `sections/${pathSegment(id)}`);
     },
   });
@@ -605,8 +606,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     access: "read",
     description: "List sections, of one project or all",
     inputSchema: sectionList,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as t.Static<typeof sectionList>;
+    async execute(p, ctx) {
       return listAll(ctx, "sections", wire(p, { projectId: "project_id" }));
     },
   });
@@ -615,8 +615,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     access: "write",
     description: "Rename a section",
     inputSchema: sectionUpdate,
-    async execute(input, ctx) {
-      const p = input as t.Static<typeof sectionUpdate>;
+    async execute(p, ctx) {
       return api(ctx, "POST", `sections/${pathSegment(p.id)}`, {
         body: { name: p.name },
       });
@@ -628,7 +627,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Delete a section",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "DELETE", `sections/${pathSegment(id)}`);
     },
   });
@@ -639,8 +638,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     access: "write",
     description: "Comment on a task or on a project (exactly one)",
     inputSchema: commentCreate,
-    async execute(input, ctx) {
-      const p = input as t.Static<typeof commentCreate>;
+    async execute(p, ctx) {
       return api(ctx, "POST", "comments", {
         body: wire(p, {
           taskId: "task_id",
@@ -656,7 +654,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Get a comment",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return api(ctx, "GET", `comments/${pathSegment(id)}`);
     },
   });
@@ -665,8 +663,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     access: "read",
     description: "List the comments of a task or of a project (exactly one)",
     inputSchema: commentList,
-    async execute(input, ctx) {
-      const p = input as t.Static<typeof commentList>;
+    async execute(p, ctx) {
       return listAll(
         ctx,
         "comments",
@@ -679,8 +676,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     access: "write",
     description: "Update a comment",
     inputSchema: commentUpdate,
-    async execute(input, ctx) {
-      const p = input as t.Static<typeof commentUpdate>;
+    async execute(p, ctx) {
       return api(ctx, "POST", `comments/${pathSegment(p.id)}`, {
         body: { content: p.content },
       });
@@ -692,7 +688,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Delete a comment",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "DELETE", `comments/${pathSegment(id)}`);
     },
   });
@@ -705,7 +701,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     inputSchema: labelCreate,
     async execute(input, ctx) {
       return api(ctx, "POST", "labels", {
-        body: wire(input as t.Static<typeof labelCreate>, labelNames),
+        body: wire(input, labelNames),
       });
     },
   });
@@ -715,7 +711,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Get a label",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return api(ctx, "GET", `labels/${pathSegment(id)}`);
     },
   });
@@ -734,7 +730,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Update a label; only the fields given change",
     inputSchema: labelUpdate,
     async execute(input, ctx) {
-      const { id, ...fields } = input as t.Static<typeof labelUpdate>;
+      const { id, ...fields } = input;
       return api(ctx, "POST", `labels/${pathSegment(id)}`, {
         body: wire(fields, labelNames),
       });
@@ -746,7 +742,7 @@ export default function todoist(rl: RunlinePluginAPI) {
     description: "Delete a label",
     inputSchema: byId,
     async execute(input, ctx) {
-      const { id } = input as t.Static<typeof byId>;
+      const { id } = input;
       return act(ctx, "DELETE", `labels/${pathSegment(id)}`);
     },
   });

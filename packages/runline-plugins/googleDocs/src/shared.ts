@@ -2,20 +2,9 @@ import { type ActionContext, pathSegment } from "runline";
 import * as t from "typebox";
 import { googleJsonRequest } from "../../_shared/googleAuth.js";
 import { RawGoogleObject } from "../../_shared/googleSchemas.js";
+import { exactlyOne, STRICT } from "../../_shared/schemas.js";
 
 export type Ctx = ActionContext;
-
-export type GoogleDocsConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
 
 export const SCOPES = [
   "https://www.googleapis.com/auth/documents",
@@ -25,7 +14,6 @@ export const SCOPES = [
 export const DOCS_BASE = "https://docs.googleapis.com/v1";
 export const DRIVE_BASE = "https://www.googleapis.com/drive/v3";
 
-export const STRICT_OBJECT = { additionalProperties: false } as const;
 export const DocumentInput = {
   document: t.String({ minLength: 1, description: "Document ID or URL" }),
 };
@@ -67,23 +55,15 @@ export const LOCATION_REQUIREMENT = [
     not: { required: ["index"] },
   },
 ] as const;
-export const HexColor = t.String({
-  pattern: "^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
-});
 export const PositivePoints = t.Number({ minimum: 0 });
-export const WriteControl = t.Object(
-  {
-    requiredRevisionId: t.Optional(t.String({ minLength: 1 })),
-    targetRevisionId: t.Optional(t.String({ minLength: 1 })),
-  },
-  {
-    additionalProperties: false,
-    oneOf: [
-      { required: ["requiredRevisionId"] },
-      { required: ["targetRevisionId"] },
-    ],
-  },
-);
+const revisionControls = {
+  requiredRevisionId: t.Optional(t.String({ minLength: 1 })),
+  targetRevisionId: t.Optional(t.String({ minLength: 1 })),
+};
+export const WriteControl = t.Object(revisionControls, {
+  ...STRICT,
+  ...exactlyOne(revisionControls),
+});
 export { RawGoogleObject };
 
 export async function docsRequest(
@@ -109,27 +89,36 @@ const DOC_URL_REGEX =
   /https:\/\/docs\.google\.com\/document\/d\/([a-zA-Z0-9-_]+)/;
 
 export function extractDocumentId(input: string): string {
-  if (!input) throw new Error("googleDocs: documentId or URL is required");
   const m = input.match(DOC_URL_REGEX);
   return pathSegment(m ? m[1] : input);
 }
 
-export function buildLocation(
-  kind: "location" | "endOfSegmentLocation",
-  segmentId?: string,
-  index?: number,
-  tabId?: string,
-): Record<string, unknown> {
-  const seg = segmentId && segmentId !== "body" ? segmentId : "";
-  if (kind === "endOfSegmentLocation") {
-    return { endOfSegmentLocation: compact({ segmentId: seg, tabId }) };
-  }
-  if (index === undefined || index === null) {
-    throw new Error(
-      "googleDocs: `index` is required when location kind is 'location'",
-    );
-  }
-  return { location: location(index, segmentId, tabId) };
+/** A segment's ID as the API takes it: `body` names the main one, whose ID is empty. */
+export function segment(segmentId: string | undefined): string {
+  return segmentId && segmentId !== "body" ? segmentId : "";
+}
+
+/** Where a `LocationInput` points. */
+export type Place = {
+  locationKind?: "location" | "endOfSegmentLocation";
+  index?: number;
+  segmentId?: string;
+  tabId?: string;
+};
+
+/** A request's `location`, or its `endOfSegmentLocation`. */
+export function buildLocation(p: Place): Record<string, unknown> {
+  if (p.locationKind === "endOfSegmentLocation")
+    return {
+      endOfSegmentLocation: compact({
+        segmentId: segment(p.segmentId),
+        tabId: p.tabId,
+      }),
+    };
+  // The schema requires an index for this kind; the type cannot say so.
+  if (p.index === undefined)
+    throw new Error("googleDocs: a location takes an index");
+  return { location: location(p.index, p.segmentId, p.tabId) };
 }
 
 export function location(
@@ -137,8 +126,27 @@ export function location(
   segmentId?: string,
   tabId?: string,
 ): Record<string, unknown> {
-  const seg = segmentId && segmentId !== "body" ? segmentId : "";
-  return compact({ segmentId: seg, index, tabId });
+  return compact({ segmentId: segment(segmentId), index, tabId });
+}
+
+/** A length in points, as the Docs API takes a Dimension. */
+export function points(magnitude: number): Record<string, unknown> {
+  return { magnitude, unit: "PT" };
+}
+
+/** A range of a segment. */
+export function range(p: {
+  startIndex: number;
+  endIndex: number;
+  segmentId?: string;
+  tabId?: string;
+}): Record<string, unknown> {
+  return compact({
+    segmentId: segment(p.segmentId),
+    startIndex: p.startIndex,
+    endIndex: p.endIndex,
+    tabId: p.tabId,
+  });
 }
 
 export function compact<T extends Record<string, unknown>>(obj: T): T {
@@ -186,25 +194,4 @@ export function flattenBodyText(body: unknown): string {
     }
   }
   return parts.join("");
-}
-
-export function hexToRgbF(hex: string): {
-  red: number;
-  green: number;
-  blue: number;
-} {
-  const h = hex.replace(/^#/, "");
-  const full =
-    h.length === 3
-      ? h
-          .split("")
-          .map((c) => c + c)
-          .join("")
-      : h;
-  const n = parseInt(full, 16);
-  return {
-    red: ((n >> 16) & 0xff) / 255,
-    green: ((n >> 8) & 0xff) / 255,
-    blue: (n & 0xff) / 255,
-  };
 }

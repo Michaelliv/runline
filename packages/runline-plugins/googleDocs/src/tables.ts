@@ -1,46 +1,42 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { HexColor, rgbColor } from "../../_shared/googleColor.js";
+import { atLeastOne, STRICT } from "../../_shared/schemas.js";
 import {
   buildLocation,
   compact,
   DocumentInput,
   extractDocumentId,
-  HexColor,
-  hexToRgbF,
   LOCATION_REQUIREMENT,
   LocationInput,
   location,
   PositivePoints,
+  points,
   runBatchUpdate,
   SegmentInput,
-  STRICT_OBJECT,
   TableLocationInput,
 } from "./shared.js";
 
 const PositiveSpan = t.Integer({ minimum: 1 });
 
-function tableStartLocation(
-  p: Record<string, unknown>,
-): Record<string, unknown> {
-  return location(
-    p.tableStartIndex as number,
-    p.segmentId as string | undefined,
-    p.tabId as string | undefined,
-  );
+type TableStart = {
+  tableStartIndex: number;
+  segmentId?: string;
+  tabId?: string;
+};
+
+function tableStartLocation(p: TableStart): Record<string, unknown> {
+  return location(p.tableStartIndex, p.segmentId, p.tabId);
 }
 
 function tableCellLocation(
-  p: Record<string, unknown>,
+  p: TableStart & { rowIndex: number; columnIndex: number },
 ): Record<string, unknown> {
   return {
     rowIndex: p.rowIndex,
     columnIndex: p.columnIndex,
     tableStartLocation: tableStartLocation(p),
   };
-}
-
-function point(value: unknown): Record<string, unknown> {
-  return { magnitude: value, unit: "PT" };
 }
 
 export function registerTablesActions(rl: RunlinePluginAPI) {
@@ -54,23 +50,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         columns: PositiveSpan,
         ...LocationInput,
       },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         insertTable: {
           rows: p.rows,
           columns: p.columns,
-          ...buildLocation(
-            kind,
-            p.segmentId as string,
-            p.index as number,
-            p.tabId as string | undefined,
-          ),
+          ...buildLocation(p),
         },
       });
     },
@@ -86,11 +74,10 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...TableLocationInput,
         insertBelow: t.Optional(t.Boolean()),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         insertTableRow: {
           insertBelow: p.insertBelow === true,
@@ -103,13 +90,9 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteTableRow", {
     access: "write",
     description: "Delete a specific row from a table.",
-    inputSchema: t.Object(
-      { ...DocumentInput, ...TableLocationInput },
-      STRICT_OBJECT,
-    ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    inputSchema: t.Object({ ...DocumentInput, ...TableLocationInput }, STRICT),
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteTableRow: {
           tableCellLocation: tableCellLocation(p),
@@ -127,11 +110,10 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...TableLocationInput,
         insertRight: t.Optional(t.Boolean()),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         insertTableColumn: {
           insertRight: p.insertRight === true,
@@ -144,13 +126,9 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteTableColumn", {
     access: "write",
     description: "Delete a specific column from a table.",
-    inputSchema: t.Object(
-      { ...DocumentInput, ...TableLocationInput },
-      STRICT_OBJECT,
-    ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    inputSchema: t.Object({ ...DocumentInput, ...TableLocationInput }, STRICT),
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteTableColumn: {
           tableCellLocation: tableCellLocation(p),
@@ -159,6 +137,16 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const cellStyleFields = {
+    backgroundColorHex: t.Optional(HexColor),
+    paddingLeftPt: t.Optional(PositivePoints),
+    paddingRightPt: t.Optional(PositivePoints),
+    paddingTopPt: t.Optional(PositivePoints),
+    paddingBottomPt: t.Optional(PositivePoints),
+    contentAlignment: t.Optional(
+      t.Union([t.Literal("TOP"), t.Literal("MIDDLE"), t.Literal("BOTTOM")]),
+    ),
+  };
   rl.registerAction("document.updateTableCellStyle", {
     access: "write",
     description:
@@ -169,75 +157,50 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...TableLocationInput,
         rowSpan: t.Optional(PositiveSpan),
         columnSpan: t.Optional(PositiveSpan),
-        backgroundColorHex: t.Optional(HexColor),
-        paddingLeftPt: t.Optional(PositivePoints),
-        paddingRightPt: t.Optional(PositivePoints),
-        paddingTopPt: t.Optional(PositivePoints),
-        paddingBottomPt: t.Optional(PositivePoints),
-        contentAlignment: t.Optional(
-          t.Union([t.Literal("TOP"), t.Literal("MIDDLE"), t.Literal("BOTTOM")]),
-        ),
+        ...cellStyleFields,
       },
       {
-        ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["backgroundColorHex"] },
-          { required: ["paddingLeftPt"] },
-          { required: ["paddingRightPt"] },
-          { required: ["paddingTopPt"] },
-          { required: ["paddingBottomPt"] },
-          { required: ["contentAlignment"] },
-        ],
+        ...STRICT,
+        ...atLeastOne(cellStyleFields),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const style: Record<string, unknown> = {};
       const fields: string[] = [];
-      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
       if (p.backgroundColorHex) {
         style.backgroundColor = {
-          color: { rgbColor: hexToRgbF(p.backgroundColorHex as string) },
+          color: { rgbColor: rgbColor(p.backgroundColorHex) },
         };
         fields.push("backgroundColor");
       }
       if (p.paddingLeftPt !== undefined) {
-        style.paddingLeft = pt(p.paddingLeftPt);
+        style.paddingLeft = points(p.paddingLeftPt);
         fields.push("paddingLeft");
       }
       if (p.paddingRightPt !== undefined) {
-        style.paddingRight = pt(p.paddingRightPt);
+        style.paddingRight = points(p.paddingRightPt);
         fields.push("paddingRight");
       }
       if (p.paddingTopPt !== undefined) {
-        style.paddingTop = pt(p.paddingTopPt);
+        style.paddingTop = points(p.paddingTopPt);
         fields.push("paddingTop");
       }
       if (p.paddingBottomPt !== undefined) {
-        style.paddingBottom = pt(p.paddingBottomPt);
+        style.paddingBottom = points(p.paddingBottomPt);
         fields.push("paddingBottom");
       }
       if (p.contentAlignment) {
         style.contentAlignment = p.contentAlignment;
         fields.push("contentAlignment");
       }
-      if (fields.length === 0) {
-        throw new Error(
-          "googleDocs.document.updateTableCellStyle: at least one style property required",
-        );
-      }
       return runBatchUpdate(ctx, documentId, [
         {
           updateTableCellStyle: {
             tableRange: {
-              tableCellLocation: {
-                tableStartLocation: tableStartLocation(p),
-                rowIndex: p.rowIndex,
-                columnIndex: p.columnIndex,
-              },
-              rowSpan: (p.rowSpan as number | undefined) ?? 1,
-              columnSpan: (p.columnSpan as number | undefined) ?? 1,
+              tableCellLocation: tableCellLocation(p),
+              rowSpan: p.rowSpan ?? 1,
+              columnSpan: p.columnSpan ?? 1,
             },
             tableCellStyle: style,
             fields: fields.join(","),
@@ -257,20 +220,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         rowSpan: PositiveSpan,
         columnSpan: PositiveSpan,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
           mergeTableCells: {
             tableRange: {
-              tableCellLocation: {
-                tableStartLocation: tableStartLocation(p),
-                rowIndex: p.rowIndex,
-                columnIndex: p.columnIndex,
-              },
+              tableCellLocation: tableCellLocation(p),
               rowSpan: p.rowSpan,
               columnSpan: p.columnSpan,
             },
@@ -290,20 +248,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         rowSpan: PositiveSpan,
         columnSpan: PositiveSpan,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
           unmergeTableCells: {
             tableRange: {
-              tableCellLocation: {
-                tableStartLocation: tableStartLocation(p),
-                rowIndex: p.rowIndex,
-                columnIndex: p.columnIndex,
-              },
+              tableCellLocation: tableCellLocation(p),
               rowSpan: p.rowSpan,
               columnSpan: p.columnSpan,
             },
@@ -313,6 +266,17 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const columnFields = {
+    widthPt: t.Optional(PositivePoints),
+    widthType: t.Optional(
+      t.Union([
+        t.Literal("WIDTH_TYPE_UNSPECIFIED"),
+        t.Literal("EVENLY_DISTRIBUTED"),
+        t.Literal("FIXED_WIDTH"),
+      ]),
+    ),
+    fields: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.updateTableColumnProperties", {
     access: "write",
     description:
@@ -324,44 +288,27 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         columnIndices: t.Optional(
           t.Array(t.Integer({ minimum: 0 }), { minItems: 1 }),
         ),
-        widthPt: t.Optional(PositivePoints),
-        widthType: t.Optional(
-          t.Union([
-            t.Literal("WIDTH_TYPE_UNSPECIFIED"),
-            t.Literal("EVENLY_DISTRIBUTED"),
-            t.Literal("FIXED_WIDTH"),
-          ]),
-        ),
-        fields: t.Optional(t.String({ minLength: 1 })),
         ...SegmentInput,
+        ...columnFields,
       },
       {
-        ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["widthPt"] },
-          { required: ["widthType"] },
-          { required: ["fields"] },
-        ],
+        ...STRICT,
+        ...atLeastOne(columnFields),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const props: Record<string, unknown> = {};
       const fields: string[] = [];
       if (p.widthPt !== undefined) {
-        props.width = point(p.widthPt);
-        props.widthType = (p.widthType as string | undefined) ?? "FIXED_WIDTH";
+        props.width = points(p.widthPt);
+        props.widthType = p.widthType ?? "FIXED_WIDTH";
         fields.push("width", "widthType");
       } else if (p.widthType) {
         props.widthType = p.widthType;
         fields.push("widthType");
       }
-      const mask = (p.fields as string | undefined) ?? fields.join(",");
-      if (!mask)
-        throw new Error(
-          "googleDocs.document.updateTableColumnProperties: fields or widthPt required",
-        );
+      const mask = p.fields ?? fields.join(",");
       return runBatchUpdate(ctx, documentId, {
         updateTableColumnProperties: compact({
           tableStartLocation: tableStartLocation(p),
@@ -373,6 +320,10 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const rowStyleFields = {
+    minRowHeightPt: t.Optional(PositivePoints),
+    fields: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.updateTableRowStyle", {
     access: "write",
     description:
@@ -384,29 +335,23 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         rowIndices: t.Optional(
           t.Array(t.Integer({ minimum: 0 }), { minItems: 1 }),
         ),
-        minRowHeightPt: t.Optional(PositivePoints),
-        fields: t.Optional(t.String({ minLength: 1 })),
         ...SegmentInput,
+        ...rowStyleFields,
       },
       {
-        ...STRICT_OBJECT,
-        anyOf: [{ required: ["minRowHeightPt"] }, { required: ["fields"] }],
+        ...STRICT,
+        ...atLeastOne(rowStyleFields),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const style: Record<string, unknown> = {};
       const fields: string[] = [];
       if (p.minRowHeightPt !== undefined) {
-        style.minRowHeight = point(p.minRowHeightPt);
+        style.minRowHeight = points(p.minRowHeightPt);
         fields.push("minRowHeight");
       }
-      const mask = (p.fields as string | undefined) ?? fields.join(",");
-      if (!mask)
-        throw new Error(
-          "googleDocs.document.updateTableRowStyle: fields or minRowHeightPt required",
-        );
+      const mask = p.fields ?? fields.join(",");
       return runBatchUpdate(ctx, documentId, {
         updateTableRowStyle: compact({
           tableStartLocation: tableStartLocation(p),
@@ -428,11 +373,10 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         pinnedHeaderRowsCount: t.Integer({ minimum: 0 }),
         ...SegmentInput,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         pinTableHeaderRows: {
           tableStartLocation: tableStartLocation(p),

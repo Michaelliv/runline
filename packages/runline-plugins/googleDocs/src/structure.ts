@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne, exactlyOne, STRICT } from "../../_shared/schemas.js";
 import {
   buildLocation,
   compact,
@@ -8,24 +9,26 @@ import {
   LOCATION_REQUIREMENT,
   LocationInput,
   location,
+  type Place,
   PositivePoints,
+  points,
   RangeInput,
+  range,
   runBatchUpdate,
   SegmentInput,
-  STRICT_OBJECT,
+  segment,
 } from "./shared.js";
 
-function range(p: Record<string, unknown>): Record<string, unknown> {
+/**
+ * The section break a header or footer attaches to: the one at `index`,
+ * or the segment's own when the location is its end.
+ */
+function sectionBreakLocation(p: Place): Record<string, unknown> {
   return compact({
-    segmentId: p.segmentId && p.segmentId !== "body" ? p.segmentId : "",
-    startIndex: p.startIndex,
-    endIndex: p.endIndex,
+    segmentId: segment(p.segmentId),
     tabId: p.tabId,
+    index: p.locationKind === "endOfSegmentLocation" ? undefined : p.index,
   });
-}
-
-function point(value: unknown): Record<string, unknown> {
-  return { magnitude: value, unit: "PT" };
 }
 
 export function registerStructureActions(rl: RunlinePluginAPI) {
@@ -34,20 +37,12 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     description: "Insert a page break at an index or at the end of a segment.",
     inputSchema: t.Object(
       { ...DocumentInput, ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
-        insertPageBreak: buildLocation(
-          kind,
-          p.segmentId as string,
-          p.index as number,
-          p.tabId as string | undefined,
-        ),
+        insertPageBreak: buildLocation(p),
       });
     },
   });
@@ -62,11 +57,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         name: t.String({ minLength: 1 }),
         ...RangeInput,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         createNamedRange: {
           name: p.name,
@@ -76,6 +70,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const namedRangeTarget = {
+    namedRangeId: t.Optional(t.String({ minLength: 1 })),
+    name: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.deleteNamedRange", {
     access: "write",
     description:
@@ -83,27 +81,22 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       {
         ...DocumentInput,
-        namedRangeId: t.Optional(t.String({ minLength: 1 })),
-        name: t.Optional(t.String({ minLength: 1 })),
+        ...namedRangeTarget,
         tabIds: t.Optional(
           t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
         ),
       },
       {
-        ...STRICT_OBJECT,
-        oneOf: [{ required: ["namedRangeId"] }, { required: ["name"] }],
+        ...STRICT,
+        ...exactlyOne(namedRangeTarget),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      if (!p.namedRangeId && !p.name) {
-        throw new Error("googleDocs: provide namedRangeId or name");
-      }
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const req: Record<string, unknown> = p.namedRangeId
         ? { namedRangeId: p.namedRangeId }
         : { name: p.name };
-      if (Array.isArray(p.tabIds)) req.tabsCriteria = { tabIds: p.tabIds };
+      if (p.tabIds) req.tabsCriteria = { tabIds: p.tabIds };
       return runBatchUpdate(ctx, documentId, { deleteNamedRange: req });
     },
   });
@@ -113,29 +106,15 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     description: "Create a DEFAULT header attached to a SectionBreak.",
     inputSchema: t.Object(
       { ...DocumentInput, ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
-      const sectionBreakLocation: Record<string, unknown> = compact({
-        segmentId: seg,
-        tabId: p.tabId,
-      });
-      if (kind === "location") {
-        if (p.index === undefined) {
-          throw new Error(
-            "googleDocs: `index` is required when locationKind=location",
-          );
-        }
-        sectionBreakLocation.index = p.index;
-      }
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
-        createHeader: { type: "DEFAULT", sectionBreakLocation },
+        createHeader: {
+          type: "DEFAULT",
+          sectionBreakLocation: sectionBreakLocation(p),
+        },
       });
     },
   });
@@ -149,11 +128,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         headerId: t.String({ minLength: 1 }),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteHeader: compact({ headerId: p.headerId, tabId: p.tabId }),
       });
@@ -165,29 +143,15 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     description: "Create a DEFAULT footer attached to a SectionBreak.",
     inputSchema: t.Object(
       { ...DocumentInput, ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
-      const sectionBreakLocation: Record<string, unknown> = compact({
-        segmentId: seg,
-        tabId: p.tabId,
-      });
-      if (kind === "location") {
-        if (p.index === undefined) {
-          throw new Error(
-            "googleDocs: `index` is required when locationKind=location",
-          );
-        }
-        sectionBreakLocation.index = p.index;
-      }
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
-        createFooter: { type: "DEFAULT", sectionBreakLocation },
+        createFooter: {
+          type: "DEFAULT",
+          sectionBreakLocation: sectionBreakLocation(p),
+        },
       });
     },
   });
@@ -201,11 +165,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         footerId: t.String({ minLength: 1 }),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteFooter: compact({ footerId: p.footerId, tabId: p.tabId }),
       });
@@ -222,11 +185,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         objectId: t.String({ minLength: 1 }),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deletePositionedObject: compact({
           objectId: p.objectId,
@@ -242,24 +204,20 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       "Create a footnote reference at a location or at the end of the document body.",
     inputSchema: t.Object(
       { ...DocumentInput, ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
-        createFootnote: buildLocation(
-          kind,
-          p.segmentId as string,
-          p.index as number,
-          p.tabId as string | undefined,
-        ),
+        createFootnote: buildLocation(p),
       });
     },
   });
 
+  const replacedRange = {
+    namedRangeId: t.Optional(t.String({ minLength: 1 })),
+    namedRangeName: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.replaceNamedRangeContent", {
     access: "write",
     description:
@@ -268,91 +226,71 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       {
         ...DocumentInput,
         text: t.String(),
-        namedRangeId: t.Optional(t.String({ minLength: 1 })),
-        namedRangeName: t.Optional(t.String({ minLength: 1 })),
+        ...replacedRange,
         tabIds: t.Optional(
           t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
         ),
       },
       {
-        ...STRICT_OBJECT,
-        oneOf: [
-          { required: ["namedRangeId"] },
-          { required: ["namedRangeName"] },
-        ],
+        ...STRICT,
+        ...exactlyOne(replacedRange),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      if (!p.namedRangeId && !p.namedRangeName) {
-        throw new Error("googleDocs: provide namedRangeId or namedRangeName");
-      }
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         replaceNamedRangeContent: compact({
           text: p.text,
           namedRangeId: p.namedRangeId,
           namedRangeName: p.namedRangeName,
-          tabsCriteria: Array.isArray(p.tabIds)
-            ? { tabIds: p.tabIds }
-            : undefined,
+          tabsCriteria: p.tabIds ? { tabIds: p.tabIds } : undefined,
         }),
       });
     },
   });
 
+  const sectionStyleFields = {
+    marginTopPt: t.Optional(PositivePoints),
+    marginBottomPt: t.Optional(PositivePoints),
+    marginLeftPt: t.Optional(PositivePoints),
+    marginRightPt: t.Optional(PositivePoints),
+    columnSeparatorStyle: t.Optional(
+      t.Union([t.Literal("NONE"), t.Literal("BETWEEN_EACH_COLUMN")]),
+    ),
+    contentDirection: t.Optional(
+      t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
+    ),
+    fields: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.updateSectionStyle", {
     access: "write",
     description:
       "Update section style over a range, such as margins or column properties.",
     inputSchema: t.Object(
+      { ...DocumentInput, ...RangeInput, ...sectionStyleFields },
       {
-        ...DocumentInput,
-        ...RangeInput,
-        marginTopPt: t.Optional(PositivePoints),
-        marginBottomPt: t.Optional(PositivePoints),
-        marginLeftPt: t.Optional(PositivePoints),
-        marginRightPt: t.Optional(PositivePoints),
-        columnSeparatorStyle: t.Optional(
-          t.Union([t.Literal("NONE"), t.Literal("BETWEEN_EACH_COLUMN")]),
-        ),
-        contentDirection: t.Optional(
-          t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
-        ),
-        fields: t.Optional(t.String({ minLength: 1 })),
-      },
-      {
-        ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["marginTopPt"] },
-          { required: ["marginBottomPt"] },
-          { required: ["marginLeftPt"] },
-          { required: ["marginRightPt"] },
-          { required: ["columnSeparatorStyle"] },
-          { required: ["contentDirection"] },
-          { required: ["fields"] },
-        ],
+        ...STRICT,
+        ...atLeastOne(sectionStyleFields),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const sectionStyle: Record<string, unknown> = {};
       const fields: string[] = [];
       if (p.marginTopPt !== undefined) {
-        sectionStyle.marginTop = point(p.marginTopPt);
+        sectionStyle.marginTop = points(p.marginTopPt);
         fields.push("marginTop");
       }
       if (p.marginBottomPt !== undefined) {
-        sectionStyle.marginBottom = point(p.marginBottomPt);
+        sectionStyle.marginBottom = points(p.marginBottomPt);
         fields.push("marginBottom");
       }
       if (p.marginLeftPt !== undefined) {
-        sectionStyle.marginLeft = point(p.marginLeftPt);
+        sectionStyle.marginLeft = points(p.marginLeftPt);
         fields.push("marginLeft");
       }
       if (p.marginRightPt !== undefined) {
-        sectionStyle.marginRight = point(p.marginRightPt);
+        sectionStyle.marginRight = points(p.marginRightPt);
         fields.push("marginRight");
       }
       if (p.columnSeparatorStyle) {
@@ -363,11 +301,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         sectionStyle.contentDirection = p.contentDirection;
         fields.push("contentDirection");
       }
-      const mask = (p.fields as string | undefined) ?? fields.join(",");
-      if (!mask)
-        throw new Error(
-          "googleDocs.document.updateSectionStyle: fields or section style property required",
-        );
+      const mask = p.fields ?? fields.join(",");
       return runBatchUpdate(ctx, documentId, {
         updateSectionStyle: {
           range: range(p),
@@ -390,26 +324,30 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         ),
         ...SegmentInput,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
           insertSectionBreak: {
-            location: location(
-              p.index as number,
-              p.segmentId as string | undefined,
-              p.tabId as string | undefined,
-            ),
-            sectionType: (p.sectionType as string | undefined) ?? "CONTINUOUS",
+            location: location(p.index, p.segmentId, p.tabId),
+            sectionType: p.sectionType ?? "CONTINUOUS",
           },
         },
       ]);
     },
   });
 
+  const documentStyleFields = {
+    pageMarginTopPt: t.Optional(PositivePoints),
+    pageMarginBottomPt: t.Optional(PositivePoints),
+    pageMarginLeftPt: t.Optional(PositivePoints),
+    pageMarginRightPt: t.Optional(PositivePoints),
+    pageSizeWidthPt: t.Optional(PositivePoints),
+    pageSizeHeightPt: t.Optional(PositivePoints),
+    useCustomHeaderFooterMargins: t.Optional(t.Boolean()),
+  };
   rl.registerAction("document.updateDocumentStyle", {
     access: "write",
     description:
@@ -417,58 +355,42 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       {
         ...DocumentInput,
-        pageMarginTopPt: t.Optional(PositivePoints),
-        pageMarginBottomPt: t.Optional(PositivePoints),
-        pageMarginLeftPt: t.Optional(PositivePoints),
-        pageMarginRightPt: t.Optional(PositivePoints),
-        pageSizeWidthPt: t.Optional(PositivePoints),
-        pageSizeHeightPt: t.Optional(PositivePoints),
-        useCustomHeaderFooterMargins: t.Optional(t.Boolean()),
         tabId: t.Optional(t.String({ minLength: 1 })),
+        ...documentStyleFields,
       },
       {
-        ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["pageMarginTopPt"] },
-          { required: ["pageMarginBottomPt"] },
-          { required: ["pageMarginLeftPt"] },
-          { required: ["pageMarginRightPt"] },
-          { required: ["pageSizeWidthPt"] },
-          { required: ["pageSizeHeightPt"] },
-          { required: ["useCustomHeaderFooterMargins"] },
-        ],
+        ...STRICT,
+        ...atLeastOne(documentStyleFields),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const ds: Record<string, unknown> = {};
       const fields: string[] = [];
-      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
       if (p.pageMarginTopPt !== undefined) {
-        ds.marginTop = pt(p.pageMarginTopPt);
+        ds.marginTop = points(p.pageMarginTopPt);
         fields.push("marginTop");
       }
       if (p.pageMarginBottomPt !== undefined) {
-        ds.marginBottom = pt(p.pageMarginBottomPt);
+        ds.marginBottom = points(p.pageMarginBottomPt);
         fields.push("marginBottom");
       }
       if (p.pageMarginLeftPt !== undefined) {
-        ds.marginLeft = pt(p.pageMarginLeftPt);
+        ds.marginLeft = points(p.pageMarginLeftPt);
         fields.push("marginLeft");
       }
       if (p.pageMarginRightPt !== undefined) {
-        ds.marginRight = pt(p.pageMarginRightPt);
+        ds.marginRight = points(p.pageMarginRightPt);
         fields.push("marginRight");
       }
       if (p.pageSizeWidthPt !== undefined || p.pageSizeHeightPt !== undefined) {
         ds.pageSize = {};
         if (p.pageSizeWidthPt !== undefined)
-          (ds.pageSize as Record<string, unknown>).width = pt(
+          (ds.pageSize as Record<string, unknown>).width = points(
             p.pageSizeWidthPt,
           );
         if (p.pageSizeHeightPt !== undefined)
-          (ds.pageSize as Record<string, unknown>).height = pt(
+          (ds.pageSize as Record<string, unknown>).height = points(
             p.pageSizeHeightPt,
           );
         fields.push("pageSize");
@@ -476,11 +398,6 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       if (p.useCustomHeaderFooterMargins !== undefined) {
         ds.useCustomHeaderFooterMargins = p.useCustomHeaderFooterMargins;
         fields.push("useCustomHeaderFooterMargins");
-      }
-      if (fields.length === 0) {
-        throw new Error(
-          "googleDocs.document.updateDocumentStyle: pass at least one property",
-        );
       }
       return runBatchUpdate(ctx, documentId, [
         {

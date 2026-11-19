@@ -1,14 +1,19 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne, STRICT } from "../../_shared/schemas.js";
 import {
   compact,
   DocumentInput,
   extractDocumentId,
   runBatchUpdate,
-  STRICT_OBJECT,
 } from "./shared.js";
 
-function tabProperties(p: Record<string, unknown>): Record<string, unknown> {
+function tabProperties(p: {
+  tabId?: string;
+  title?: string;
+  index?: number;
+  parentTabId?: string;
+}): Record<string, unknown> {
   return compact({
     tabId: p.tabId,
     title: p.title,
@@ -18,6 +23,12 @@ function tabProperties(p: Record<string, unknown>): Record<string, unknown> {
 }
 
 export function registerTabActions(rl: RunlinePluginAPI) {
+  /** What a tab is given on creating it, and what an update may change. */
+  const tabChanges = {
+    title: t.Optional(t.String({ minLength: 1 })),
+    index: t.Optional(t.Integer({ minimum: 0 })),
+    parentTabId: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.addDocumentTab", {
     access: "write",
     description:
@@ -25,15 +36,12 @@ export function registerTabActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       {
         ...DocumentInput,
-        title: t.Optional(t.String({ minLength: 1 })),
-        index: t.Optional(t.Integer({ minimum: 0 })),
-        parentTabId: t.Optional(t.String({ minLength: 1 })),
+        ...tabChanges,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         addDocumentTab: { tabProperties: tabProperties(p) },
       });
@@ -46,11 +54,10 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       "Delete a Google Docs document tab by tab ID. Child tabs are deleted too.",
     inputSchema: t.Object(
       { ...DocumentInput, tabId: t.String({ minLength: 1 }) },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteTab: { tabId: p.tabId },
       });
@@ -65,33 +72,21 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       {
         ...DocumentInput,
         tabId: t.String({ minLength: 1 }),
-        title: t.Optional(t.String({ minLength: 1 })),
-        index: t.Optional(t.Integer({ minimum: 0 })),
-        parentTabId: t.Optional(t.String({ minLength: 1 })),
         fields: t.Optional(t.String({ minLength: 1 })),
+        ...tabChanges,
       },
       {
-        ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["title"] },
-          { required: ["index"] },
-          { required: ["parentTabId"] },
-        ],
+        ...STRICT,
+        ...atLeastOne(tabChanges),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const fields: string[] = [];
       if (p.title !== undefined) fields.push("title");
       if (p.index !== undefined) fields.push("index");
       if (p.parentTabId !== undefined) fields.push("parentTabId");
-      const mask = (p.fields as string | undefined) ?? fields.join(",");
-      if (!mask) {
-        throw new Error(
-          "googleDocs.document.updateDocumentTabProperties: fields or tab property required",
-        );
-      }
+      const mask = p.fields ?? fields.join(",");
       return runBatchUpdate(ctx, documentId, {
         updateDocumentTabProperties: {
           tabProperties: tabProperties(p),

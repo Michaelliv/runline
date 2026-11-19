@@ -33,30 +33,23 @@ import * as t from "typebox";
 import {
   googleCredential,
   googleJsonRequest,
+  googleListAll,
   googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
+  googleConnection,
   Id,
   NonEmptyString,
+  optionalBoolean,
+  optionalString,
   PositiveInteger,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { arr, obj } from "../../_shared/provider.js";
+import { atLeastOne, strictObject, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
 type Ctx = ActionContext;
-
-type GoogleContactsConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
 
 // ─── Fields ─────────────────────────────────────────────────────
 
@@ -92,31 +85,6 @@ const ALL_PERSON_FIELDS = [
   "userDefined",
 ] as const;
 
-/**
- * Fields that People API accepts on PATCH `updatePersonFields`.
- * Matches the request schema — `metadata`, `photos`, `coverPhotos`,
- * `locales`, `genders`, and `nicknames` aren't writable here.
- */
-const UPDATABLE_PERSON_FIELDS = new Set([
-  "addresses",
-  "biographies",
-  "birthdays",
-  "emailAddresses",
-  "events",
-  "imClients",
-  "interests",
-  "memberships",
-  "names",
-  "occupations",
-  "organizations",
-  "phoneNumbers",
-  "relations",
-  "sipAddresses",
-  "skills",
-  "urls",
-  "userDefined",
-]);
-
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://people.googleapis.com/v1";
@@ -128,27 +96,28 @@ async function peopleRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  return googleJsonRequest(ctx, "googleContacts", SCOPES, method, `${API_BASE}${path}`, body, qs);
+  return googleJsonRequest(
+    ctx,
+    "googleContacts",
+    SCOPES,
+    method,
+    `${API_BASE}${path}`,
+    body,
+    qs,
+  );
 }
 
-async function paginateAll(
+function paginateAll(
   ctx: Ctx,
   path: string,
   key: string,
   qs: Record<string, unknown>,
 ): Promise<Record<string, unknown>[]> {
-  const out: Record<string, unknown>[] = [];
-  const query: Record<string, unknown> = { ...qs, pageSize: qs.pageSize ?? 100 };
-  do {
-    const page = (await peopleRequest(ctx, "GET", path, undefined, query)) as {
-      [k: string]: unknown;
-      nextPageToken?: string;
-    };
-    const items = (page[key] as Record<string, unknown>[]) ?? [];
-    out.push(...items);
-    query.pageToken = page.nextPageToken;
-  } while (query.pageToken);
-  return out;
+  return googleListAll(
+    (query) => peopleRequest(ctx, "GET", path, undefined, query),
+    key,
+    { ...qs, pageSize: qs.pageSize ?? 100 },
+  );
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -158,7 +127,9 @@ async function paginateAll(
  * Accepts either the raw ID (`c1234…`) or the full prefixed form.
  */
 function normalizeContactResource(input: string): string {
-  const id = input.startsWith("people/") ? input.slice("people/".length) : input;
+  const id = input.startsWith("people/")
+    ? input.slice("people/".length)
+    : input;
   return `people/${pathSegment(id)}`;
 }
 
@@ -169,27 +140,20 @@ function normalizeGroupResource(input: string): string {
   return `contactGroups/${pathSegment(id)}`;
 }
 
-function contactIdFromResource(resourceName: string | undefined): string | undefined {
-  if (!resourceName) return undefined;
-  const parts = resourceName.split("/");
-  return parts[parts.length - 1];
+function contactIdFromResource(resourceName: unknown): string | undefined {
+  return typeof resourceName === "string" && resourceName
+    ? resourceName.split("/").pop()
+    : undefined;
 }
 
 /**
  * Resolve a `fields: "*" | string | string[]` argument to a
  * comma-separated list of valid People-API field names.
  */
-function resolvePersonFields(input: unknown): string {
+function resolvePersonFields(input: string | string[] | undefined): string {
   if (!input) return "names,emailAddresses,phoneNumbers";
-  if (Array.isArray(input)) {
-    if (input.includes("*")) return ALL_PERSON_FIELDS.join(",");
-    return input.join(",");
-  }
-  if (typeof input === "string") {
-    if (input === "*") return ALL_PERSON_FIELDS.join(",");
-    return input;
-  }
-  return "names,emailAddresses,phoneNumbers";
+  const fields = typeof input === "string" ? [input] : input;
+  return (fields.includes("*") ? ALL_PERSON_FIELDS : fields).join(",");
 }
 
 /**
@@ -197,46 +161,22 @@ function resolvePersonFields(input: unknown): string {
  * object and return the Google-native structured date shape. A
  * `year: 0` indicates "no year" (common for recurring events).
  */
-function coerceDate(v: unknown): { year?: number; month: number; day: number } {
-  if (v && typeof v === "object" && "day" in (v as object) && "month" in (v as object)) {
-    return v as { year?: number; month: number; day: number };
+function coerceDate(
+  v: string | { year?: number; month: number; day: number },
+): { year?: number; month: number; day: number } {
+  if (typeof v !== "string") return v;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`googleContacts: invalid date "${v}"`);
   }
-  if (typeof v === "string") {
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) {
-      throw new Error(`googleContacts: invalid date "${v}"`);
-    }
-    return {
-      year: d.getUTCFullYear(),
-      month: d.getUTCMonth() + 1,
-      day: d.getUTCDate(),
-    };
-  }
-  throw new Error("googleContacts: date must be an ISO string or {year, month, day}");
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+  };
 }
 
-interface ContactInput {
-  // Name
-  givenName?: string;
-  familyName?: string;
-  middleName?: string;
-  honorificPrefix?: string;
-  honorificSuffix?: string;
-  // Collections
-  phoneNumbers?: Array<{ value: string; type?: string }>;
-  emailAddresses?: Array<{ value: string; type?: string }>;
-  addresses?: Array<Record<string, unknown>>;
-  organizations?: Array<Record<string, unknown>>;
-  relations?: Array<{ person: string; type?: string }>;
-  urls?: Array<{ value: string; type?: string }>;
-  events?: Array<{ date: unknown; type?: string }>;
-  userDefined?: Array<{ key: string; value: string }>;
-  // Single / structured
-  birthday?: unknown;
-  biography?: string;
-  // Memberships (group IDs or resourceNames)
-  groups?: string[];
-}
+type ContactInput = t.Static<t.TObject<typeof contactWritableFields>>;
 
 /**
  * Build a People-API `Person` body from our flat-ish input shape.
@@ -262,8 +202,10 @@ function buildPersonBody(
     if (input.givenName !== undefined) name.givenName = input.givenName;
     if (input.familyName !== undefined) name.familyName = input.familyName;
     if (input.middleName !== undefined) name.middleName = input.middleName;
-    if (input.honorificPrefix !== undefined) name.honorificPrefix = input.honorificPrefix;
-    if (input.honorificSuffix !== undefined) name.honorificSuffix = input.honorificSuffix;
+    if (input.honorificPrefix !== undefined)
+      name.honorificPrefix = input.honorificPrefix;
+    if (input.honorificSuffix !== undefined)
+      name.honorificSuffix = input.honorificSuffix;
     body.names = [name];
     touched.push("names");
   }
@@ -325,21 +267,16 @@ function buildPersonBody(
   return { body, touchedFields: touched };
 }
 
-function attachContactId<T extends { resourceName?: string }>(
-  obj: T,
-): T & { contactId?: string } {
-  return { ...obj, contactId: contactIdFromResource(obj.resourceName) };
+/** A person, with the ID its `resourceName` ends in as `contactId`. */
+function attachContactId(person: unknown) {
+  const fields = obj(person);
+  return { ...fields, contactId: contactIdFromResource(fields.resourceName) };
 }
 
 // ─── Plugin ──────────────────────────────────────────────────────
 
 const SCOPES = ["https://www.googleapis.com/auth/contacts"];
 
-const strictObject = <T extends t.TProperties>(properties: T, options = {}) =>
-  t.Object(properties, { ...options, additionalProperties: false });
-const optionalString = (description?: string) =>
-  t.Optional(t.String(description ? { description } : {}));
-const optionalBoolean = t.Optional(t.Boolean());
 const personField = stringEnum([...ALL_PERSON_FIELDS, "*"] as const);
 const personFields = t.Optional(
   t.Union([t.String(), t.Array(personField, { minItems: 1 })]),
@@ -363,9 +300,8 @@ const contactEvent = strictObject({
   type: optionalString(),
 });
 const userDefined = strictObject({ key: NonEmptyString, value: t.String() });
-// These two People API resources are intentionally extensible. Known fields are
-// typed, while additional provider fields remain available for forward
-// compatibility and parity with the plugin's existing passthrough behavior.
+// These two People API resources are open: the fields named here are typed,
+// and whatever else the API takes passes through.
 const address = t.Object(
   {
     formattedValue: optionalString(),
@@ -421,7 +357,6 @@ const contactWritableFields = {
   userDefined: t.Optional(t.Array(userDefined)),
   groups: t.Optional(t.Array(NonEmptyString)),
 };
-const writableContactKeys = Object.keys(contactWritableFields);
 
 const contactSchemas = {
   create: strictObject(contactWritableFields),
@@ -448,11 +383,15 @@ const contactSchemas = {
       fields: personFields,
       ...contactWritableFields,
     },
-    { anyOf: writableContactKeys.map((key) => ({ required: [key] })) },
+    atLeastOne(contactWritableFields),
   ),
   delete: strictObject({ contactId: Id }),
 };
 
+const groupChanges = {
+  name: optionalString(),
+  clientData: t.Optional(t.Array(clientData)),
+};
 const groupSchemas = {
   list: strictObject({
     returnAll: optionalBoolean,
@@ -469,13 +408,8 @@ const groupSchemas = {
     clientData: t.Optional(t.Array(clientData)),
   }),
   update: strictObject(
-    {
-      groupId: Id,
-      name: optionalString(),
-      clientData: t.Optional(t.Array(clientData)),
-      etag: optionalString(),
-    },
-    { anyOf: [{ required: ["name"] }, { required: ["clientData"] }] },
+    { groupId: Id, etag: optionalString(), ...groupChanges },
+    atLeastOne(groupChanges),
   ),
   delete: strictObject({ groupId: Id, deleteContacts: optionalBoolean }),
 };
@@ -487,18 +421,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
 
   rl.setOAuth(googleOAuth("googleContacts", SCOPES, "GOOGLE_CONTACTS"));
 
-  rl.setConnectionSchema({
-    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
-    clientId: { type: "string", required: false, env: "GOOGLE_CONTACTS_CLIENT_ID" },
-    clientSecret: { type: "string", required: false, env: "GOOGLE_CONTACTS_CLIENT_SECRET" },
-    refreshToken: { type: "string", required: false, env: "GOOGLE_CONTACTS_REFRESH_TOKEN" },
-    serviceAccountJson: { type: "string", required: false, env: "GOOGLE_CONTACTS_SERVICE_ACCOUNT_JSON" },
-    serviceAccountEmail: { type: "string", required: false, env: "GOOGLE_CONTACTS_SERVICE_ACCOUNT_EMAIL" },
-    serviceAccountPrivateKey: { type: "string", required: false, env: "GOOGLE_CONTACTS_SERVICE_ACCOUNT_PRIVATE_KEY" },
-    serviceAccountSubject: { type: "string", required: false, env: "GOOGLE_CONTACTS_SERVICE_ACCOUNT_SUBJECT" },
-    accessToken: { type: "string", required: false },
-    accessTokenExpiresAt: { type: "number", required: false },
-  });
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_CONTACTS")));
 
   // ── Contact ───────────────────────────────────────────
 
@@ -506,16 +429,11 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description: "Create a new contact",
     inputSchema: contactSchemas.create,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as unknown as ContactInput;
+    async execute(p, ctx) {
       const { body } = buildPersonBody(p);
-      const res = (await peopleRequest(
-        ctx,
-        "POST",
-        "/people:createContact",
-        body,
-      )) as { resourceName?: string };
-      return attachContactId(res);
+      return attachContactId(
+        await peopleRequest(ctx, "POST", "/people:createContact", body),
+      );
     },
   });
 
@@ -523,17 +441,13 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get a contact by ID",
     inputSchema: contactSchemas.get,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const resource = normalizeContactResource(p.contactId as string);
-      const res = (await peopleRequest(
-        ctx,
-        "GET",
-        `/${resource}`,
-        undefined,
-        { personFields: resolvePersonFields(p.fields) },
-      )) as { resourceName?: string };
-      return attachContactId(res);
+    async execute(p, ctx) {
+      const resource = normalizeContactResource(p.contactId);
+      return attachContactId(
+        await peopleRequest(ctx, "GET", `/${resource}`, undefined, {
+          personFields: resolvePersonFields(p.fields),
+        }),
+      );
     },
   });
 
@@ -542,10 +456,11 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "List contacts (people/me/connections) or search them. When `query` is set, hits people:searchContacts; otherwise returns the user's connections.",
     inputSchema: contactSchemas.list,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const useSearch = typeof p.query === "string" && p.query.length > 0;
-      const endpoint = useSearch ? "/people:searchContacts" : "/people/me/connections";
+    async execute(p, ctx) {
+      const useSearch = Boolean(p.query);
+      const endpoint = useSearch
+        ? "/people:searchContacts"
+        : "/people/me/connections";
       const fields = resolvePersonFields(p.fields);
       const qs: Record<string, unknown> = {};
       if (useSearch) {
@@ -557,9 +472,8 @@ export default function googleContacts(rl: RunlinePluginAPI) {
       }
       if (p.pageToken) qs.pageToken = p.pageToken;
 
-      // The People API caches searches server-side; first call often
-      // returns empty. Warm up when searching. Not needed for
-      // connections.list but cheap and identical request otherwise.
+      // The People API caches searches server-side, and a first search
+      // often answers nothing: an empty one warms the cache.
       if (useSearch && !p.pageToken) {
         await peopleRequest(ctx, "GET", endpoint, undefined, {
           query: "",
@@ -567,39 +481,19 @@ export default function googleContacts(rl: RunlinePluginAPI) {
         });
       }
 
-      const extractItems = (page: Record<string, unknown>): Record<string, unknown>[] => {
-        if (useSearch) {
-          const results = (page.results as Array<{ person: Record<string, unknown> }> | undefined) ?? [];
-          return results.map((r) => r.person);
-        }
-        return (page.connections as Record<string, unknown>[]) ?? [];
-      };
-
-      if (p.returnAll) {
-        // Use paginateAll-ish loop that knows about the two shapes.
-        const out: Record<string, unknown>[] = [];
-        const query: Record<string, unknown> = { ...qs, pageSize: 100 };
-        do {
-          const page = (await peopleRequest(ctx, "GET", endpoint, undefined, query)) as {
-            nextPageToken?: string;
-          };
-          out.push(...extractItems(page as Record<string, unknown>));
-          query.pageToken = page.nextPageToken;
-        } while (query.pageToken);
-        return out.map((c) =>
-          attachContactId(c as { resourceName?: string } & Record<string, unknown>),
+      // A search answers results that hold a person; a list, the people.
+      const key = useSearch ? "results" : "connections";
+      const people = (items: unknown[]) =>
+        items.map((item) =>
+          attachContactId(useSearch ? obj(item).person : item),
         );
-      }
 
+      if (p.returnAll) return people(await paginateAll(ctx, endpoint, key, qs));
       if (p.maxResults) qs.pageSize = p.maxResults;
-      const page = (await peopleRequest(ctx, "GET", endpoint, undefined, qs)) as Record<
-        string,
-        unknown
-      >;
-      const items = extractItems(page);
-      return items.map((c) =>
-        attachContactId(c as { resourceName?: string } & Record<string, unknown>),
+      const page = obj(
+        await peopleRequest(ctx, "GET", endpoint, undefined, qs),
       );
+      return people(arr(page[key]));
     },
   });
 
@@ -608,11 +502,10 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "Update a contact. Only supplied fields are sent; etag is resolved automatically if not provided.",
     inputSchema: contactSchemas.update,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const resource = normalizeContactResource(p.contactId as string);
+    async execute(p, ctx) {
+      const resource = normalizeContactResource(p.contactId);
 
-      let etag = p.etag as string | undefined;
+      let etag = p.etag;
       if (!etag) {
         const existing = (await peopleRequest(
           ctx,
@@ -624,25 +517,20 @@ export default function googleContacts(rl: RunlinePluginAPI) {
         etag = existing.etag;
       }
 
-      const { body, touchedFields } = buildPersonBody(p as unknown as ContactInput, etag);
-      // Filter to fields People API actually accepts on updatePersonFields.
-      const updateMask = touchedFields.filter((f) => UPDATABLE_PERSON_FIELDS.has(f));
-      if (updateMask.length === 0) {
-        throw new Error("googleContacts: no updatable fields supplied");
-      }
-
+      const { body, touchedFields } = buildPersonBody(p, etag);
       const qs: Record<string, unknown> = {
-        updatePersonFields: updateMask.join(","),
+        updatePersonFields: touchedFields.join(","),
         personFields: resolvePersonFields(p.fields),
       };
-      const res = (await peopleRequest(
-        ctx,
-        "PATCH",
-        `/${resource}:updateContact`,
-        body,
-        qs,
-      )) as { resourceName?: string };
-      return attachContactId(res);
+      return attachContactId(
+        await peopleRequest(
+          ctx,
+          "PATCH",
+          `/${resource}:updateContact`,
+          body,
+          qs,
+        ),
+      );
     },
   });
 
@@ -650,9 +538,8 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description: "Delete a contact",
     inputSchema: contactSchemas.delete,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const resource = normalizeContactResource(p.contactId as string);
+    async execute(p, ctx) {
+      const resource = normalizeContactResource(p.contactId);
       await peopleRequest(ctx, "DELETE", `/${resource}:deleteContact`);
       return { success: true };
     },
@@ -662,16 +549,23 @@ export default function googleContacts(rl: RunlinePluginAPI) {
 
   rl.registerAction("group.list", {
     access: "read",
-    description: "List contact groups (including system groups like 'myContacts' and 'starred')",
+    description:
+      "List contact groups (including system groups like 'myContacts' and 'starred')",
     inputSchema: groupSchemas.list,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.pageToken) qs.pageToken = p.pageToken;
       if (p.syncToken) qs.syncToken = p.syncToken;
-      if (p.returnAll) return paginateAll(ctx, "/contactGroups", "contactGroups", qs);
+      if (p.returnAll)
+        return paginateAll(ctx, "/contactGroups", "contactGroups", qs);
       if (p.maxResults) qs.pageSize = p.maxResults;
-      const res = (await peopleRequest(ctx, "GET", "/contactGroups", undefined, qs)) as {
+      const res = (await peopleRequest(
+        ctx,
+        "GET",
+        "/contactGroups",
+        undefined,
+        qs,
+      )) as {
         contactGroups?: unknown[];
       };
       return res.contactGroups ?? [];
@@ -682,9 +576,8 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get a contact group by ID",
     inputSchema: groupSchemas.get,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const resource = normalizeGroupResource(p.groupId as string);
+    async execute(p, ctx) {
+      const resource = normalizeGroupResource(p.groupId);
       const qs: Record<string, unknown> = {};
       if (p.maxMembers !== undefined) qs.maxMembers = p.maxMembers;
       return peopleRequest(ctx, "GET", `/${resource}`, undefined, qs);
@@ -695,8 +588,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description: "Create a contact group",
     inputSchema: groupSchemas.create,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {
         contactGroup: {
           name: p.name,
@@ -712,10 +604,9 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "Update a contact group. Pass a fresh `etag` or let the plugin resolve it automatically.",
     inputSchema: groupSchemas.update,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const resource = normalizeGroupResource(p.groupId as string);
-      let etag = p.etag as string | undefined;
+    async execute(p, ctx) {
+      const resource = normalizeGroupResource(p.groupId);
+      let etag = p.etag;
       if (!etag) {
         const existing = (await peopleRequest(ctx, "GET", `/${resource}`)) as {
           etag?: string;
@@ -732,9 +623,6 @@ export default function googleContacts(rl: RunlinePluginAPI) {
         contactGroup.clientData = p.clientData;
         updateGroupFields.push("clientData");
       }
-      if (updateGroupFields.length === 0) {
-        throw new Error("googleContacts: nothing to update on group");
-      }
       return peopleRequest(ctx, "PUT", `/${resource}`, {
         contactGroup,
         updateGroupFields: updateGroupFields.join(","),
@@ -747,9 +635,8 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "Delete a contact group. Pass `deleteContacts=true` to also delete every contact in the group.",
     inputSchema: groupSchemas.delete,
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const resource = normalizeGroupResource(p.groupId as string);
+    async execute(p, ctx) {
+      const resource = normalizeGroupResource(p.groupId);
       const qs: Record<string, unknown> = {};
       if (p.deleteContacts) qs.deleteContacts = p.deleteContacts;
       await peopleRequest(ctx, "DELETE", `/${resource}`, undefined, qs);

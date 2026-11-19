@@ -196,6 +196,7 @@ export type {
   ConnectionSchema,
   ConnectionSchemaField,
   InputField,
+  InputOf,
   InputSchema,
   LegacyConnectionSchema,
   OAuthConfig,

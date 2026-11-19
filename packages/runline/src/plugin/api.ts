@@ -1,22 +1,31 @@
 import type { CredentialDeclaration } from "../credentials/types.js";
 import type {
   ActionAccess,
+  ActionContext,
   ActionDef,
   ConnectionSchema,
+  InputOf,
   InputSchema,
+  LegacyInputSchema,
   OAuthConfig,
   PluginDef,
 } from "./types.js";
 
-export interface ActionDefinition {
+export interface ActionDefinition<S extends InputSchema = InputSchema> {
   access?: ActionAccess;
   description?: string;
-  inputSchema?: InputSchema;
-  execute: ActionDef["execute"];
+  inputSchema?: S;
+  execute: (
+    input: InputOf<S>,
+    ctx: ActionContext,
+  ) => unknown | Promise<unknown>;
 }
 
 export interface RunlinePluginAPI {
-  registerAction(name: string, def: ActionDefinition): void;
+  registerAction<const S extends InputSchema = LegacyInputSchema>(
+    name: string,
+    def: ActionDefinition<S>,
+  ): void;
   setConnectionSchema(schema: ConnectionSchema): void;
   setName(name: string): void;
   setVersion(version: string): void;
@@ -66,8 +75,13 @@ export function createPluginAPI(pluginId: string): {
     setVersion(v: string) {
       version = v;
     },
-    registerAction(actionName: string, def: ActionDefinition) {
-      actions.push({ name: actionName, ...def });
+    registerAction<S extends InputSchema>(
+      actionName: string,
+      def: ActionDefinition<S>,
+    ) {
+      // The engine validates input against a TypeBox schema before
+      // execute, so the handler's typed input holds at this boundary.
+      actions.push({ name: actionName, ...def } as ActionDef);
     },
     setConnectionSchema(schema: ConnectionSchema) {
       connectionConfigSchema = { ...schema };

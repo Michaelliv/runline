@@ -1,77 +1,66 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne, STRICT } from "../../_shared/schemas.js";
 import {
   compact,
   DocumentInput,
   extractDocumentId,
   PositivePoints,
+  points,
   RangeInput,
   RawGoogleObject,
+  range,
   runBatchUpdate,
-  STRICT_OBJECT,
 } from "./shared.js";
 
 export function registerFormattingActions(rl: RunlinePluginAPI) {
+  const paragraphStyleFields = {
+    alignment: t.Optional(
+      t.Union([
+        t.Literal("START"),
+        t.Literal("CENTER"),
+        t.Literal("END"),
+        t.Literal("JUSTIFIED"),
+      ]),
+    ),
+    namedStyleType: t.Optional(
+      t.Union([
+        t.Literal("NORMAL_TEXT"),
+        t.Literal("TITLE"),
+        t.Literal("SUBTITLE"),
+        t.Literal("HEADING_1"),
+        t.Literal("HEADING_2"),
+        t.Literal("HEADING_3"),
+        t.Literal("HEADING_4"),
+        t.Literal("HEADING_5"),
+        t.Literal("HEADING_6"),
+      ]),
+    ),
+    direction: t.Optional(
+      t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
+    ),
+    indentFirstLinePt: t.Optional(PositivePoints),
+    indentStartPt: t.Optional(PositivePoints),
+    indentEndPt: t.Optional(PositivePoints),
+    spaceAbovePt: t.Optional(PositivePoints),
+    spaceBelowPt: t.Optional(PositivePoints),
+    lineSpacing: t.Optional(t.Number({ minimum: 0 })),
+  };
   rl.registerAction("document.updateParagraphStyle", {
     access: "write",
     description:
       "Apply paragraph styling (alignment, named style, indents, spacing, direction) to the paragraphs intersecting the range.",
     inputSchema: t.Object(
+      { ...DocumentInput, ...RangeInput, ...paragraphStyleFields },
       {
-        ...DocumentInput,
-        ...RangeInput,
-        alignment: t.Optional(
-          t.Union([
-            t.Literal("START"),
-            t.Literal("CENTER"),
-            t.Literal("END"),
-            t.Literal("JUSTIFIED"),
-          ]),
-        ),
-        namedStyleType: t.Optional(
-          t.Union([
-            t.Literal("NORMAL_TEXT"),
-            t.Literal("TITLE"),
-            t.Literal("SUBTITLE"),
-            t.Literal("HEADING_1"),
-            t.Literal("HEADING_2"),
-            t.Literal("HEADING_3"),
-            t.Literal("HEADING_4"),
-            t.Literal("HEADING_5"),
-            t.Literal("HEADING_6"),
-          ]),
-        ),
-        direction: t.Optional(
-          t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
-        ),
-        indentFirstLinePt: t.Optional(PositivePoints),
-        indentStartPt: t.Optional(PositivePoints),
-        indentEndPt: t.Optional(PositivePoints),
-        spaceAbovePt: t.Optional(PositivePoints),
-        spaceBelowPt: t.Optional(PositivePoints),
-        lineSpacing: t.Optional(t.Number({ minimum: 0 })),
-      },
-      {
-        ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["alignment"] },
-          { required: ["namedStyleType"] },
-          { required: ["direction"] },
-          { required: ["indentFirstLinePt"] },
-          { required: ["indentStartPt"] },
-          { required: ["indentEndPt"] },
-          { required: ["spaceAbovePt"] },
-          { required: ["spaceBelowPt"] },
-          { required: ["lineSpacing"] },
-        ],
+        ...STRICT,
+        ...atLeastOne(paragraphStyleFields),
       },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const ps: Record<string, unknown> = {};
       const fields: string[] = [];
-      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
       if (p.alignment) {
         ps.alignment = p.alignment;
         fields.push("alignment");
@@ -85,43 +74,33 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
         fields.push("direction");
       }
       if (p.indentFirstLinePt !== undefined) {
-        ps.indentFirstLine = pt(p.indentFirstLinePt);
+        ps.indentFirstLine = points(p.indentFirstLinePt);
         fields.push("indentFirstLine");
       }
       if (p.indentStartPt !== undefined) {
-        ps.indentStart = pt(p.indentStartPt);
+        ps.indentStart = points(p.indentStartPt);
         fields.push("indentStart");
       }
       if (p.indentEndPt !== undefined) {
-        ps.indentEnd = pt(p.indentEndPt);
+        ps.indentEnd = points(p.indentEndPt);
         fields.push("indentEnd");
       }
       if (p.spaceAbovePt !== undefined) {
-        ps.spaceAbove = pt(p.spaceAbovePt);
+        ps.spaceAbove = points(p.spaceAbovePt);
         fields.push("spaceAbove");
       }
       if (p.spaceBelowPt !== undefined) {
-        ps.spaceBelow = pt(p.spaceBelowPt);
+        ps.spaceBelow = points(p.spaceBelowPt);
         fields.push("spaceBelow");
       }
       if (p.lineSpacing !== undefined) {
         ps.lineSpacing = p.lineSpacing;
         fields.push("lineSpacing");
       }
-      if (fields.length === 0) {
-        throw new Error(
-          "googleDocs.document.updateParagraphStyle: at least one property required",
-        );
-      }
       return runBatchUpdate(ctx, documentId, [
         {
           updateParagraphStyle: {
-            range: compact({
-              startIndex: p.startIndex,
-              endIndex: p.endIndex,
-              segmentId: p.segmentId,
-              tabId: p.tabId,
-            }),
+            range: range(p),
             paragraphStyle: ps,
             fields: fields.join(","),
           },
@@ -141,11 +120,10 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
         fields: t.String({ minLength: 1 }),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         updateNamedStyle: compact({
           namedStyle: p.namedStyle,

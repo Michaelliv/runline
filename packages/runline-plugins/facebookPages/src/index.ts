@@ -23,12 +23,15 @@ import {
   unixTime,
   url,
 } from "../../_shared/metaGraph.js";
-import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  STRICT,
+  stringEnum,
+} from "../../_shared/schemas.js";
 import { facebookPagesCredential } from "./credentials.js";
 
 const PLUGIN = "facebookPages";
-const STRICT = { additionalProperties: false } as const;
-type In<S extends t.TSchema> = t.Static<S>;
 
 /** What Meta's documented failures mean for the call that got them. */
 const HINTS: Record<number, string> = {
@@ -354,7 +357,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "The Page's details: name, about, category, link, website, and like and follower counts.",
     inputSchema: pageGet,
     async execute(input, ctx) {
-      const { fields } = input as In<typeof pageGet>;
+      const { fields } = input;
       return node(ctx, PAGE, fields ?? PAGE_FIELDS);
     },
   });
@@ -365,7 +368,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "The Page's metrics over time, such as reach and paid impressions. Meta keeps them 2 years, and answers nothing without the read_insights permission.",
     inputSchema: pageInsights,
     async execute(input, ctx) {
-      const { metric, ...query } = input as In<typeof pageInsights>;
+      const { metric, ...query } = input;
       return edge(ctx, `${PAGE}/insights`, {
         metric: metric.join(","),
         ...query,
@@ -381,7 +384,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       return graph(ctx, {
         method: "POST",
         path: `${PAGE}/blocked`,
-        json: input as In<typeof blockUser>,
+        json: input,
       });
     },
   });
@@ -392,7 +395,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "The Page's settings, each a name and whether it is on: USERS_CAN_POST, USERS_CAN_MESSAGE and the rest.",
     inputSchema: page,
     async execute(input, ctx) {
-      return edge(ctx, `${PAGE}/settings`, input as In<typeof page>);
+      return edge(ctx, `${PAGE}/settings`, input);
     },
   });
 
@@ -404,7 +407,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       return graph(ctx, {
         method: "POST",
         path: `${PAGE}/settings`,
-        json: input as In<typeof settingUpdate>,
+        json: input,
       });
     },
   });
@@ -415,7 +418,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "The people who can work on the Page, each with the tasks they may perform.",
     inputSchema: page,
     async execute(input, ctx) {
-      return edge(ctx, `${PAGE}/roles`, input as In<typeof page>);
+      return edge(ctx, `${PAGE}/roles`, input);
     },
   });
 
@@ -425,7 +428,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "The Page's reviews: each reviewer, whether they recommend it, the text and the time.",
     inputSchema: page,
     async execute(input, ctx) {
-      return edge(ctx, `${PAGE}/ratings`, input as In<typeof page>);
+      return edge(ctx, `${PAGE}/ratings`, input);
     },
   });
 
@@ -437,7 +440,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "The Page's feed, newest first, at most 100 a page: its own posts, scheduled and unpublished ones included (is_published tells), and posts by visitors.",
     inputSchema: postList,
     async execute(input, ctx) {
-      const { fields, ...query } = input as In<typeof postList>;
+      const { fields, ...query } = input;
       return edge(ctx, `${PAGE}/feed`, {
         fields: (fields ?? POST_FIELDS).join(","),
         ...query,
@@ -450,7 +453,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
     description: "Public posts by others that tag the Page.",
     inputSchema: postList,
     async execute(input, ctx) {
-      const { fields, ...query } = input as In<typeof postList>;
+      const { fields, ...query } = input;
       return edge(ctx, `${PAGE}/tagged`, {
         fields: (fields ?? POST_FIELDS).join(","),
         ...query,
@@ -464,7 +467,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "One post: its text, time, permalink, picture, type, share count and whether it is published.",
     inputSchema: postGet,
     async execute(input, ctx) {
-      const { postId, fields } = input as In<typeof postGet>;
+      const { postId, fields } = input;
       return node(ctx, postId, fields ?? POST_FIELDS);
     },
   });
@@ -474,8 +477,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
     description:
       "Post to the Page as the Page: text, a link, or several photos (attachedMedia), published now, scheduled, or left unpublished. Answers the post's id. A single photo with a caption is photo.create.",
     inputSchema: postCreate,
-    async execute(input, ctx) {
-      const post = input as In<typeof postCreate>;
+    async execute(post, ctx) {
       return graph(ctx, {
         method: "POST",
         path: `${PAGE}/feed`,
@@ -497,7 +499,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "Change a post's text, hide or show it, or publish an unpublished one. Meta lets an app change only the posts it made.",
     inputSchema: postUpdate,
     async execute(input, ctx) {
-      const { postId, ...changes } = input as In<typeof postUpdate>;
+      const { postId, ...changes } = input;
       return graph(ctx, {
         method: "POST",
         path: pathSegment(postId),
@@ -511,7 +513,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
     description: "Delete a post; it cannot be undone.",
     inputSchema: postOnly,
     async execute(input, ctx) {
-      const { postId } = input as In<typeof postOnly>;
+      const { postId } = input;
       return graph(ctx, { method: "DELETE", path: pathSegment(postId) });
     },
   });
@@ -522,7 +524,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "A post's metrics, such as its reactions by kind. For public posts the Page itself made.",
     inputSchema: postInsights,
     async execute(input, ctx) {
-      const { postId, metric, ...query } = input as In<typeof postInsights>;
+      const { postId, metric, ...query } = input;
       return edge(ctx, `${pathSegment(postId)}/insights`, {
         metric: metric.join(","),
         ...query,
@@ -536,7 +538,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "Add a photo to the Page from a public URL or a local file, as a post with its caption, scheduled, or unpublished for a multi-photo post (post.create attachedMedia). Answers the photo's id, and post_id when it made a post.",
     inputSchema: photoCreate,
     async execute(input, ctx) {
-      const { contentPath, ...parameters } = input as In<typeof photoCreate>;
+      const { contentPath, ...parameters } = input;
       const path = `${PAGE}/photos`;
       if (contentPath === undefined)
         return graph(ctx, { method: "POST", path, json: snake(parameters) });
@@ -570,7 +572,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "The comments on a post or photo, or the replies to a comment. Each comment's from.id is its author's Page-scoped ID.",
     inputSchema: commentList,
     async execute(input, ctx) {
-      const { objectId, fields, ...query } = input as In<typeof commentList>;
+      const { objectId, fields, ...query } = input;
       return edge(ctx, `${pathSegment(objectId)}/comments`, {
         fields: (fields ?? COMMENT_FIELDS).join(","),
         ...query,
@@ -584,7 +586,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "One comment: its text, author, time, like and reply counts, and the comment it replies to.",
     inputSchema: commentGet,
     async execute(input, ctx) {
-      const { commentId, fields } = input as In<typeof commentGet>;
+      const { commentId, fields } = input;
       return node(ctx, commentId, fields ?? COMMENT_FIELDS);
     },
   });
@@ -595,7 +597,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "Comment as the Page on a post or photo, or reply to a comment: text, an image or a GIF. Answers the comment's id.",
     inputSchema: commentCreate,
     async execute(input, ctx) {
-      const { objectId, ...content } = input as In<typeof commentCreate>;
+      const { objectId, ...content } = input;
       return graph(ctx, {
         method: "POST",
         path: `${pathSegment(objectId)}/comments`,
@@ -610,7 +612,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
       "Change the text of a comment the Page made, or hide or show a comment on the Page.",
     inputSchema: commentUpdate,
     async execute(input, ctx) {
-      const { commentId, ...changes } = input as In<typeof commentUpdate>;
+      const { commentId, ...changes } = input;
       return graph(ctx, {
         method: "POST",
         path: pathSegment(commentId),
@@ -624,7 +626,7 @@ export default function facebookPages(rl: RunlinePluginAPI) {
     description: "Delete a comment on the Page; it cannot be undone.",
     inputSchema: commentOnly,
     async execute(input, ctx) {
-      const { commentId } = input as In<typeof commentOnly>;
+      const { commentId } = input;
       return graph(ctx, { method: "DELETE", path: pathSegment(commentId) });
     },
   });

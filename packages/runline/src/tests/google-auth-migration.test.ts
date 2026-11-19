@@ -6,9 +6,11 @@ import { join } from "node:path";
 import { afterEach, it } from "node:test";
 import {
   googleDownload,
+  googleListAll,
   googleProbe,
   googleResponse,
 } from "../../../runline-plugins/_shared/googleAuth.js";
+import { rgbColor } from "../../../runline-plugins/_shared/googleColor.js";
 import gmail from "../../../runline-plugins/gmail/src/index.js";
 import googleAppsScript from "../../../runline-plugins/googleAppsScript/src/index.js";
 import googleCalendar from "../../../runline-plugins/googleCalendar/src/index.js";
@@ -116,9 +118,11 @@ it("never replays writes or retries quota/server/network failures, renews a reje
           ctx,
         ),
       ),
-      (error: Error) => {
+      (error: Error & { status?: number }) => {
         assert.ok(error.message.includes("Before retrying"));
         assert.ok(!error.message.includes("SECRET"));
+        // The guidance joins the failure; a host still reads its status.
+        assert.equal(error.status, status);
         return true;
       },
     );
@@ -139,6 +143,56 @@ it("never replays writes or retries quota/server/network failures, renews a reje
     );
     assert.equal(calls, 1);
   }
+});
+
+it("a failed call names Google's status and reason, on JSON calls and Drive's own alike", async () => {
+  const denied = () =>
+    Response.json(
+      {
+        error: {
+          status: "PERMISSION_DENIED",
+          message: "SECRET",
+          details: [{ reason: "SERVICE_DISABLED" }],
+        },
+      },
+      { status: 403 },
+    );
+  const expected = (plugin: string) => ({
+    message: `${plugin}: request failed (HTTP 403 PERMISSION_DENIED.SERVICE_DISABLED)`,
+    status: 403,
+  });
+  mock(denied);
+  await assert.rejects(
+    Promise.resolve(
+      action(googleTasks, "taskList.list").execute({}, await context()),
+    ),
+    expected("googleTasks"),
+  );
+  for (const [name, input] of [
+    ["file.upload", { content: "bytes" }],
+    ["file.export", { fileId: "file", mimeType: "text/plain" }],
+  ] as const)
+    await assert.rejects(
+      Promise.resolve(
+        action(googleDrive, name).execute(input, await context()),
+      ),
+      expected("googleDrive"),
+    );
+  // A blob's download fails the same way.
+  mock((url) =>
+    new URL(url).searchParams.get("alt") === "media"
+      ? denied()
+      : Response.json({ name: "f", mimeType: "text/plain" }),
+  );
+  await assert.rejects(
+    Promise.resolve(
+      action(googleDrive, "file.download").execute(
+        { fileId: "file" },
+        await context(),
+      ),
+    ),
+    expected("googleDrive"),
+  );
 });
 
 it("network errors are sanitized without automatic retry", async () => {
@@ -637,4 +691,106 @@ it("308 with Location is a redirect, not an upload acknowledgement", async () =>
     ),
     { code: "transport_failed" },
   );
+});
+
+it("a list is read page by page until no token follows", async () => {
+  const asked: Record<string, unknown>[] = [];
+  const pages: Record<string, unknown>[] = [
+    { items: [{ id: 1 }], nextPageToken: "second" },
+    { nextPageToken: "third" },
+    { items: [{ id: 2 }, { id: 3 }] },
+  ];
+  const items = await googleListAll(
+    async (query) => {
+      asked.push({ ...query });
+      return pages[asked.length - 1];
+    },
+    "items",
+    { pageSize: 2, pageToken: "first" },
+  );
+  assert.deepEqual(items, [{ id: 1 }, { id: 2 }, { id: 3 }]);
+  assert.deepEqual(
+    asked.map((query) => query.pageToken),
+    ["first", "second", "third"],
+  );
+  assert.ok(asked.every((query) => query.pageSize === 2));
+});
+
+it("a Drive comment list follows its pages at its default page size", async () => {
+  const urls: string[] = [];
+  mock((url) => {
+    urls.push(url);
+    return Response.json(
+      url.includes("pageToken=next")
+        ? { comments: [{ id: "b" }] }
+        : { comments: [{ id: "a" }], nextPageToken: "next" },
+    );
+  });
+  const answer = await action(googleDrive, "comment.list").execute(
+    { fileId: "file" },
+    await context(),
+  );
+  assert.deepEqual(answer, {
+    fileId: "file",
+    count: 2,
+    comments: [{ id: "a" }, { id: "b" }],
+  });
+  assert.equal(urls.length, 2);
+  assert.ok(urls.every((url) => url.includes("pageSize=100")));
+});
+
+it("a share with an empty message sends no message", async () => {
+  let asked = "";
+  mock((url) => {
+    asked = url;
+    return Response.json({ id: "permission" });
+  });
+  await action(googleDrive, "file.share").execute(
+    {
+      fileId: "file",
+      role: "reader",
+      type: "user",
+      emailAddress: "a@example.com",
+      emailMessage: "",
+      sendNotificationEmail: false,
+    },
+    await context(),
+  );
+  const query = new URL(asked).searchParams;
+  assert.equal(query.has("emailMessage"), false);
+  assert.equal(query.get("sendNotificationEmail"), "false");
+});
+
+it("a conditional format keeps a style it turns off", async () => {
+  let body: Record<string, unknown> = {};
+  mock((_url, init) => {
+    body = JSON.parse(String(init.body));
+    return Response.json({});
+  });
+  await action(googleSheets, "conditionalFormat.add").execute(
+    {
+      spreadsheetId: "sheet",
+      sheet: 0,
+      range: "A1:B2",
+      condition: { type: "NOT_BLANK" },
+      bold: false,
+      backgroundColorHex: "#f00",
+    },
+    await context(),
+  );
+  const requests = body.requests as Array<{
+    addConditionalFormatRule: { rule: { booleanRule: { format: unknown } } };
+  }>;
+  assert.deepEqual(
+    requests[0].addConditionalFormatRule.rule.booleanRule.format,
+    {
+      backgroundColor: { red: 1, green: 0, blue: 0 },
+      textFormat: { bold: false },
+    },
+  );
+});
+
+it("a hex colour is its channels from 0 to 1, short or long", () => {
+  assert.deepEqual(rgbColor("#0f0"), { red: 0, green: 1, blue: 0 });
+  assert.deepEqual(rgbColor("0000ff"), { red: 0, green: 0, blue: 1 });
 });

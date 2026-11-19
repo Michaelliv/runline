@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { STRICT } from "../../_shared/schemas.js";
 import {
   buildLocation,
   DocumentInput,
@@ -7,8 +8,8 @@ import {
   LOCATION_REQUIREMENT,
   LocationInput,
   PositivePoints,
+  points,
   runBatchUpdate,
-  STRICT_OBJECT,
 } from "./shared.js";
 
 const PublicImageUri = t.String({
@@ -30,29 +31,22 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
         widthPt: t.Optional(PositivePoints),
         heightPt: t.Optional(PositivePoints),
       },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       const req: Record<string, unknown> = {
-        ...buildLocation(
-          kind,
-          p.segmentId as string,
-          p.index as number,
-          p.tabId as string | undefined,
-        ),
+        ...buildLocation(p),
         uri: p.uri,
       };
       if (p.widthPt !== undefined || p.heightPt !== undefined) {
         req.objectSize = {};
         if (p.widthPt !== undefined)
-          (req.objectSize as Record<string, unknown>).width = pt(p.widthPt);
+          (req.objectSize as Record<string, unknown>).width = points(p.widthPt);
         if (p.heightPt !== undefined)
-          (req.objectSize as Record<string, unknown>).height = pt(p.heightPt);
+          (req.objectSize as Record<string, unknown>).height = points(
+            p.heightPt,
+          );
       }
       return runBatchUpdate(ctx, documentId, [{ insertInlineImage: req }]);
     },
@@ -70,18 +64,16 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
         imageReplaceMethod: t.Optional(t.Literal("CENTER_CROP")),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+    async execute(p, ctx) {
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
           replaceImage: {
             imageObjectId: p.imageObjectId,
             uri: p.uri,
-            imageReplaceMethod:
-              (p.imageReplaceMethod as string | undefined) ?? "CENTER_CROP",
+            imageReplaceMethod: p.imageReplaceMethod ?? "CENTER_CROP",
             ...(p.tabId ? { tabId: p.tabId } : {}),
           },
         },

@@ -11,8 +11,6 @@ export const PLUGIN = "instagram";
 
 // ─── Inputs ─────────────────────────────────────────────────────
 
-export const STRICT = { additionalProperties: false } as const;
-
 const NUMERIC_ID = "^\\d+$";
 /** A numeric Graph ID: an account, a media object, a comment, a container. */
 export const id = (description: string, options: { env?: string } = {}) =>

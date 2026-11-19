@@ -1,4 +1,4 @@
-import type { TSchema } from "typebox";
+import type { Static, TSchema } from "typebox";
 import type { OAuth2Definition } from "../auth/types.js";
 import type { ConnectionUpdate } from "../connections/types.js";
 import type { CredentialBroker } from "../credentials/transport.js";
@@ -14,6 +14,14 @@ export interface InputField {
 export type LegacyInputSchema = Record<string, InputField>;
 export type TypedInputSchema = TSchema;
 export type InputSchema = LegacyInputSchema | TypedInputSchema;
+
+/**
+ * What `execute` receives for an action declared with `S`. A TypeBox
+ * schema is validated before the handler runs, so its static type holds.
+ * A legacy field map, or no schema at all, is not validated: the handler
+ * gets whatever the caller sent.
+ */
+export type InputOf<S> = S extends { "~kind": string } ? Static<S> : unknown;
 
 export interface ConnectionSchemaField {
   type: string;

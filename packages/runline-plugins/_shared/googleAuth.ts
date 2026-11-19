@@ -3,10 +3,11 @@ import {
   AuthError,
   brokerFor,
   downloadResource,
+  type ErrorEnvelope,
   type HttpMethod,
   jsonAnswer,
   type OAuthConfig,
-  requestFailed,
+  responseFailed,
 } from "runline";
 import {
   GOOGLE_GRANT,
@@ -15,6 +16,7 @@ import {
   googleResources,
   googleServices,
 } from "./googleCredentials.js";
+import { arr, obj } from "./provider.js";
 
 export type { GoogleAuthConfig } from "./googleCredentials.js";
 export { googleCredential } from "./googleCredentials.js";
@@ -119,7 +121,8 @@ export async function googleResponse(
       for (const entry of Array.isArray(value) ? value : [value])
         params.append(key, String(entry));
     }
-    path = `${separator < 0 ? path : path.slice(0, separator)}?${params}`;
+    const bare = separator < 0 ? path : path.slice(0, separator);
+    path = params.size ? `${bare}?${params}` : bare;
   }
   return brokerFor(ctx, googleCredential(plugin, scopes)).request({
     target,
@@ -128,6 +131,68 @@ export async function googleResponse(
     headers: init.headers,
     body: init.body,
   });
+}
+
+/**
+ * What Google's error envelope names: its status (`PERMISSION_DENIED`),
+ * with the reason an ErrorInfo detail or an older API's `errors` entry
+ * gives (`PERMISSION_DENIED.SERVICE_DISABLED`), and the request fields a
+ * BadRequest detail faults. Its messages are never read: they can echo
+ * what was sent.
+ */
+export function googleFailure(body: unknown): ErrorEnvelope {
+  const error = obj(obj(body).error);
+  const details = arr(error.details).map(obj);
+  const reason = [...details, ...arr(error.errors).map(obj)]
+    .map((entry) => entry.reason)
+    .find((value) => typeof value === "string");
+  const status = typeof error.status === "string" ? error.status : undefined;
+  return {
+    code: status && reason ? `${status}.${reason}` : (status ?? reason),
+    param: details.flatMap((detail) =>
+      arr(detail.fieldViolations).map((violation) => obj(violation).field),
+    ),
+  };
+}
+
+/** A failed Google response, by its status and what `googleFailure` reads. */
+export function googleFailed(
+  plugin: string,
+  response: Response,
+): Promise<Error & { status: number }> {
+  return responseFailed(plugin, response, googleFailure);
+}
+
+/**
+ * A Google JSON call's response, whatever its status: the body sent as
+ * JSON and a JSON answer asked for, beside any headers the call adds.
+ */
+export function googleJsonResponse(
+  ctx: ActionContext,
+  plugin: string,
+  scopes: string[],
+  method: string,
+  url: string,
+  body?: unknown,
+  query?: Record<string, unknown>,
+  headers: Record<string, string> = {},
+): Promise<Response> {
+  return googleResponse(
+    ctx,
+    plugin,
+    scopes,
+    url,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...headers,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    query,
+  );
 }
 
 /** A Google JSON request that must succeed; its answer is read by `jsonAnswer`. */
@@ -140,23 +205,36 @@ export async function googleJsonRequest<T = unknown>(
   body?: unknown,
   query?: Record<string, unknown>,
 ): Promise<T> {
-  const response = await googleResponse(
+  const response = await googleJsonResponse(
     ctx,
     plugin,
     scopes,
+    method,
     url,
-    {
-      method,
-      headers: {
-        Accept: "application/json",
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    },
+    body,
     query,
   );
-  if (!response.ok) throw requestFailed(plugin, response.status);
+  if (!response.ok) throw await googleFailed(plugin, response);
   return jsonAnswer<T>(response);
+}
+
+/**
+ * Every item of a Google list: `request` answers the page a query asks
+ * for, and each page's `nextPageToken` asks for the one after it.
+ */
+export async function googleListAll(
+  request: (query: Record<string, unknown>) => Promise<unknown>,
+  key: string,
+  query: Record<string, unknown>,
+): Promise<Record<string, unknown>[]> {
+  const items: Record<string, unknown>[] = [];
+  const next = { ...query };
+  do {
+    const page = obj(await request(next));
+    items.push(...(arr(page[key]) as Record<string, unknown>[]));
+    next.pageToken = page.nextPageToken;
+  } while (next.pageToken);
+  return items;
 }
 
 export async function googleProbe(

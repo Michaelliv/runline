@@ -31,6 +31,7 @@ import {
   SEND_FILE_NOTE,
   writeImageFile,
 } from "../../_shared/mediaFile.js";
+import { STRICT } from "../../_shared/schemas.js";
 import { googleImageCredential } from "./credentials.js";
 
 /** The model as one path segment before the fixed :generateContent verb. */
@@ -45,19 +46,6 @@ function generateContent(
     method: "POST",
     json: body,
   }) as Promise<GeminiResponse>;
-}
-
-interface CreateInput {
-  prompt: string;
-  model?: string;
-  saveDir?: string;
-}
-
-interface EditInput {
-  prompt: string;
-  imagePath: string;
-  model?: string;
-  saveDir?: string;
 }
 
 interface GeminiPart {
@@ -133,14 +121,9 @@ export default function googleImage(rl: RunlinePluginAPI) {
           }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as CreateInput;
-      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
-        throw new Error("googleImage: prompt is required");
-      }
-
+    async execute(p, ctx) {
       const model = p.model ?? "gemini-2.5-flash-image";
       const data = await generateContent(ctx, model, {
         contents: [{ parts: [{ text: p.prompt }] }],
@@ -179,13 +162,9 @@ export default function googleImage(rl: RunlinePluginAPI) {
           }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
-    async execute(input, ctx) {
-      const p = (input ?? {}) as EditInput;
-      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
-        throw new Error("googleImage: prompt is required");
-      }
+    async execute(p, ctx) {
       const img = await readImageInput(p.imagePath, "googleImage");
 
       const model = p.model ?? "gemini-2.5-flash-image";
