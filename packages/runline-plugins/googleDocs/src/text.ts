@@ -1,12 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { atLeastOne } from "../../_shared/schemas.js";
+import { HexColor, rgbColor } from "../../_shared/googleColor.js";
+import { atLeastOne, STRICT } from "../../_shared/schemas.js";
 import {
   buildLocation,
   DocumentInput,
   extractDocumentId,
-  HexColor,
-  hexToRgbF,
   LOCATION_REQUIREMENT,
   LocationInput,
   PositivePoints,
@@ -14,12 +13,11 @@ import {
   RangeInput,
   range,
   runBatchUpdate,
-  STRICT_OBJECT,
 } from "./shared.js";
 
 const PersonProperties = t.Object(
   { email: t.String({ minLength: 1 }) },
-  STRICT_OBJECT,
+  STRICT,
 );
 const RichLinkProperties = t.Object(
   {
@@ -27,7 +25,7 @@ const RichLinkProperties = t.Object(
     mimeType: t.Optional(t.String({ minLength: 1 })),
     title: t.Optional(t.String({ minLength: 1 })),
   },
-  STRICT_OBJECT,
+  STRICT,
 );
 const DateElementProperties = t.Object(
   {
@@ -52,7 +50,7 @@ const DateElementProperties = t.Object(
       ]),
     ),
   },
-  STRICT_OBJECT,
+  STRICT,
 );
 
 const BulletPreset = t.Union([
@@ -80,14 +78,12 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       "Insert text at a specific index, or at the end of a segment (body/header/footer/footnote).",
     inputSchema: t.Object(
       { ...DocumentInput, text: t.String(), ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
-      const locObj = buildLocation(kind, p.segmentId, p.index, p.tabId);
       return runBatchUpdate(ctx, documentId, {
-        insertText: { text: p.text, ...locObj },
+        insertText: { text: p.text, ...buildLocation(p) },
       });
     },
   });
@@ -107,7 +103,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
           t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
         ),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -128,7 +124,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteContentRange", {
     access: "write",
     description: "Delete text between two indices in a segment.",
-    inputSchema: t.Object({ ...DocumentInput, ...RangeInput }, STRICT_OBJECT),
+    inputSchema: t.Object({ ...DocumentInput, ...RangeInput }, STRICT),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
@@ -143,7 +139,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       "Apply a bullet preset to paragraphs spanning a range. Presets: BULLET_DISC_CIRCLE_SQUARE, BULLET_DIAMONDX_ARROW3D_SQUARE, BULLET_CHECKBOX, NUMBERED_DECIMAL_ALPHA_ROMAN, NUMBERED_DECIMAL_NESTED, etc.",
     inputSchema: t.Object(
       { ...DocumentInput, bulletPreset: BulletPreset, ...RangeInput },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -159,7 +155,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteParagraphBullets", {
     access: "write",
     description: "Remove bullets from paragraphs in a range.",
-    inputSchema: t.Object({ ...DocumentInput, ...RangeInput }, STRICT_OBJECT),
+    inputSchema: t.Object({ ...DocumentInput, ...RangeInput }, STRICT),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
@@ -178,15 +174,14 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         personProperties: PersonProperties,
         ...LocationInput,
       },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
         insertPerson: {
           personProperties: p.personProperties,
-          ...buildLocation(kind, p.segmentId, p.index, p.tabId),
+          ...buildLocation(p),
         },
       });
     },
@@ -202,15 +197,14 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         richLinkProperties: RichLinkProperties,
         ...LocationInput,
       },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
         insertRichLink: {
           richLinkProperties: p.richLinkProperties,
-          ...buildLocation(kind, p.segmentId, p.index, p.tabId),
+          ...buildLocation(p),
         },
       });
     },
@@ -226,17 +220,16 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         dateElementProperties: t.Optional(DateElementProperties),
         ...LocationInput,
       },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
         insertDate: {
           ...(p.dateElementProperties
             ? { dateElementProperties: p.dateElementProperties }
             : {}),
-          ...buildLocation(kind, p.segmentId, p.index, p.tabId),
+          ...buildLocation(p),
         },
       });
     },
@@ -260,7 +253,7 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       { ...DocumentInput, ...RangeInput, ...textStyleFields },
       {
-        ...STRICT_OBJECT,
+        ...STRICT,
         ...atLeastOne(textStyleFields),
       },
     ),
@@ -293,12 +286,12 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         fields.push("weightedFontFamily");
       }
       if (p.foregroundColorHex) {
-        const c = hexToRgbF(p.foregroundColorHex);
+        const c = rgbColor(p.foregroundColorHex);
         ts.foregroundColor = { color: { rgbColor: c } };
         fields.push("foregroundColor");
       }
       if (p.backgroundColorHex) {
-        const c = hexToRgbF(p.backgroundColorHex);
+        const c = rgbColor(p.backgroundColorHex);
         ts.backgroundColor = { color: { rgbColor: c } };
         fields.push("backgroundColor");
       }

@@ -31,6 +31,7 @@ import {
   SEND_FILE_NOTE,
   writeImageFile,
 } from "../../_shared/mediaFile.js";
+import { STRICT } from "../../_shared/schemas.js";
 import { googleImageCredential } from "./credentials.js";
 
 /** The model as one path segment before the fixed :generateContent verb. */
@@ -120,7 +121,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
           }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const model = p.model ?? "gemini-2.5-flash-image";
@@ -161,7 +162,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
           }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const img = await readImageInput(p.imagePath, "googleImage");

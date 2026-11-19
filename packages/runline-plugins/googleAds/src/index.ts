@@ -26,7 +26,7 @@ import {
   googleConnection,
   RawGoogleObject,
 } from "../../_shared/googleSchemas.js";
-import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, STRICT, stringEnum } from "../../_shared/schemas.js";
 import {
   type Account,
   account,
@@ -48,7 +48,6 @@ import {
   resourceId,
   resourceName,
   SCOPES,
-  STRICT,
   type Status,
   search,
   servingStatus,

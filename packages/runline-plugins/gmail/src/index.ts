@@ -30,6 +30,7 @@ import { renderEmailJsx } from "../../_shared/emailJsx.js";
 import {
   googleCredential,
   googleJsonRequest,
+  googleListAll,
   googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
@@ -38,7 +39,7 @@ import {
   Id,
   NonEmptyString,
 } from "../../_shared/googleSchemas.js";
-import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, STRICT, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -108,24 +109,17 @@ async function gmailRequest(
   }
 }
 
-async function paginateAll(
+function paginateAll(
   ctx: Ctx,
   path: string,
   key: string,
   qs: Record<string, unknown>,
 ): Promise<Record<string, unknown>[]> {
-  const out: Record<string, unknown>[] = [];
-  const query: Record<string, unknown> = { ...qs, maxResults: 100 };
-  do {
-    const page = (await gmailRequest(ctx, "GET", path, undefined, query)) as {
-      [k: string]: unknown;
-      nextPageToken?: string;
-    };
-    const items = (page[key] as Record<string, unknown>[]) ?? [];
-    out.push(...items);
-    query.pageToken = page.nextPageToken;
-  } while (query.pageToken);
-  return out;
+  return googleListAll(
+    (query) => gmailRequest(ctx, "GET", path, undefined, query),
+    key,
+    { ...qs, maxResults: 100 },
+  );
 }
 
 // ─── MIME encoding ───────────────────────────────────────────────
@@ -152,7 +146,6 @@ function randomBoundary(): string {
 function needsEncoding(s: string): boolean {
   // Anything outside printable ASCII gets MIME-encoded-word treatment.
   // Covers non-ASCII subjects/names and a handful of structural chars.
-  // eslint-disable-next-line no-control-regex
   return /[^\x20-\x7e]/.test(s);
 }
 
@@ -264,51 +257,30 @@ export function encodeEmail(email: EmailInput): string {
     normalizeAttachment(att, index),
   );
   assertAttachmentPayloadFits(atts);
-  const hasAtt = atts.length > 0;
-  const hasBoth = text && html;
 
-  let bodyBlock: string;
-  let rootType: string;
-
-  if (!hasAtt && !hasBoth) {
-    // Flat body.
-    const mime = html ? "text/html" : "text/plain";
-    const content = html || text || "";
-    bodyBlock = textPart(content, mime);
-    rootType = ""; // already present in bodyBlock
-  } else if (!hasAtt && hasBoth) {
-    const altBoundary = randomBoundary();
-    rootType = `Content-Type: multipart/alternative; boundary="${altBoundary}"${CRLF}${CRLF}`;
-    bodyBlock =
-      `--${altBoundary}${CRLF}${textPart(text, "text/plain")}` +
-      `--${altBoundary}${CRLF}${textPart(html, "text/html")}` +
-      `--${altBoundary}--${CRLF}`;
+  // The body: both renderings as alternatives, or the one there is.
+  let body: string;
+  if (text && html) {
+    const boundary = randomBoundary();
+    body =
+      `Content-Type: multipart/alternative; boundary="${boundary}"${CRLF}${CRLF}` +
+      `--${boundary}${CRLF}${textPart(text, "text/plain")}` +
+      `--${boundary}${CRLF}${textPart(html, "text/html")}` +
+      `--${boundary}--${CRLF}`;
   } else {
-    // Attachments present → multipart/mixed wrapping.
-    const mixedBoundary = randomBoundary();
-    rootType = `Content-Type: multipart/mixed; boundary="${mixedBoundary}"${CRLF}${CRLF}`;
-    let inner: string;
-    if (hasBoth) {
-      const altBoundary = randomBoundary();
-      inner =
-        `Content-Type: multipart/alternative; boundary="${altBoundary}"${CRLF}${CRLF}` +
-        `--${altBoundary}${CRLF}${textPart(text, "text/plain")}` +
-        `--${altBoundary}${CRLF}${textPart(html, "text/html")}` +
-        `--${altBoundary}--${CRLF}`;
-    } else {
-      const mime = html ? "text/html" : "text/plain";
-      const content = html || text || "";
-      inner = textPart(content, mime);
-    }
-    bodyBlock =
-      `--${mixedBoundary}${CRLF}${inner}` +
-      atts
-        .map((a) => `--${mixedBoundary}${CRLF}${attachmentPart(a)}`)
-        .join("") +
-      `--${mixedBoundary}--${CRLF}`;
+    body = textPart(html || text, html ? "text/html" : "text/plain");
+  }
+  // Attachments wrap it in multipart/mixed.
+  if (atts.length > 0) {
+    const boundary = randomBoundary();
+    body =
+      `Content-Type: multipart/mixed; boundary="${boundary}"${CRLF}${CRLF}` +
+      `--${boundary}${CRLF}${body}` +
+      atts.map((a) => `--${boundary}${CRLF}${attachmentPart(a)}`).join("") +
+      `--${boundary}--${CRLF}`;
   }
 
-  const raw = `${headers.join("")}${rootType}${bodyBlock}`;
+  const raw = `${headers.join("")}${body}`;
   const rawBytes = Buffer.byteLength(raw, "utf-8");
   if (rawBytes > GMAIL_MAX_RAW_BYTES) {
     throw new Error(
@@ -319,6 +291,10 @@ export function encodeEmail(email: EmailInput): string {
 }
 
 // ─── Email address helpers ───────────────────────────────────────
+
+/** An address as a list takes it: `Name <a@x>` stays, a bare one is bracketed. */
+const bracketed = (address: string) =>
+  address.includes("<") && address.includes(">") ? address : `<${address}>`;
 
 /**
  * Normalize a comma-separated list of addresses into an RFC-5322
@@ -337,9 +313,7 @@ function normalizeAddressList(input: string | undefined): string | undefined {
       throw new Error(`gmail: invalid email address "${p}"`);
     }
   }
-  return parts
-    .map((p) => (p.includes("<") && p.includes(">") ? p : `<${p}>`))
-    .join(", ");
+  return parts.map(bracketed).join(", ");
 }
 
 // ─── Body resolution ─────────────────────────────────────────────
@@ -439,19 +413,15 @@ function buildListQuery(
   return qs;
 }
 
-function toGmailTimestamp(v: unknown): number | undefined {
-  if (v === undefined || v === null || v === "") return undefined;
-  if (typeof v === "number") {
-    // Accept either seconds or milliseconds; Gmail wants seconds.
+function toGmailTimestamp(v: string | number | undefined): number | undefined {
+  if (v === undefined) return undefined;
+  // Accept either seconds or milliseconds; Gmail wants seconds.
+  if (typeof v === "number")
     return v > 1e12 ? Math.floor(v / 1000) : Math.floor(v);
-  }
-  if (typeof v === "string") {
-    const parsed = Date.parse(v);
-    if (!Number.isNaN(parsed)) return Math.floor(parsed / 1000);
-    const num = Number(v);
-    if (!Number.isNaN(num)) return toGmailTimestamp(num);
-  }
-  return undefined;
+  const parsed = Date.parse(v);
+  if (!Number.isNaN(parsed)) return Math.floor(parsed / 1000);
+  const num = Number(v);
+  return Number.isNaN(num) ? undefined : toGmailTimestamp(num);
 }
 
 // ─── Simplified output ───────────────────────────────────────────
@@ -632,9 +602,7 @@ async function replyToMessage(
       seen.add(key);
       return true;
     })
-    .map((addr) =>
-      addr.includes("<") && addr.includes(">") ? addr : `<${addr}>`,
-    )
+    .map(bracketed)
     .join(", ");
 
   const email: EmailInput = {
@@ -667,9 +635,8 @@ const SCOPES = [
 
 // ─── Action input schemas ────────────────────────────────────────
 
-const strict = { additionalProperties: false } as const;
-const EmptyInput = t.Object({}, strict);
-const IdInput = t.Object({ id: Id }, strict);
+const EmptyInput = t.Object({}, STRICT);
+const IdInput = t.Object({ id: Id }, STRICT);
 const MessageFormat = stringEnum(["minimal", "full", "raw", "metadata"]);
 const ThreadFormat = stringEnum(["minimal", "full", "metadata"]);
 const ReadStatus = stringEnum(["read", "unread", "both"]);
@@ -691,7 +658,7 @@ const Attachment = t.Object(
     mimeType: t.Optional(t.String()),
     contentBase64: AttachmentContent,
   },
-  strict,
+  STRICT,
 );
 const Attachments = t.Array(Attachment);
 
@@ -729,7 +696,7 @@ const ReplyFields = {
   attachments: t.Optional(Attachments),
 };
 const ReplyOptions = {
-  ...strict,
+  ...STRICT,
   ...HasMessageContent,
   not: {
     required: ["replyToSenderOnly", "replyToRecipientsOnly"],
@@ -752,7 +719,7 @@ const ListFields = {
   includeSpamTrash: t.Optional(t.Boolean()),
   returnAll: t.Optional(t.Boolean()),
 };
-const ListInput = t.Object(ListFields, strict);
+const ListInput = t.Object(ListFields, STRICT);
 
 export default function gmail(rl: RunlinePluginAPI) {
   rl.setName("gmail");
@@ -784,7 +751,7 @@ export default function gmail(rl: RunlinePluginAPI) {
         threadId: t.Optional(Id),
         attachments: t.Optional(Attachments),
       },
-      { ...strict, ...HasMessageContent },
+      { ...STRICT, ...HasMessageContent },
     ),
     async execute(p, ctx) {
       const { text, html } = await resolveBody(p);
@@ -830,7 +797,7 @@ export default function gmail(rl: RunlinePluginAPI) {
           }),
         ),
       },
-      strict,
+      STRICT,
     ),
     async execute(p, ctx) {
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
@@ -915,7 +882,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.addLabels", {
     access: "write",
     description: "Add labels to a message",
-    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
+    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, STRICT),
     async execute({ id, labelIds }, ctx) {
       return gmailRequest(ctx, "POST", `/messages/${pathSegment(id)}/modify`, {
         addLabelIds: labelIds,
@@ -926,7 +893,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("message.removeLabels", {
     access: "write",
     description: "Remove labels from a message",
-    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
+    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, STRICT),
     async execute({ id, labelIds }, ctx) {
       return gmailRequest(ctx, "POST", `/messages/${pathSegment(id)}/modify`, {
         removeLabelIds: labelIds,
@@ -938,7 +905,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "Download an attachment by ID (returns {size, data} where data is base64url)",
-    inputSchema: t.Object({ messageId: Id, attachmentId: Id }, strict),
+    inputSchema: t.Object({ messageId: Id, attachmentId: Id }, STRICT),
     async execute({ messageId, attachmentId }, ctx) {
       return gmailRequest(
         ctx,
@@ -965,7 +932,7 @@ export default function gmail(rl: RunlinePluginAPI) {
           }),
         ),
       },
-      strict,
+      STRICT,
     ),
     async execute(p, ctx) {
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
@@ -1026,7 +993,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.addLabels", {
     access: "write",
     description: "Add labels to all messages in a thread",
-    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
+    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, STRICT),
     async execute({ id, labelIds }, ctx) {
       return gmailRequest(ctx, "POST", `/threads/${pathSegment(id)}/modify`, {
         addLabelIds: labelIds,
@@ -1037,7 +1004,7 @@ export default function gmail(rl: RunlinePluginAPI) {
   rl.registerAction("thread.removeLabels", {
     access: "write",
     description: "Remove labels from all messages in a thread",
-    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, strict),
+    inputSchema: t.Object({ id: Id, labelIds: LabelIds }, STRICT),
     async execute({ id, labelIds }, ctx) {
       return gmailRequest(ctx, "POST", `/threads/${pathSegment(id)}/modify`, {
         removeLabelIds: labelIds,
@@ -1091,7 +1058,7 @@ export default function gmail(rl: RunlinePluginAPI) {
         threadId: t.Optional(Id),
         attachments: t.Optional(Attachments),
       },
-      strict,
+      STRICT,
     ),
     async execute(p, ctx) {
       const from = p.from ?? p.fromAlias;
@@ -1138,7 +1105,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     description: "Get a draft by ID",
     inputSchema: t.Object(
       { id: Id, format: t.Optional(MessageFormat) },
-      strict,
+      STRICT,
     ),
     async execute(p, ctx) {
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
@@ -1163,7 +1130,7 @@ export default function gmail(rl: RunlinePluginAPI) {
         includeSpamTrash: t.Optional(t.Boolean()),
         returnAll: t.Optional(t.Boolean()),
       },
-      strict,
+      STRICT,
     ),
     async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
@@ -1205,7 +1172,7 @@ export default function gmail(rl: RunlinePluginAPI) {
         labelListVisibility: t.Optional(LabelListVisibility),
         messageListVisibility: t.Optional(MessageListVisibility),
       },
-      strict,
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = { name: p.name };
@@ -1260,7 +1227,7 @@ export default function gmail(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       { id: Id, ...labelChanges },
       {
-        ...strict,
+        ...STRICT,
         ...atLeastOne(labelChanges),
       },
     ),

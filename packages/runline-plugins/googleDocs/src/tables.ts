@@ -1,13 +1,12 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { atLeastOne } from "../../_shared/schemas.js";
+import { HexColor, rgbColor } from "../../_shared/googleColor.js";
+import { atLeastOne, STRICT } from "../../_shared/schemas.js";
 import {
   buildLocation,
   compact,
   DocumentInput,
   extractDocumentId,
-  HexColor,
-  hexToRgbF,
   LOCATION_REQUIREMENT,
   LocationInput,
   location,
@@ -15,7 +14,6 @@ import {
   points,
   runBatchUpdate,
   SegmentInput,
-  STRICT_OBJECT,
   TableLocationInput,
 } from "./shared.js";
 
@@ -52,16 +50,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         columns: PositiveSpan,
         ...LocationInput,
       },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
         insertTable: {
           rows: p.rows,
           columns: p.columns,
-          ...buildLocation(kind, p.segmentId, p.index, p.tabId),
+          ...buildLocation(p),
         },
       });
     },
@@ -77,7 +74,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...TableLocationInput,
         insertBelow: t.Optional(t.Boolean()),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -93,10 +90,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteTableRow", {
     access: "write",
     description: "Delete a specific row from a table.",
-    inputSchema: t.Object(
-      { ...DocumentInput, ...TableLocationInput },
-      STRICT_OBJECT,
-    ),
+    inputSchema: t.Object({ ...DocumentInput, ...TableLocationInput }, STRICT),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
@@ -116,7 +110,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...TableLocationInput,
         insertRight: t.Optional(t.Boolean()),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -132,10 +126,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.deleteTableColumn", {
     access: "write",
     description: "Delete a specific column from a table.",
-    inputSchema: t.Object(
-      { ...DocumentInput, ...TableLocationInput },
-      STRICT_OBJECT,
-    ),
+    inputSchema: t.Object({ ...DocumentInput, ...TableLocationInput }, STRICT),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
@@ -169,7 +160,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...cellStyleFields,
       },
       {
-        ...STRICT_OBJECT,
+        ...STRICT,
         ...atLeastOne(cellStyleFields),
       },
     ),
@@ -179,7 +170,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       const fields: string[] = [];
       if (p.backgroundColorHex) {
         style.backgroundColor = {
-          color: { rgbColor: hexToRgbF(p.backgroundColorHex) },
+          color: { rgbColor: rgbColor(p.backgroundColorHex) },
         };
         fields.push("backgroundColor");
       }
@@ -207,11 +198,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         {
           updateTableCellStyle: {
             tableRange: {
-              tableCellLocation: {
-                tableStartLocation: tableStartLocation(p),
-                rowIndex: p.rowIndex,
-                columnIndex: p.columnIndex,
-              },
+              tableCellLocation: tableCellLocation(p),
               rowSpan: p.rowSpan ?? 1,
               columnSpan: p.columnSpan ?? 1,
             },
@@ -233,7 +220,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         rowSpan: PositiveSpan,
         columnSpan: PositiveSpan,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -241,11 +228,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         {
           mergeTableCells: {
             tableRange: {
-              tableCellLocation: {
-                tableStartLocation: tableStartLocation(p),
-                rowIndex: p.rowIndex,
-                columnIndex: p.columnIndex,
-              },
+              tableCellLocation: tableCellLocation(p),
               rowSpan: p.rowSpan,
               columnSpan: p.columnSpan,
             },
@@ -265,7 +248,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         rowSpan: PositiveSpan,
         columnSpan: PositiveSpan,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -273,11 +256,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         {
           unmergeTableCells: {
             tableRange: {
-              tableCellLocation: {
-                tableStartLocation: tableStartLocation(p),
-                rowIndex: p.rowIndex,
-                columnIndex: p.columnIndex,
-              },
+              tableCellLocation: tableCellLocation(p),
               rowSpan: p.rowSpan,
               columnSpan: p.columnSpan,
             },
@@ -313,7 +292,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...columnFields,
       },
       {
-        ...STRICT_OBJECT,
+        ...STRICT,
         ...atLeastOne(columnFields),
       },
     ),
@@ -360,7 +339,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...rowStyleFields,
       },
       {
-        ...STRICT_OBJECT,
+        ...STRICT,
         ...atLeastOne(rowStyleFields),
       },
     ),
@@ -394,7 +373,7 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         pinnedHeaderRowsCount: t.Integer({ minimum: 0 }),
         ...SegmentInput,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);

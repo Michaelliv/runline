@@ -23,11 +23,15 @@ import {
   unixTime,
   url,
 } from "../../_shared/metaGraph.js";
-import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  STRICT,
+  stringEnum,
+} from "../../_shared/schemas.js";
 import { facebookPagesCredential } from "./credentials.js";
 
 const PLUGIN = "facebookPages";
-const STRICT = { additionalProperties: false } as const;
 type In<S extends t.TSchema> = t.Static<S>;
 
 /** What Meta's documented failures mean for the call that got them. */

@@ -15,13 +15,17 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
-import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  STRICT,
+  stringEnum,
+} from "../../_shared/schemas.js";
 import { todoistCredential } from "./credentials.js";
 
 /** API v1's largest page. */
 const PAGE = 200;
 
-const STRICT = { additionalProperties: false } as const;
 const Id = (description?: string) =>
   t.String({ minLength: 1, ...(description ? { description } : {}) });
 const Limit = t.Optional(

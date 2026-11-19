@@ -28,8 +28,6 @@ const BASE = `https://googleads.googleapis.com/${GOOGLE_ADS_VERSION}/`;
 
 // ─── Inputs ─────────────────────────────────────────────────────
 
-export const STRICT = { additionalProperties: false } as const;
-
 const CUSTOMER_ID = /^\d{3}-?\d{3}-?\d{4}$/;
 /** A Google Ads customer ID, with or without its hyphens. */
 export const customerIdSchema = (

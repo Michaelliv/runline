@@ -34,7 +34,12 @@ import {
   url,
 } from "../../_shared/metaGraph.js";
 import { obj } from "../../_shared/provider.js";
-import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  STRICT,
+  stringEnum,
+} from "../../_shared/schemas.js";
 import {
   apiHost,
   HOSTS,
@@ -51,7 +56,6 @@ import {
   igUserId,
   node,
   PLUGIN,
-  STRICT,
   send,
 } from "./shared.js";
 

@@ -192,6 +192,25 @@ export async function googleJsonRequest<T = unknown>(
   return jsonAnswer<T>(response);
 }
 
+/**
+ * Every item of a Google list: `request` answers the page a query asks
+ * for, and each page's `nextPageToken` asks for the one after it.
+ */
+export async function googleListAll(
+  request: (query: Record<string, unknown>) => Promise<unknown>,
+  key: string,
+  query: Record<string, unknown>,
+): Promise<Record<string, unknown>[]> {
+  const items: Record<string, unknown>[] = [];
+  const next = { ...query };
+  do {
+    const page = obj(await request(next));
+    items.push(...(arr(page[key]) as Record<string, unknown>[]));
+    next.pageToken = page.nextPageToken;
+  } while (next.pageToken);
+  return items;
+}
+
 export async function googleProbe(
   ctx: ActionContext,
   plugin: string,

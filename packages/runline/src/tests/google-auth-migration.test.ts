@@ -6,9 +6,11 @@ import { join } from "node:path";
 import { afterEach, it } from "node:test";
 import {
   googleDownload,
+  googleListAll,
   googleProbe,
   googleResponse,
 } from "../../../runline-plugins/_shared/googleAuth.js";
+import { rgbColor } from "../../../runline-plugins/_shared/googleColor.js";
 import gmail from "../../../runline-plugins/gmail/src/index.js";
 import googleAppsScript from "../../../runline-plugins/googleAppsScript/src/index.js";
 import googleCalendar from "../../../runline-plugins/googleCalendar/src/index.js";
@@ -689,4 +691,106 @@ it("308 with Location is a redirect, not an upload acknowledgement", async () =>
     ),
     { code: "transport_failed" },
   );
+});
+
+it("a list is read page by page until no token follows", async () => {
+  const asked: Record<string, unknown>[] = [];
+  const pages: Record<string, unknown>[] = [
+    { items: [{ id: 1 }], nextPageToken: "second" },
+    { nextPageToken: "third" },
+    { items: [{ id: 2 }, { id: 3 }] },
+  ];
+  const items = await googleListAll(
+    async (query) => {
+      asked.push({ ...query });
+      return pages[asked.length - 1];
+    },
+    "items",
+    { pageSize: 2, pageToken: "first" },
+  );
+  assert.deepEqual(items, [{ id: 1 }, { id: 2 }, { id: 3 }]);
+  assert.deepEqual(
+    asked.map((query) => query.pageToken),
+    ["first", "second", "third"],
+  );
+  assert.ok(asked.every((query) => query.pageSize === 2));
+});
+
+it("every Drive list follows its pages through the one loop", async () => {
+  const urls: string[] = [];
+  mock((url) => {
+    urls.push(url);
+    return Response.json(
+      url.includes("pageToken=next")
+        ? { comments: [{ id: "b" }] }
+        : { comments: [{ id: "a" }], nextPageToken: "next" },
+    );
+  });
+  const answer = await action(googleDrive, "comment.list").execute(
+    { fileId: "file" },
+    await context(),
+  );
+  assert.deepEqual(answer, {
+    fileId: "file",
+    count: 2,
+    comments: [{ id: "a" }, { id: "b" }],
+  });
+  assert.equal(urls.length, 2);
+  assert.ok(urls.every((url) => url.includes("pageSize=100")));
+});
+
+it("a share with an empty message sends no message", async () => {
+  let asked = "";
+  mock((url) => {
+    asked = url;
+    return Response.json({ id: "permission" });
+  });
+  await action(googleDrive, "file.share").execute(
+    {
+      fileId: "file",
+      role: "reader",
+      type: "user",
+      emailAddress: "a@example.com",
+      emailMessage: "",
+      sendNotificationEmail: false,
+    },
+    await context(),
+  );
+  const query = new URL(asked).searchParams;
+  assert.equal(query.has("emailMessage"), false);
+  assert.equal(query.get("sendNotificationEmail"), "false");
+});
+
+it("a conditional format keeps a style it turns off", async () => {
+  let body: Record<string, unknown> = {};
+  mock((_url, init) => {
+    body = JSON.parse(String(init.body));
+    return Response.json({});
+  });
+  await action(googleSheets, "conditionalFormat.add").execute(
+    {
+      spreadsheetId: "sheet",
+      sheet: 0,
+      range: "A1:B2",
+      condition: { type: "NOT_BLANK" },
+      bold: false,
+      backgroundColorHex: "#f00",
+    },
+    await context(),
+  );
+  const requests = body.requests as Array<{
+    addConditionalFormatRule: { rule: { booleanRule: { format: unknown } } };
+  }>;
+  assert.deepEqual(
+    requests[0].addConditionalFormatRule.rule.booleanRule.format,
+    {
+      backgroundColor: { red: 1, green: 0, blue: 0 },
+      textFormat: { bold: false },
+    },
+  );
+});
+
+it("a hex colour is its channels from 0 to 1, short or long", () => {
+  assert.deepEqual(rgbColor("#0f0"), { red: 0, green: 1, blue: 0 });
+  assert.deepEqual(rgbColor("0000ff"), { red: 0, green: 0, blue: 1 });
 });

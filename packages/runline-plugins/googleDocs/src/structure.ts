@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { atLeastOne } from "../../_shared/schemas.js";
+import { atLeastOne, exactlyOne, STRICT } from "../../_shared/schemas.js";
 import {
   buildLocation,
   compact,
@@ -9,27 +9,23 @@ import {
   LOCATION_REQUIREMENT,
   LocationInput,
   location,
+  type Place,
   PositivePoints,
   points,
   RangeInput,
   range,
   runBatchUpdate,
   SegmentInput,
-  STRICT_OBJECT,
+  segment,
 } from "./shared.js";
 
 /**
  * The section break a header or footer attaches to: the one at `index`,
  * or the segment's own when the location is its end.
  */
-function sectionBreakLocation(p: {
-  locationKind?: "location" | "endOfSegmentLocation";
-  index?: number;
-  segmentId?: string;
-  tabId?: string;
-}): Record<string, unknown> {
+function sectionBreakLocation(p: Place): Record<string, unknown> {
   return compact({
-    segmentId: p.segmentId && p.segmentId !== "body" ? p.segmentId : "",
+    segmentId: segment(p.segmentId),
     tabId: p.tabId,
     index: p.locationKind === "endOfSegmentLocation" ? undefined : p.index,
   });
@@ -41,13 +37,12 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     description: "Insert a page break at an index or at the end of a segment.",
     inputSchema: t.Object(
       { ...DocumentInput, ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
-        insertPageBreak: buildLocation(kind, p.segmentId, p.index, p.tabId),
+        insertPageBreak: buildLocation(p),
       });
     },
   });
@@ -62,7 +57,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         name: t.String({ minLength: 1 }),
         ...RangeInput,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -75,6 +70,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const namedRangeTarget = {
+    namedRangeId: t.Optional(t.String({ minLength: 1 })),
+    name: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.deleteNamedRange", {
     access: "write",
     description:
@@ -82,15 +81,14 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       {
         ...DocumentInput,
-        namedRangeId: t.Optional(t.String({ minLength: 1 })),
-        name: t.Optional(t.String({ minLength: 1 })),
+        ...namedRangeTarget,
         tabIds: t.Optional(
           t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
         ),
       },
       {
-        ...STRICT_OBJECT,
-        oneOf: [{ required: ["namedRangeId"] }, { required: ["name"] }],
+        ...STRICT,
+        ...exactlyOne(namedRangeTarget),
       },
     ),
     async execute(p, ctx) {
@@ -108,7 +106,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     description: "Create a DEFAULT header attached to a SectionBreak.",
     inputSchema: t.Object(
       { ...DocumentInput, ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -130,7 +128,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         headerId: t.String({ minLength: 1 }),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -145,7 +143,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     description: "Create a DEFAULT footer attached to a SectionBreak.",
     inputSchema: t.Object(
       { ...DocumentInput, ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -167,7 +165,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         footerId: t.String({ minLength: 1 }),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -187,7 +185,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         objectId: t.String({ minLength: 1 }),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -206,17 +204,20 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       "Create a footnote reference at a location or at the end of the document body.",
     inputSchema: t.Object(
       { ...DocumentInput, ...LocationInput },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
-        createFootnote: buildLocation(kind, p.segmentId, p.index, p.tabId),
+        createFootnote: buildLocation(p),
       });
     },
   });
 
+  const replacedRange = {
+    namedRangeId: t.Optional(t.String({ minLength: 1 })),
+    namedRangeName: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.replaceNamedRangeContent", {
     access: "write",
     description:
@@ -225,18 +226,14 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       {
         ...DocumentInput,
         text: t.String(),
-        namedRangeId: t.Optional(t.String({ minLength: 1 })),
-        namedRangeName: t.Optional(t.String({ minLength: 1 })),
+        ...replacedRange,
         tabIds: t.Optional(
           t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
         ),
       },
       {
-        ...STRICT_OBJECT,
-        oneOf: [
-          { required: ["namedRangeId"] },
-          { required: ["namedRangeName"] },
-        ],
+        ...STRICT,
+        ...exactlyOne(replacedRange),
       },
     ),
     async execute(p, ctx) {
@@ -272,7 +269,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       { ...DocumentInput, ...RangeInput, ...sectionStyleFields },
       {
-        ...STRICT_OBJECT,
+        ...STRICT,
         ...atLeastOne(sectionStyleFields),
       },
     ),
@@ -327,7 +324,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         ),
         ...SegmentInput,
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -362,7 +359,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         ...documentStyleFields,
       },
       {
-        ...STRICT_OBJECT,
+        ...STRICT,
         ...atLeastOne(documentStyleFields),
       },
     ),

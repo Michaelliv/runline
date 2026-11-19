@@ -25,6 +25,7 @@
  * call `event.listInstances`.
  */
 
+import { randomUUID } from "node:crypto";
 import rrulePkg from "rrule";
 import {
   type ActionContext,
@@ -35,6 +36,7 @@ import * as t from "typebox";
 import {
   googleCredential,
   googleJsonRequest,
+  googleListAll,
   googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
@@ -42,10 +44,17 @@ import {
   Id,
   NonEmptyString,
   NonEmptyStringArray,
+  optionalBoolean,
+  optionalString,
   PositiveInteger,
   StringOrStringArray,
 } from "../../_shared/googleSchemas.js";
-import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  strictObject,
+  stringEnum,
+} from "../../_shared/schemas.js";
 
 // `rrule` ships as CJS; named imports fail under Node ESM.
 const { RRule } = rrulePkg as unknown as {
@@ -115,24 +124,17 @@ async function calRequest(
   );
 }
 
-async function paginateAll(
+function paginateAll(
   ctx: Ctx,
   path: string,
   key: string,
   qs: Record<string, unknown>,
 ): Promise<Record<string, unknown>[]> {
-  const out: Record<string, unknown>[] = [];
-  const query: Record<string, unknown> = { ...qs, maxResults: 100 };
-  do {
-    const page = (await calRequest(ctx, "GET", path, undefined, query)) as {
-      [k: string]: unknown;
-      nextPageToken?: string;
-    };
-    const items = (page[key] as Record<string, unknown>[]) ?? [];
-    out.push(...items);
-    query.pageToken = page.nextPageToken;
-  } while (query.pageToken);
-  return out;
+  return googleListAll(
+    (query) => calRequest(ctx, "GET", path, undefined, query),
+    key,
+    { ...qs, maxResults: qs.maxResults ?? 100 },
+  );
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -143,17 +145,13 @@ function encodeCalendarId(id: string): string {
   return pathSegment(decodeURIComponent(id));
 }
 
-function splitAttendees(input: unknown): Array<{ email: string }> | undefined {
-  if (input === undefined || input === null) return undefined;
-  const raw: string[] = Array.isArray(input)
-    ? (input as string[])
-    : String(input).split(",");
-  const emails = raw
+/** Attendees from addresses, each of which may itself be a comma-separated list. */
+function splitAttendees(input: string | string[]): Array<{ email: string }> {
+  return (typeof input === "string" ? [input] : input)
     .flatMap((s) => s.split(","))
     .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  if (emails.length === 0) return undefined;
-  return emails.map((email) => ({ email }));
+    .filter((s) => s.length > 0)
+    .map((email) => ({ email }));
 }
 
 function buildRecurrence(
@@ -185,13 +183,13 @@ function buildRecurrence(
 }
 
 function buildEventTimes(
-  start: unknown,
-  end: unknown,
+  start: string | undefined,
+  end: string | undefined,
   allDay: boolean,
   timeZone?: string,
 ): { start: EventDateTime; end: EventDateTime } {
   if (allDay) {
-    const fmt = (v: unknown) => {
+    const fmt = (v: string | undefined) => {
       const d = new Date(String(v));
       if (Number.isNaN(d.getTime()))
         throw new Error(`googleCalendar: invalid date "${v}"`);
@@ -199,7 +197,7 @@ function buildEventTimes(
     };
     return { start: { date: fmt(start) }, end: { date: fmt(end) } };
   }
-  const toISO = (v: unknown) => {
+  const toISO = (v: string | undefined) => {
     const d = new Date(String(v));
     if (Number.isNaN(d.getTime()))
       throw new Error(`googleCalendar: invalid dateTime "${v}"`);
@@ -275,14 +273,6 @@ function addNextOccurrence<T extends RecurringEvent>(items: T[]): T[] {
   return items;
 }
 
-function uuid(): string {
-  // Good enough for conferenceData.createRequest.requestId — Google
-  // just wants a per-event unique string.
-  const g = globalThis as { crypto?: { randomUUID?: () => string } };
-  if (g.crypto?.randomUUID) return g.crypto.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
-
 function applyEventFields(
   body: EventBody,
   p: t.Static<t.TObject<typeof eventMutableFields>> & {
@@ -304,7 +294,7 @@ function applyEventFields(
     body.guestsCanSeeOtherGuests = p.guestsCanSeeOtherGuests;
 
   if (p.attendees !== undefined) {
-    body.attendees = splitAttendees(p.attendees) ?? [];
+    body.attendees = splitAttendees(p.attendees);
   }
 
   if (p.reminders !== undefined || p.useDefaultReminders !== undefined) {
@@ -318,7 +308,7 @@ function applyEventFields(
   if (p.conferenceSolution) {
     body.conferenceData = {
       createRequest: {
-        requestId: uuid(),
+        requestId: randomUUID(),
         conferenceSolutionKey: { type: p.conferenceSolution },
       },
     };
@@ -329,11 +319,6 @@ function applyEventFields(
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 
-const strictObject = <T extends t.TProperties>(properties: T, options = {}) =>
-  t.Object(properties, { ...options, additionalProperties: false });
-const optionalString = (description?: string) =>
-  t.Optional(t.String(description ? { description } : {}));
-const optionalBoolean = t.Optional(t.Boolean());
 const optionalPositiveInteger = t.Optional(PositiveInteger);
 const calendarId = NonEmptyString;
 const accessRole = stringEnum([
@@ -411,6 +396,11 @@ const eventListFields = {
   nextOccurrence: optionalBoolean,
 };
 
+/** The calendars an availability check is about: one, or several. */
+const availabilityCalendars = {
+  calendarId: t.Optional(calendarId),
+  calendarIds: t.Optional(NonEmptyStringArray),
+};
 const calendarSchemas = {
   list: strictObject({
     returnAll: optionalBoolean,
@@ -423,8 +413,7 @@ const calendarSchemas = {
   get: strictObject({ calendarId }),
   availability: strictObject(
     {
-      calendarId: t.Optional(calendarId),
-      calendarIds: t.Optional(NonEmptyStringArray),
+      ...availabilityCalendars,
       timeMin: NonEmptyString,
       timeMax: NonEmptyString,
       timeZone: optionalString(),
@@ -432,18 +421,7 @@ const calendarSchemas = {
         stringEnum(["availability", "bookedSlots", "raw"] as const),
       ),
     },
-    {
-      oneOf: [
-        {
-          required: ["calendarId"],
-          not: { required: ["calendarIds"] },
-        },
-        {
-          required: ["calendarIds"],
-          not: { required: ["calendarId"] },
-        },
-      ],
-    },
+    exactlyOne(availabilityCalendars),
   ),
   listColors: strictObject({}),
 };
@@ -502,8 +480,7 @@ const eventSchemas = {
       calendarId,
       eventId: Id,
       modifyTarget: t.Optional(stringEnum(["instance", "series"] as const)),
-      ...eventMutableFields,
-      start: optionalString(),
+      ...eventChanges,
       end: optionalString(),
       allDay: optionalBoolean,
       timeZone: optionalString(),
@@ -587,9 +564,7 @@ const calendarListSchemas = {
   }),
   patch: strictObject(
     { calendarId, ...calendarListChanges },
-    {
-      ...atLeastOne(calendarListChanges),
-    },
+    atLeastOne(calendarListChanges),
   ),
   delete: strictObject({ calendarId }),
 };

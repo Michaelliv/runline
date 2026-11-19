@@ -1,6 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { atLeastOne } from "../../_shared/schemas.js";
+import { atLeastOne, STRICT } from "../../_shared/schemas.js";
 import {
   compact,
   DocumentInput,
@@ -9,8 +9,8 @@ import {
   points,
   RangeInput,
   RawGoogleObject,
+  range,
   runBatchUpdate,
-  STRICT_OBJECT,
 } from "./shared.js";
 
 export function registerFormattingActions(rl: RunlinePluginAPI) {
@@ -53,7 +53,7 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       { ...DocumentInput, ...RangeInput, ...paragraphStyleFields },
       {
-        ...STRICT_OBJECT,
+        ...STRICT,
         ...atLeastOne(paragraphStyleFields),
       },
     ),
@@ -100,12 +100,7 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
       return runBatchUpdate(ctx, documentId, [
         {
           updateParagraphStyle: {
-            range: compact({
-              startIndex: p.startIndex,
-              endIndex: p.endIndex,
-              segmentId: p.segmentId,
-              tabId: p.tabId,
-            }),
+            range: range(p),
             paragraphStyle: ps,
             fields: fields.join(","),
           },
@@ -125,7 +120,7 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
         fields: t.String({ minLength: 1 }),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);

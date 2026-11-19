@@ -7,11 +7,10 @@
 import { pathSegment, type RunlinePluginAPI } from "runline";
 import * as t from "typebox";
 import { metaGraph } from "../../_shared/metaGraph.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { STRICT, stringEnum } from "../../_shared/schemas.js";
 import { facebookGraphCredential } from "./credentials.js";
 
 const PLUGIN = "facebookGraph";
-const STRICT = { additionalProperties: false } as const;
 const { request } = metaGraph({
   plugin: PLUGIN,
   credential: facebookGraphCredential,

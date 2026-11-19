@@ -46,6 +46,7 @@ import {
   googleJsonRequest,
   googleOAuth,
 } from "../../_shared/googleAuth.js";
+import { HexColor, rgbColor } from "../../_shared/googleColor.js";
 import {
   googleConnection,
   Id,
@@ -56,7 +57,7 @@ import {
   RawGoogleObject,
   StringArray,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { STRICT, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -112,10 +113,10 @@ const updateFields = {
   valueInputOption: t.Optional(valueInputOptionSchema),
   handlingExtraData: t.Optional(handlingExtraDataSchema),
 };
-const updateInput = t.Object(updateFields, { additionalProperties: false });
+const updateInput = t.Object(updateFields, STRICT);
 const upsertInput = t.Object(
   { ...updateFields, useAppend: t.Optional(t.Boolean()) },
-  { additionalProperties: false },
+  STRICT,
 );
 const initialSheetSchema = t.Object(
   {
@@ -138,11 +139,11 @@ const initialSheetSchema = t.Object(
           rowGroupControlAfter: t.Optional(t.Boolean()),
           columnGroupControlAfter: t.Optional(t.Boolean()),
         },
-        { additionalProperties: false },
+        STRICT,
       ),
     ),
   },
-  { additionalProperties: false },
+  STRICT,
 );
 
 // ─── Request ─────────────────────────────────────────────────────
@@ -180,7 +181,7 @@ function encodeA1(range: string): string {
 }
 
 /** A spreadsheet's API path, its ID one path segment. */
-function spreadsheetPath(spreadsheetId: unknown): string {
+function spreadsheetPath(spreadsheetId: string): string {
   return `/v4/spreadsheets/${pathSegment(spreadsheetId)}`;
 }
 
@@ -215,20 +216,7 @@ function objectsToRows(
   rows: Record<string, unknown>[],
   columns: string[],
 ): string[][] {
-  return rows.map((row) => {
-    return columns.map((col) => {
-      const v = row[col];
-      if (v === undefined || v === null) return "";
-      if (typeof v === "object") {
-        try {
-          return JSON.stringify(v);
-        } catch {
-          return String(v);
-        }
-      }
-      return String(v);
-    });
-  });
+  return rows.map((row) => columns.map((col) => stringifyCell(row[col])));
 }
 
 /**
@@ -490,19 +478,6 @@ function stringifyCell(v: unknown): string {
   return String(v);
 }
 
-function hexToRgb(
-  hex: string,
-): { red: number; green: number; blue: number } | null {
-  const m = hex.replace(/^#/, "").match(/^([0-9a-f]{6})$/i);
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  return {
-    red: ((n >> 16) & 0xff) / 255,
-    green: ((n >> 8) & 0xff) / 255,
-    blue: (n & 0xff) / 255,
-  };
-}
-
 // ─── Plugin ──────────────────────────────────────────────────────
 
 const SCOPES = [
@@ -562,7 +537,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
           stringEnum(["ON_CHANGE", "MINUTE", "HOUR"] as const),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = {
@@ -592,7 +567,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         ranges: t.Optional(StringArray),
         fields: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
@@ -613,10 +588,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Delete a spreadsheet (via Drive API — requires drive.file scope)",
-    inputSchema: t.Object(
-      { spreadsheetId: Id },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ spreadsheetId: Id }, STRICT),
     async execute(p, ctx) {
       await sheetsRequest(
         ctx,
@@ -635,10 +607,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
   rl.registerAction("sheet.listTabs", {
     access: "read",
     description: "List sheet tabs in a spreadsheet",
-    inputSchema: t.Object(
-      { spreadsheetId: Id },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ spreadsheetId: Id }, STRICT),
     async execute(p, ctx) {
       return getSheetProperties(ctx, p.spreadsheetId);
     },
@@ -655,9 +624,9 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         sheetId: t.Optional(NonNegativeInteger),
         hidden: t.Optional(t.Boolean()),
         rightToLeft: t.Optional(t.Boolean()),
-        tabColor: t.Optional(t.String({ pattern: "^#?[0-9a-fA-F]{6}$" })),
+        tabColor: t.Optional(HexColor),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const properties: Record<string, unknown> = { title: p.title };
@@ -665,10 +634,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       if (p.sheetId !== undefined) properties.sheetId = p.sheetId;
       if (p.hidden !== undefined) properties.hidden = p.hidden;
       if (p.rightToLeft !== undefined) properties.rightToLeft = p.rightToLeft;
-      if (p.tabColor) {
-        const rgb = hexToRgb(p.tabColor);
-        if (rgb) properties.tabColor = rgb;
-      }
+      if (p.tabColor) properties.tabColor = rgbColor(p.tabColor);
       const res = (await spreadsheetBatchUpdate(ctx, p.spreadsheetId, [
         { addSheet: { properties } },
       ])) as {
@@ -686,7 +652,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         spreadsheetId: Id,
         sheet: sheetReferenceSchema,
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const sheetId = await resolveSheetId(ctx, p.spreadsheetId, p.sheet);
@@ -722,7 +688,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         ),
         includeRowNumber: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const rows = await getValues(
@@ -765,7 +731,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         handlingExtraData: t.Optional(handlingExtraDataSchema),
         useAppend: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const spreadsheetId = p.spreadsheetId;
@@ -893,7 +859,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         keepFirstRow: t.Optional(t.Boolean()),
       },
       {
-        additionalProperties: false,
+        ...STRICT,
         oneOf: [
           {
             properties: { mode: { const: "wholeSheet" } },
@@ -971,36 +937,32 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         range = sheetName;
       }
 
-      if (mode === "wholeSheet" && p.keepFirstRow) {
-        const firstRow = await getValues(
-          ctx,
-          p.spreadsheetId,
-          `${sheetName}!1:1`,
-          "FORMATTED_VALUE",
-        );
-        await sheetsRequest(
+      const clear = () =>
+        sheetsRequest(
           ctx,
           "POST",
           `${spreadsheetPath(p.spreadsheetId)}/values/${encodeA1(range)}:clear`,
           {},
         );
-        if (firstRow.length > 0) {
-          await sheetsRequest(
-            ctx,
-            "PUT",
-            `${spreadsheetPath(p.spreadsheetId)}/values/${encodeA1(`${sheetName}!1:1`)}`,
-            { range: `${sheetName}!1:1`, values: firstRow },
-            { valueInputOption: "RAW" },
-          );
-        }
-        return { success: true };
-      }
-      return sheetsRequest(
+      if (mode !== "wholeSheet" || !p.keepFirstRow) return clear();
+
+      const firstRow = await getValues(
         ctx,
-        "POST",
-        `${spreadsheetPath(p.spreadsheetId)}/values/${encodeA1(range)}:clear`,
-        {},
+        p.spreadsheetId,
+        `${sheetName}!1:1`,
+        "FORMATTED_VALUE",
       );
+      await clear();
+      if (firstRow.length > 0) {
+        await sheetsRequest(
+          ctx,
+          "PUT",
+          `${spreadsheetPath(p.spreadsheetId)}/values/${encodeA1(`${sheetName}!1:1`)}`,
+          { range: `${sheetName}!1:1`, values: firstRow },
+          { valueInputOption: "RAW" },
+        );
+      }
+      return { success: true };
     },
   });
 
@@ -1017,7 +979,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         startIndex: PositiveInteger,
         count: t.Optional(PositiveInteger),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const sheetId = await resolveSheetId(ctx, p.spreadsheetId, p.sheet);
@@ -1050,7 +1012,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         spreadsheetId: Id,
         requests: t.Array(RawGoogleObject, { minItems: 1 }),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return spreadsheetBatchUpdate(ctx, p.spreadsheetId, p.requests);
@@ -1234,7 +1196,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         chartSpec: t.Optional(RawGoogleObject),
       },
       {
-        additionalProperties: false,
+        ...STRICT,
         oneOf: [
           {
             required: ["chartSpec"],
@@ -1355,7 +1317,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         chartSpec: RawGoogleObject,
         fields: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return spreadsheetBatchUpdate(ctx, p.spreadsheetId, [
@@ -1378,7 +1340,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         spreadsheetId: Id,
         chartId: NonNegativeInteger,
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return spreadsheetBatchUpdate(ctx, p.spreadsheetId, [
@@ -1400,7 +1362,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         sheet: sheetReferenceSchema,
         range: NonEmptyString,
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const sheetId = await resolveSheetId(ctx, p.spreadsheetId, p.sheet);
@@ -1419,7 +1381,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         spreadsheetId: Id,
         namedRangeId: Id,
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return spreadsheetBatchUpdate(ctx, p.spreadsheetId, [
@@ -1443,7 +1405,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         warningOnly: t.Optional(t.Boolean()),
         editorEmails: t.Optional(t.Array(NonEmptyString)),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const sheetId = await resolveSheetId(ctx, p.spreadsheetId, p.sheet);
@@ -1470,7 +1432,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         spreadsheetId: Id,
         protectedRangeId: NonNegativeInteger,
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return spreadsheetBatchUpdate(ctx, p.spreadsheetId, [
@@ -1491,18 +1453,14 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         sheet: sheetReferenceSchema,
         range: NonEmptyString,
         condition: t.Optional(RawGoogleObject),
-        backgroundColorHex: t.Optional(
-          t.String({ pattern: "^#?[0-9a-fA-F]{6}$" }),
-        ),
-        foregroundColorHex: t.Optional(
-          t.String({ pattern: "^#?[0-9a-fA-F]{6}$" }),
-        ),
+        backgroundColorHex: t.Optional(HexColor),
+        foregroundColorHex: t.Optional(HexColor),
         bold: t.Optional(t.Boolean()),
         italic: t.Optional(t.Boolean()),
         rule: t.Optional(RawGoogleObject),
       },
       {
-        additionalProperties: false,
+        ...STRICT,
         oneOf: [
           {
             required: ["rule"],
@@ -1531,11 +1489,15 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       else {
         const fmt: Record<string, unknown> = {};
         if (p.backgroundColorHex)
-          fmt.backgroundColor = hexToRgb(p.backgroundColorHex);
-        if (p.foregroundColorHex || p.bold || p.italic) {
+          fmt.backgroundColor = rgbColor(p.backgroundColorHex);
+        if (
+          p.foregroundColorHex ||
+          p.bold !== undefined ||
+          p.italic !== undefined
+        ) {
           const ts: Record<string, unknown> = {};
           if (p.foregroundColorHex)
-            ts.foregroundColor = hexToRgb(p.foregroundColorHex);
+            ts.foregroundColor = rgbColor(p.foregroundColorHex);
           if (p.bold !== undefined) ts.bold = p.bold;
           if (p.italic !== undefined) ts.italic = p.italic;
           fmt.textFormat = ts;
@@ -1561,7 +1523,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         sheet: sheetReferenceSchema,
         index: NonNegativeInteger,
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const sheetId = await resolveSheetId(ctx, p.spreadsheetId, p.sheet);
@@ -1590,7 +1552,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         clear: t.Optional(t.Boolean()),
       },
       {
-        additionalProperties: false,
+        ...STRICT,
         oneOf: [
           {
             required: ["condition"],

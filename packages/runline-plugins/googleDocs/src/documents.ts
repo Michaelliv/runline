@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { STRICT } from "../../_shared/schemas.js";
 import {
   DocumentInput,
   DRIVE_BASE,
@@ -7,7 +8,6 @@ import {
   extractDocumentId,
   flattenBodyText,
   RawGoogleObject,
-  STRICT_OBJECT,
   WriteControl,
 } from "./shared.js";
 
@@ -27,7 +27,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
           }),
         ),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = {
@@ -45,7 +45,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Create a blank Google Doc through the native Docs API. Use document.create when you need Drive folder placement.",
-    inputSchema: t.Object({ title: t.String({ minLength: 1 }) }, STRICT_OBJECT),
+    inputSchema: t.Object({ title: t.String({ minLength: 1 }) }, STRICT),
     async execute(p, ctx) {
       return docsRequest(ctx, "POST", "/documents", { title: p.title });
     },
@@ -74,7 +74,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
           }),
         ),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -104,7 +104,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
         requests: t.Array(RawGoogleObject, { minItems: 1 }),
         writeControl: t.Optional(WriteControl),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);

@@ -1,5 +1,14 @@
 import * as t from "typebox";
 
+/** An object that takes its declared fields and no others. */
+export const STRICT = { additionalProperties: false } as const;
+
+/** A `STRICT` object of `properties`, under whatever rules `options` add. */
+export const strictObject = <T extends t.TProperties>(
+  properties: T,
+  options: t.TObjectOptions = {},
+) => t.Object(properties, { ...options, ...STRICT });
+
 /**
  * At least one of `fields` must be given: "provide a change", "name a
  * recipient". Keyed off the field record itself, so the rule cannot drift

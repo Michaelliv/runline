@@ -14,6 +14,7 @@ import * as t from "typebox";
 import { failedChange, unansweredChange } from "../../_shared/changes.js";
 import { googleFailure, googleResponse } from "../../_shared/googleAuth.js";
 import { maskedFields } from "../../_shared/googleFieldMask.js";
+import { STRICT } from "../../_shared/schemas.js";
 
 export const PLUGIN = "googleAnalytics";
 /**
@@ -32,8 +33,6 @@ const BASES = {
 } as const;
 
 // ─── Names ──────────────────────────────────────────────────────
-
-export const STRICT = { additionalProperties: false } as const;
 
 /**
  * A top-level resource a call names by its numeric ID or by its resource

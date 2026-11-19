@@ -41,7 +41,7 @@ import {
   RawGoogleObject,
   StringArray,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { STRICT, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -101,10 +101,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
   rl.registerAction("presentation.create", {
     access: "write",
     description: "Create a new empty presentation",
-    inputSchema: t.Object(
-      { title: NonEmptyString },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ title: NonEmptyString }, STRICT),
     async execute(p, ctx) {
       return slidesRequest(ctx, "POST", "/presentations", { title: p.title });
     },
@@ -119,7 +116,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         presentation: Id,
         fields: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
@@ -137,7 +134,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         presentation: Id,
         limit: t.Optional(PositiveInteger),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
@@ -169,13 +166,13 @@ export default function googleSlides(rl: RunlinePluginAPI) {
               matchCase: t.Optional(t.Boolean()),
               pageObjectIds: t.Optional(StringArray),
             },
-            { additionalProperties: false },
+            STRICT,
           ),
           { minItems: 1 },
         ),
         revisionId: t.Optional(Id),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
@@ -210,11 +207,9 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       {
         presentation: Id,
         requests: t.Array(RawGoogleObject, { minItems: 1 }),
-        writeControl: t.Optional(
-          t.Object({ requiredRevisionId: Id }, { additionalProperties: false }),
-        ),
+        writeControl: t.Optional(t.Object({ requiredRevisionId: Id }, STRICT)),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
@@ -239,7 +234,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         presentation: Id,
         pageObjectId: Id,
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
@@ -271,7 +266,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         savePath: t.Optional(NonEmptyString),
         download: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);

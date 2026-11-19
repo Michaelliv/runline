@@ -50,9 +50,11 @@ export const NonEmptyString = t.String({ minLength: 1, pattern: "\\S" });
 export const Id = t.String({ minLength: 1 });
 export const PositiveInteger = t.Integer({ minimum: 1 });
 export const NonNegativeInteger = t.Integer({ minimum: 0 });
+export const optionalString = (description?: string) =>
+  t.Optional(t.String(description ? { description } : {}));
+export const optionalBoolean = t.Optional(t.Boolean());
 export const StringArray = t.Array(t.String());
 export const NonEmptyStringArray = t.Array(NonEmptyString, { minItems: 1 });
-export const StringOrNumber = t.Union([t.String(), t.Number()]);
 export const StringOrStringArray = t.Union([t.String(), t.Array(t.String())]);
 
 /** JSON-compatible data whose provider-specific shape is intentionally open. */
@@ -62,7 +64,6 @@ export const RawGoogleObject = t.Unsafe<Record<string, unknown>>(
 export const JsonValue = t.Unknown({
   description: "Any JSON-compatible value",
 });
-export const JsonArray = t.Array(JsonValue);
 export const StringMap = t.Record(t.String(), t.String());
 
 export const GoogleTimestamp = t.Union([NonEmptyString, t.Number()], {

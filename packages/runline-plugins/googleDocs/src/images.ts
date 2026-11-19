@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { STRICT } from "../../_shared/schemas.js";
 import {
   buildLocation,
   DocumentInput,
@@ -9,7 +10,6 @@ import {
   PositivePoints,
   points,
   runBatchUpdate,
-  STRICT_OBJECT,
 } from "./shared.js";
 
 const PublicImageUri = t.String({
@@ -31,13 +31,12 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
         widthPt: t.Optional(PositivePoints),
         heightPt: t.Optional(PositivePoints),
       },
-      { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
+      { ...STRICT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
       const req: Record<string, unknown> = {
-        ...buildLocation(kind, p.segmentId, p.index, p.tabId),
+        ...buildLocation(p),
         uri: p.uri,
       };
       if (p.widthPt !== undefined || p.heightPt !== undefined) {
@@ -65,7 +64,7 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
         imageReplaceMethod: t.Optional(t.Literal("CENTER_CROP")),
         tabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);

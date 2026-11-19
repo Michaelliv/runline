@@ -26,7 +26,7 @@ import {
   NonEmptyString,
   PositiveInteger,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { STRICT, stringEnum } from "../../_shared/schemas.js";
 
 const SCRIPT_API = "https://script.googleapis.com/v1";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -63,7 +63,7 @@ const scriptFileSchema = t.Object(
     type: scriptFileTypeSchema,
     source: t.String(),
   },
-  { additionalProperties: false },
+  STRICT,
 );
 
 /** A project file as the Apps Script API answers it. */
@@ -115,7 +115,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
           }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const params = new URLSearchParams({
@@ -140,7 +140,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
     access: "read",
     description:
       "Get all files of an Apps Script project (name, type, source).",
-    inputSchema: t.Object({ scriptId: Id }, { additionalProperties: false }),
+    inputSchema: t.Object({ scriptId: Id }, STRICT),
     async execute(p, ctx) {
       const res = await call<{ files?: ScriptFile[] }>(
         ctx,
@@ -163,7 +163,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
             "File name without extension (e.g. 'Code', 'appsscript').",
         }),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const res = await call<{ files?: ScriptFile[] }>(
@@ -189,9 +189,9 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
         scriptId: Id,
         name: NonEmptyString,
         source: t.String(),
-        type: t.Optional(stringEnum(["SERVER_JS", "HTML", "JSON"] as const)),
+        type: t.Optional(scriptFileTypeSchema),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const cur = await call<{ files?: ScriptFile[] }>(
@@ -236,7 +236,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
             "Complete project files, including the appsscript JSON manifest",
         }),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const res = await call<{ files?: ScriptFile[] }>(
@@ -263,7 +263,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
           }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const payload: Record<string, unknown> = { title: p.title };
@@ -290,7 +290,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
         scriptId: Id,
         description: t.Optional(t.String()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const res = await call<{ versionNumber?: number; description?: string }>(
@@ -320,7 +320,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
           t.String({ minLength: 1, description: "Defaults to 'appsscript'." }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const res = await call<{ deploymentId?: string; entryPoints?: unknown }>(
@@ -352,7 +352,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
           }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const res = await call<{
@@ -388,7 +388,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
           t.Integer({ minimum: 1, maximum: 50, description: "Default 20." }),
         ),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const params = new URLSearchParams({

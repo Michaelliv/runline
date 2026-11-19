@@ -2,8 +2,8 @@ import { basename } from "node:path";
 import * as t from "typebox";
 import { DownloadedFile, standardBase64 } from "./base64.js";
 import { readLocalFile } from "./localFile.js";
+import { STRICT } from "./schemas.js";
 
-const STRICT = { additionalProperties: false } as const;
 const id = t.String({ minLength: 1, pattern: "\\S" });
 
 /** What any attachment may say about itself, whatever its bytes are. */

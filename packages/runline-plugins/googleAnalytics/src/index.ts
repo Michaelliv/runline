@@ -24,7 +24,12 @@ import {
   googleConnection,
   RawGoogleObject,
 } from "../../_shared/googleSchemas.js";
-import { atLeastOne, exactlyOne, stringEnum } from "../../_shared/schemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  STRICT,
+  stringEnum,
+} from "../../_shared/schemas.js";
 import {
   accountId,
   accountName,
@@ -41,7 +46,6 @@ import {
   read,
   report,
   SCOPES,
-  STRICT,
   table,
 } from "./shared.js";
 

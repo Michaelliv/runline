@@ -55,6 +55,7 @@
  * Google-native files, which Drive caps at 10 MB and serves whole, in one.
  */
 
+import { randomUUID } from "node:crypto";
 import { createReadStream, statSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -73,6 +74,7 @@ import {
   googleCredential,
   googleFailed,
   googleJsonRequest,
+  googleListAll,
   googleOAuth,
   googleResponse,
 } from "../../_shared/googleAuth.js";
@@ -85,7 +87,12 @@ import {
   StringOrStringArray,
 } from "../../_shared/googleSchemas.js";
 import { readLocalFile } from "../../_shared/localFile.js";
-import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  STRICT,
+  stringEnum,
+} from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -110,6 +117,8 @@ const AccessProposalRole = stringEnum([
   "commenter",
   "reader",
 ] as const);
+/** A colour as Drive takes one: `#rrggbb`. */
+const ColorRgb = t.String({ pattern: "^#?[0-9A-Fa-f]{6}$" });
 const PageSize100 = t.Integer({ minimum: 1, maximum: 100 });
 const PageSize1000 = t.Integer({ minimum: 1, maximum: 1000 });
 const Rfc3339Timestamp = t.String({
@@ -121,7 +130,7 @@ const QuotedFileContent = t.Object(
     value: NonEmptyString,
     mimeType: t.Optional(NonEmptyString),
   },
-  { additionalProperties: false },
+  STRICT,
 );
 
 // ─── MIME constants ──────────────────────────────────────────────
@@ -197,27 +206,17 @@ async function driveRequest(
  * `nextPageToken`. Works for `/drive/v3/files`, `/drive/v3/drives`,
  * etc. Returns the concatenated `key` arrays.
  */
-async function paginateAll(
+function paginateAll(
   ctx: Ctx,
   path: string,
   key: string,
   qs: Record<string, unknown>,
 ): Promise<Record<string, unknown>[]> {
-  const out: Record<string, unknown>[] = [];
-  const query: Record<string, unknown> = {
-    ...qs,
-    pageSize: qs.pageSize ?? 100,
-  };
-  do {
-    const page = (await driveRequest(ctx, "GET", path, undefined, query)) as {
-      [k: string]: unknown;
-      nextPageToken?: string;
-    };
-    const items = (page[key] as Record<string, unknown>[]) ?? [];
-    out.push(...items);
-    query.pageToken = page.nextPageToken;
-  } while (query.pageToken);
-  return out;
+  return googleListAll(
+    (query) => driveRequest(ctx, "GET", path, undefined, query),
+    key,
+    { ...qs, pageSize: qs.pageSize ?? 100 },
+  );
 }
 
 // ─── Binary I/O helpers ─────────────────────────────────────────
@@ -444,18 +443,35 @@ async function downloadMedia(
   );
 }
 
+/**
+ * A Google-native file as `mimeType`, whole: Drive caps an export at 10 MB
+ * and serves no ranges of one.
+ */
+async function exported(
+  ctx: Ctx,
+  fileId: string,
+  mimeType: string,
+): Promise<{ bytes: Buffer; contentType: string }> {
+  const url = new URL(
+    `${API_BASE}/drive/v3/files/${pathSegment(fileId)}/export`,
+  );
+  url.searchParams.set("mimeType", mimeType);
+  const res = await driveResponse(ctx, url.toString());
+  if (!res.ok) throw await googleFailed("googleDrive", res);
+  return {
+    bytes: Buffer.from(await res.arrayBuffer()),
+    contentType: res.headers.get("content-type") ?? mimeType,
+  };
+}
+
 // ─── Shared helpers ─────────────────────────────────────────────
 
-function toStringArray(v: unknown): string[] | undefined {
-  if (v === undefined || v === null) return undefined;
-  if (Array.isArray(v)) return v.map(String);
-  if (typeof v === "string") {
-    return v
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-  }
-  return undefined;
+function toStringArray(v: string | string[] | undefined): string[] | undefined {
+  if (v === undefined || Array.isArray(v)) return v;
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 /**
@@ -484,11 +500,12 @@ function resolveParent(folderId?: string, driveId?: string): string {
   return "root";
 }
 
-function uuid(): string {
-  const g = globalThis as { crypto?: { randomUUID?: () => string } };
-  if (g.crypto?.randomUUID) return g.crypto.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
+/** Where an upload's content comes from. */
+const uploadSources = {
+  contentBase64: t.Optional(t.String()),
+  contentPath: t.Optional(NonEmptyString),
+  content: t.Optional(t.String()),
+};
 
 /** Who a share is for, and what it tells them. */
 const shareFields = {
@@ -542,6 +559,7 @@ function share(
     emailAddress,
     domain,
     allowFileDiscovery,
+    emailMessage,
     ...notification
   } = p;
   // Fields left undefined drop out of the body and the query.
@@ -550,7 +568,11 @@ function share(
     "POST",
     `/drive/v3/files/${pathSegment(id)}/permissions`,
     { role, type, emailAddress, domain, allowFileDiscovery },
-    { supportsAllDrives: true, ...notification },
+    {
+      supportsAllDrives: true,
+      ...notification,
+      emailMessage: emailMessage || undefined,
+    },
   );
 }
 
@@ -601,9 +623,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         folderId: t.Optional(Id),
         driveId: t.Optional(Id),
         mimeType: t.Optional(NonEmptyString),
-        contentBase64: t.Optional(t.String()),
-        contentPath: t.Optional(NonEmptyString),
-        content: t.Optional(t.String()),
+        ...uploadSources,
         properties: t.Optional(StringMap),
         appProperties: t.Optional(StringMap),
         keepRevisionForever: t.Optional(t.Boolean()),
@@ -612,12 +632,8 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         fields: t.Optional(NonEmptyString),
       },
       {
-        additionalProperties: false,
-        oneOf: [
-          { required: ["contentBase64"] },
-          { required: ["contentPath"] },
-          { required: ["content"] },
-        ],
+        ...STRICT,
+        ...exactlyOne(uploadSources),
       },
     ),
     async execute(p, ctx) {
@@ -668,7 +684,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         properties: t.Optional(StringMap),
         appProperties: t.Optional(StringMap),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const name = p.name || "Untitled";
@@ -696,29 +712,23 @@ export default function googleDrive(rl: RunlinePluginAPI) {
           },
         )) as { id: string };
 
-        const res = await driveResponse(
+        await googleJsonRequest(
           ctx,
+          "googleDrive",
+          SCOPES,
+          "POST",
           `https://docs.googleapis.com/v1/documents/${pathSegment(doc.id)}:batchUpdate`,
           {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              requests: [
-                {
-                  insertText: {
-                    text: p.content,
-                    endOfSegmentLocation: { segmentId: "" },
-                  },
+            requests: [
+              {
+                insertText: {
+                  text: p.content,
+                  endOfSegmentLocation: { segmentId: "" },
                 },
-              ],
-            }),
+              },
+            ],
           },
         );
-        if (!res.ok) {
-          throw await googleFailed("googleDrive", res);
-        }
         return { id: doc.id };
       }
 
@@ -742,7 +752,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         savePath: t.Optional(NonEmptyString),
         googleDocFormat: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const fileId = p.fileId;
@@ -770,18 +780,8 @@ export default function googleDrive(rl: RunlinePluginAPI) {
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
           drawing: "image/jpeg",
         };
-        const mime = p.googleDocFormat ?? defaults[type] ?? "application/pdf";
-        contentType = mime;
-        const u = new URL(
-          `${API_BASE}/drive/v3/files/${pathSegment(fileId)}/export`,
-        );
-        u.searchParams.set("mimeType", mime);
-        u.searchParams.set("supportsAllDrives", "true");
-        const res = await driveResponse(ctx, u.toString());
-        if (!res.ok) {
-          throw await googleFailed("googleDrive", res);
-        }
-        bytes = Buffer.from(await res.arrayBuffer());
+        contentType = p.googleDocFormat ?? defaults[type] ?? "application/pdf";
+        ({ bytes } = await exported(ctx, fileId, contentType));
         size = bytes.byteLength;
         if (savePath !== undefined) writeFileSync(savePath, bytes);
       } else {
@@ -820,7 +820,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         description: t.Optional(t.String()),
         copyRequiresWriterPermission: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = {};
@@ -852,7 +852,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         folderId: t.Optional(Id),
         driveId: t.Optional(Id),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const current = (await driveRequest(
@@ -901,7 +901,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ...fileChanges,
       },
       {
-        additionalProperties: false,
+        ...STRICT,
         allOf: [
           { not: { required: ["contentBase64", "contentPath"] } },
           ...[
@@ -983,7 +983,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "Delete a file. Moves to trash by default; pass deletePermanently=true to erase.",
     inputSchema: t.Object(
       { fileId: Id, deletePermanently: t.Optional(t.Boolean()) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return remove(ctx, p.fileId, p.deletePermanently);
@@ -995,7 +995,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     description: "Get file metadata",
     inputSchema: t.Object(
       { fileId: Id, fields: t.Optional(NonEmptyString) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(
@@ -1014,7 +1014,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "Add a permission to a file. Create one permission per call; list the existing permissions via file.listPermissions.",
     inputSchema: t.Object(
       { fileId: Id, ...shareFields },
-      { additionalProperties: false, ...SHARE_RULE },
+      { ...STRICT, ...SHARE_RULE },
     ),
     async execute({ fileId, ...permission }, ctx) {
       return share(ctx, fileId, permission);
@@ -1026,7 +1026,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     description: "List permissions on a file",
     inputSchema: t.Object(
       { fileId: Id, useDomainAdminAccess: t.Optional(t.Boolean()) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(
@@ -1046,10 +1046,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   rl.registerAction("file.deletePermission", {
     access: "write",
     description: "Revoke a permission on a file",
-    inputSchema: t.Object(
-      { fileId: Id, permissionId: Id },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ fileId: Id, permissionId: Id }, STRICT),
     async execute(p, ctx) {
       await driveRequest(
         ctx,
@@ -1072,10 +1069,10 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         name: t.Optional(NonEmptyString),
         folderId: t.Optional(Id),
         driveId: t.Optional(Id),
-        folderColorRgb: t.Optional(t.String({ pattern: "^#?[0-9A-Fa-f]{6}$" })),
+        folderColorRgb: t.Optional(ColorRgb),
         fields: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = {
@@ -1098,7 +1095,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "Delete a folder. Moves to trash by default; pass deletePermanently=true to erase.",
     inputSchema: t.Object(
       { folderId: Id, deletePermanently: t.Optional(t.Boolean()) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return remove(ctx, p.folderId, p.deletePermanently);
@@ -1110,7 +1107,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     description: "Add a permission to a folder (same shape as file.share)",
     inputSchema: t.Object(
       { folderId: Id, ...shareFields },
-      { additionalProperties: false, ...SHARE_RULE },
+      { ...STRICT, ...SHARE_RULE },
     ),
     async execute({ folderId, ...permission }, ctx) {
       return share(ctx, folderId, permission);
@@ -1139,7 +1136,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         maxResults: t.Optional(PageSize1000),
         pageToken: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const clauses: string[] = [];
@@ -1205,12 +1202,12 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       {
         name: NonEmptyString,
-        colorRgb: t.Optional(t.String({ pattern: "^#?[0-9A-Fa-f]{6}$" })),
+        colorRgb: t.Optional(ColorRgb),
         hidden: t.Optional(t.Boolean()),
         capabilities: t.Optional(RawGoogleObject),
         restrictions: t.Optional(RawGoogleObject),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = { name: p.name };
@@ -1223,7 +1220,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         if (p[k] !== undefined) body[k] = p[k];
       }
       return driveRequest(ctx, "POST", "/drive/v3/drives", body, {
-        requestId: uuid(),
+        requestId: randomUUID(),
       });
     },
   });
@@ -1233,7 +1230,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     description: "Get a shared drive",
     inputSchema: t.Object(
       { driveId: Id, useDomainAdminAccess: t.Optional(t.Boolean()) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
@@ -1260,7 +1257,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         maxResults: t.Optional(PageSize100),
         pageToken: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
@@ -1286,7 +1283,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
 
   const driveChanges = {
     name: t.Optional(NonEmptyString),
-    colorRgb: t.Optional(t.String({ pattern: "^#?[0-9A-Fa-f]{6}$" })),
+    colorRgb: t.Optional(ColorRgb),
     restrictions: t.Optional(RawGoogleObject),
   };
   rl.registerAction("drive.update", {
@@ -1295,7 +1292,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       { driveId: Id, ...driveChanges },
       {
-        additionalProperties: false,
+        ...STRICT,
         ...atLeastOne(driveChanges),
       },
     ),
@@ -1316,7 +1313,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   rl.registerAction("drive.delete", {
     access: "write",
     description: "Delete a shared drive",
-    inputSchema: t.Object({ driveId: Id }, { additionalProperties: false }),
+    inputSchema: t.Object({ driveId: Id }, STRICT),
     async execute(p, ctx) {
       await driveRequest(
         ctx,
@@ -1357,31 +1354,21 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         pageSize: t.Optional(PageSize100),
         startModifiedTime: t.Optional(Rfc3339Timestamp),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
-      const fileId = p.fileId;
-      const out: unknown[] = [];
-      const query: Record<string, unknown> = {
-        fields: COMMENT_LIST_FIELDS,
-        includeDeleted: p.includeDeleted ?? false,
-        pageSize: p.pageSize ?? 100,
-        startModifiedTime: p.startModifiedTime,
-      };
-      let pageToken: string | undefined;
-      do {
-        if (pageToken) query.pageToken = pageToken;
-        const page = (await driveRequest(
-          ctx,
-          "GET",
-          `/drive/v3/files/${pathSegment(fileId)}/comments`,
-          undefined,
-          query,
-        )) as { comments?: unknown[]; nextPageToken?: string };
-        if (Array.isArray(page.comments)) out.push(...page.comments);
-        pageToken = page.nextPageToken;
-      } while (pageToken);
-      return { fileId, count: out.length, comments: out };
+      const comments = await paginateAll(
+        ctx,
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments`,
+        "comments",
+        {
+          fields: COMMENT_LIST_FIELDS,
+          includeDeleted: p.includeDeleted ?? false,
+          pageSize: p.pageSize,
+          startModifiedTime: p.startModifiedTime,
+        },
+      );
+      return { fileId: p.fileId, count: comments.length, comments };
     },
   });
 
@@ -1390,7 +1377,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     description: "Fetch a single comment (with its replies) by ID.",
     inputSchema: t.Object(
       { fileId: Id, commentId: Id, includeDeleted: t.Optional(t.Boolean()) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(
@@ -1413,7 +1400,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         content: NonEmptyString,
         quotedFileContent: t.Optional(QuotedFileContent),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = { content: p.content };
@@ -1434,7 +1421,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "Edit the content of an existing comment. Caller must be the author or have edit rights.",
     inputSchema: t.Object(
       { fileId: Id, commentId: Id, content: NonEmptyString },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(
@@ -1450,10 +1437,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   rl.registerAction("comment.delete", {
     access: "write",
     description: "Soft-delete a comment.",
-    inputSchema: t.Object(
-      { fileId: Id, commentId: Id },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ fileId: Id, commentId: Id }, STRICT),
     async execute(p, ctx) {
       await driveRequest(
         ctx,
@@ -1470,7 +1454,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "Resolve a comment thread by posting a resolution reply. `resolved` on a Comment is computed from replies; this is the canonical way to mark a thread done.",
     inputSchema: t.Object(
       { fileId: Id, commentId: Id, content: t.Optional(NonEmptyString) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(
@@ -1489,7 +1473,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "Re-open a previously resolved comment by posting a reopen reply.",
     inputSchema: t.Object(
       { fileId: Id, commentId: Id, content: t.Optional(NonEmptyString) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(
@@ -1512,33 +1496,24 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         includeDeleted: t.Optional(t.Boolean()),
         pageSize: t.Optional(PageSize100),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
-      const out: unknown[] = [];
-      const query: Record<string, unknown> = {
-        fields: REPLY_LIST_FIELDS,
-        includeDeleted: p.includeDeleted ?? false,
-        pageSize: p.pageSize ?? 100,
-      };
-      let pageToken: string | undefined;
-      do {
-        if (pageToken) query.pageToken = pageToken;
-        const page = (await driveRequest(
-          ctx,
-          "GET",
-          `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}/replies`,
-          undefined,
-          query,
-        )) as { replies?: unknown[]; nextPageToken?: string };
-        if (Array.isArray(page.replies)) out.push(...page.replies);
-        pageToken = page.nextPageToken;
-      } while (pageToken);
+      const replies = await paginateAll(
+        ctx,
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}/replies`,
+        "replies",
+        {
+          fields: REPLY_LIST_FIELDS,
+          includeDeleted: p.includeDeleted ?? false,
+          pageSize: p.pageSize,
+        },
+      );
       return {
         fileId: p.fileId,
         commentId: p.commentId,
-        count: out.length,
-        replies: out,
+        count: replies.length,
+        replies,
       };
     },
   });
@@ -1554,7 +1529,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         content: NonEmptyString,
         action: t.Optional(stringEnum(["resolve", "reopen"] as const)),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = { content: p.content };
@@ -1574,7 +1549,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     description: "Edit the content of a reply.",
     inputSchema: t.Object(
       { fileId: Id, commentId: Id, replyId: Id, content: NonEmptyString },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(
@@ -1590,10 +1565,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
   rl.registerAction("reply.delete", {
     access: "write",
     description: "Soft-delete a reply.",
-    inputSchema: t.Object(
-      { fileId: Id, commentId: Id, replyId: Id },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ fileId: Id, commentId: Id, replyId: Id }, STRICT),
     async execute(p, ctx) {
       await driveRequest(
         ctx,
@@ -1631,39 +1603,23 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "List every revision Drive retains for a file, oldest first. For Office files the per-revision bytes are what `revision.download` returns.",
     inputSchema: t.Object(
       { fileId: Id, pageSize: t.Optional(PageSize1000) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
-      const fileId = p.fileId;
-      const out: unknown[] = [];
-      const query: Record<string, unknown> = {
-        fields: REVISION_LIST_FIELDS,
-        pageSize: p.pageSize ?? 200,
-      };
-      let pageToken: string | undefined;
-      do {
-        if (pageToken) query.pageToken = pageToken;
-        const page = (await driveRequest(
-          ctx,
-          "GET",
-          `/drive/v3/files/${pathSegment(fileId)}/revisions`,
-          undefined,
-          query,
-        )) as { revisions?: unknown[]; nextPageToken?: string };
-        if (Array.isArray(page.revisions)) out.push(...page.revisions);
-        pageToken = page.nextPageToken;
-      } while (pageToken);
-      return { fileId, count: out.length, revisions: out };
+      const revisions = await paginateAll(
+        ctx,
+        `/drive/v3/files/${pathSegment(p.fileId)}/revisions`,
+        "revisions",
+        { fields: REVISION_LIST_FIELDS, pageSize: p.pageSize ?? 200 },
+      );
+      return { fileId: p.fileId, count: revisions.length, revisions };
     },
   });
 
   rl.registerAction("revision.get", {
     access: "read",
     description: "Fetch metadata for a single revision.",
-    inputSchema: t.Object(
-      { fileId: Id, revisionId: Id },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ fileId: Id, revisionId: Id }, STRICT),
     async execute(p, ctx) {
       return driveRequest(
         ctx,
@@ -1681,7 +1637,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "Download the bytes of a specific revision. Pass savePath to write to disk and get back the path (any size); otherwise returns { contentBase64, mimeType, size } for revisions up to 64 MiB. This is the recovery path when an in-place file.update has overwritten in-document comments on an Office file.",
     inputSchema: t.Object(
       { fileId: Id, revisionId: Id, savePath: t.Optional(NonEmptyString) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const fileId = p.fileId;
@@ -1724,7 +1680,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       { fileId: Id, revisionId: Id, ...revisionChanges },
       {
-        additionalProperties: false,
+        ...STRICT,
         ...atLeastOne(revisionChanges),
       },
     ),
@@ -1752,10 +1708,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Permanently delete a revision (head revision cannot be deleted).",
-    inputSchema: t.Object(
-      { fileId: Id, revisionId: Id },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ fileId: Id, revisionId: Id }, STRICT),
     async execute(p, ctx) {
       await driveRequest(
         ctx,
@@ -1772,7 +1725,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       "Restore an older revision as the head of the file. Downloads the revision bytes and re-uploads them so the head moves to that content. Drive's REST API has no native restore endpoint for binary files; this performs the equivalent. Returns the new head file resource.",
     inputSchema: t.Object(
       { fileId: Id, revisionId: Id, mimeType: t.Optional(NonEmptyString) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const fileId = p.fileId;
@@ -1824,7 +1777,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         driveId: t.Optional(Id),
         supportsAllDrives: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(
@@ -1856,7 +1809,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         pageSize: t.Optional(PageSize1000),
         fields: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       return driveRequest(ctx, "GET", `/drive/v3/changes`, undefined, {
@@ -1890,11 +1843,11 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         supportsAllDrives: t.Optional(t.Boolean()),
         includeItemsFromAllDrives: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = {
-        id: p.channelId ?? uuid(),
+        id: p.channelId ?? randomUUID(),
         type: "web_hook",
         address: p.address,
       };
@@ -1913,10 +1866,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     access: "write",
     description:
       "Stop a previously-subscribed change channel. Pass the same `channelId` and `resourceId` returned by `changes.watch`.",
-    inputSchema: t.Object(
-      { channelId: Id, resourceId: Id },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ channelId: Id, resourceId: Id }, STRICT),
     async execute(p, ctx) {
       await driveRequest(ctx, "POST", `/drive/v3/channels/stop`, {
         id: p.channelId,
@@ -1949,7 +1899,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         supportsAllDrives: t.Optional(t.Boolean()),
       },
       {
-        additionalProperties: false,
+        ...STRICT,
         anyOf: [
           { required: ["role"] },
           { required: ["expirationTime"] },
@@ -1992,24 +1942,20 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     description: "List access proposals (Request-access entries) on a file.",
     inputSchema: t.Object(
       { fileId: Id, pageSize: t.Optional(PageSize100) },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
-      const out: unknown[] = [];
-      let pageToken: string | undefined;
-      do {
-        const page = (await driveRequest(
-          ctx,
-          "GET",
-          `/drive/v3/files/${pathSegment(p.fileId)}/accessproposals`,
-          undefined,
-          { pageSize: p.pageSize ?? 100, pageToken },
-        )) as { accessProposals?: unknown[]; nextPageToken?: string };
-        if (Array.isArray(page.accessProposals))
-          out.push(...page.accessProposals);
-        pageToken = page.nextPageToken;
-      } while (pageToken);
-      return { fileId: p.fileId, count: out.length, accessProposals: out };
+      const accessProposals = await paginateAll(
+        ctx,
+        `/drive/v3/files/${pathSegment(p.fileId)}/accessproposals`,
+        "accessProposals",
+        { pageSize: p.pageSize },
+      );
+      return {
+        fileId: p.fileId,
+        count: accessProposals.length,
+        accessProposals,
+      };
     },
   });
 
@@ -2027,7 +1973,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         sendNotification: t.Optional(t.Boolean()),
       },
       {
-        additionalProperties: false,
+        ...STRICT,
         oneOf: [
           { properties: { action: { const: "ACCEPT" } } },
           {
@@ -2060,10 +2006,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     access: "read",
     description:
       "Current user info: storage quota, export formats, max upload size, importable mime types. Useful for healthchecks and conversion planning.",
-    inputSchema: t.Object(
-      { fields: t.Optional(NonEmptyString) },
-      { additionalProperties: false },
-    ),
+    inputSchema: t.Object({ fields: t.Optional(NonEmptyString) }, STRICT),
     async execute(p, ctx) {
       return driveRequest(ctx, "GET", `/drive/v3/about`, undefined, {
         fields:
@@ -2085,19 +2028,10 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         mimeType: NonEmptyString,
         savePath: t.Optional(NonEmptyString),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
-      const u = new URL(
-        `${API_BASE}/drive/v3/files/${pathSegment(p.fileId)}/export`,
-      );
-      u.searchParams.set("mimeType", p.mimeType);
-      const res = await driveResponse(ctx, u.toString());
-      if (!res.ok) {
-        throw await googleFailed("googleDrive", res);
-      }
-      const bytes = Buffer.from(await res.arrayBuffer());
-      const contentType = res.headers.get("content-type") ?? p.mimeType;
+      const { bytes, contentType } = await exported(ctx, p.fileId, p.mimeType);
       if (p.savePath !== undefined) {
         writeFileSync(p.savePath, bytes);
         return {
@@ -2136,7 +2070,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         fields: t.Optional(NonEmptyString),
         returnAll: t.Optional(t.Boolean()),
       },
-      { additionalProperties: false },
+      STRICT,
     ),
     async execute(p, ctx) {
       const baseQs: Record<string, unknown> = {

@@ -1080,6 +1080,34 @@ describe("googleDocs plugin", () => {
     );
   });
 
+  it("names the body segment by its empty ID in a paragraph style's range", async () => {
+    const plugin = makeGoogleDocs();
+    const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });
+
+    await getAction(plugin, "document.updateParagraphStyle").execute(
+      {
+        document: "doc_1",
+        startIndex: 1,
+        endIndex: 5,
+        segmentId: "body",
+        alignment: "CENTER",
+      },
+      ctx(),
+    );
+
+    assert.deepEqual(calls[0].body, {
+      requests: [
+        {
+          updateParagraphStyle: {
+            range: { segmentId: "", startIndex: 1, endIndex: 5 },
+            paragraphStyle: { alignment: "CENTER" },
+            fields: "alignment",
+          },
+        },
+      ],
+    });
+  });
+
   it("supports named style update requests", async () => {
     const plugin = makeGoogleDocs();
     const calls = await captureFetch({ documentId: "doc_1", replies: [{}] });

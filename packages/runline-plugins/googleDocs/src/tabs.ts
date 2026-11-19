@@ -1,12 +1,11 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
-import { atLeastOne } from "../../_shared/schemas.js";
+import { atLeastOne, STRICT } from "../../_shared/schemas.js";
 import {
   compact,
   DocumentInput,
   extractDocumentId,
   runBatchUpdate,
-  STRICT_OBJECT,
 } from "./shared.js";
 
 function tabProperties(p: {
@@ -35,7 +34,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
         index: t.Optional(t.Integer({ minimum: 0 })),
         parentTabId: t.Optional(t.String({ minLength: 1 })),
       },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -51,7 +50,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       "Delete a Google Docs document tab by tab ID. Child tabs are deleted too.",
     inputSchema: t.Object(
       { ...DocumentInput, tabId: t.String({ minLength: 1 }) },
-      STRICT_OBJECT,
+      STRICT,
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
@@ -78,7 +77,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
         ...tabChanges,
       },
       {
-        ...STRICT_OBJECT,
+        ...STRICT,
         ...atLeastOne(tabChanges),
       },
     ),
