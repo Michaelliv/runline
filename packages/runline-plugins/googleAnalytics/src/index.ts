@@ -27,6 +27,8 @@ import {
 import {
   atLeastOne,
   exactlyOne,
+  ISO_DAY,
+  rfc3339,
   STRICT,
   stringEnum,
 } from "../../_shared/schemas.js";
@@ -123,7 +125,7 @@ const returnPropertyQuota = t.Optional(
 
 const day = (which: string) =>
   t.String({
-    pattern: "^(\\d{4}-\\d{2}-\\d{2}|today|yesterday|\\d+daysAgo)$",
+    pattern: `^(${ISO_DAY}|today|yesterday|\\d+daysAgo)$`,
     description: `The ${which} day, inclusive: YYYY-MM-DD, today, yesterday or NdaysAgo, in the property's time zone`,
   });
 const rangeName = t.Optional(
@@ -362,8 +364,6 @@ const accountList = t.Object(
   STRICT,
 );
 const accountGet = t.Object({ accountId }, STRICT);
-const RFC3339 =
-  "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$";
 const changeHistory = t.Object(
   {
     accountId,
@@ -404,17 +404,12 @@ const changeHistory = t.Object(
       }),
     ),
     earliestChangeTime: t.Optional(
-      t.String({
-        pattern: RFC3339,
-        description:
-          "Only changes at or after this time (RFC 3339: 2026-11-01T00:00:00Z)",
-      }),
+      rfc3339(
+        "Only changes at or after this time (RFC 3339: 2026-11-01T00:00:00Z)",
+      ),
     ),
     latestChangeTime: t.Optional(
-      t.String({
-        pattern: RFC3339,
-        description: "Only changes at or before this time (RFC 3339)",
-      }),
+      rfc3339("Only changes at or before this time (RFC 3339)"),
     ),
     ...paging,
   },

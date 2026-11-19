@@ -37,6 +37,7 @@ import { obj } from "../../_shared/provider.js";
 import {
   atLeastOne,
   exactlyOne,
+  ISO_DAY_TIME,
   STRICT,
   stringEnum,
 } from "../../_shared/schemas.js";
@@ -306,7 +307,7 @@ const storyList = accountEdge({
 });
 const isoTime = (description: string) =>
   t.String({
-    pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}",
+    pattern: `^${ISO_DAY_TIME}`,
     description: `${description} (ISO 8601: 2026-11-18T09:12:31, UTC without an offset)`,
   });
 const tagList = accountEdge({

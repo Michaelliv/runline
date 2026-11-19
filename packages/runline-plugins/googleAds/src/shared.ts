@@ -12,11 +12,11 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { failedChange, unansweredChange } from "../../_shared/changes.js";
-import { googleFailure, googleResponse } from "../../_shared/googleAuth.js";
+import { googleFailure, googleJsonResponse } from "../../_shared/googleAuth.js";
 import { GOOGLE_ADS_VERSION } from "../../_shared/googleCredentials.js";
 import { maskedFields } from "../../_shared/googleFieldMask.js";
 import { arr, obj } from "../../_shared/provider.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { isoDay, stringEnum } from "../../_shared/schemas.js";
 
 export const PLUGIN = "googleAds";
 /**
@@ -85,8 +85,6 @@ const DATE_RANGES = [
   "THIS_WEEK_MON_TODAY",
   "THIS_WEEK_SUN_TODAY",
 ] as const;
-const day = (description: string) =>
-  t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$", description });
 
 /** The period a list reports metrics for; without one it reports none. */
 export const period = {
@@ -96,10 +94,10 @@ export const period = {
     }),
   ),
   startDate: t.Optional(
-    day("Report metrics from this day (YYYY-MM-DD), with endDate"),
+    isoDay("Report metrics from this day (YYYY-MM-DD), with endDate"),
   ),
   endDate: t.Optional(
-    day("Report metrics through this day (YYYY-MM-DD), with startDate"),
+    isoDay("Report metrics through this day (YYYY-MM-DD), with startDate"),
   ),
 };
 export type Period = t.Static<t.TObject<typeof period>>;
@@ -219,23 +217,17 @@ export async function adsRequest<T = unknown>(
   ctx: ActionContext,
   call: AdsCall,
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    ...(call.body === undefined ? {} : { "Content-Type": "application/json" }),
-    ...(call.account ? loginHeader(ctx, call.account.loginCustomerId) : {}),
-  };
   let response: Response;
   try {
-    response = await googleResponse(
+    response = await googleJsonResponse(
       ctx,
       PLUGIN,
       SCOPES,
+      call.method ?? "GET",
       `${BASE}${call.path}`,
-      {
-        method: call.method ?? "GET",
-        headers,
-        body: call.body === undefined ? undefined : JSON.stringify(call.body),
-      },
+      call.body,
+      undefined,
+      call.account ? loginHeader(ctx, call.account.loginCustomerId) : {},
     );
   } catch (error) {
     throw call.changes ? unansweredChange(error) : error;
@@ -246,7 +238,7 @@ export async function adsRequest<T = unknown>(
     if (requestId) failure.message += ` (request-id ${requestId})`;
     throw call.changes ? failedChange(failure) : failure;
   }
-  return (await jsonAnswer(response)) as T;
+  return jsonAnswer<T>(response);
 }
 
 type Page = { nextPageToken?: string } & Record<string, unknown>;

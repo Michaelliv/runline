@@ -41,3 +41,22 @@ export function stringEnum<const T extends readonly string[]>(
     ),
   );
 }
+
+/** A calendar day, `2026-11-19`, as a pattern fragment. */
+export const ISO_DAY = "\\d{4}-\\d{2}-\\d{2}";
+/** A day and its time to the second, `2026-11-19T09:12:31`, as a fragment. */
+export const ISO_DAY_TIME = `${ISO_DAY}T\\d{2}:\\d{2}:\\d{2}`;
+
+/** A calendar day: `YYYY-MM-DD`. */
+export const isoDay = (description?: string) =>
+  t.String({
+    pattern: `^${ISO_DAY}$`,
+    ...(description ? { description } : {}),
+  });
+
+/** An RFC 3339 time with its offset: `2026-11-19T09:12:31Z`. */
+export const rfc3339 = (description?: string) =>
+  t.String({
+    pattern: `^${ISO_DAY_TIME}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$`,
+    ...(description ? { description } : {}),
+  });

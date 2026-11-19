@@ -12,7 +12,7 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { failedChange, unansweredChange } from "../../_shared/changes.js";
-import { googleFailure, googleResponse } from "../../_shared/googleAuth.js";
+import { googleFailure, googleJsonResponse } from "../../_shared/googleAuth.js";
 import { maskedFields } from "../../_shared/googleFieldMask.js";
 import { STRICT } from "../../_shared/schemas.js";
 
@@ -150,21 +150,13 @@ export async function analytics<T = unknown>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await googleResponse(
+    response = await googleJsonResponse(
       ctx,
       PLUGIN,
       SCOPES,
+      call.method ?? "GET",
       `${BASES[call.api]}${call.path}`,
-      {
-        method: call.method ?? "GET",
-        headers: {
-          Accept: "application/json",
-          ...(call.body === undefined
-            ? {}
-            : { "Content-Type": "application/json" }),
-        },
-        body: call.body === undefined ? undefined : JSON.stringify(call.body),
-      },
+      call.body,
       call.query,
     );
   } catch (error) {

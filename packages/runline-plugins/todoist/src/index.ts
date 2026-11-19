@@ -19,6 +19,7 @@ import { obj } from "../../_shared/provider.js";
 import {
   atLeastOne,
   exactlyOne,
+  isoDay,
   STRICT,
   stringEnum,
 } from "../../_shared/schemas.js";
@@ -40,7 +41,6 @@ const Priority = t.Integer({
   maximum: 4,
   description: "1 (normal) to 4 (urgent)",
 });
-const DueDate = t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" });
 const Filter = (description: string) =>
   t.String({ minLength: 1, maxLength: 1024, description });
 const FilterLang = t.Optional(
@@ -187,7 +187,7 @@ const taskChanges = {
   description: t.Optional(t.String()),
   priority: t.Optional(Priority),
   dueString: t.Optional(Id('Natural language, e.g. "every monday"')),
-  dueDate: t.Optional(DueDate),
+  dueDate: t.Optional(isoDay()),
   labels: t.Optional(Labels),
   assigneeId: t.Optional(AssigneeId),
 };

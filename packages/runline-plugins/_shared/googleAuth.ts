@@ -163,6 +163,38 @@ export function googleFailed(
   return responseFailed(plugin, response, googleFailure);
 }
 
+/**
+ * A Google JSON call's response, whatever its status: the body sent as
+ * JSON and a JSON answer asked for, beside any headers the call adds.
+ */
+export function googleJsonResponse(
+  ctx: ActionContext,
+  plugin: string,
+  scopes: string[],
+  method: string,
+  url: string,
+  body?: unknown,
+  query?: Record<string, unknown>,
+  headers: Record<string, string> = {},
+): Promise<Response> {
+  return googleResponse(
+    ctx,
+    plugin,
+    scopes,
+    url,
+    {
+      method,
+      headers: {
+        Accept: "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...headers,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    query,
+  );
+}
+
 /** A Google JSON request that must succeed; its answer is read by `jsonAnswer`. */
 export async function googleJsonRequest<T = unknown>(
   ctx: ActionContext,
@@ -173,19 +205,13 @@ export async function googleJsonRequest<T = unknown>(
   body?: unknown,
   query?: Record<string, unknown>,
 ): Promise<T> {
-  const response = await googleResponse(
+  const response = await googleJsonResponse(
     ctx,
     plugin,
     scopes,
+    method,
     url,
-    {
-      method,
-      headers: {
-        Accept: "application/json",
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    },
+    body,
     query,
   );
   if (!response.ok) throw await googleFailed(plugin, response);

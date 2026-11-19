@@ -90,6 +90,7 @@ import { readLocalFile } from "../../_shared/localFile.js";
 import {
   atLeastOne,
   exactlyOne,
+  rfc3339,
   STRICT,
   stringEnum,
 } from "../../_shared/schemas.js";
@@ -121,10 +122,6 @@ const AccessProposalRole = stringEnum([
 const ColorRgb = t.String({ pattern: "^#?[0-9A-Fa-f]{6}$" });
 const PageSize100 = t.Integer({ minimum: 1, maximum: 100 });
 const PageSize1000 = t.Integer({ minimum: 1, maximum: 1000 });
-const Rfc3339Timestamp = t.String({
-  pattern:
-    "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
-});
 const QuotedFileContent = t.Object(
   {
     value: NonEmptyString,
@@ -1352,7 +1349,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         fileId: Id,
         includeDeleted: t.Optional(t.Boolean()),
         pageSize: t.Optional(PageSize100),
-        startModifiedTime: t.Optional(Rfc3339Timestamp),
+        startModifiedTime: t.Optional(rfc3339()),
       },
       STRICT,
     ),
@@ -1892,7 +1889,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         fileId: Id,
         permissionId: Id,
         role: t.Optional(PermissionRole),
-        expirationTime: t.Optional(Rfc3339Timestamp),
+        expirationTime: t.Optional(rfc3339()),
         transferOwnership: t.Optional(t.Boolean()),
         removeExpiration: t.Optional(t.Boolean()),
         useDomainAdminAccess: t.Optional(t.Boolean()),
