@@ -21,6 +21,7 @@ import {
   googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
+  googleConnection,
   Id,
   NonEmptyString,
   PositiveInteger,
@@ -97,56 +98,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
     googleOAuth("googleAppsScript", SCOPES, "GOOGLE_APPS_SCRIPT"),
   );
 
-  rl.setConnectionSchema({
-    authMethod: {
-      type: "string",
-      required: false,
-      description:
-        "delegated or serviceAccount (legacy configs infer the method)",
-    },
-    clientId: {
-      type: "string",
-      required: false,
-      description: "OAuth client ID",
-      env: "GOOGLE_APPS_SCRIPT_CLIENT_ID",
-    },
-    clientSecret: {
-      type: "string",
-      required: false,
-      description: "OAuth client secret",
-      env: "GOOGLE_APPS_SCRIPT_CLIENT_SECRET",
-    },
-    refreshToken: {
-      type: "string",
-      required: false,
-      description: "OAuth refresh token",
-      env: "GOOGLE_APPS_SCRIPT_REFRESH_TOKEN",
-    },
-    serviceAccountJson: {
-      type: "string",
-      required: false,
-      description: "Service-account key JSON",
-      env: "GOOGLE_APPS_SCRIPT_SERVICE_ACCOUNT_JSON",
-    },
-    serviceAccountEmail: {
-      type: "string",
-      required: false,
-      description: "Service-account email",
-      env: "GOOGLE_APPS_SCRIPT_SERVICE_ACCOUNT_EMAIL",
-    },
-    serviceAccountPrivateKey: {
-      type: "string",
-      required: false,
-      description: "Service-account private key",
-      env: "GOOGLE_APPS_SCRIPT_SERVICE_ACCOUNT_PRIVATE_KEY",
-    },
-    serviceAccountSubject: {
-      type: "string",
-      required: false,
-      description: "User to impersonate (domain-wide delegation)",
-      env: "GOOGLE_APPS_SCRIPT_SERVICE_ACCOUNT_SUBJECT",
-    },
-  });
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_APPS_SCRIPT")));
 
   rl.registerAction("script.list", {
     access: "read",

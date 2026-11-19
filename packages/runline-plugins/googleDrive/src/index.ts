@@ -77,6 +77,7 @@ import {
   googleResponse,
 } from "../../_shared/googleAuth.js";
 import {
+  googleConnection,
   Id,
   NonEmptyString,
   RawGoogleObject,
@@ -486,53 +487,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
 
   rl.setOAuth(googleOAuth("googleDrive", SCOPES, "GOOGLE_DRIVE"));
 
-  rl.setConnectionSchema({
-    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
-    clientId: {
-      type: "string",
-      required: false,
-      description: "Google OAuth2 client ID",
-      env: "GOOGLE_DRIVE_CLIENT_ID",
-    },
-    clientSecret: {
-      type: "string",
-      required: false,
-      description: "Google OAuth2 client secret",
-      env: "GOOGLE_DRIVE_CLIENT_SECRET",
-    },
-    refreshToken: {
-      type: "string",
-      required: false,
-      description: "OAuth2 refresh token",
-      env: "GOOGLE_DRIVE_REFRESH_TOKEN",
-    },
-    serviceAccountJson: {
-      type: "string",
-      required: false,
-      description: "Google service account JSON credential",
-      env: "GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON",
-    },
-    serviceAccountEmail: {
-      type: "string",
-      required: false,
-      description: "Google service account email",
-      env: "GOOGLE_DRIVE_SERVICE_ACCOUNT_EMAIL",
-    },
-    serviceAccountPrivateKey: {
-      type: "string",
-      required: false,
-      description: "Google service account private key",
-      env: "GOOGLE_DRIVE_SERVICE_ACCOUNT_PRIVATE_KEY",
-    },
-    serviceAccountSubject: {
-      type: "string",
-      required: false,
-      description: "User email to impersonate with domain-wide delegation",
-      env: "GOOGLE_DRIVE_SERVICE_ACCOUNT_SUBJECT",
-    },
-    accessToken: { type: "string", required: false },
-    accessTokenExpiresAt: { type: "number", required: false },
-  });
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_DRIVE")));
 
   // ── File ──────────────────────────────────────────────
 

@@ -36,6 +36,7 @@ import {
   googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
+  googleConnection,
   Id,
   NonEmptyString,
   PositiveInteger,
@@ -487,18 +488,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
 
   rl.setOAuth(googleOAuth("googleContacts", SCOPES, "GOOGLE_CONTACTS"));
 
-  rl.setConnectionSchema({
-    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
-    clientId: { type: "string", required: false, env: "GOOGLE_CONTACTS_CLIENT_ID" },
-    clientSecret: { type: "string", required: false, env: "GOOGLE_CONTACTS_CLIENT_SECRET" },
-    refreshToken: { type: "string", required: false, env: "GOOGLE_CONTACTS_REFRESH_TOKEN" },
-    serviceAccountJson: { type: "string", required: false, env: "GOOGLE_CONTACTS_SERVICE_ACCOUNT_JSON" },
-    serviceAccountEmail: { type: "string", required: false, env: "GOOGLE_CONTACTS_SERVICE_ACCOUNT_EMAIL" },
-    serviceAccountPrivateKey: { type: "string", required: false, env: "GOOGLE_CONTACTS_SERVICE_ACCOUNT_PRIVATE_KEY" },
-    serviceAccountSubject: { type: "string", required: false, env: "GOOGLE_CONTACTS_SERVICE_ACCOUNT_SUBJECT" },
-    accessToken: { type: "string", required: false },
-    accessTokenExpiresAt: { type: "number", required: false },
-  });
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_CONTACTS")));
 
   // ── Contact ───────────────────────────────────────────
 

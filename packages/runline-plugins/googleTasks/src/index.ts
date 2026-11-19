@@ -31,7 +31,7 @@ import {
   googleJsonRequest,
   googleOAuth,
 } from "../../_shared/googleAuth.js";
-import { GoogleTimestamp, Id } from "../../_shared/googleSchemas.js";
+import { googleConnection, GoogleTimestamp, Id } from "../../_shared/googleSchemas.js";
 import { stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -121,18 +121,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
 
   rl.setOAuth(googleOAuth("googleTasks", SCOPES, "GOOGLE_TASKS"));
 
-  rl.setConnectionSchema({
-    authMethod: { type: "string", required: false, description: "delegated or serviceAccount (legacy configs infer the method)" },
-    clientId: { type: "string", required: false, env: "GOOGLE_TASKS_CLIENT_ID" },
-    clientSecret: { type: "string", required: false, env: "GOOGLE_TASKS_CLIENT_SECRET" },
-    refreshToken: { type: "string", required: false, env: "GOOGLE_TASKS_REFRESH_TOKEN" },
-    serviceAccountJson: { type: "string", required: false, env: "GOOGLE_TASKS_SERVICE_ACCOUNT_JSON" },
-    serviceAccountEmail: { type: "string", required: false, env: "GOOGLE_TASKS_SERVICE_ACCOUNT_EMAIL" },
-    serviceAccountPrivateKey: { type: "string", required: false, env: "GOOGLE_TASKS_SERVICE_ACCOUNT_PRIVATE_KEY" },
-    serviceAccountSubject: { type: "string", required: false, env: "GOOGLE_TASKS_SERVICE_ACCOUNT_SUBJECT" },
-    accessToken: { type: "string", required: false },
-    accessTokenExpiresAt: { type: "number", required: false },
-  });
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_TASKS")));
 
   // ── Task lists ────────────────────────────────────────
 

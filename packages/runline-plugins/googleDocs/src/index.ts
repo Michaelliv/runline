@@ -9,7 +9,9 @@
  */
 
 import type { RunlinePluginAPI } from "runline";
+import * as t from "typebox";
 import { googleCredential, googleOAuth } from "../../_shared/googleAuth.js";
+import { googleConnection } from "../../_shared/googleSchemas.js";
 import { registerDocumentsActions } from "./documents.js";
 import { registerFormattingActions } from "./formatting.js";
 import { registerImagesActions } from "./images.js";
@@ -26,47 +28,7 @@ export default function googleDocs(rl: RunlinePluginAPI) {
 
   rl.setOAuth(googleOAuth("googleDocs", SCOPES, "GOOGLE_DOCS"));
 
-  rl.setConnectionSchema({
-    authMethod: {
-      type: "string",
-      required: false,
-      description:
-        "delegated or serviceAccount (legacy configs infer the method)",
-    },
-    clientId: { type: "string", required: false, env: "GOOGLE_DOCS_CLIENT_ID" },
-    clientSecret: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_DOCS_CLIENT_SECRET",
-    },
-    refreshToken: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_DOCS_REFRESH_TOKEN",
-    },
-    serviceAccountJson: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_DOCS_SERVICE_ACCOUNT_JSON",
-    },
-    serviceAccountEmail: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_DOCS_SERVICE_ACCOUNT_EMAIL",
-    },
-    serviceAccountPrivateKey: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_DOCS_SERVICE_ACCOUNT_PRIVATE_KEY",
-    },
-    serviceAccountSubject: {
-      type: "string",
-      required: false,
-      env: "GOOGLE_DOCS_SERVICE_ACCOUNT_SUBJECT",
-    },
-    accessToken: { type: "string", required: false },
-    accessTokenExpiresAt: { type: "number", required: false },
-  });
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_DOCS")));
 
   registerDocumentsActions(rl);
   registerTextActions(rl);

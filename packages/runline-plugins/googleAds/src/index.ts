@@ -22,7 +22,10 @@ import {
 } from "runline";
 import * as t from "typebox";
 import { googleCredential, googleOAuth } from "../../_shared/googleAuth.js";
-import { RawGoogleObject } from "../../_shared/googleSchemas.js";
+import {
+  googleConnection,
+  RawGoogleObject,
+} from "../../_shared/googleSchemas.js";
 import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 import {
   type Account,
@@ -473,25 +476,9 @@ export default function googleAds(rl: RunlinePluginAPI) {
     ],
   });
 
-  const text = (env: string) =>
-    t.Optional(t.String({ env: `GOOGLE_ADS_${env}` }));
   rl.setConnectionSchema(
     t.Object({
-      authMethod: t.Optional(
-        stringEnum(["delegated", "serviceAccount"] as const, {
-          description:
-            "delegated (a person's login) or serviceAccount (a key added to the Google Ads account as a user)",
-        }),
-      ),
-      clientId: text("CLIENT_ID"),
-      clientSecret: text("CLIENT_SECRET"),
-      refreshToken: text("REFRESH_TOKEN"),
-      serviceAccountJson: text("SERVICE_ACCOUNT_JSON"),
-      serviceAccountEmail: text("SERVICE_ACCOUNT_EMAIL"),
-      serviceAccountPrivateKey: text("SERVICE_ACCOUNT_PRIVATE_KEY"),
-      serviceAccountSubject: text("SERVICE_ACCOUNT_SUBJECT"),
-      accessToken: t.Optional(t.String()),
-      accessTokenExpiresAt: t.Optional(t.Number()),
+      ...googleConnection("GOOGLE_ADS"),
       loginCustomerId: t.Optional(
         customerIdSchema(
           "Manager account the login reaches client accounts through; calls may name another",

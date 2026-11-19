@@ -303,10 +303,11 @@ describe("googleDocs plugin", () => {
       "https://www.googleapis.com/auth/documents",
       "https://www.googleapis.com/auth/drive.file",
     ]);
-    const connectionSchema = plugin.connectionConfigSchema as Record<
-      string,
-      { env?: string }
-    >;
+    const connectionSchema = (
+      plugin.connectionConfigSchema as {
+        properties: Record<string, { env?: string }>;
+      }
+    ).properties;
     assert.equal(connectionSchema.clientId?.env, "GOOGLE_DOCS_CLIENT_ID");
     assert.equal(
       connectionSchema.serviceAccountSubject?.env,

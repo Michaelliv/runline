@@ -16,6 +16,7 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
+import { failedChange, unansweredChange } from "./changes.js";
 import { obj } from "./provider.js";
 
 /**
@@ -118,9 +119,6 @@ export function snake(value: unknown): unknown {
 
 // ─── Requests ───────────────────────────────────────────────────
 
-const UNKNOWN_OUTCOME =
-  "The change may have been applied: check before sending it again.";
-
 /** The codes that say the token itself is expired, revoked or invalid. */
 const DEAD_TOKEN_CODES = [102, 190];
 
@@ -201,9 +199,7 @@ export function metaGraph(options: MetaGraphOptions) {
     if (advice) failure.message += `: ${advice}`;
     const trace = errorIdentifier(error.fbtrace_id);
     if (trace) failure.message += ` (fbtrace_id ${trace})`;
-    if (changes && response.status >= 500)
-      failure.message += `. ${UNKNOWN_OUTCOME}`;
-    return failure;
+    return changes ? failedChange(failure) : failure;
   }
 
   /**
@@ -220,14 +216,7 @@ export function metaGraph(options: MetaGraphOptions) {
     try {
       response = await credentialRequest(ctx, credential, call);
     } catch (error) {
-      const code = (error as { code?: unknown }).code;
-      if (!changes || code !== "transport_failed") throw error;
-      throw Object.assign(
-        new Error(`${(error as Error).message}. ${UNKNOWN_OUTCOME}`, {
-          cause: error,
-        }),
-        { code },
-      );
+      throw changes ? unansweredChange(error) : error;
     }
     if (!response.ok) throw await failed(response, changes);
     return response;

@@ -3,10 +3,11 @@ import {
   AuthError,
   brokerFor,
   downloadResource,
+  type ErrorEnvelope,
   type HttpMethod,
   jsonAnswer,
   type OAuthConfig,
-  requestFailed,
+  responseFailed,
 } from "runline";
 import {
   GOOGLE_GRANT,
@@ -15,6 +16,7 @@ import {
   googleResources,
   googleServices,
 } from "./googleCredentials.js";
+import { arr, obj } from "./provider.js";
 
 export type { GoogleAuthConfig } from "./googleCredentials.js";
 export { googleCredential } from "./googleCredentials.js";
@@ -119,7 +121,8 @@ export async function googleResponse(
       for (const entry of Array.isArray(value) ? value : [value])
         params.append(key, String(entry));
     }
-    path = `${separator < 0 ? path : path.slice(0, separator)}?${params}`;
+    const bare = separator < 0 ? path : path.slice(0, separator);
+    path = params.size ? `${bare}?${params}` : bare;
   }
   return brokerFor(ctx, googleCredential(plugin, scopes)).request({
     target,
@@ -128,6 +131,28 @@ export async function googleResponse(
     headers: init.headers,
     body: init.body,
   });
+}
+
+/**
+ * What Google's error envelope names: its status (`PERMISSION_DENIED`),
+ * with the reason an ErrorInfo detail or an older API's `errors` entry
+ * gives (`PERMISSION_DENIED.SERVICE_DISABLED`), and the request fields a
+ * BadRequest detail faults. Its messages are never read: they can echo
+ * what was sent.
+ */
+export function googleFailure(body: unknown): ErrorEnvelope {
+  const error = obj(obj(body).error);
+  const details = arr(error.details).map(obj);
+  const reason = [...details, ...arr(error.errors).map(obj)]
+    .map((entry) => entry.reason)
+    .find((value) => typeof value === "string");
+  const status = typeof error.status === "string" ? error.status : undefined;
+  return {
+    code: status && reason ? `${status}.${reason}` : (status ?? reason),
+    param: details.flatMap((detail) =>
+      arr(detail.fieldViolations).map((violation) => obj(violation).field),
+    ),
+  };
 }
 
 /** A Google JSON request that must succeed; its answer is read by `jsonAnswer`. */
@@ -155,7 +180,7 @@ export async function googleJsonRequest<T = unknown>(
     },
     query,
   );
-  if (!response.ok) throw requestFailed(plugin, response.status);
+  if (!response.ok) throw await responseFailed(plugin, response, googleFailure);
   return jsonAnswer<T>(response);
 }
 

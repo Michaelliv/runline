@@ -11,8 +11,10 @@ import {
   responseFailed,
 } from "runline";
 import * as t from "typebox";
-import { googleResponse } from "../../_shared/googleAuth.js";
+import { failedChange, unansweredChange } from "../../_shared/changes.js";
+import { googleFailure, googleResponse } from "../../_shared/googleAuth.js";
 import { GOOGLE_ADS_VERSION } from "../../_shared/googleCredentials.js";
+import { maskedFields } from "../../_shared/googleFieldMask.js";
 import { obj } from "../../_shared/provider.js";
 import { stringEnum } from "../../_shared/schemas.js";
 
@@ -166,14 +168,12 @@ interface AdsCall {
   changes?: boolean;
 }
 
-const UNKNOWN_OUTCOME =
-  "The change may have been applied: check with search before sending it again.";
-
 /**
- * Google's error status, and its GoogleAdsFailure: each error's code as
- * `<type>.<value>` (`queryError.UNRECOGNIZED_FIELD`) and the request field
- * it concerns (`mutateOperations.0.campaignOperation.update.name`). The
- * messages are never read: they can echo what was sent.
+ * A GoogleAdsFailure: each error's code as `<type>.<value>`
+ * (`queryError.UNRECOGNIZED_FIELD`) and the request field it concerns
+ * (`mutateOperations.0.campaignOperation.update.name`). A failure that
+ * carries none reads as any Google API's does. The messages are never
+ * read: they can echo what was sent.
  */
 export function adsFailure(body: unknown): { code?: unknown; param?: unknown } {
   const error = obj(obj(body).error);
@@ -189,7 +189,7 @@ export function adsFailure(body: unknown): { code?: unknown; param?: unknown } {
   return {
     code:
       errors.map((entry) => errorCode(entry.errorCode)).find(Boolean) ??
-      error.status,
+      googleFailure(body).code,
     param: [...new Set(fields)],
   };
 }
@@ -245,22 +245,13 @@ export async function adsRequest<T = unknown>(
       },
     );
   } catch (error) {
-    const code = (error as { code?: unknown }).code;
-    if (!call.changes || code !== "transport_failed") throw error;
-    throw Object.assign(
-      new Error(`${(error as Error).message}. ${UNKNOWN_OUTCOME}`, {
-        cause: error,
-      }),
-      { code },
-    );
+    throw call.changes ? unansweredChange(error) : error;
   }
   if (!response.ok) {
     const failure = await responseFailed(PLUGIN, response, adsFailure);
     const requestId = errorIdentifier(response.headers.get("request-id"));
     if (requestId) failure.message += ` (request-id ${requestId})`;
-    if (call.changes && response.status >= 500)
-      failure.message += `. ${UNKNOWN_OUTCOME}`;
-    throw failure;
+    throw call.changes ? failedChange(failure) : failure;
   }
   return (await jsonAnswer(response)) as T;
 }
@@ -459,21 +450,8 @@ export function update(
   name: string,
   fields: Record<string, unknown>,
 ): { update: Record<string, unknown>; updateMask: string } {
-  const set = Object.entries(fields).filter(([, value]) => value !== undefined);
-  return {
-    update: {
-      resourceName: name,
-      ...Object.fromEntries(set.map(([key, value]) => [camel(key), value])),
-    },
-    // Google's REST examples name mask paths in snake_case, as GAQL does.
-    updateMask: set.map(([key]) => key).join(","),
-  };
-}
-
-function camel(field: string): string {
-  return field.replace(/_([a-z])/g, (_, letter: string) =>
-    letter.toUpperCase(),
-  );
+  const { body, updateMask } = maskedFields(fields);
+  return { update: { resourceName: name, ...body }, updateMask };
 }
 
 export const validateOnly = t.Optional(

@@ -696,7 +696,7 @@ describe("googleAds failures", () => {
       run("campaign.update", { ...acct, campaignId: "1", status: "PAUSED" }),
       {
         message:
-          "googleAds: request failed (HTTP 503 UNAVAILABLE) (request-id rq-7). The change may have been applied: check with search before sending it again.",
+          "googleAds: request failed (HTTP 503 UNAVAILABLE) (request-id rq-7). The change may have been applied: check before sending it again.",
         status: 503,
       },
     );
