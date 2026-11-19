@@ -33,18 +33,12 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      const kind = p.locationKind ?? "location";
       const req: Record<string, unknown> = {
-        ...buildLocation(
-          kind,
-          p.segmentId as string,
-          p.index as number,
-          p.tabId as string | undefined,
-        ),
+        ...buildLocation(kind, p.segmentId, p.index, p.tabId),
         uri: p.uri,
       };
       if (p.widthPt !== undefined || p.heightPt !== undefined) {
@@ -73,15 +67,14 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
           replaceImage: {
             imageObjectId: p.imageObjectId,
             uri: p.uri,
-            imageReplaceMethod:
-              (p.imageReplaceMethod as string | undefined) ?? "CENTER_CROP",
+            imageReplaceMethod: p.imageReplaceMethod ?? "CENTER_CROP",
             ...(p.tabId ? { tabId: p.tabId } : {}),
           },
         },

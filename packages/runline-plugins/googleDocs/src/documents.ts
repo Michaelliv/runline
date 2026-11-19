@@ -30,7 +30,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       const body: Record<string, unknown> = {
         name: p.title,
         mimeType: "application/vnd.google-apps.document",
@@ -48,7 +48,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
       "Create a blank Google Doc through the native Docs API. Use document.create when you need Drive folder placement.",
     inputSchema: t.Object({ title: t.String({ minLength: 1 }) }, STRICT_OBJECT),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       return docsRequest(ctx, "POST", "/documents", { title: p.title });
     },
   });
@@ -79,8 +79,8 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const qs: Record<string, unknown> = {};
       if (p.suggestionsViewMode) qs.suggestionsViewMode = p.suggestionsViewMode;
       if (p.includeTabsContent !== undefined)
@@ -110,8 +110,8 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const body: Record<string, unknown> = {
         requests: p.requests,
       };

@@ -47,13 +47,6 @@ import { stringEnum } from "../../_shared/schemas.js";
 
 type Ctx = ActionContext;
 
-interface ReplaceTextEntry {
-  text: string;
-  replaceText: string;
-  matchCase?: boolean;
-  pageObjectIds?: string[];
-}
-
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://slides.googleapis.com/v1";
@@ -115,7 +108,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       return slidesRequest(ctx, "POST", "/presentations", { title: p.title });
     },
   });
@@ -132,8 +125,8 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+      const p = input;
+      const id = extractPresentationId(p.presentation);
       const qs: Record<string, unknown> = {};
       if (p.fields) qs.fields = p.fields;
       return slidesRequest(ctx, "GET", `/presentations/${id}`, undefined, qs);
@@ -151,8 +144,8 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+      const p = input;
+      const id = extractPresentationId(p.presentation);
       const res = (await slidesRequest(
         ctx,
         "GET",
@@ -190,9 +183,9 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
-      const replacements = p.replacements as ReplaceTextEntry[];
+      const p = input;
+      const id = extractPresentationId(p.presentation);
+      const replacements = p.replacements;
       if (!Array.isArray(replacements) || replacements.length === 0) {
         throw new Error("googleSlides: replacements must be a non-empty array");
       }
@@ -234,8 +227,8 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+      const p = input;
+      const id = extractPresentationId(p.presentation);
       const body: Record<string, unknown> = { requests: p.requests };
       if (p.writeControl) body.writeControl = p.writeControl;
       return slidesRequest(
@@ -260,8 +253,8 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+      const p = input;
+      const id = extractPresentationId(p.presentation);
       return slidesRequest(
         ctx,
         "GET",
@@ -293,8 +286,8 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const id = extractPresentationId(p.presentation as string);
+      const p = input;
+      const id = extractPresentationId(p.presentation);
       const qs: Record<string, unknown> = {};
       if (p.mimeType) qs["thumbnailProperties.mimeType"] = p.mimeType;
       if (p.thumbnailSize)

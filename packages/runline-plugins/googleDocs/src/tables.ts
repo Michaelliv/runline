@@ -19,18 +19,18 @@ import {
 
 const PositiveSpan = t.Integer({ minimum: 1 });
 
-function tableStartLocation(
-  p: Record<string, unknown>,
-): Record<string, unknown> {
-  return location(
-    p.tableStartIndex as number,
-    p.segmentId as string | undefined,
-    p.tabId as string | undefined,
-  );
+type TableStart = {
+  tableStartIndex: number;
+  segmentId?: string;
+  tabId?: string;
+};
+
+function tableStartLocation(p: TableStart): Record<string, unknown> {
+  return location(p.tableStartIndex, p.segmentId, p.tabId);
 }
 
 function tableCellLocation(
-  p: Record<string, unknown>,
+  p: TableStart & { rowIndex: number; columnIndex: number },
 ): Record<string, unknown> {
   return {
     rowIndex: p.rowIndex,
@@ -57,20 +57,14 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
         insertTable: {
           rows: p.rows,
           columns: p.columns,
-          ...buildLocation(
-            kind,
-            p.segmentId as string,
-            p.index as number,
-            p.tabId as string | undefined,
-          ),
+          ...buildLocation(kind, p.segmentId, p.index, p.tabId),
         },
       });
     },
@@ -89,8 +83,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         insertTableRow: {
           insertBelow: p.insertBelow === true,
@@ -108,8 +102,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteTableRow: {
           tableCellLocation: tableCellLocation(p),
@@ -130,8 +124,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         insertTableColumn: {
           insertRight: p.insertRight === true,
@@ -149,8 +143,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteTableColumn: {
           tableCellLocation: tableCellLocation(p),
@@ -191,14 +185,14 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const style: Record<string, unknown> = {};
       const fields: string[] = [];
       const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
       if (p.backgroundColorHex) {
         style.backgroundColor = {
-          color: { rgbColor: hexToRgbF(p.backgroundColorHex as string) },
+          color: { rgbColor: hexToRgbF(p.backgroundColorHex) },
         };
         fields.push("backgroundColor");
       }
@@ -236,8 +230,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
                 rowIndex: p.rowIndex,
                 columnIndex: p.columnIndex,
               },
-              rowSpan: (p.rowSpan as number | undefined) ?? 1,
-              columnSpan: (p.columnSpan as number | undefined) ?? 1,
+              rowSpan: p.rowSpan ?? 1,
+              columnSpan: p.columnSpan ?? 1,
             },
             tableCellStyle: style,
             fields: fields.join(","),
@@ -260,8 +254,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
           mergeTableCells: {
@@ -293,8 +287,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
           unmergeTableCells: {
@@ -345,19 +339,19 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const props: Record<string, unknown> = {};
       const fields: string[] = [];
       if (p.widthPt !== undefined) {
         props.width = point(p.widthPt);
-        props.widthType = (p.widthType as string | undefined) ?? "FIXED_WIDTH";
+        props.widthType = p.widthType ?? "FIXED_WIDTH";
         fields.push("width", "widthType");
       } else if (p.widthType) {
         props.widthType = p.widthType;
         fields.push("widthType");
       }
-      const mask = (p.fields as string | undefined) ?? fields.join(",");
+      const mask = p.fields ?? fields.join(",");
       if (!mask)
         throw new Error(
           "googleDocs.document.updateTableColumnProperties: fields or widthPt required",
@@ -394,15 +388,15 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const style: Record<string, unknown> = {};
       const fields: string[] = [];
       if (p.minRowHeightPt !== undefined) {
         style.minRowHeight = point(p.minRowHeightPt);
         fields.push("minRowHeight");
       }
-      const mask = (p.fields as string | undefined) ?? fields.join(",");
+      const mask = p.fields ?? fields.join(",");
       if (!mask)
         throw new Error(
           "googleDocs.document.updateTableRowStyle: fields or minRowHeightPt required",
@@ -431,8 +425,8 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         pinTableHeaderRows: {
           tableStartLocation: tableStartLocation(p),

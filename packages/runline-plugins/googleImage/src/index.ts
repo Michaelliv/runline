@@ -47,19 +47,6 @@ function generateContent(
   }) as Promise<GeminiResponse>;
 }
 
-interface CreateInput {
-  prompt: string;
-  model?: string;
-  saveDir?: string;
-}
-
-interface EditInput {
-  prompt: string;
-  imagePath: string;
-  model?: string;
-  saveDir?: string;
-}
-
 interface GeminiPart {
   inlineData?: { data: string; mimeType?: string };
   text?: string;
@@ -136,7 +123,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as CreateInput;
+      const p = input;
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("googleImage: prompt is required");
       }
@@ -182,7 +169,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as EditInput;
+      const p = input;
       if (typeof p.prompt !== "string" || p.prompt.length === 0) {
         throw new Error("googleImage: prompt is required");
       }

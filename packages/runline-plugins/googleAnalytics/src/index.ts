@@ -339,10 +339,12 @@ const description = t.String({
 const page = t.Object(paging, STRICT);
 const propertyPage = t.Object({ propertyId, ...paging }, STRICT);
 /** One page of a collection a property holds. */
-const listOf = (collection: string) => (input: unknown, ctx: ActionContext) => {
-  const { propertyId, ...query } = input as In<typeof propertyPage>;
-  return read(ctx, `${propertyName(ctx, propertyId)}/${collection}`, query);
-};
+const listOf =
+  (collection: string) =>
+  (input: In<typeof propertyPage>, ctx: ActionContext) => {
+    const { propertyId, ...query } = input;
+    return read(ctx, `${propertyName(ctx, propertyId)}/${collection}`, query);
+  };
 
 const accountList = t.Object(
   {
@@ -707,7 +709,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "A report of a property's event data: metrics (activeUsers, sessions, eventCount, …) broken down by dimensions (date, country, pagePath, …) over date ranges, filtered and ordered. Each row answers { dimensions, metrics } by name, with values as strings; rowCount is how many rows there are, of which limit and offset answer a page. metadata flags sampling, thresholding and an (other) row.",
     inputSchema: reportRun,
     async execute(input, ctx) {
-      const { propertyId, ...fields } = input as In<typeof reportRun>;
+      const { propertyId, ...fields } = input;
       return table(
         await report(
           ctx,
@@ -725,7 +727,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "A pivot report: the dimensions laid out by pivots, as a pivot table's rows and columns. Answers the API's shape: pivotHeaders name each pivot's dimension values, and each row its dimensionValues and metricValues by position.",
     inputSchema: reportRunPivot,
     async execute(input, ctx) {
-      const { propertyId, ...fields } = input as In<typeof reportRunPivot>;
+      const { propertyId, ...fields } = input;
       return report(
         ctx,
         propertyName(ctx, propertyId),
@@ -741,7 +743,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Up to 5 reports on one property in one request; answers reports, each as report.run answers it, in the order asked.",
     inputSchema: reportBatchRun,
     async execute(input, ctx) {
-      const { propertyId, requests } = input as In<typeof reportBatchRun>;
+      const { propertyId, requests } = input;
       const answer = await report<{ reports?: ReportTable[] }>(
         ctx,
         propertyName(ctx, propertyId),
@@ -761,7 +763,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Up to 5 pivot reports on one property in one request; answers pivotReports, each as report.runPivot answers it, in the order asked.",
     inputSchema: reportBatchRunPivot,
     async execute(input, ctx) {
-      const { propertyId, requests } = input as In<typeof reportBatchRunPivot>;
+      const { propertyId, requests } = input;
       return report(
         ctx,
         propertyName(ctx, propertyId),
@@ -777,7 +779,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "A report of the events of the last 30 minutes, seconds after they arrive: activeUsers, eventCount, screenPageViews and the like, by the realtime dimensions (country, deviceCategory, unifiedScreenName, eventName, minutesAgo, …). Realtime takes fewer names than report.run. Rows answer as report.run's do.",
     inputSchema: reportRunRealtime,
     async execute(input, ctx) {
-      const { propertyId, ...fields } = input as In<typeof reportRunRealtime>;
+      const { propertyId, ...fields } = input;
       return table(
         await report(
           ctx,
@@ -795,9 +797,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Which dimensions and metrics can join a report.run request that has the ones given: each of the property's names as COMPATIBLE or INCOMPATIBLE with them. Fails when the ones given do not go together themselves.",
     inputSchema: reportCheckCompatibility,
     async execute(input, ctx) {
-      const { propertyId, ...fields } = input as In<
-        typeof reportCheckCompatibility
-      >;
+      const { propertyId, ...fields } = input;
       return report(
         ctx,
         propertyName(ctx, propertyId),
@@ -813,7 +813,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "The dimensions, metrics and saved comparisons a property's reports take: each one's apiName, UI name, category and description, the property's custom ones included (customEvent:name). Property 0 answers the names every property has.",
     inputSchema: propertyOnly,
     async execute(input, ctx) {
-      const { propertyId } = input as In<typeof propertyOnly>;
+      const { propertyId } = input;
       return analytics(ctx, {
         api: "data",
         path: `${propertyName(ctx, propertyId)}/metadata`,
@@ -829,7 +829,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Every account the login reaches, each with its properties: their resource names (properties/1234), display names and types. The way to find a property's ID.",
     inputSchema: page,
     async execute(input, ctx) {
-      return read(ctx, "accountSummaries", input as In<typeof page>);
+      return read(ctx, "accountSummaries", input);
     },
   });
 
@@ -839,7 +839,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "The accounts the login reaches, with their region and times; an account may have no property.",
     inputSchema: accountList,
     async execute(input, ctx) {
-      return read(ctx, "accounts", input as In<typeof accountList>);
+      return read(ctx, "accounts", input);
     },
   });
 
@@ -848,7 +848,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     description: "One account: its display name, region and times.",
     inputSchema: accountGet,
     async execute(input, ctx) {
-      const { accountId } = input as In<typeof accountGet>;
+      const { accountId } = input;
       return read(ctx, accountName(accountId));
     },
   });
@@ -859,9 +859,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Who changed what in an account and its properties: each change's time, actor, and the resource before and after, a page at a time. A page may come back short or empty while nextPageToken says more follow.",
     inputSchema: changeHistory,
     async execute(input, ctx) {
-      const { accountId, propertyId, ...filter } = input as In<
-        typeof changeHistory
-      >;
+      const { accountId, propertyId, ...filter } = input;
       return analytics(ctx, {
         api: "admin",
         method: "POST",
@@ -885,7 +883,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "The properties under an account or a property, or linked to a Firebase project, a page at a time.",
     inputSchema: propertyList,
     async execute(input, ctx) {
-      return read(ctx, "properties", input as In<typeof propertyList>);
+      return read(ctx, "properties", input);
     },
   });
 
@@ -895,7 +893,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "One property: its display name, time zone, currency, industry, type, service level and account.",
     inputSchema: propertyOnly,
     async execute(input, ctx) {
-      const { propertyId } = input as In<typeof propertyOnly>;
+      const { propertyId } = input;
       return read(ctx, propertyName(ctx, propertyId));
     },
   });
@@ -906,7 +904,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Create a Google Analytics 4 property in an account. Its data streams are added with dataStream.create.",
     inputSchema: propertyCreate,
     async execute(input, ctx) {
-      const { accountId, ...settings } = input as In<typeof propertyCreate>;
+      const { accountId, ...settings } = input;
       return change(ctx, {
         method: "POST",
         path: "properties",
@@ -921,7 +919,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Change a property's display name, time zone, currency or industry.",
     inputSchema: propertyUpdate,
     async execute(input, ctx) {
-      const { propertyId, ...changes } = input as In<typeof propertyUpdate>;
+      const { propertyId, ...changes } = input;
       return patch(ctx, propertyName(ctx, propertyId), {
         display_name: changes.displayName,
         time_zone: changes.timeZone,
@@ -937,7 +935,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Move a property to the trash, and answer it with its expireTime: Google deletes it and everything under it for good then, unless it is restored in the Analytics UI first. The API cannot restore it.",
     inputSchema: propertyDelete,
     async execute(input, ctx) {
-      const { propertyId } = input as In<typeof propertyDelete>;
+      const { propertyId } = input;
       return change(ctx, {
         method: "DELETE",
         path: propertyName(ctx, propertyId),
@@ -950,7 +948,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     description: "How long a property keeps event and user data.",
     inputSchema: propertyOnly,
     async execute(input, ctx) {
-      const { propertyId } = input as In<typeof propertyOnly>;
+      const { propertyId } = input;
       return read(
         ctx,
         `${propertyName(ctx, propertyId)}/dataRetentionSettings`,
@@ -963,7 +961,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     description: "Change how long a property keeps event and user data.",
     inputSchema: retentionUpdate,
     async execute(input, ctx) {
-      const { propertyId, ...changes } = input as In<typeof retentionUpdate>;
+      const { propertyId, ...changes } = input;
       return patch(
         ctx,
         `${propertyName(ctx, propertyId)}/dataRetentionSettings`,
@@ -1011,7 +1009,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       description: `One of a property's ${kind.collection}, by its resource name.`,
       inputSchema: kind.named,
       async execute(input, ctx) {
-        return read(ctx, kind.path((input as In<typeof kind.named>).name));
+        return read(ctx, kind.path(input.name));
       },
     });
   }
@@ -1036,7 +1034,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     inputSchema: dataStreamCreate,
     async execute(input, ctx) {
       const { propertyId, defaultUri, packageName, bundleId, ...stream } =
-        input as In<typeof dataStreamCreate>;
+        input;
       return change(ctx, {
         method: "POST",
         path: `${propertyName(ctx, propertyId)}/dataStreams`,
@@ -1056,7 +1054,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     description: "Rename a data stream, or change the website a web one names.",
     inputSchema: dataStreamUpdate,
     async execute(input, ctx) {
-      const { name, ...changes } = input as In<typeof dataStreamUpdate>;
+      const { name, ...changes } = input;
       return patch(ctx, DATA_STREAM.path(name), {
         display_name: changes.displayName,
         "web_stream_data.default_uri": changes.defaultUri,
@@ -1072,9 +1070,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Register an event parameter, user property or item parameter as a custom dimension, which reports name as customEvent:name, customUser:name or customItem:name. Google's terms forbid using one to collect data on individual users, user IDs included.",
     inputSchema: customDimensionCreate,
     async execute(input, ctx) {
-      const { propertyId, ...definition } = input as In<
-        typeof customDimensionCreate
-      >;
+      const { propertyId, ...definition } = input;
       return change(ctx, {
         method: "POST",
         path: `${propertyName(ctx, propertyId)}/customDimensions`,
@@ -1088,7 +1084,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     description: "Change a custom dimension's display name or description.",
     inputSchema: customDimensionUpdate,
     async execute(input, ctx) {
-      const { name, ...changes } = input as In<typeof customDimensionUpdate>;
+      const { name, ...changes } = input;
       return patch(ctx, CUSTOM_DIMENSION.path(name), {
         display_name: changes.displayName,
         description: changes.description,
@@ -1103,9 +1099,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Register an event parameter as a custom metric, which reports name as customEvent:name.",
     inputSchema: customMetricCreate,
     async execute(input, ctx) {
-      const { propertyId, ...definition } = input as In<
-        typeof customMetricCreate
-      >;
+      const { propertyId, ...definition } = input;
       return change(ctx, {
         method: "POST",
         path: `${propertyName(ctx, propertyId)}/customMetrics`,
@@ -1119,7 +1113,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     description: "Change a custom metric's display name, description or unit.",
     inputSchema: customMetricUpdate,
     async execute(input, ctx) {
-      const { name, ...changes } = input as In<typeof customMetricUpdate>;
+      const { name, ...changes } = input;
       return patch(ctx, CUSTOM_METRIC.path(name), {
         display_name: changes.displayName,
         description: changes.description,
@@ -1140,7 +1134,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       async execute(input, ctx) {
         return change(ctx, {
           method: "POST",
-          path: `${kind.path((input as In<typeof kind.named>).name)}:archive`,
+          path: `${kind.path(input.name)}:archive`,
           body: {},
         });
       },
@@ -1154,7 +1148,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       "Count an event as a key event, every time it occurs or once a session. Key events replace the API's conversion events.",
     inputSchema: keyEventCreate,
     async execute(input, ctx) {
-      const { propertyId, ...keyEvent } = input as In<typeof keyEventCreate>;
+      const { propertyId, ...keyEvent } = input;
       return change(ctx, {
         method: "POST",
         path: `${propertyName(ctx, propertyId)}/keyEvents`,
@@ -1168,7 +1162,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     description: "Change how a key event is counted, or its default value.",
     inputSchema: keyEventUpdate,
     async execute(input, ctx) {
-      const { name, ...changes } = input as In<typeof keyEventUpdate>;
+      const { name, ...changes } = input;
       return patch(ctx, KEY_EVENT.path(name), {
         counting_method: changes.countingMethod,
         default_value: changes.defaultValue,
@@ -1191,7 +1185,7 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
       async execute(input, ctx) {
         return change(ctx, {
           method: "DELETE",
-          path: kind.path((input as In<typeof kind.named>).name),
+          path: kind.path(input.name),
         });
       },
     });

@@ -90,16 +90,10 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
-      const locObj = buildLocation(
-        kind,
-        p.segmentId as string,
-        p.index as number,
-        p.tabId as string | undefined,
-      );
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
+      const locObj = buildLocation(kind, p.segmentId, p.index, p.tabId);
       return runBatchUpdate(ctx, documentId, {
         insertText: { text: p.text, ...locObj },
       });
@@ -124,8 +118,8 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         replaceAllText: {
           replaceText: p.replaceText,
@@ -147,8 +141,8 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     description: "Delete text between two indices in a segment.",
     inputSchema: t.Object({ ...DocumentInput, ...RangeInput }, STRICT_OBJECT),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteContentRange: { range: range(p) },
       });
@@ -164,8 +158,8 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         createParagraphBullets: {
           bulletPreset: p.bulletPreset,
@@ -180,8 +174,8 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     description: "Remove bullets from paragraphs in a range.",
     inputSchema: t.Object({ ...DocumentInput, ...RangeInput }, STRICT_OBJECT),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteParagraphBullets: { range: range(p) },
       });
@@ -201,19 +195,13 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
         insertPerson: {
           personProperties: p.personProperties,
-          ...buildLocation(
-            kind,
-            p.segmentId as string,
-            p.index as number,
-            p.tabId as string | undefined,
-          ),
+          ...buildLocation(kind, p.segmentId, p.index, p.tabId),
         },
       });
     },
@@ -232,19 +220,13 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
         insertRichLink: {
           richLinkProperties: p.richLinkProperties,
-          ...buildLocation(
-            kind,
-            p.segmentId as string,
-            p.index as number,
-            p.tabId as string | undefined,
-          ),
+          ...buildLocation(kind, p.segmentId, p.index, p.tabId),
         },
       });
     },
@@ -263,21 +245,15 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
         insertDate: {
           ...(p.dateElementProperties
             ? { dateElementProperties: p.dateElementProperties }
             : {}),
-          ...buildLocation(
-            kind,
-            p.segmentId as string,
-            p.index as number,
-            p.tabId as string | undefined,
-          ),
+          ...buildLocation(kind, p.segmentId, p.index, p.tabId),
         },
       });
     },
@@ -317,8 +293,8 @@ export function registerTextActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const ts: Record<string, unknown> = {};
       const fields: string[] = [];
       if (p.bold !== undefined) {
@@ -346,12 +322,12 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         fields.push("weightedFontFamily");
       }
       if (p.foregroundColorHex) {
-        const c = hexToRgbF(p.foregroundColorHex as string);
+        const c = hexToRgbF(p.foregroundColorHex);
         ts.foregroundColor = { color: { rgbColor: c } };
         fields.push("foregroundColor");
       }
       if (p.backgroundColorHex) {
-        const c = hexToRgbF(p.backgroundColorHex as string);
+        const c = hexToRgbF(p.backgroundColorHex);
         ts.backgroundColor = { color: { rgbColor: c } };
         fields.push("backgroundColor");
       }

@@ -56,7 +56,9 @@ export const StringOrNumber = t.Union([t.String(), t.Number()]);
 export const StringOrStringArray = t.Union([t.String(), t.Array(t.String())]);
 
 /** JSON-compatible data whose provider-specific shape is intentionally open. */
-export const RawGoogleObject = t.Object({}, { additionalProperties: true });
+export const RawGoogleObject = t.Unsafe<Record<string, unknown>>(
+  t.Object({}, { additionalProperties: true }),
+);
 export const JsonValue = t.Unknown({
   description: "Any JSON-compatible value",
 });

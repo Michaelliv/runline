@@ -32,8 +32,8 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         addDocumentTab: { tabProperties: tabProperties(p) },
       });
@@ -49,8 +49,8 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteTab: { tabId: p.tabId },
       });
@@ -80,13 +80,13 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const fields: string[] = [];
       if (p.title !== undefined) fields.push("title");
       if (p.index !== undefined) fields.push("index");
       if (p.parentTabId !== undefined) fields.push("parentTabId");
-      const mask = (p.fields as string | undefined) ?? fields.join(",");
+      const mask = p.fields ?? fields.join(",");
       if (!mask) {
         throw new Error(
           "googleDocs.document.updateDocumentTabProperties: fields or tab property required",

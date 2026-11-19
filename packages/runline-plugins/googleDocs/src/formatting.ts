@@ -67,8 +67,8 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const ps: Record<string, unknown> = {};
       const fields: string[] = [];
       const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
@@ -144,8 +144,8 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         updateNamedStyle: compact({
           namedStyle: p.namedStyle,

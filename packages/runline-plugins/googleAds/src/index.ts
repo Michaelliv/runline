@@ -506,7 +506,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "An account's name, currency, time zone, status, and whether it is a manager or a test account",
     inputSchema: customerGet,
     async execute(input, ctx) {
-      return get(ctx, input as In<typeof customerGet>, {
+      return get(ctx, input, {
         select: [
           "customer.id",
           "customer.descriptive_name",
@@ -529,7 +529,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "A manager account's client accounts: every descendant with its level (1 is a direct client), or the direct clients only. Run it with the manager as customerId.",
     inputSchema: customerListClients,
     async execute(input, ctx) {
-      const p = input as In<typeof customerListClients>;
+      const p = input;
       return report(ctx, p, {
         select: [
           "customer_client.id",
@@ -569,7 +569,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
         summaryRow,
         totalResultsCount,
         ...rest
-      } = input as In<typeof searchInput>;
+      } = input;
       return search(ctx, rest, query, {
         limit: rows,
         summaryRow,
@@ -584,7 +584,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Search the catalog of GAQL resources, fields, segments and metrics: what each is, and which can be selected, filtered or sorted together",
     inputSchema: fieldSearch,
     async execute(input, ctx) {
-      const p = input as In<typeof fieldSearch>;
+      const p = input;
       return collect(
         ctx,
         { path: "googleAdsFields:search", body: { query: p.query } },
@@ -598,7 +598,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
     description: "One GAQL resource, field, segment or metric from the catalog",
     inputSchema: fieldGet,
     async execute(input, ctx) {
-      const { name } = input as In<typeof fieldGet>;
+      const { name } = input;
       return adsRequest(ctx, { path: `googleAdsFields/${pathSegment(name)}` });
     },
   });
@@ -611,7 +611,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Create, update or remove any resources in one request (GoogleAdsService.Mutate). All operations apply together, or none do unless partialFailure is set. An update names its changed fields in updateMask, in snake_case.",
     inputSchema: mutateInput,
     async execute(input, ctx) {
-      const { mutateOperations, ...options } = input as In<typeof mutateInput>;
+      const { mutateOperations, ...options } = input;
       return mutate(ctx, options, mutateOperations);
     },
   });
@@ -624,7 +624,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Campaigns with their status, channel, bidding and budget; with a period, also impressions, clicks, CTR, average CPC, cost and conversions",
     inputSchema: campaignList,
     async execute(input, ctx) {
-      return list(ctx, input as In<typeof campaignList>, {
+      return list(ctx, input, {
         select: CAMPAIGN_FIELDS,
         from: "campaign",
         statusField: "campaign.status",
@@ -639,7 +639,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "One campaign, as campaign.list reports it; null when there is none",
     inputSchema: campaignGet,
     async execute(input, ctx) {
-      const p = input as In<typeof campaignGet>;
+      const p = input;
       return get(ctx, p, {
         select: CAMPAIGN_FIELDS,
         from: "campaign",
@@ -654,12 +654,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
     description: "Rename a campaign, or pause or enable it",
     inputSchema: campaignUpdate,
     async execute(input, ctx) {
-      const {
-        campaignId: id,
-        name,
-        status,
-        ...options
-      } = input as In<typeof campaignUpdate>;
+      const { campaignId: id, name, status, ...options } = input;
       return mutate(ctx, options, [
         {
           campaignOperation: update(
@@ -677,7 +672,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Remove a campaign. Its status becomes REMOVED, which cannot be undone.",
     inputSchema: campaignRemove,
     async execute(input, ctx) {
-      const { campaignId: id, ...options } = input as In<typeof campaignRemove>;
+      const { campaignId: id, ...options } = input;
       return mutate(ctx, options, [
         {
           campaignOperation: {
@@ -694,12 +689,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Change a campaign budget's amount (micros per period) or name. A shared budget changes for every campaign using it. campaign.list reports each campaign's budget ID.",
     inputSchema: budgetUpdate,
     async execute(input, ctx) {
-      const {
-        campaignBudgetId: id,
-        amountMicros,
-        name,
-        ...options
-      } = input as In<typeof budgetUpdate>;
+      const { campaignBudgetId: id, amountMicros, name, ...options } = input;
       return mutate(ctx, options, [
         {
           campaignBudgetOperation: update(
@@ -719,7 +709,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Ad groups, of every campaign or one, with their status, type and default bid; with a period, also their performance",
     inputSchema: adGroupList,
     async execute(input, ctx) {
-      const p = input as In<typeof adGroupList>;
+      const p = input;
       return list(ctx, p, {
         select: AD_GROUP_FIELDS,
         from: "ad_group",
@@ -736,7 +726,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "One ad group, as adGroup.list reports it; null when there is none",
     inputSchema: adGroupGet,
     async execute(input, ctx) {
-      const p = input as In<typeof adGroupGet>;
+      const p = input;
       return get(ctx, p, {
         select: AD_GROUP_FIELDS,
         from: "ad_group",
@@ -751,13 +741,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
     description: "Rename an ad group, pause or enable it, or change its bid",
     inputSchema: adGroupUpdate,
     async execute(input, ctx) {
-      const {
-        adGroupId: id,
-        name,
-        status,
-        cpcBidMicros,
-        ...options
-      } = input as In<typeof adGroupUpdate>;
+      const { adGroupId: id, name, status, cpcBidMicros, ...options } = input;
       return mutate(ctx, options, [
         {
           adGroupOperation: update(
@@ -775,7 +759,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Remove an ad group. Its status becomes REMOVED, which cannot be undone.",
     inputSchema: adGroupRemove,
     async execute(input, ctx) {
-      const { adGroupId: id, ...options } = input as In<typeof adGroupRemove>;
+      const { adGroupId: id, ...options } = input;
       return mutate(ctx, options, [
         {
           adGroupOperation: {
@@ -794,7 +778,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Ads with their type, final URLs, responsive search ad text, status, strength and approval; with a period, also their performance",
     inputSchema: adList,
     async execute(input, ctx) {
-      const p = input as In<typeof adList>;
+      const p = input;
       return list(ctx, p, {
         select: AD_FIELDS,
         from: "ad_group_ad",
@@ -813,12 +797,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
     description: "Pause or enable an ad in its ad group",
     inputSchema: adUpdate,
     async execute(input, ctx) {
-      const {
-        adGroupId: group,
-        adId,
-        status,
-        ...options
-      } = input as In<typeof adUpdate>;
+      const { adGroupId: group, adId, status, ...options } = input;
       return mutate(ctx, options, [
         {
           adGroupAdOperation: update(
@@ -836,11 +815,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Remove an ad from its ad group. Its status becomes REMOVED, which cannot be undone.",
     inputSchema: adRemove,
     async execute(input, ctx) {
-      const {
-        adGroupId: group,
-        adId,
-        ...options
-      } = input as In<typeof adRemove>;
+      const { adGroupId: group, adId, ...options } = input;
       return mutate(ctx, options, [
         {
           adGroupAdOperation: {
@@ -859,7 +834,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Keywords with their text, match type, status, bid, serving and approval status and quality score; with a period, also their performance",
     inputSchema: keywordList,
     async execute(input, ctx) {
-      const p = input as In<typeof keywordList>;
+      const p = input;
       return list(ctx, p, {
         select: KEYWORD_FIELDS,
         from: "keyword_view",
@@ -886,7 +861,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
         status,
         cpcBidMicros,
         ...options
-      } = input as In<typeof keywordCreate>;
+      } = input;
       const adGroup = resourceName(options.customerId, "adGroups", group);
       return mutate(
         ctx,
@@ -911,7 +886,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
         status,
         cpcBidMicros,
         ...options
-      } = input as In<typeof keywordUpdate>;
+      } = input;
       return mutate(ctx, options, [
         {
           adGroupCriterionOperation: update(
@@ -928,11 +903,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
     description: "Remove a keyword from its ad group",
     inputSchema: keywordRemove,
     async execute(input, ctx) {
-      const {
-        adGroupId: group,
-        criterionId: id,
-        ...options
-      } = input as In<typeof keywordRemove>;
+      const { adGroupId: group, criterionId: id, ...options } = input;
       return mutate(ctx, options, [
         {
           adGroupCriterionOperation: {
@@ -954,7 +925,7 @@ export default function googleAds(rl: RunlinePluginAPI) {
       "Keyword ideas from Keyword Planner, from seed keywords, a page, both, or a site: each with its average monthly searches, competition and top-of-page bid range. Google allows one request a second per account.",
     inputSchema: keywordIdeas,
     async execute(input, ctx) {
-      const p = input as In<typeof keywordIdeas>;
+      const p = input;
       return collect(
         ctx,
         {

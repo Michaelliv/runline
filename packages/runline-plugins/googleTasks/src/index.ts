@@ -142,7 +142,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       const qs: Record<string, unknown> = {};
       if (p.pageToken) qs.pageToken = p.pageToken;
       if (p.returnAll) return paginateAll(ctx, "/users/@me/lists", qs);
@@ -165,7 +165,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     description: "Get a task list by ID",
     inputSchema: t.Object({ tasklist: Id }, { additionalProperties: false }),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       return tasksRequest(
         ctx,
         "GET",
@@ -182,7 +182,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       return tasksRequest(ctx, "POST", "/users/@me/lists", { title: p.title });
     },
   });
@@ -198,7 +198,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       return tasksRequest(
         ctx,
         "PATCH",
@@ -215,7 +215,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     description: "Delete a task list and all its tasks",
     inputSchema: t.Object({ tasklist: Id }, { additionalProperties: false }),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       await tasksRequest(
         ctx,
         "DELETE",
@@ -256,7 +256,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       const body: Record<string, unknown> = { title: p.title };
       if (p.notes) body.notes = p.notes;
       if (p.status) body.status = p.status;
@@ -291,7 +291,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       return tasksRequest(
         ctx,
         "GET",
@@ -324,7 +324,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       const qs: Record<string, unknown> = {
         showCompleted: p.showCompleted ?? true,
         showDeleted: p.showDeleted ?? false,
@@ -379,7 +379,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       const body: Record<string, unknown> = {};
       if (p.title !== undefined) body.title = p.title;
       if (p.notes !== undefined) body.notes = p.notes;
@@ -412,7 +412,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       await tasksRequest(
         ctx,
         "DELETE",
@@ -436,7 +436,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       const qs: Record<string, unknown> = {};
       if (p.parent) qs.parent = p.parent;
       if (p.previous) qs.previous = p.previous;
@@ -456,7 +456,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       "Hide all completed tasks in a list from the default view. They remain accessible via task.list with showHidden=true.",
     inputSchema: t.Object({ tasklist: Id }, { additionalProperties: false }),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
+      const p = input;
       await tasksRequest(
         ctx,
         "POST",

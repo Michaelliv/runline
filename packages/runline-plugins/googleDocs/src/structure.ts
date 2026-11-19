@@ -37,17 +37,11 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
-        insertPageBreak: buildLocation(
-          kind,
-          p.segmentId as string,
-          p.index as number,
-          p.tabId as string | undefined,
-        ),
+        insertPageBreak: buildLocation(kind, p.segmentId, p.index, p.tabId),
       });
     },
   });
@@ -65,8 +59,8 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         createNamedRange: {
           name: p.name,
@@ -95,8 +89,8 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       if (!p.namedRangeId && !p.name) {
         throw new Error("googleDocs: provide namedRangeId or name");
       }
@@ -116,12 +110,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
+      const seg = p.segmentId && p.segmentId !== "body" ? p.segmentId : "";
       const sectionBreakLocation: Record<string, unknown> = compact({
         segmentId: seg,
         tabId: p.tabId,
@@ -152,8 +144,8 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteHeader: compact({ headerId: p.headerId, tabId: p.tabId }),
       });
@@ -168,12 +160,10 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
-      const seg =
-        p.segmentId && p.segmentId !== "body" ? (p.segmentId as string) : "";
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
+      const seg = p.segmentId && p.segmentId !== "body" ? p.segmentId : "";
       const sectionBreakLocation: Record<string, unknown> = compact({
         segmentId: seg,
         tabId: p.tabId,
@@ -204,8 +194,8 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteFooter: compact({ footerId: p.footerId, tabId: p.tabId }),
       });
@@ -225,8 +215,8 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deletePositionedObject: compact({
           objectId: p.objectId,
@@ -245,17 +235,11 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
-      const kind =
-        (p.locationKind as "location" | "endOfSegmentLocation") ?? "location";
+      const p = input;
+      const documentId = extractDocumentId(p.document);
+      const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
-        createFootnote: buildLocation(
-          kind,
-          p.segmentId as string,
-          p.index as number,
-          p.tabId as string | undefined,
-        ),
+        createFootnote: buildLocation(kind, p.segmentId, p.index, p.tabId),
       });
     },
   });
@@ -283,8 +267,8 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       if (!p.namedRangeId && !p.namedRangeName) {
         throw new Error("googleDocs: provide namedRangeId or namedRangeName");
       }
@@ -335,8 +319,8 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const sectionStyle: Record<string, unknown> = {};
       const fields: string[] = [];
       if (p.marginTopPt !== undefined) {
@@ -363,7 +347,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         sectionStyle.contentDirection = p.contentDirection;
         fields.push("contentDirection");
       }
-      const mask = (p.fields as string | undefined) ?? fields.join(",");
+      const mask = p.fields ?? fields.join(",");
       if (!mask)
         throw new Error(
           "googleDocs.document.updateSectionStyle: fields or section style property required",
@@ -393,17 +377,13 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       STRICT_OBJECT,
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
           insertSectionBreak: {
-            location: location(
-              p.index as number,
-              p.segmentId as string | undefined,
-              p.tabId as string | undefined,
-            ),
-            sectionType: (p.sectionType as string | undefined) ?? "CONTINUOUS",
+            location: location(p.index, p.segmentId, p.tabId),
+            sectionType: p.sectionType ?? "CONTINUOUS",
           },
         },
       ]);
@@ -440,8 +420,8 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
     ),
     async execute(input, ctx) {
-      const p = (input ?? {}) as Record<string, unknown>;
-      const documentId = extractDocumentId(p.document as string);
+      const p = input;
+      const documentId = extractDocumentId(p.document);
       const ds: Record<string, unknown> = {};
       const fields: string[] = [];
       const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });

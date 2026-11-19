@@ -117,8 +117,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as { query?: string; pageSize?: number };
+    async execute(input, ctx) {
+      const p = input;
       const params = new URLSearchParams({
         q: "mimeType='application/vnd.google-apps.script' and trashed=false",
         fields: "files(id,name,modifiedTime)",
@@ -142,8 +142,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
     description:
       "Get all files of an Apps Script project (name, type, source).",
     inputSchema: t.Object({ scriptId: Id }, { additionalProperties: false }),
-    async execute(input, ctx: ActionContext) {
-      const p = input as { scriptId: string };
+    async execute(input, ctx) {
+      const p = input;
       const res = await call<{ files?: ScriptFile[] }>(
         ctx,
         "GET",
@@ -167,8 +167,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as { scriptId: string; name: string };
+    async execute(input, ctx) {
+      const p = input;
       const res = await call<{ files?: ScriptFile[] }>(
         ctx,
         "GET",
@@ -196,13 +196,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as {
-        scriptId: string;
-        name: string;
-        source: string;
-        type?: string;
-      };
+    async execute(input, ctx) {
+      const p = input;
       const cur = await call<{ files?: ScriptFile[] }>(
         ctx,
         "GET",
@@ -247,8 +242,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as { scriptId: string; files: ScriptFile[] };
+    async execute(input, ctx) {
+      const p = input;
       const res = await call<{ files?: ScriptFile[] }>(
         ctx,
         "PUT",
@@ -275,8 +270,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as { title: string; parentId?: string };
+    async execute(input, ctx) {
+      const p = input;
       const payload: Record<string, unknown> = { title: p.title };
       if (p.parentId) payload.parentId = p.parentId;
       const res = await call<{
@@ -303,8 +298,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as { scriptId: string; description?: string };
+    async execute(input, ctx) {
+      const p = input;
       const res = await call<{ versionNumber?: number; description?: string }>(
         ctx,
         "POST",
@@ -334,13 +329,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as {
-        scriptId: string;
-        versionNumber: number;
-        description?: string;
-        manifestFileName?: string;
-      };
+    async execute(input, ctx) {
+      const p = input;
       const res = await call<{ deploymentId?: string; entryPoints?: unknown }>(
         ctx,
         "POST",
@@ -372,13 +362,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as {
-        scriptId: string;
-        functionName: string;
-        parameters?: unknown[];
-        devMode?: boolean;
-      };
+    async execute(input, ctx) {
+      const p = input;
       const res = await call<{
         done?: boolean;
         response?: { result?: unknown };
@@ -414,8 +399,8 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx: ActionContext) {
-      const p = input as { scriptId: string; pageSize?: number };
+    async execute(input, ctx) {
+      const p = input;
       const params = new URLSearchParams({
         "userProcessFilter.scriptId": p.scriptId,
         pageSize: String(p.pageSize ?? 20),
