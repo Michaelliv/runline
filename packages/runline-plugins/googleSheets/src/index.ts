@@ -62,18 +62,6 @@ import { stringEnum } from "../../_shared/schemas.js";
 
 type Ctx = ActionContext;
 
-type GoogleSheetsConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
-
 type ValueInputOption = "RAW" | "USER_ENTERED";
 type ValueRenderOption = "FORMATTED_VALUE" | "FORMULA" | "UNFORMATTED_VALUE";
 

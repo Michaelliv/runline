@@ -5,18 +5,6 @@ import { RawGoogleObject } from "../../_shared/googleSchemas.js";
 
 export type Ctx = ActionContext;
 
-export type GoogleDocsConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
-
 export const SCOPES = [
   "https://www.googleapis.com/auth/documents",
   "https://www.googleapis.com/auth/drive.file",

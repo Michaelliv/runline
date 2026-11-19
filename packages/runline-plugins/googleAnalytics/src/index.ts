@@ -334,7 +334,7 @@ const displayName = (what: string, maxLength: number) =>
   });
 const description = t.String({
   maxLength: 150,
-  description: "What it measures",
+  description: "A description of it",
 });
 const page = t.Object(paging, STRICT);
 const propertyPage = t.Object({ propertyId, ...paging }, STRICT);

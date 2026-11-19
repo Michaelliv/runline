@@ -116,9 +116,11 @@ it("never replays writes or retries quota/server/network failures, renews a reje
           ctx,
         ),
       ),
-      (error: Error) => {
+      (error: Error & { status?: number }) => {
         assert.ok(error.message.includes("Before retrying"));
         assert.ok(!error.message.includes("SECRET"));
+        // The guidance joins the failure; a host still reads its status.
+        assert.equal(error.status, status);
         return true;
       },
     );
@@ -139,6 +141,56 @@ it("never replays writes or retries quota/server/network failures, renews a reje
     );
     assert.equal(calls, 1);
   }
+});
+
+it("a failed call names Google's status and reason, on JSON calls and Drive's own alike", async () => {
+  const denied = () =>
+    Response.json(
+      {
+        error: {
+          status: "PERMISSION_DENIED",
+          message: "SECRET",
+          details: [{ reason: "SERVICE_DISABLED" }],
+        },
+      },
+      { status: 403 },
+    );
+  const expected = (plugin: string) => ({
+    message: `${plugin}: request failed (HTTP 403 PERMISSION_DENIED.SERVICE_DISABLED)`,
+    status: 403,
+  });
+  mock(denied);
+  await assert.rejects(
+    Promise.resolve(
+      action(googleTasks, "taskList.list").execute({}, await context()),
+    ),
+    expected("googleTasks"),
+  );
+  for (const [name, input] of [
+    ["file.upload", { content: "bytes" }],
+    ["file.export", { fileId: "file", mimeType: "text/plain" }],
+  ] as const)
+    await assert.rejects(
+      Promise.resolve(
+        action(googleDrive, name).execute(input, await context()),
+      ),
+      expected("googleDrive"),
+    );
+  // A blob's download fails the same way.
+  mock((url) =>
+    new URL(url).searchParams.get("alt") === "media"
+      ? denied()
+      : Response.json({ name: "f", mimeType: "text/plain" }),
+  );
+  await assert.rejects(
+    Promise.resolve(
+      action(googleDrive, "file.download").execute(
+        { fileId: "file" },
+        await context(),
+      ),
+    ),
+    expected("googleDrive"),
+  );
 });
 
 it("network errors are sanitized without automatic retry", async () => {

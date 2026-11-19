@@ -155,6 +155,14 @@ export function googleFailure(body: unknown): ErrorEnvelope {
   };
 }
 
+/** A failed Google response, by its status and what `googleFailure` reads. */
+export function googleFailed(
+  plugin: string,
+  response: Response,
+): Promise<Error & { status: number }> {
+  return responseFailed(plugin, response, googleFailure);
+}
+
 /** A Google JSON request that must succeed; its answer is read by `jsonAnswer`. */
 export async function googleJsonRequest<T = unknown>(
   ctx: ActionContext,
@@ -180,7 +188,7 @@ export async function googleJsonRequest<T = unknown>(
     },
     query,
   );
-  if (!response.ok) throw await responseFailed(plugin, response, googleFailure);
+  if (!response.ok) throw await googleFailed(plugin, response);
   return jsonAnswer<T>(response);
 }
 

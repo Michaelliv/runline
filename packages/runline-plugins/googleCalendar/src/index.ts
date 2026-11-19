@@ -54,18 +54,6 @@ const { RRule } = rrulePkg as unknown as { RRule: typeof import("rrule").RRule }
 
 type Ctx = ActionContext;
 
-type GoogleCalendarConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
-
 interface EventDateTime {
   dateTime?: string;
   date?: string;

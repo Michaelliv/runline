@@ -709,6 +709,23 @@ describe("googleAnalytics failures", () => {
     });
   });
 
+  it("keeps the report hint to reports, and names the field a change faults", async () => {
+    mock([
+      failure(400, {
+        status: "INVALID_ARGUMENT",
+        details: [{ fieldViolations: [{ field: "time_zone" }] }],
+      }),
+    ]);
+    await assert.rejects(
+      run("property.update", { propertyId: "1234", timeZone: "Mars" }),
+      {
+        message:
+          "googleAnalytics: request failed (HTTP 400 INVALID_ARGUMENT, param: time_zone)",
+        status: 400,
+      },
+    );
+  });
+
   it("says a change's outcome is unknown after a 5xx or no answer, and a read's is not", async () => {
     mock([failure(503, { status: "UNAVAILABLE" })]);
     await assert.rejects(

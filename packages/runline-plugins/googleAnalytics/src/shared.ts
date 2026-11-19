@@ -126,10 +126,11 @@ interface AnalyticsCall {
   changes?: boolean;
 }
 
-/** What Google's statuses mean for a report or a configuration call. */
+/** What a report's refusal usually is: a name, or names that do not mix. */
+const REPORT_HINT =
+  "metadata.get lists the property's dimension and metric names, and report.checkCompatibility says which go together";
+/** What Google's statuses mean for a call to either API. */
 const HINTS: Record<string, string> = {
-  INVALID_ARGUMENT:
-    "metadata.get lists the property's dimension and metric names, and report.checkCompatibility says which go together",
   RESOURCE_EXHAUSTED:
     "the property or the project is out of quota; returnPropertyQuota on a report answers what is left",
   "PERMISSION_DENIED.SERVICE_DISABLED":
@@ -178,9 +179,11 @@ export async function analytics<T = unknown>(
       return envelope;
     });
     const hint =
-      typeof code === "string"
-        ? (HINTS[code] ?? HINTS[code.split(".")[0]])
-        : undefined;
+      typeof code !== "string"
+        ? undefined
+        : call.api === "data" && code === "INVALID_ARGUMENT"
+          ? REPORT_HINT
+          : (HINTS[code] ?? HINTS[code.split(".")[0]]);
     if (hint) failure.message += `: ${hint}`;
     throw call.changes ? failedChange(failure) : failure;
   }

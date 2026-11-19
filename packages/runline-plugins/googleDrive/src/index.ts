@@ -64,7 +64,6 @@ import {
   jsonAnswer,
   pathSegment,
   rangedDownload,
-  requestFailed,
   type RunlinePluginAPI,
 } from "runline";
 import * as t from "typebox";
@@ -72,6 +71,7 @@ import { standardBase64 } from "../../_shared/base64.js";
 import { downloadTo } from "../../_shared/download.js";
 import {
   googleCredential,
+  googleFailed,
   googleJsonRequest,
   googleOAuth,
   googleResponse,
@@ -90,18 +90,6 @@ import { stringEnum } from "../../_shared/schemas.js";
 // ─── Types ───────────────────────────────────────────────────────
 
 type Ctx = ActionContext;
-
-type GoogleDriveConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
 
 interface PermissionInput {
   role: "owner" | "organizer" | "fileOrganizer" | "writer" | "commenter" | "reader";
@@ -365,7 +353,7 @@ async function uploadContent(
         to.metadata ? buildMultipart(to.metadata, c.buffer, mimeType) : c.buffer,
       ),
     });
-    if (!res.ok) throw requestFailed("googleDrive", res.status);
+    if (!res.ok) throw await googleFailed("googleDrive", res);
     return jsonAnswer(res);
   }
 
@@ -381,7 +369,7 @@ async function uploadContent(
     },
     ...(to.metadata ? { body: JSON.stringify(to.metadata) } : {}),
   });
-  if (!initRes.ok) throw requestFailed("googleDrive", initRes.status);
+  if (!initRes.ok) throw await googleFailed("googleDrive", initRes);
   const session = uploadSession(initRes.headers.get("location"));
 
   let offset = 0;
@@ -399,7 +387,7 @@ async function uploadContent(
       if (offset !== c.size) break;
       return jsonAnswer(res);
     }
-    if (res.status !== 308) throw requestFailed("googleDrive", res.status);
+    if (res.status !== 308) throw await googleFailed("googleDrive", res);
   }
   throw new Error("googleDrive: resumable upload did not complete");
 }
@@ -420,7 +408,7 @@ async function downloadMedia(
       plugin: "googleDrive",
       request: (range) =>
         driveResponse(ctx, url, { headers: { Range: range } }),
-      failed: (response) => requestFailed("googleDrive", response.status),
+      failed: (response) => googleFailed("googleDrive", response),
     },
     downloadTo("googleDrive", savePath),
     md5 === undefined ? {} : { md5 },
@@ -606,7 +594,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
           },
         );
         if (!res.ok) {
-          throw requestFailed("googleDrive", res.status);
+          throw await googleFailed("googleDrive", res);
         }
         return { id: doc.id };
       }
@@ -674,7 +662,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         u.searchParams.set("supportsAllDrives", "true");
         const res = await driveResponse(ctx, u.toString());
         if (!res.ok) {
-          throw requestFailed("googleDrive", res.status);
+          throw await googleFailed("googleDrive", res);
         }
         bytes = Buffer.from(await res.arrayBuffer());
         size = bytes.byteLength;
@@ -2114,7 +2102,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       u.searchParams.set("mimeType", p.mimeType as string);
       const res = await driveResponse(ctx, u.toString());
       if (!res.ok) {
-        throw requestFailed("googleDrive", res.status);
+        throw await googleFailed("googleDrive", res);
       }
       const bytes = Buffer.from(await res.arrayBuffer());
       const contentType = res.headers.get("content-type") ?? (p.mimeType as string);

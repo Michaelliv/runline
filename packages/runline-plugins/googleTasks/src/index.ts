@@ -38,18 +38,6 @@ import { stringEnum } from "../../_shared/schemas.js";
 
 type Ctx = ActionContext;
 
-type GoogleTasksConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
-
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://tasks.googleapis.com/tasks/v1";

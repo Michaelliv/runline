@@ -47,18 +47,6 @@ import { stringEnum } from "../../_shared/schemas.js";
 
 type Ctx = ActionContext;
 
-type GoogleSlidesConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
-
 interface ReplaceTextEntry {
   text: string;
   replaceText: string;

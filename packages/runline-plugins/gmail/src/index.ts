@@ -44,18 +44,6 @@ import { stringEnum } from "../../_shared/schemas.js";
 
 type Ctx = ActionContext;
 
-type GmailConfig = {
-  clientId?: string;
-  clientSecret?: string;
-  refreshToken?: string;
-  serviceAccountJson?: string;
-  serviceAccountEmail?: string;
-  serviceAccountPrivateKey?: string;
-  serviceAccountSubject?: string;
-  accessToken?: string;
-  accessTokenExpiresAt?: number;
-};
-
 interface EmailAttachmentInput {
   name?: string;
   filename?: string;
@@ -105,9 +93,10 @@ async function gmailRequest(
   try {
     return await googleJsonRequest(ctx, "gmail", SCOPES, method, `${API_BASE}${path}`, body, qs);
   } catch (error) {
+    // The hint joins the failure itself, which keeps its status and code.
     const hint = sendFailureRetryHint(method, path);
-    if (!hint) throw error;
-    throw new Error(`${error instanceof Error ? error.message : "gmail: request failed"}.${hint}`);
+    if (hint && error instanceof Error) error.message += `.${hint}`;
+    throw error;
   }
 }
 
