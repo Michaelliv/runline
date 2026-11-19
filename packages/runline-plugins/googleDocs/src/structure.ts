@@ -18,6 +18,23 @@ import {
   STRICT_OBJECT,
 } from "./shared.js";
 
+/**
+ * The section break a header or footer attaches to: the one at `index`,
+ * or the segment's own when the location is its end.
+ */
+function sectionBreakLocation(p: {
+  locationKind?: "location" | "endOfSegmentLocation";
+  index?: number;
+  segmentId?: string;
+  tabId?: string;
+}): Record<string, unknown> {
+  return compact({
+    segmentId: p.segmentId && p.segmentId !== "body" ? p.segmentId : "",
+    tabId: p.tabId,
+    index: p.locationKind === "endOfSegmentLocation" ? undefined : p.index,
+  });
+}
+
 export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertPageBreak", {
     access: "write",
@@ -78,9 +95,6 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      if (!p.namedRangeId && !p.name) {
-        throw new Error("googleDocs: provide namedRangeId or name");
-      }
       const req: Record<string, unknown> = p.namedRangeId
         ? { namedRangeId: p.namedRangeId }
         : { name: p.name };
@@ -98,22 +112,11 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
-      const seg = p.segmentId && p.segmentId !== "body" ? p.segmentId : "";
-      const sectionBreakLocation: Record<string, unknown> = compact({
-        segmentId: seg,
-        tabId: p.tabId,
-      });
-      if (kind === "location") {
-        if (p.index === undefined) {
-          throw new Error(
-            "googleDocs: `index` is required when locationKind=location",
-          );
-        }
-        sectionBreakLocation.index = p.index;
-      }
       return runBatchUpdate(ctx, documentId, {
-        createHeader: { type: "DEFAULT", sectionBreakLocation },
+        createHeader: {
+          type: "DEFAULT",
+          sectionBreakLocation: sectionBreakLocation(p),
+        },
       });
     },
   });
@@ -146,22 +149,11 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const kind = p.locationKind ?? "location";
-      const seg = p.segmentId && p.segmentId !== "body" ? p.segmentId : "";
-      const sectionBreakLocation: Record<string, unknown> = compact({
-        segmentId: seg,
-        tabId: p.tabId,
-      });
-      if (kind === "location") {
-        if (p.index === undefined) {
-          throw new Error(
-            "googleDocs: `index` is required when locationKind=location",
-          );
-        }
-        sectionBreakLocation.index = p.index;
-      }
       return runBatchUpdate(ctx, documentId, {
-        createFooter: { type: "DEFAULT", sectionBreakLocation },
+        createFooter: {
+          type: "DEFAULT",
+          sectionBreakLocation: sectionBreakLocation(p),
+        },
       });
     },
   });
@@ -249,9 +241,6 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     ),
     async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      if (!p.namedRangeId && !p.namedRangeName) {
-        throw new Error("googleDocs: provide namedRangeId or namedRangeName");
-      }
       return runBatchUpdate(ctx, documentId, {
         replaceNamedRangeContent: compact({
           text: p.text,
@@ -316,10 +305,6 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         fields.push("contentDirection");
       }
       const mask = p.fields ?? fields.join(",");
-      if (!mask)
-        throw new Error(
-          "googleDocs.document.updateSectionStyle: fields or section style property required",
-        );
       return runBatchUpdate(ctx, documentId, {
         updateSectionStyle: {
           range: range(p),
@@ -416,11 +401,6 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       if (p.useCustomHeaderFooterMargins !== undefined) {
         ds.useCustomHeaderFooterMargins = p.useCustomHeaderFooterMargins;
         fields.push("useCustomHeaderFooterMargins");
-      }
-      if (fields.length === 0) {
-        throw new Error(
-          "googleDocs.document.updateDocumentStyle: pass at least one property",
-        );
       }
       return runBatchUpdate(ctx, documentId, [
         {

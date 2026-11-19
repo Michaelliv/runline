@@ -248,7 +248,7 @@ async function resolveContent(p: {
   mimeType?: string;
   name?: string;
 }): Promise<Content> {
-  if (typeof p.contentBase64 === "string") {
+  if (p.contentBase64 !== undefined) {
     const base64 = standardBase64(p.contentBase64);
     if (base64 === undefined)
       throw new Error("googleDrive: contentBase64 is not valid base64");
@@ -260,7 +260,7 @@ async function resolveContent(p: {
       fileName: p.name,
     };
   }
-  if (typeof p.content === "string") {
+  if (p.content !== undefined) {
     const buf = Buffer.from(p.content, "utf-8");
     return {
       buffer: buf,
@@ -269,7 +269,7 @@ async function resolveContent(p: {
       fileName: p.name,
     };
   }
-  if (typeof p.contentPath === "string") {
+  if (p.contentPath !== undefined) {
     const stat = statSync(p.contentPath);
     const fileName = p.name ?? p.contentPath.split("/").pop();
     if (stat.size <= SIMPLE_UPLOAD_BYTES) {
@@ -490,6 +490,92 @@ function uuid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+/** Who a share is for, and what it tells them. */
+const shareFields = {
+  role: PermissionRole,
+  type: PermissionType,
+  emailAddress: t.Optional(NonEmptyString),
+  domain: t.Optional(NonEmptyString),
+  allowFileDiscovery: t.Optional(t.Boolean()),
+  emailMessage: t.Optional(t.String()),
+  sendNotificationEmail: t.Optional(t.Boolean()),
+  transferOwnership: t.Optional(t.Boolean()),
+  moveToNewOwnersRoot: t.Optional(t.Boolean()),
+  useDomainAdminAccess: t.Optional(t.Boolean()),
+};
+/** A user or group is named by email, a domain by its name, anyone by neither. */
+const SHARE_RULE = {
+  oneOf: [
+    {
+      properties: { type: { const: "user" } },
+      required: ["emailAddress"],
+      not: { required: ["domain"] },
+    },
+    {
+      properties: { type: { const: "group" } },
+      required: ["emailAddress"],
+      not: { required: ["domain"] },
+    },
+    {
+      properties: { type: { const: "domain" } },
+      required: ["domain"],
+      not: { required: ["emailAddress"] },
+    },
+    {
+      properties: { type: { const: "anyone" } },
+      not: {
+        anyOf: [{ required: ["emailAddress"] }, { required: ["domain"] }],
+      },
+    },
+  ],
+};
+
+/** Add a permission to a file or a folder. */
+function share(
+  ctx: Ctx,
+  id: string,
+  p: t.Static<t.TObject<typeof shareFields>>,
+): Promise<unknown> {
+  const {
+    role,
+    type,
+    emailAddress,
+    domain,
+    allowFileDiscovery,
+    ...notification
+  } = p;
+  // Fields left undefined drop out of the body and the query.
+  return driveRequest(
+    ctx,
+    "POST",
+    `/drive/v3/files/${pathSegment(id)}/permissions`,
+    { role, type, emailAddress, domain, allowFileDiscovery },
+    { supportsAllDrives: true, ...notification },
+  );
+}
+
+/** Trash a file or a folder, or erase it for good. */
+async function remove(
+  ctx: Ctx,
+  id: string,
+  permanently: boolean | undefined,
+): Promise<{ id: string; success: true }> {
+  const path = `/drive/v3/files/${pathSegment(id)}`;
+  if (permanently)
+    await driveRequest(ctx, "DELETE", path, undefined, {
+      supportsAllDrives: true,
+    });
+  else
+    await driveRequest(
+      ctx,
+      "PATCH",
+      path,
+      { trashed: true },
+      { supportsAllDrives: true },
+    );
+  return { id, success: true };
+}
+
 // ─── Plugin ──────────────────────────────────────────────────────
 
 const SCOPES = ["https://www.googleapis.com/auth/drive"];
@@ -588,18 +674,18 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       const name = p.name || "Untitled";
       const asDoc = p.convertToGoogleDocument === true;
       const mimeType = asDoc ? DRIVE.DOCUMENT : "text/plain";
+      const metadata: Record<string, unknown> = {
+        name,
+        mimeType,
+        parents: [resolveParent(p.folderId, p.driveId)],
+      };
+      if (p.properties) metadata.properties = p.properties;
+      if (p.appProperties) metadata.appProperties = p.appProperties;
 
       if (asDoc) {
         // For docs: create the file then fill it via docs.batchUpdate,
         // Drive's upload would upload the raw text as an attachment
         // instead of populating the document body.
-        const metadata: Record<string, unknown> = {
-          name,
-          mimeType,
-          parents: [resolveParent(p.folderId, p.driveId)],
-        };
-        if (p.properties) metadata.properties = p.properties;
-        if (p.appProperties) metadata.appProperties = p.appProperties;
         const doc = (await driveRequest(
           ctx,
           "POST",
@@ -637,14 +723,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       }
 
       // Plain text: uploaded as it is.
-      const buffer = Buffer.from(String(p.content), "utf-8");
-      const metadata: Record<string, unknown> = {
-        name,
-        parents: [resolveParent(p.folderId, p.driveId)],
-        mimeType,
-      };
-      if (p.properties) metadata.properties = p.properties;
-      if (p.appProperties) metadata.appProperties = p.appProperties;
+      const buffer = Buffer.from(p.content, "utf-8");
       return uploadContent(
         ctx,
         { metadata },
@@ -907,26 +986,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(p, ctx) {
-      if (p.deletePermanently) {
-        await driveRequest(
-          ctx,
-          "DELETE",
-          `/drive/v3/files/${pathSegment(p.fileId)}`,
-          undefined,
-          {
-            supportsAllDrives: true,
-          },
-        );
-      } else {
-        await driveRequest(
-          ctx,
-          "PATCH",
-          `/drive/v3/files/${pathSegment(p.fileId)}`,
-          { trashed: true },
-          { supportsAllDrives: true },
-        );
-      }
-      return { id: p.fileId, success: true };
+      return remove(ctx, p.fileId, p.deletePermanently);
     },
   });
 
@@ -953,72 +1013,11 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     description:
       "Add a permission to a file. Create one permission per call; list the existing permissions via file.listPermissions.",
     inputSchema: t.Object(
-      {
-        fileId: Id,
-        role: PermissionRole,
-        type: PermissionType,
-        emailAddress: t.Optional(NonEmptyString),
-        domain: t.Optional(NonEmptyString),
-        allowFileDiscovery: t.Optional(t.Boolean()),
-        emailMessage: t.Optional(t.String()),
-        sendNotificationEmail: t.Optional(t.Boolean()),
-        transferOwnership: t.Optional(t.Boolean()),
-        moveToNewOwnersRoot: t.Optional(t.Boolean()),
-        useDomainAdminAccess: t.Optional(t.Boolean()),
-      },
-      {
-        additionalProperties: false,
-        oneOf: [
-          {
-            properties: { type: { const: "user" } },
-            required: ["emailAddress"],
-            not: { required: ["domain"] },
-          },
-          {
-            properties: { type: { const: "group" } },
-            required: ["emailAddress"],
-            not: { required: ["domain"] },
-          },
-          {
-            properties: { type: { const: "domain" } },
-            required: ["domain"],
-            not: { required: ["emailAddress"] },
-          },
-          {
-            properties: { type: { const: "anyone" } },
-            not: {
-              anyOf: [{ required: ["emailAddress"] }, { required: ["domain"] }],
-            },
-          },
-        ],
-      },
+      { fileId: Id, ...shareFields },
+      { additionalProperties: false, ...SHARE_RULE },
     ),
-    async execute(p, ctx) {
-      const body: Record<string, unknown> = {
-        role: p.role,
-        type: p.type,
-      };
-      if (p.emailAddress) body.emailAddress = p.emailAddress;
-      if (p.domain) body.domain = p.domain;
-      if (p.allowFileDiscovery !== undefined)
-        body.allowFileDiscovery = p.allowFileDiscovery;
-      const qs: Record<string, unknown> = { supportsAllDrives: true };
-      if (p.emailMessage) qs.emailMessage = p.emailMessage;
-      if (p.sendNotificationEmail !== undefined)
-        qs.sendNotificationEmail = p.sendNotificationEmail;
-      if (p.transferOwnership !== undefined)
-        qs.transferOwnership = p.transferOwnership;
-      if (p.moveToNewOwnersRoot !== undefined)
-        qs.moveToNewOwnersRoot = p.moveToNewOwnersRoot;
-      if (p.useDomainAdminAccess !== undefined)
-        qs.useDomainAdminAccess = p.useDomainAdminAccess;
-      return driveRequest(
-        ctx,
-        "POST",
-        `/drive/v3/files/${pathSegment(p.fileId)}/permissions`,
-        body,
-        qs,
-      );
+    async execute({ fileId, ...permission }, ctx) {
+      return share(ctx, fileId, permission);
     },
   });
 
@@ -1102,26 +1101,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { additionalProperties: false },
     ),
     async execute(p, ctx) {
-      if (p.deletePermanently) {
-        await driveRequest(
-          ctx,
-          "DELETE",
-          `/drive/v3/files/${pathSegment(p.folderId)}`,
-          undefined,
-          {
-            supportsAllDrives: true,
-          },
-        );
-      } else {
-        await driveRequest(
-          ctx,
-          "PATCH",
-          `/drive/v3/files/${pathSegment(p.folderId)}`,
-          { trashed: true },
-          { supportsAllDrives: true },
-        );
-      }
-      return { id: p.folderId, success: true };
+      return remove(ctx, p.folderId, p.deletePermanently);
     },
   });
 
@@ -1129,69 +1109,11 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     access: "write",
     description: "Add a permission to a folder (same shape as file.share)",
     inputSchema: t.Object(
-      {
-        folderId: Id,
-        role: PermissionRole,
-        type: PermissionType,
-        emailAddress: t.Optional(NonEmptyString),
-        domain: t.Optional(NonEmptyString),
-        allowFileDiscovery: t.Optional(t.Boolean()),
-        emailMessage: t.Optional(t.String()),
-        sendNotificationEmail: t.Optional(t.Boolean()),
-        transferOwnership: t.Optional(t.Boolean()),
-        moveToNewOwnersRoot: t.Optional(t.Boolean()),
-        useDomainAdminAccess: t.Optional(t.Boolean()),
-      },
-      {
-        additionalProperties: false,
-        oneOf: [
-          {
-            properties: { type: { const: "user" } },
-            required: ["emailAddress"],
-            not: { required: ["domain"] },
-          },
-          {
-            properties: { type: { const: "group" } },
-            required: ["emailAddress"],
-            not: { required: ["domain"] },
-          },
-          {
-            properties: { type: { const: "domain" } },
-            required: ["domain"],
-            not: { required: ["emailAddress"] },
-          },
-          {
-            properties: { type: { const: "anyone" } },
-            not: {
-              anyOf: [{ required: ["emailAddress"] }, { required: ["domain"] }],
-            },
-          },
-        ],
-      },
+      { folderId: Id, ...shareFields },
+      { additionalProperties: false, ...SHARE_RULE },
     ),
-    async execute(p, ctx) {
-      const body: Record<string, unknown> = { role: p.role, type: p.type };
-      if (p.emailAddress) body.emailAddress = p.emailAddress;
-      if (p.domain) body.domain = p.domain;
-      if (p.allowFileDiscovery !== undefined)
-        body.allowFileDiscovery = p.allowFileDiscovery;
-      const qs: Record<string, unknown> = { supportsAllDrives: true };
-      for (const k of [
-        "emailMessage",
-        "sendNotificationEmail",
-        "transferOwnership",
-        "moveToNewOwnersRoot",
-        "useDomainAdminAccess",
-      ] as const) {
-        if (p[k] !== undefined) qs[k] = p[k];
-      }
-      return driveRequest(
-        ctx,
-        "POST",
-        `/drive/v3/files/${pathSegment(p.folderId)}/permissions`,
-        body,
-        qs,
-      );
+    async execute({ folderId, ...permission }, ctx) {
+      return share(ctx, folderId, permission);
     },
   });
 
@@ -1221,18 +1143,14 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     ),
     async execute(p, ctx) {
       const clauses: string[] = [];
-      if (typeof p.query === "string" && p.query.length > 0) {
+      if (p.query) {
         clauses.push(p.query);
-      } else if (typeof p.name === "string" && p.name.length > 0) {
+      } else if (p.name) {
         // Drive expects single-quoted strings with \' escaping.
         const escaped = p.name.replace(/'/g, "\\'");
         clauses.push(`name contains '${escaped}'`);
       }
-      if (
-        typeof p.folderId === "string" &&
-        p.folderId &&
-        p.folderId !== "root"
-      ) {
+      if (p.folderId && p.folderId !== "root") {
         clauses.push(`'${p.folderId}' in parents`);
       }
       const whatToSearch = p.whatToSearch ?? "all";
@@ -1640,8 +1558,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     ),
     async execute(p, ctx) {
       const body: Record<string, unknown> = { content: p.content };
-      if (p.action === "resolve" || p.action === "reopen")
-        body.action = p.action;
+      if (p.action) body.action = p.action;
       return driveRequest(
         ctx,
         "POST",
@@ -2181,7 +2098,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       }
       const bytes = Buffer.from(await res.arrayBuffer());
       const contentType = res.headers.get("content-type") ?? p.mimeType;
-      if (typeof p.savePath === "string") {
+      if (p.savePath !== undefined) {
         writeFileSync(p.savePath, bytes);
         return {
           path: p.savePath,

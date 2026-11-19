@@ -306,11 +306,6 @@ export function registerTextActions(rl: RunlinePluginAPI) {
         ts.link = { url: p.link };
         fields.push("link");
       }
-      if (fields.length === 0) {
-        throw new Error(
-          "googleDocs.document.updateTextStyle: at least one styling property required",
-        );
-      }
       return runBatchUpdate(ctx, documentId, [
         {
           updateTextStyle: {

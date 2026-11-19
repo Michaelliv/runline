@@ -167,11 +167,6 @@ function buildRecurrence(
   if (p.repeatFrequency) {
     parts.push(`FREQ=${p.repeatFrequency.toUpperCase()}`);
   }
-  if (p.repeatHowManyTimes !== undefined && p.repeatUntil !== undefined) {
-    throw new Error(
-      "googleCalendar: set either repeatHowManyTimes or repeatUntil, not both",
-    );
-  }
   if (p.repeatHowManyTimes !== undefined) {
     parts.push(`COUNT=${p.repeatHowManyTimes}`);
   }
@@ -688,11 +683,6 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
     inputSchema: calendarSchemas.availability,
     async execute(p, ctx) {
       const ids = p.calendarIds ?? (p.calendarId ? [p.calendarId] : []);
-      if (ids.length === 0) {
-        throw new Error(
-          "googleCalendar: calendarId or calendarIds is required",
-        );
-      }
       const body: Record<string, unknown> = {
         timeMin: new Date(p.timeMin).toISOString(),
         timeMax: new Date(p.timeMax).toISOString(),
@@ -889,11 +879,6 @@ export default function googleCalendar(rl: RunlinePluginAPI) {
 
       const body: EventBody = {};
       if (p.start !== undefined || p.end !== undefined) {
-        if (p.start === undefined || p.end === undefined) {
-          throw new Error(
-            "googleCalendar: start and end must be provided together on update",
-          );
-        }
         const times = buildEventTimes(
           p.start,
           p.end,

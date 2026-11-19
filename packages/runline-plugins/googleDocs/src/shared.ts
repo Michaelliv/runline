@@ -97,7 +97,6 @@ const DOC_URL_REGEX =
   /https:\/\/docs\.google\.com\/document\/d\/([a-zA-Z0-9-_]+)/;
 
 export function extractDocumentId(input: string): string {
-  if (!input) throw new Error("googleDocs: documentId or URL is required");
   const m = input.match(DOC_URL_REGEX);
   return pathSegment(m ? m[1] : input);
 }
@@ -112,11 +111,9 @@ export function buildLocation(
   if (kind === "endOfSegmentLocation") {
     return { endOfSegmentLocation: compact({ segmentId: seg, tabId }) };
   }
-  if (index === undefined || index === null) {
-    throw new Error(
-      "googleDocs: `index` is required when location kind is 'location'",
-    );
-  }
+  // The schema requires an index for this kind; the type cannot say so.
+  if (index === undefined)
+    throw new Error("googleDocs: a location takes an index");
   return { location: location(index, segmentId, tabId) };
 }
 

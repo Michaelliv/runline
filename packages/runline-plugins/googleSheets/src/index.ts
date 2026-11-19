@@ -284,6 +284,20 @@ async function getSheetProperties(
   return res.sheets.map((s) => s.properties);
 }
 
+/** A sheet's title: the name given, or the title of the sheet with that ID. */
+async function sheetTitle(
+  ctx: Ctx,
+  spreadsheetId: string,
+  sheet: string | number,
+): Promise<string> {
+  if (typeof sheet === "string") return sheet;
+  const found = (await getSheetProperties(ctx, spreadsheetId)).find(
+    (properties) => properties.sheetId === sheet,
+  );
+  if (!found) throw new Error(`googleSheets: sheet "${sheet}" not found`);
+  return found.title;
+}
+
 async function resolveSheetId(
   ctx: Ctx,
   spreadsheetId: string,
@@ -558,7 +572,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
           ...(p.autoRecalc ? { autoRecalc: p.autoRecalc } : {}),
         },
       };
-      if (Array.isArray(p.sheets) && p.sheets.length > 0) {
+      if (p.sheets?.length) {
         body.sheets = p.sheets.map((s) => ({
           properties: s,
         }));
@@ -583,7 +597,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
     async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.includeGridData) qs.includeGridData = p.includeGridData;
-      if (Array.isArray(p.ranges)) qs.ranges = p.ranges;
+      if (p.ranges) qs.ranges = p.ranges;
       if (p.fields) qs.fields = p.fields;
       return sheetsRequest(
         ctx,
@@ -651,7 +665,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       if (p.sheetId !== undefined) properties.sheetId = p.sheetId;
       if (p.hidden !== undefined) properties.hidden = p.hidden;
       if (p.rightToLeft !== undefined) properties.rightToLeft = p.rightToLeft;
-      if (typeof p.tabColor === "string") {
+      if (p.tabColor) {
         const rgb = hexToRgb(p.tabColor);
         if (rgb) properties.tabColor = rgb;
       }
@@ -755,18 +769,9 @@ export default function googleSheets(rl: RunlinePluginAPI) {
     ),
     async execute(p, ctx) {
       const spreadsheetId = p.spreadsheetId;
-      const sheetName =
-        typeof p.sheet === "number"
-          ? (await getSheetProperties(ctx, spreadsheetId)).find(
-              (s) => s.sheetId === p.sheet,
-            )?.title
-          : p.sheet;
-      if (!sheetName)
-        throw new Error(`googleSheets: sheet "${p.sheet}" not found`);
+      const sheetName = await sheetTitle(ctx, spreadsheetId, p.sheet);
       const rows = p.rows;
-      if (!Array.isArray(rows) || rows.length === 0) {
-        return { updatedRange: null, updatedRows: 0 };
-      }
+      if (rows.length === 0) return { updatedRange: null, updatedRows: 0 };
       const valueInputOption = p.valueInputOption ?? "USER_ENTERED";
       const headerRowIdx = Math.max(1, p.headerRow ?? 1) - 1;
 
@@ -943,14 +948,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       },
     ),
     async execute(p, ctx) {
-      const sheetName =
-        typeof p.sheet === "number"
-          ? (await getSheetProperties(ctx, p.spreadsheetId)).find(
-              (s) => s.sheetId === p.sheet,
-            )?.title
-          : p.sheet;
-      if (!sheetName)
-        throw new Error(`googleSheets: sheet "${p.sheet}" not found`);
+      const sheetName = await sheetTitle(ctx, p.spreadsheetId, p.sheet);
       const mode = p.mode ?? "wholeSheet";
       let range: string;
       if (mode === "rows") {
@@ -965,7 +963,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
         const endN = count === 1 ? startN : startN + count - 1;
         range = `${sheetName}!${startCol}:${columnNumberToLetter(endN)}`;
       } else if (mode === "range") {
-        const region = String(p.range ?? "");
+        const region = p.range ?? "";
         range = region.includes("!")
           ? `${sheetName}!${region.split("!")[1]}`
           : `${sheetName}!${region}`;
@@ -1023,14 +1021,14 @@ export default function googleSheets(rl: RunlinePluginAPI) {
     ),
     async execute(p, ctx) {
       const sheetId = await resolveSheetId(ctx, p.spreadsheetId, p.sheet);
-      const start = (p.startIndex ?? 1) - 1; // Sheets API is 0-indexed
+      const start = p.startIndex - 1; // Sheets API is 0-indexed
       const count = p.count ?? 1;
       await spreadsheetBatchUpdate(ctx, p.spreadsheetId, [
         {
           deleteDimension: {
             range: {
               sheetId,
-              dimension: String(p.dimension).toUpperCase(),
+              dimension: p.dimension,
               startIndex: start,
               endIndex: start + count,
             },
@@ -1074,11 +1072,8 @@ export default function googleSheets(rl: RunlinePluginAPI) {
     const spreadsheetId = p.spreadsheetId;
     const sheetIdOrName = p.sheet;
     const rows = p.rows;
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return { updated: 0, appended: 0 };
-    }
+    if (rows.length === 0) return { updated: 0, appended: 0 };
     const matchKey = p.matchKey;
-    if (!matchKey) throw new Error("googleSheets: matchKey is required");
     const valueInputOption = p.valueInputOption ?? "USER_ENTERED";
 
     const allProps = await getSheetProperties(ctx, spreadsheetId);
@@ -1458,7 +1453,7 @@ export default function googleSheets(rl: RunlinePluginAPI) {
       };
       if (p.range) protectedRange.range = a1RangeToGridRange(p.range, sheetId);
       else protectedRange.range = { sheetId };
-      if (Array.isArray(p.editorEmails)) {
+      if (p.editorEmails) {
         protectedRange.editors = { users: p.editorEmails };
       }
       return spreadsheetBatchUpdate(ctx, p.spreadsheetId, [
@@ -1628,30 +1623,22 @@ export default function googleSheets(rl: RunlinePluginAPI) {
     async execute(p, ctx) {
       const sheetId = await resolveSheetId(ctx, p.spreadsheetId, p.sheet);
       const grid = a1RangeToGridRange(p.range, sheetId);
-      let rule: Record<string, unknown> | null = null;
-      if (!p.clear) {
-        let cond = p.condition;
-        if (!cond && Array.isArray(p.oneOfList)) {
-          cond = {
-            type: "ONE_OF_LIST",
-            values: p.oneOfList.map((v) => ({
-              userEnteredValue: String(v),
-            })),
+      // Without a rule, setDataValidation clears the range's validation.
+      const rule = p.clear
+        ? undefined
+        : {
+            condition: p.condition ?? {
+              type: "ONE_OF_LIST",
+              values: p.oneOfList?.map((value) => ({
+                userEnteredValue: String(value),
+              })),
+            },
+            strict: p.strict ?? true,
+            showCustomUi: p.showCustomUi ?? true,
+            inputMessage: p.inputMessage,
           };
-        }
-        if (!cond)
-          throw new Error(
-            "googleSheets.dataValidation.set: pass condition or oneOfList, or set clear=true",
-          );
-        rule = {
-          condition: cond,
-          strict: p.strict ?? true,
-          showCustomUi: p.showCustomUi ?? true,
-          inputMessage: p.inputMessage,
-        };
-      }
       return spreadsheetBatchUpdate(ctx, p.spreadsheetId, [
-        { setDataValidation: { range: grid, rule: rule ?? undefined } },
+        { setDataValidation: { range: grid, rule } },
       ]);
     },
   });

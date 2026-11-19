@@ -79,8 +79,6 @@ const PRES_URL_REGEX =
  * Falls through to the input unchanged if no URL is detected.
  */
 function extractPresentationId(input: string): string {
-  if (!input)
-    throw new Error("googleSlides: presentationId or URL is required");
   const m = input.match(PRES_URL_REGEX);
   return pathSegment(m ? m[1] : input);
 }

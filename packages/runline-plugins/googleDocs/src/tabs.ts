@@ -89,11 +89,6 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       if (p.index !== undefined) fields.push("index");
       if (p.parentTabId !== undefined) fields.push("parentTabId");
       const mask = p.fields ?? fields.join(",");
-      if (!mask) {
-        throw new Error(
-          "googleDocs.document.updateDocumentTabProperties: fields or tab property required",
-        );
-      }
       return runBatchUpdate(ctx, documentId, {
         updateDocumentTabProperties: {
           tabProperties: tabProperties(p),

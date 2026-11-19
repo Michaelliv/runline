@@ -97,11 +97,6 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
         ps.lineSpacing = p.lineSpacing;
         fields.push("lineSpacing");
       }
-      if (fields.length === 0) {
-        throw new Error(
-          "googleDocs.document.updateParagraphStyle: at least one property required",
-        );
-      }
       return runBatchUpdate(ctx, documentId, [
         {
           updateParagraphStyle: {

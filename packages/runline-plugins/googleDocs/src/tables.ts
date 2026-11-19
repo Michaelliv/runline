@@ -203,11 +203,6 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         style.contentAlignment = p.contentAlignment;
         fields.push("contentAlignment");
       }
-      if (fields.length === 0) {
-        throw new Error(
-          "googleDocs.document.updateTableCellStyle: at least one style property required",
-        );
-      }
       return runBatchUpdate(ctx, documentId, [
         {
           updateTableCellStyle: {
@@ -335,10 +330,6 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         fields.push("widthType");
       }
       const mask = p.fields ?? fields.join(",");
-      if (!mask)
-        throw new Error(
-          "googleDocs.document.updateTableColumnProperties: fields or widthPt required",
-        );
       return runBatchUpdate(ctx, documentId, {
         updateTableColumnProperties: compact({
           tableStartLocation: tableStartLocation(p),
@@ -382,10 +373,6 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         fields.push("minRowHeight");
       }
       const mask = p.fields ?? fields.join(",");
-      if (!mask)
-        throw new Error(
-          "googleDocs.document.updateTableRowStyle: fields or minRowHeightPt required",
-        );
       return runBatchUpdate(ctx, documentId, {
         updateTableRowStyle: compact({
           tableStartLocation: tableStartLocation(p),

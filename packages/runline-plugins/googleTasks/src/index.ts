@@ -372,9 +372,6 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       if (due) body.due = due;
       const completed = toRFC3339(p.completed);
       if (completed) body.completed = completed;
-      if (Object.keys(body).length === 0) {
-        throw new Error("googleTasks: nothing to update");
-      }
       return tasksRequest(
         ctx,
         "PATCH",

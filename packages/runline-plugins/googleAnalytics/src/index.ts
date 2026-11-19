@@ -51,7 +51,9 @@ type In<S extends t.TSchema> = t.Static<S>;
 
 /** A part of a report request taken in the Data API's own JSON. */
 const raw = (description: string) =>
-  t.Object({}, { additionalProperties: true, description });
+  t.Unsafe<Record<string, unknown>>(
+    t.Object({}, { additionalProperties: true, description }),
+  );
 const apiName = t.String({ minLength: 1 });
 const dimension = t.Union([
   apiName,
@@ -1017,9 +1019,10 @@ export default function googleAnalytics(rl: RunlinePluginAPI) {
     description:
       "Add a data stream to a property: a website (displayName and defaultUri), an Android app (packageName) or an iOS app (bundleId). A web stream answers the measurementId its tag sends to.",
     inputSchema: dataStreamCreate,
-    async execute(input, ctx) {
-      const { propertyId, defaultUri, packageName, bundleId, ...stream } =
-        input;
+    async execute(
+      { propertyId, defaultUri, packageName, bundleId, ...stream },
+      ctx,
+    ) {
       return change(ctx, {
         method: "POST",
         path: `${propertyName(ctx, propertyId)}/dataStreams`,

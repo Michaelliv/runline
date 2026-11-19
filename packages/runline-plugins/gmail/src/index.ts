@@ -358,7 +358,7 @@ async function resolveBody(p: {
 }): Promise<{ text?: string; html?: string }> {
   let text = p.text;
   let html: string | undefined;
-  if (typeof p.jsx === "string" && p.jsx.trim()) {
+  if (p.jsx?.trim()) {
     let rendered: { html: string; text: string };
     try {
       rendered = await renderEmailJsx(p.jsx);
@@ -423,10 +423,8 @@ function buildListQuery(
 ): Record<string, unknown> {
   const qs: Record<string, unknown> = {};
   const qParts: string[] = [];
-  if (typeof input.q === "string" && input.q.length > 0) qParts.push(input.q);
-  if (typeof input.sender === "string" && input.sender.length > 0) {
-    qParts.push(`from:${input.sender}`);
-  }
+  if (input.q) qParts.push(input.q);
+  if (input.sender) qParts.push(`from:${input.sender}`);
   if (input.readStatus === "read" || input.readStatus === "unread") {
     qParts.push(`is:${input.readStatus}`);
   }

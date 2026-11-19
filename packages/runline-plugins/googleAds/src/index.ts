@@ -561,14 +561,10 @@ export default function googleAds(rl: RunlinePluginAPI) {
     description:
       "Run a GAQL query: any resource, its attributed resources, segments and metrics. Answers rows in the API's shape ({ campaign: {...}, metrics: {...} }); money is in micros. Build or check queries with field.search.",
     inputSchema: searchInput,
-    async execute(input, ctx) {
-      const {
-        query,
-        limit: rows,
-        summaryRow,
-        totalResultsCount,
-        ...rest
-      } = input;
+    async execute(
+      { query, limit: rows, summaryRow, totalResultsCount, ...rest },
+      ctx,
+    ) {
       return search(ctx, rest, query, {
         limit: rows,
         summaryRow,
@@ -843,15 +839,17 @@ export default function googleAds(rl: RunlinePluginAPI) {
     description:
       "Add keywords to an ad group, each with its match type; negative ones exclude searches instead",
     inputSchema: keywordCreate,
-    async execute(input, ctx) {
-      const {
+    async execute(
+      {
         adGroupId: group,
         keywords,
         negative,
         status,
         cpcBidMicros,
         ...options
-      } = input;
+      },
+      ctx,
+    ) {
       const adGroup = resourceName(options.customerId, "adGroups", group);
       return mutate(
         ctx,
@@ -869,14 +867,10 @@ export default function googleAds(rl: RunlinePluginAPI) {
     access: "write",
     description: "Pause or enable a keyword, or change its bid",
     inputSchema: keywordUpdate,
-    async execute(input, ctx) {
-      const {
-        adGroupId: group,
-        criterionId: id,
-        status,
-        cpcBidMicros,
-        ...options
-      } = input;
+    async execute(
+      { adGroupId: group, criterionId: id, status, cpcBidMicros, ...options },
+      ctx,
+    ) {
       return mutate(ctx, options, [
         {
           adGroupCriterionOperation: update(

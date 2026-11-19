@@ -81,31 +81,6 @@ const ALL_PERSON_FIELDS = [
   "userDefined",
 ] as const;
 
-/**
- * Fields that People API accepts on PATCH `updatePersonFields`.
- * Matches the request schema — `metadata`, `photos`, `coverPhotos`,
- * `locales`, `genders`, and `nicknames` aren't writable here.
- */
-const UPDATABLE_PERSON_FIELDS = new Set([
-  "addresses",
-  "biographies",
-  "birthdays",
-  "emailAddresses",
-  "events",
-  "imClients",
-  "interests",
-  "memberships",
-  "names",
-  "occupations",
-  "organizations",
-  "phoneNumbers",
-  "relations",
-  "sipAddresses",
-  "skills",
-  "urls",
-  "userDefined",
-]);
-
 // ─── Request ─────────────────────────────────────────────────────
 
 const API_BASE = "https://people.googleapis.com/v1";
@@ -616,16 +591,8 @@ export default function googleContacts(rl: RunlinePluginAPI) {
       }
 
       const { body, touchedFields } = buildPersonBody(p, etag);
-      // Filter to fields People API actually accepts on updatePersonFields.
-      const updateMask = touchedFields.filter((f) =>
-        UPDATABLE_PERSON_FIELDS.has(f),
-      );
-      if (updateMask.length === 0) {
-        throw new Error("googleContacts: no updatable fields supplied");
-      }
-
       const qs: Record<string, unknown> = {
-        updatePersonFields: updateMask.join(","),
+        updatePersonFields: touchedFields.join(","),
         personFields: resolvePersonFields(p.fields),
       };
       const res = (await peopleRequest(
@@ -727,9 +694,6 @@ export default function googleContacts(rl: RunlinePluginAPI) {
       if (p.clientData !== undefined) {
         contactGroup.clientData = p.clientData;
         updateGroupFields.push("clientData");
-      }
-      if (updateGroupFields.length === 0) {
-        throw new Error("googleContacts: nothing to update on group");
       }
       return peopleRequest(ctx, "PUT", `/${resource}`, {
         contactGroup,
