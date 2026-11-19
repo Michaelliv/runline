@@ -534,8 +534,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const content = await resolveContent(p);
       const metadata: Record<string, unknown> = {
         name: content.fileName ?? "Untitled",
@@ -585,8 +584,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const name = p.name || "Untitled";
       const asDoc = p.convertToGoogleDocument === true;
       const mimeType = asDoc ? DRIVE.DOCUMENT : "text/plain";
@@ -667,8 +665,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const fileId = p.fileId;
       const meta = (await driveRequest(
         ctx,
@@ -746,8 +743,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {};
       if (p.name) body.name = p.name;
       if (p.description) body.description = p.description;
@@ -779,8 +775,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const current = (await driveRequest(
         ctx,
         "GET",
@@ -854,8 +849,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const fileId = p.fileId;
       const hasBytes =
         p.contentBase64 !== undefined || p.contentPath !== undefined;
@@ -917,8 +911,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, deletePermanently: t.Optional(t.Boolean()) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       if (p.deletePermanently) {
         await driveRequest(
           ctx,
@@ -949,8 +942,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, fields: t.Optional(NonEmptyString) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "GET",
@@ -1006,8 +998,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {
         role: p.role,
         type: p.type,
@@ -1043,8 +1034,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, useDomainAdminAccess: t.Optional(t.Boolean()) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "GET",
@@ -1066,8 +1056,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, permissionId: Id },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await driveRequest(
         ctx,
         "DELETE",
@@ -1094,8 +1083,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {
         name: p.name || "Untitled",
         mimeType: DRIVE.FOLDER,
@@ -1118,8 +1106,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { folderId: Id, deletePermanently: t.Optional(t.Boolean()) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       if (p.deletePermanently) {
         await driveRequest(
           ctx,
@@ -1187,8 +1174,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = { role: p.role, type: p.type };
       if (p.emailAddress) body.emailAddress = p.emailAddress;
       if (p.domain) body.domain = p.domain;
@@ -1238,8 +1224,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const clauses: string[] = [];
       if (typeof p.query === "string" && p.query.length > 0) {
         clauses.push(p.query);
@@ -1314,8 +1299,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = { name: p.name };
       for (const k of [
         "colorRgb",
@@ -1338,8 +1322,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { driveId: Id, useDomainAdminAccess: t.Optional(t.Boolean()) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.useDomainAdminAccess !== undefined)
         qs.useDomainAdminAccess = p.useDomainAdminAccess;
@@ -1366,8 +1349,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.q) qs.q = p.q;
       if (p.useDomainAdminAccess !== undefined)
@@ -1408,8 +1390,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {};
       for (const k of ["name", "colorRgb", "restrictions"] as const) {
         if (p[k] !== undefined) body[k] = p[k];
@@ -1427,8 +1408,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     access: "write",
     description: "Delete a shared drive",
     inputSchema: t.Object({ driveId: Id }, { additionalProperties: false }),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await driveRequest(
         ctx,
         "DELETE",
@@ -1470,8 +1450,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const fileId = p.fileId;
       const out: unknown[] = [];
       const query: Record<string, unknown> = {
@@ -1504,8 +1483,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, commentId: Id, includeDeleted: t.Optional(t.Boolean()) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "GET",
@@ -1528,8 +1506,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = { content: p.content };
       if (p.quotedFileContent) body.quotedFileContent = p.quotedFileContent;
       return driveRequest(
@@ -1550,8 +1527,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, commentId: Id, content: NonEmptyString },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "PATCH",
@@ -1569,8 +1545,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, commentId: Id },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await driveRequest(
         ctx,
         "DELETE",
@@ -1588,8 +1563,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, commentId: Id, content: t.Optional(NonEmptyString) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "POST",
@@ -1608,8 +1582,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, commentId: Id, content: t.Optional(NonEmptyString) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "POST",
@@ -1632,8 +1605,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const out: unknown[] = [];
       const query: Record<string, unknown> = {
         fields: REPLY_LIST_FIELDS,
@@ -1675,8 +1647,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = { content: p.content };
       if (p.action === "resolve" || p.action === "reopen")
         body.action = p.action;
@@ -1697,8 +1668,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, commentId: Id, replyId: Id, content: NonEmptyString },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "PATCH",
@@ -1716,8 +1686,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, commentId: Id, replyId: Id },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await driveRequest(
         ctx,
         "DELETE",
@@ -1756,8 +1725,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, pageSize: t.Optional(PageSize1000) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const fileId = p.fileId;
       const out: unknown[] = [];
       const query: Record<string, unknown> = {
@@ -1788,8 +1756,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, revisionId: Id },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "GET",
@@ -1808,8 +1775,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, revisionId: Id, savePath: t.Optional(NonEmptyString) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const fileId = p.fileId;
       const revisionId = p.revisionId;
       const url = new URL(
@@ -1860,8 +1826,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {};
       for (const k of [
         "keepForever",
@@ -1889,8 +1854,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, revisionId: Id },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await driveRequest(
         ctx,
         "DELETE",
@@ -1908,8 +1872,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, revisionId: Id, mimeType: t.Optional(NonEmptyString) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const fileId = p.fileId;
       const revisionId = p.revisionId;
       // 1. Pull the chosen revision's bytes into a scratch file, so a large
@@ -1961,8 +1924,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(
         ctx,
         "GET",
@@ -1994,8 +1956,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(ctx, "GET", `/drive/v3/changes`, undefined, {
         pageToken: p.pageToken,
         driveId: p.driveId,
@@ -2029,8 +1990,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {
         id: p.channelId ?? uuid(),
         type: "web_hook",
@@ -2055,8 +2015,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { channelId: Id, resourceId: Id },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await driveRequest(ctx, "POST", `/drive/v3/channels/stop`, {
         id: p.channelId,
         resourceId: p.resourceId,
@@ -2099,8 +2058,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {};
       if (p.role) body.role = p.role;
       if (p.expirationTime) body.expirationTime = p.expirationTime;
@@ -2134,8 +2092,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fileId: Id, pageSize: t.Optional(PageSize100) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const out: unknown[] = [];
       let pageToken: string | undefined;
       do {
@@ -2178,8 +2135,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = { action: p.action };
       if (p.action === "ACCEPT") {
         body.role = [p.role ?? "reader"];
@@ -2206,8 +2162,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       { fields: t.Optional(NonEmptyString) },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return driveRequest(ctx, "GET", `/drive/v3/about`, undefined, {
         fields:
           p.fields ??
@@ -2230,8 +2185,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const u = new URL(
         `${API_BASE}/drive/v3/files/${pathSegment(p.fileId)}/export`,
       );
@@ -2282,8 +2236,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const baseQs: Record<string, unknown> = {
         q: p.q,
         corpora: p.corpora,

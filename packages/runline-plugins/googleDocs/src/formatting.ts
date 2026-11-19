@@ -5,6 +5,7 @@ import {
   DocumentInput,
   extractDocumentId,
   PositivePoints,
+  points,
   RangeInput,
   RawGoogleObject,
   runBatchUpdate,
@@ -66,12 +67,10 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const ps: Record<string, unknown> = {};
       const fields: string[] = [];
-      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
       if (p.alignment) {
         ps.alignment = p.alignment;
         fields.push("alignment");
@@ -85,23 +84,23 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
         fields.push("direction");
       }
       if (p.indentFirstLinePt !== undefined) {
-        ps.indentFirstLine = pt(p.indentFirstLinePt);
+        ps.indentFirstLine = points(p.indentFirstLinePt);
         fields.push("indentFirstLine");
       }
       if (p.indentStartPt !== undefined) {
-        ps.indentStart = pt(p.indentStartPt);
+        ps.indentStart = points(p.indentStartPt);
         fields.push("indentStart");
       }
       if (p.indentEndPt !== undefined) {
-        ps.indentEnd = pt(p.indentEndPt);
+        ps.indentEnd = points(p.indentEndPt);
         fields.push("indentEnd");
       }
       if (p.spaceAbovePt !== undefined) {
-        ps.spaceAbove = pt(p.spaceAbovePt);
+        ps.spaceAbove = points(p.spaceAbovePt);
         fields.push("spaceAbove");
       }
       if (p.spaceBelowPt !== undefined) {
-        ps.spaceBelow = pt(p.spaceBelowPt);
+        ps.spaceBelow = points(p.spaceBelowPt);
         fields.push("spaceBelow");
       }
       if (p.lineSpacing !== undefined) {
@@ -143,8 +142,7 @@ export function registerFormattingActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         updateNamedStyle: compact({

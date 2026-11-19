@@ -6,6 +6,7 @@ import type {
   ConnectionSchema,
   InputOf,
   InputSchema,
+  LegacyInputSchema,
   OAuthConfig,
   PluginDef,
 } from "./types.js";
@@ -21,7 +22,7 @@ export interface ActionDefinition<S extends InputSchema = InputSchema> {
 }
 
 export interface RunlinePluginAPI {
-  registerAction<const S extends InputSchema = Record<string, never>>(
+  registerAction<const S extends InputSchema = LegacyInputSchema>(
     name: string,
     def: ActionDefinition<S>,
   ): void;
@@ -78,8 +79,8 @@ export function createPluginAPI(pluginId: string): {
       actionName: string,
       def: ActionDefinition<S>,
     ) {
-      // The engine validates input against the schema before execute,
-      // so the handler's typed input holds at this untyped boundary.
+      // The engine validates input against a TypeBox schema before
+      // execute, so the handler's typed input holds at this boundary.
       actions.push({ name: actionName, ...def } as ActionDef);
     },
     setConnectionSchema(schema: ConnectionSchema) {

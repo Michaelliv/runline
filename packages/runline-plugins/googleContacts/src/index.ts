@@ -226,28 +226,7 @@ function coerceDate(v: unknown): { year?: number; month: number; day: number } {
   );
 }
 
-interface ContactInput {
-  // Name
-  givenName?: string;
-  familyName?: string;
-  middleName?: string;
-  honorificPrefix?: string;
-  honorificSuffix?: string;
-  // Collections
-  phoneNumbers?: Array<{ value: string; type?: string }>;
-  emailAddresses?: Array<{ value: string; type?: string }>;
-  addresses?: Array<Record<string, unknown>>;
-  organizations?: Array<Record<string, unknown>>;
-  relations?: Array<{ person: string; type?: string }>;
-  urls?: Array<{ value: string; type?: string }>;
-  events?: Array<{ date: unknown; type?: string }>;
-  userDefined?: Array<{ key: string; value: string }>;
-  // Single / structured
-  birthday?: unknown;
-  biography?: string;
-  // Memberships (group IDs or resourceNames)
-  groups?: string[];
-}
+type ContactInput = t.Static<t.TObject<typeof contactWritableFields>>;
 
 /**
  * Build a People-API `Person` body from our flat-ish input shape.
@@ -508,8 +487,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description: "Create a new contact",
     inputSchema: contactSchemas.create,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const { body } = buildPersonBody(p);
       const res = (await peopleRequest(
         ctx,
@@ -525,8 +503,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get a contact by ID",
     inputSchema: contactSchemas.get,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const resource = normalizeContactResource(p.contactId);
       const res = (await peopleRequest(ctx, "GET", `/${resource}`, undefined, {
         personFields: resolvePersonFields(p.fields),
@@ -540,9 +517,8 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "List contacts (people/me/connections) or search them. When `query` is set, hits people:searchContacts; otherwise returns the user's connections.",
     inputSchema: contactSchemas.list,
-    async execute(input, ctx) {
-      const p = input;
-      const useSearch = typeof p.query === "string" && p.query.length > 0;
+    async execute(p, ctx) {
+      const useSearch = Boolean(p.query);
       const endpoint = useSearch
         ? "/people:searchContacts"
         : "/people/me/connections";
@@ -626,8 +602,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "Update a contact. Only supplied fields are sent; etag is resolved automatically if not provided.",
     inputSchema: contactSchemas.update,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const resource = normalizeContactResource(p.contactId);
 
       let etag = p.etag;
@@ -670,8 +645,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description: "Delete a contact",
     inputSchema: contactSchemas.delete,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const resource = normalizeContactResource(p.contactId);
       await peopleRequest(ctx, "DELETE", `/${resource}:deleteContact`);
       return { success: true };
@@ -685,8 +659,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "List contact groups (including system groups like 'myContacts' and 'starred')",
     inputSchema: groupSchemas.list,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.pageToken) qs.pageToken = p.pageToken;
       if (p.syncToken) qs.syncToken = p.syncToken;
@@ -710,8 +683,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get a contact group by ID",
     inputSchema: groupSchemas.get,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const resource = normalizeGroupResource(p.groupId);
       const qs: Record<string, unknown> = {};
       if (p.maxMembers !== undefined) qs.maxMembers = p.maxMembers;
@@ -723,8 +695,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     access: "write",
     description: "Create a contact group",
     inputSchema: groupSchemas.create,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {
         contactGroup: {
           name: p.name,
@@ -740,8 +711,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "Update a contact group. Pass a fresh `etag` or let the plugin resolve it automatically.",
     inputSchema: groupSchemas.update,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const resource = normalizeGroupResource(p.groupId);
       let etag = p.etag;
       if (!etag) {
@@ -775,8 +745,7 @@ export default function googleContacts(rl: RunlinePluginAPI) {
     description:
       "Delete a contact group. Pass `deleteContacts=true` to also delete every contact in the group.",
     inputSchema: groupSchemas.delete,
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const resource = normalizeGroupResource(p.groupId);
       const qs: Record<string, unknown> = {};
       if (p.deleteContacts) qs.deleteContacts = p.deleteContacts;

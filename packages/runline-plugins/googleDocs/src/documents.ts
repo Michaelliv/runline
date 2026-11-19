@@ -29,8 +29,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {
         name: p.title,
         mimeType: "application/vnd.google-apps.document",
@@ -47,8 +46,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
     description:
       "Create a blank Google Doc through the native Docs API. Use document.create when you need Drive folder placement.",
     inputSchema: t.Object({ title: t.String({ minLength: 1 }) }, STRICT_OBJECT),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return docsRequest(ctx, "POST", "/documents", { title: p.title });
     },
   });
@@ -78,8 +76,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const qs: Record<string, unknown> = {};
       if (p.suggestionsViewMode) qs.suggestionsViewMode = p.suggestionsViewMode;
@@ -109,8 +106,7 @@ export function registerDocumentsActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const body: Record<string, unknown> = {
         requests: p.requests,

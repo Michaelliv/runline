@@ -7,6 +7,7 @@ import {
   LOCATION_REQUIREMENT,
   LocationInput,
   PositivePoints,
+  points,
   runBatchUpdate,
   STRICT_OBJECT,
 } from "./shared.js";
@@ -32,10 +33,8 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
       },
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
-      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
       const kind = p.locationKind ?? "location";
       const req: Record<string, unknown> = {
         ...buildLocation(kind, p.segmentId, p.index, p.tabId),
@@ -44,9 +43,11 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
       if (p.widthPt !== undefined || p.heightPt !== undefined) {
         req.objectSize = {};
         if (p.widthPt !== undefined)
-          (req.objectSize as Record<string, unknown>).width = pt(p.widthPt);
+          (req.objectSize as Record<string, unknown>).width = points(p.widthPt);
         if (p.heightPt !== undefined)
-          (req.objectSize as Record<string, unknown>).height = pt(p.heightPt);
+          (req.objectSize as Record<string, unknown>).height = points(
+            p.heightPt,
+          );
       }
       return runBatchUpdate(ctx, documentId, [{ insertInlineImage: req }]);
     },
@@ -66,8 +67,7 @@ export function registerImagesActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {

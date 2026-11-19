@@ -141,8 +141,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.pageToken) qs.pageToken = p.pageToken;
       if (p.returnAll) return paginateAll(ctx, "/users/@me/lists", qs);
@@ -164,8 +163,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     access: "read",
     description: "Get a task list by ID",
     inputSchema: t.Object({ tasklist: Id }, { additionalProperties: false }),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return tasksRequest(
         ctx,
         "GET",
@@ -181,8 +179,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       { title: t.String() },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return tasksRequest(ctx, "POST", "/users/@me/lists", { title: p.title });
     },
   });
@@ -197,8 +194,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return tasksRequest(
         ctx,
         "PATCH",
@@ -214,8 +210,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     access: "write",
     description: "Delete a task list and all its tasks",
     inputSchema: t.Object({ tasklist: Id }, { additionalProperties: false }),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await tasksRequest(
         ctx,
         "DELETE",
@@ -255,8 +250,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = { title: p.title };
       if (p.notes) body.notes = p.notes;
       if (p.status) body.status = p.status;
@@ -290,8 +284,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return tasksRequest(
         ctx,
         "GET",
@@ -323,8 +316,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {
         showCompleted: p.showCompleted ?? true,
         showDeleted: p.showDeleted ?? false,
@@ -378,8 +370,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const body: Record<string, unknown> = {};
       if (p.title !== undefined) body.title = p.title;
       if (p.notes !== undefined) body.notes = p.notes;
@@ -411,8 +402,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await tasksRequest(
         ctx,
         "DELETE",
@@ -435,8 +425,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const qs: Record<string, unknown> = {};
       if (p.parent) qs.parent = p.parent;
       if (p.previous) qs.previous = p.previous;
@@ -455,8 +444,7 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     description:
       "Hide all completed tasks in a list from the default view. They remain accessible via task.list with showHidden=true.",
     inputSchema: t.Object({ tasklist: Id }, { additionalProperties: false }),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       await tasksRequest(
         ctx,
         "POST",

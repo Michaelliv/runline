@@ -8,7 +8,12 @@ import {
   STRICT_OBJECT,
 } from "./shared.js";
 
-function tabProperties(p: Record<string, unknown>): Record<string, unknown> {
+function tabProperties(p: {
+  tabId?: string;
+  title?: string;
+  index?: number;
+  parentTabId?: string;
+}): Record<string, unknown> {
   return compact({
     tabId: p.tabId,
     title: p.title,
@@ -31,8 +36,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         addDocumentTab: { tabProperties: tabProperties(p) },
@@ -48,8 +52,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       { ...DocumentInput, tabId: t.String({ minLength: 1 }) },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteTab: { tabId: p.tabId },
@@ -79,8 +82,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const fields: string[] = [];
       if (p.title !== undefined) fields.push("title");

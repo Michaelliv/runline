@@ -107,8 +107,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       { title: NonEmptyString },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       return slidesRequest(ctx, "POST", "/presentations", { title: p.title });
     },
   });
@@ -124,8 +123,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
       const qs: Record<string, unknown> = {};
       if (p.fields) qs.fields = p.fields;
@@ -143,8 +141,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
       const res = (await slidesRequest(
         ctx,
@@ -154,7 +151,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         { fields: "slides" },
       )) as { slides?: unknown[] };
       const slides = res.slides ?? [];
-      if (typeof p.limit === "number") return slides.slice(0, p.limit);
+      if (p.limit !== undefined) return slides.slice(0, p.limit);
       return slides;
     },
   });
@@ -182,14 +179,9 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
-      const replacements = p.replacements;
-      if (!Array.isArray(replacements) || replacements.length === 0) {
-        throw new Error("googleSlides: replacements must be a non-empty array");
-      }
-      const requests = replacements.map((r) => ({
+      const requests = p.replacements.map((r) => ({
         replaceAllText: {
           replaceText: r.replaceText,
           pageObjectIds: r.pageObjectIds ?? [],
@@ -226,8 +218,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
       const body: Record<string, unknown> = { requests: p.requests };
       if (p.writeControl) body.writeControl = p.writeControl;
@@ -252,8 +243,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
       return slidesRequest(
         ctx,
@@ -285,8 +275,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const id = extractPresentationId(p.presentation);
       const qs: Record<string, unknown> = {};
       if (p.mimeType) qs["thumbnailProperties.mimeType"] = p.mimeType;
@@ -310,7 +299,7 @@ export default function googleSlides(rl: RunlinePluginAPI) {
         );
       }
       const bytes = Buffer.from(await imgRes.arrayBuffer());
-      if (typeof p.savePath === "string") {
+      if (p.savePath) {
         writeFileSync(p.savePath, bytes);
         return { ...res, path: p.savePath, size: bytes.byteLength };
       }

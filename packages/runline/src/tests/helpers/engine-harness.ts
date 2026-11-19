@@ -34,9 +34,9 @@ function makeFilesPlugin() {
 
   api.registerAction("upload", {
     description: "Accepts a large base64 payload",
-    inputSchema: { data: { type: "string", required: true } },
-    async execute({ data }) {
+    async execute(input) {
       await new Promise((r) => setTimeout(r, 5));
+      const { data } = input as { data: string };
       received.uploadSha =
         typeof data === "string"
           ? createHash("sha256").update(data).digest("hex")
@@ -48,9 +48,9 @@ function makeFilesPlugin() {
 
   api.registerAction("send", {
     description: "Accepts a large attachment",
-    inputSchema: { attachment: { type: "string", required: true } },
-    async execute({ attachment }) {
+    async execute(input) {
       await new Promise((r) => setTimeout(r, 5));
+      const { attachment } = input as { attachment: string };
       received.sendBytes =
         typeof attachment === "string" ? attachment.length : -1;
       return { messageId: "msg_456", bytes: received.sendBytes };
@@ -67,8 +67,8 @@ function makeFilesPlugin() {
 
   api.registerAction("slow", {
     description: "Sleeps for the given ms, then returns",
-    inputSchema: { ms: { type: "number", required: true } },
-    async execute({ ms }) {
+    async execute(input) {
+      const { ms } = input as { ms: number };
       await new Promise((r) => setTimeout(r, ms));
       return { waited: ms };
     },

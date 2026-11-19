@@ -129,6 +129,26 @@ export function location(
   return compact({ segmentId: seg, index, tabId });
 }
 
+/** A length in points, as the Docs API takes a Dimension. */
+export function points(magnitude: number): Record<string, unknown> {
+  return { magnitude, unit: "PT" };
+}
+
+/** A range of a segment; `body` names the main one, whose ID is empty. */
+export function range(p: {
+  startIndex: number;
+  endIndex: number;
+  segmentId?: string;
+  tabId?: string;
+}): Record<string, unknown> {
+  return compact({
+    segmentId: p.segmentId && p.segmentId !== "body" ? p.segmentId : "",
+    startIndex: p.startIndex,
+    endIndex: p.endIndex,
+    tabId: p.tabId,
+  });
+}
+
 export function compact<T extends Record<string, unknown>>(obj: T): T {
   for (const key of Object.keys(obj)) {
     if (obj[key] === undefined || obj[key] === null) delete obj[key];

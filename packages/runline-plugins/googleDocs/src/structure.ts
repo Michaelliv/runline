@@ -9,24 +9,13 @@ import {
   LocationInput,
   location,
   PositivePoints,
+  points,
   RangeInput,
+  range,
   runBatchUpdate,
   SegmentInput,
   STRICT_OBJECT,
 } from "./shared.js";
-
-function range(p: Record<string, unknown>): Record<string, unknown> {
-  return compact({
-    segmentId: p.segmentId && p.segmentId !== "body" ? p.segmentId : "",
-    startIndex: p.startIndex,
-    endIndex: p.endIndex,
-    tabId: p.tabId,
-  });
-}
-
-function point(value: unknown): Record<string, unknown> {
-  return { magnitude: value, unit: "PT" };
-}
 
 export function registerStructureActions(rl: RunlinePluginAPI) {
   rl.registerAction("document.insertPageBreak", {
@@ -36,8 +25,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       { ...DocumentInput, ...LocationInput },
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
@@ -58,8 +46,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         createNamedRange: {
@@ -88,8 +75,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         oneOf: [{ required: ["namedRangeId"] }, { required: ["name"] }],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       if (!p.namedRangeId && !p.name) {
         throw new Error("googleDocs: provide namedRangeId or name");
@@ -97,7 +83,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       const req: Record<string, unknown> = p.namedRangeId
         ? { namedRangeId: p.namedRangeId }
         : { name: p.name };
-      if (Array.isArray(p.tabIds)) req.tabsCriteria = { tabIds: p.tabIds };
+      if (p.tabIds) req.tabsCriteria = { tabIds: p.tabIds };
       return runBatchUpdate(ctx, documentId, { deleteNamedRange: req });
     },
   });
@@ -109,8 +95,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       { ...DocumentInput, ...LocationInput },
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const kind = p.locationKind ?? "location";
       const seg = p.segmentId && p.segmentId !== "body" ? p.segmentId : "";
@@ -143,8 +128,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteHeader: compact({ headerId: p.headerId, tabId: p.tabId }),
@@ -159,8 +143,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       { ...DocumentInput, ...LocationInput },
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const kind = p.locationKind ?? "location";
       const seg = p.segmentId && p.segmentId !== "body" ? p.segmentId : "";
@@ -193,8 +176,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deleteFooter: compact({ footerId: p.footerId, tabId: p.tabId }),
@@ -214,8 +196,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, {
         deletePositionedObject: compact({
@@ -234,8 +215,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       { ...DocumentInput, ...LocationInput },
       { ...STRICT_OBJECT, anyOf: LOCATION_REQUIREMENT },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const kind = p.locationKind ?? "location";
       return runBatchUpdate(ctx, documentId, {
@@ -266,8 +246,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       if (!p.namedRangeId && !p.namedRangeName) {
         throw new Error("googleDocs: provide namedRangeId or namedRangeName");
@@ -277,9 +256,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
           text: p.text,
           namedRangeId: p.namedRangeId,
           namedRangeName: p.namedRangeName,
-          tabsCriteria: Array.isArray(p.tabIds)
-            ? { tabIds: p.tabIds }
-            : undefined,
+          tabsCriteria: p.tabIds ? { tabIds: p.tabIds } : undefined,
         }),
       });
     },
@@ -318,25 +295,24 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const sectionStyle: Record<string, unknown> = {};
       const fields: string[] = [];
       if (p.marginTopPt !== undefined) {
-        sectionStyle.marginTop = point(p.marginTopPt);
+        sectionStyle.marginTop = points(p.marginTopPt);
         fields.push("marginTop");
       }
       if (p.marginBottomPt !== undefined) {
-        sectionStyle.marginBottom = point(p.marginBottomPt);
+        sectionStyle.marginBottom = points(p.marginBottomPt);
         fields.push("marginBottom");
       }
       if (p.marginLeftPt !== undefined) {
-        sectionStyle.marginLeft = point(p.marginLeftPt);
+        sectionStyle.marginLeft = points(p.marginLeftPt);
         fields.push("marginLeft");
       }
       if (p.marginRightPt !== undefined) {
-        sectionStyle.marginRight = point(p.marginRightPt);
+        sectionStyle.marginRight = points(p.marginRightPt);
         fields.push("marginRight");
       }
       if (p.columnSeparatorStyle) {
@@ -376,8 +352,7 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
       },
       STRICT_OBJECT,
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       return runBatchUpdate(ctx, documentId, [
         {
@@ -419,36 +394,34 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
         ],
       },
     ),
-    async execute(input, ctx) {
-      const p = input;
+    async execute(p, ctx) {
       const documentId = extractDocumentId(p.document);
       const ds: Record<string, unknown> = {};
       const fields: string[] = [];
-      const pt = (n: unknown) => ({ magnitude: n, unit: "PT" });
       if (p.pageMarginTopPt !== undefined) {
-        ds.marginTop = pt(p.pageMarginTopPt);
+        ds.marginTop = points(p.pageMarginTopPt);
         fields.push("marginTop");
       }
       if (p.pageMarginBottomPt !== undefined) {
-        ds.marginBottom = pt(p.pageMarginBottomPt);
+        ds.marginBottom = points(p.pageMarginBottomPt);
         fields.push("marginBottom");
       }
       if (p.pageMarginLeftPt !== undefined) {
-        ds.marginLeft = pt(p.pageMarginLeftPt);
+        ds.marginLeft = points(p.pageMarginLeftPt);
         fields.push("marginLeft");
       }
       if (p.pageMarginRightPt !== undefined) {
-        ds.marginRight = pt(p.pageMarginRightPt);
+        ds.marginRight = points(p.pageMarginRightPt);
         fields.push("marginRight");
       }
       if (p.pageSizeWidthPt !== undefined || p.pageSizeHeightPt !== undefined) {
         ds.pageSize = {};
         if (p.pageSizeWidthPt !== undefined)
-          (ds.pageSize as Record<string, unknown>).width = pt(
+          (ds.pageSize as Record<string, unknown>).width = points(
             p.pageSizeWidthPt,
           );
         if (p.pageSizeHeightPt !== undefined)
-          (ds.pageSize as Record<string, unknown>).height = pt(
+          (ds.pageSize as Record<string, unknown>).height = points(
             p.pageSizeHeightPt,
           );
         fields.push("pageSize");

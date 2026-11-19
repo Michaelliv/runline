@@ -122,12 +122,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
-      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
-        throw new Error("googleImage: prompt is required");
-      }
-
+    async execute(p, ctx) {
       const model = p.model ?? "gemini-2.5-flash-image";
       const data = await generateContent(ctx, model, {
         contents: [{ parts: [{ text: p.prompt }] }],
@@ -168,11 +163,7 @@ export default function googleImage(rl: RunlinePluginAPI) {
       },
       { additionalProperties: false },
     ),
-    async execute(input, ctx) {
-      const p = input;
-      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
-        throw new Error("googleImage: prompt is required");
-      }
+    async execute(p, ctx) {
       const img = await readImageInput(p.imagePath, "googleImage");
 
       const model = p.model ?? "gemini-2.5-flash-image";
