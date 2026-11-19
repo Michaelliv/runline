@@ -33,8 +33,8 @@ import {
   googleOAuth,
 } from "../../_shared/googleAuth.js";
 import {
-  googleConnection,
   GoogleTimestamp,
+  googleConnection,
   Id,
   NonEmptyString,
 } from "../../_shared/googleSchemas.js";
@@ -91,7 +91,15 @@ async function gmailRequest(
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
   try {
-    return await googleJsonRequest(ctx, "gmail", SCOPES, method, `${API_BASE}${path}`, body, qs);
+    return await googleJsonRequest(
+      ctx,
+      "gmail",
+      SCOPES,
+      method,
+      `${API_BASE}${path}`,
+      body,
+      qs,
+    );
   } catch (error) {
     // The hint joins the failure itself, which keeps its status and code.
     const hint = sendFailureRetryHint(method, path);
@@ -127,7 +135,9 @@ const GMAIL_MAX_RAW_BYTES = 35 * 1024 * 1024;
 
 function base64url(bytes: string | Uint8Array): string {
   const buf =
-    typeof bytes === "string" ? Buffer.from(bytes, "utf-8") : Buffer.from(bytes);
+    typeof bytes === "string"
+      ? Buffer.from(bytes, "utf-8")
+      : Buffer.from(bytes);
   return buf
     .toString("base64")
     .replace(/\+/g, "-")
@@ -157,7 +167,9 @@ function header(name: string, value: string | undefined): string {
 }
 
 function foldedBase64ByteLength(length: number): number {
-  return length === 0 ? 0 : length + Math.floor((length - 1) / 76) * CRLF.length;
+  return length === 0
+    ? 0
+    : length + Math.floor((length - 1) / 76) * CRLF.length;
 }
 
 function foldBase64(encoded: string): string {
@@ -405,7 +417,9 @@ const REPLY_METADATA_HEADERS = [
  * `labelIds`, `includeSpamTrash`, `pageToken`, `maxResults` pass
  * through as query parameters.
  */
-function buildListQuery(input: Record<string, unknown>): Record<string, unknown> {
+function buildListQuery(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
   const qs: Record<string, unknown> = {};
   const qParts: string[] = [];
   if (typeof input.q === "string" && input.q.length > 0) qParts.push(input.q);
@@ -1155,7 +1169,13 @@ export default function gmail(rl: RunlinePluginAPI) {
     async execute(input, ctx) {
       const p = (input ?? {}) as Record<string, unknown>;
       const qs: Record<string, unknown> = { format: p.format ?? "full" };
-      return gmailRequest(ctx, "GET", `/drafts/${pathSegment(p.id)}`, undefined, qs);
+      return gmailRequest(
+        ctx,
+        "GET",
+        `/drafts/${pathSegment(p.id)}`,
+        undefined,
+        qs,
+      );
     },
   });
 

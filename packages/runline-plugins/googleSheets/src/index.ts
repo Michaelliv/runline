@@ -141,7 +141,15 @@ async function sheetsRequest(
   qs?: Record<string, unknown>,
   baseOverride?: string,
 ): Promise<unknown> {
-  return googleJsonRequest(ctx, "googleSheets", SCOPES, method, `${baseOverride ?? SHEETS_BASE}${path}`, body, qs);
+  return googleJsonRequest(
+    ctx,
+    "googleSheets",
+    SCOPES,
+    method,
+    `${baseOverride ?? SHEETS_BASE}${path}`,
+    body,
+    qs,
+  );
 }
 
 // ─── A1 helpers ─────────────────────────────────────────────────
@@ -1656,19 +1664,13 @@ export default function googleSheets(rl: RunlinePluginAPI) {
           {
             required: ["condition"],
             not: {
-              anyOf: [
-                { required: ["oneOfList"] },
-                { required: ["clear"] },
-              ],
+              anyOf: [{ required: ["oneOfList"] }, { required: ["clear"] }],
             },
           },
           {
             required: ["oneOfList"],
             not: {
-              anyOf: [
-                { required: ["condition"] },
-                { required: ["clear"] },
-              ],
+              anyOf: [{ required: ["condition"] }, { required: ["clear"] }],
             },
           },
           {

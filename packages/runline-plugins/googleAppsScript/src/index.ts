@@ -94,9 +94,7 @@ export default function googleAppsScript(rl: RunlinePluginAPI): void {
   rl.setName("googleAppsScript");
   rl.setVersion("1.0.0");
   rl.setCredential(googleCredential("googleAppsScript", SCOPES));
-  rl.setOAuth(
-    googleOAuth("googleAppsScript", SCOPES, "GOOGLE_APPS_SCRIPT"),
-  );
+  rl.setOAuth(googleOAuth("googleAppsScript", SCOPES, "GOOGLE_APPS_SCRIPT"));
 
   rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_APPS_SCRIPT")));
 

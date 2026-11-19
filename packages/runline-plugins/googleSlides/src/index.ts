@@ -65,7 +65,15 @@ async function slidesRequest(
   body?: Record<string, unknown>,
   qs?: Record<string, unknown>,
 ): Promise<unknown> {
-  return googleJsonRequest(ctx, "googleSlides", SCOPES, method, `${API_BASE}${path}`, body, qs);
+  return googleJsonRequest(
+    ctx,
+    "googleSlides",
+    SCOPES,
+    method,
+    `${API_BASE}${path}`,
+    body,
+    qs,
+  );
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
