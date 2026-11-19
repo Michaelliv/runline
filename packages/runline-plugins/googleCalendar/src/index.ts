@@ -45,7 +45,7 @@ import {
   PositiveInteger,
   StringOrStringArray,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 
 // `rrule` ships as CJS; named imports fail under Node ESM.
 const { RRule } = rrulePkg as unknown as {
@@ -453,6 +453,13 @@ const calendarSchemas = {
   listColors: strictObject({}),
 };
 
+/** What makes an event.update a change: a field, new times, or a recurrence. */
+const eventChanges = {
+  ...eventMutableFields,
+  start: optionalString(),
+  rrule: recurrenceFields.rrule,
+  repeatFrequency: recurrenceFields.repeatFrequency,
+};
 const eventSchemas = {
   create: strictObject(
     {
@@ -536,12 +543,7 @@ const eventSchemas = {
           },
         },
       ],
-      anyOf: [
-        ...Object.keys(eventMutableFields).map((key) => ({ required: [key] })),
-        { required: ["start"] },
-        { required: ["rrule"] },
-        { required: ["repeatFrequency"] },
-      ],
+      ...atLeastOne(eventChanges),
     },
   ),
   delete: strictObject({
@@ -566,6 +568,15 @@ const freeBusySchema = strictObject({
   calendarExpansionMax: optionalPositiveInteger,
 });
 
+const calendarListChanges = {
+  colorId: optionalString(),
+  backgroundColor: optionalString(),
+  foregroundColor: optionalString(),
+  summaryOverride: optionalString(),
+  selected: optionalBoolean,
+  hidden: optionalBoolean,
+  defaultReminders: t.Optional(reminders),
+};
 const calendarListSchemas = {
   list: strictObject({
     minAccessRole: t.Optional(accessRole),
@@ -580,26 +591,9 @@ const calendarListSchemas = {
     summaryOverride: optionalString(),
   }),
   patch: strictObject(
+    { calendarId, ...calendarListChanges },
     {
-      calendarId,
-      colorId: optionalString(),
-      backgroundColor: optionalString(),
-      foregroundColor: optionalString(),
-      summaryOverride: optionalString(),
-      selected: optionalBoolean,
-      hidden: optionalBoolean,
-      defaultReminders: t.Optional(reminders),
-    },
-    {
-      anyOf: [
-        { required: ["colorId"] },
-        { required: ["backgroundColor"] },
-        { required: ["foregroundColor"] },
-        { required: ["summaryOverride"] },
-        { required: ["selected"] },
-        { required: ["hidden"] },
-        { required: ["defaultReminders"] },
-      ],
+      ...atLeastOne(calendarListChanges),
     },
   ),
   delete: strictObject({ calendarId }),

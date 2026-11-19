@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne } from "../../_shared/schemas.js";
 import {
   buildLocation,
   DocumentInput,
@@ -241,37 +242,26 @@ export function registerTextActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const textStyleFields = {
+    bold: t.Optional(t.Boolean()),
+    italic: t.Optional(t.Boolean()),
+    underline: t.Optional(t.Boolean()),
+    strikethrough: t.Optional(t.Boolean()),
+    fontSizePt: t.Optional(PositivePoints),
+    fontFamily: t.Optional(t.String({ minLength: 1 })),
+    foregroundColorHex: t.Optional(HexColor),
+    backgroundColorHex: t.Optional(HexColor),
+    link: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.updateTextStyle", {
     access: "write",
     description:
       "Apply text styling (bold, italic, underline, color, font size, font family, or link) to a range.",
     inputSchema: t.Object(
-      {
-        ...DocumentInput,
-        ...RangeInput,
-        bold: t.Optional(t.Boolean()),
-        italic: t.Optional(t.Boolean()),
-        underline: t.Optional(t.Boolean()),
-        strikethrough: t.Optional(t.Boolean()),
-        fontSizePt: t.Optional(PositivePoints),
-        fontFamily: t.Optional(t.String({ minLength: 1 })),
-        foregroundColorHex: t.Optional(HexColor),
-        backgroundColorHex: t.Optional(HexColor),
-        link: t.Optional(t.String({ minLength: 1 })),
-      },
+      { ...DocumentInput, ...RangeInput, ...textStyleFields },
       {
         ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["bold"] },
-          { required: ["italic"] },
-          { required: ["underline"] },
-          { required: ["strikethrough"] },
-          { required: ["fontSizePt"] },
-          { required: ["fontFamily"] },
-          { required: ["foregroundColorHex"] },
-          { required: ["backgroundColorHex"] },
-          { required: ["link"] },
-        ],
+        ...atLeastOne(textStyleFields),
       },
     ),
     async execute(p, ctx) {

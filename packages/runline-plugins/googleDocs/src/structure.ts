@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne } from "../../_shared/schemas.js";
 import {
   buildLocation,
   compact,
@@ -262,37 +263,28 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const sectionStyleFields = {
+    marginTopPt: t.Optional(PositivePoints),
+    marginBottomPt: t.Optional(PositivePoints),
+    marginLeftPt: t.Optional(PositivePoints),
+    marginRightPt: t.Optional(PositivePoints),
+    columnSeparatorStyle: t.Optional(
+      t.Union([t.Literal("NONE"), t.Literal("BETWEEN_EACH_COLUMN")]),
+    ),
+    contentDirection: t.Optional(
+      t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
+    ),
+    fields: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.updateSectionStyle", {
     access: "write",
     description:
       "Update section style over a range, such as margins or column properties.",
     inputSchema: t.Object(
-      {
-        ...DocumentInput,
-        ...RangeInput,
-        marginTopPt: t.Optional(PositivePoints),
-        marginBottomPt: t.Optional(PositivePoints),
-        marginLeftPt: t.Optional(PositivePoints),
-        marginRightPt: t.Optional(PositivePoints),
-        columnSeparatorStyle: t.Optional(
-          t.Union([t.Literal("NONE"), t.Literal("BETWEEN_EACH_COLUMN")]),
-        ),
-        contentDirection: t.Optional(
-          t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
-        ),
-        fields: t.Optional(t.String({ minLength: 1 })),
-      },
+      { ...DocumentInput, ...RangeInput, ...sectionStyleFields },
       {
         ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["marginTopPt"] },
-          { required: ["marginBottomPt"] },
-          { required: ["marginLeftPt"] },
-          { required: ["marginRightPt"] },
-          { required: ["columnSeparatorStyle"] },
-          { required: ["contentDirection"] },
-          { required: ["fields"] },
-        ],
+        ...atLeastOne(sectionStyleFields),
       },
     ),
     async execute(p, ctx) {
@@ -365,6 +357,15 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const documentStyleFields = {
+    pageMarginTopPt: t.Optional(PositivePoints),
+    pageMarginBottomPt: t.Optional(PositivePoints),
+    pageMarginLeftPt: t.Optional(PositivePoints),
+    pageMarginRightPt: t.Optional(PositivePoints),
+    pageSizeWidthPt: t.Optional(PositivePoints),
+    pageSizeHeightPt: t.Optional(PositivePoints),
+    useCustomHeaderFooterMargins: t.Optional(t.Boolean()),
+  };
   rl.registerAction("document.updateDocumentStyle", {
     access: "write",
     description:
@@ -372,26 +373,12 @@ export function registerStructureActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       {
         ...DocumentInput,
-        pageMarginTopPt: t.Optional(PositivePoints),
-        pageMarginBottomPt: t.Optional(PositivePoints),
-        pageMarginLeftPt: t.Optional(PositivePoints),
-        pageMarginRightPt: t.Optional(PositivePoints),
-        pageSizeWidthPt: t.Optional(PositivePoints),
-        pageSizeHeightPt: t.Optional(PositivePoints),
-        useCustomHeaderFooterMargins: t.Optional(t.Boolean()),
         tabId: t.Optional(t.String({ minLength: 1 })),
+        ...documentStyleFields,
       },
       {
         ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["pageMarginTopPt"] },
-          { required: ["pageMarginBottomPt"] },
-          { required: ["pageMarginLeftPt"] },
-          { required: ["pageMarginRightPt"] },
-          { required: ["pageSizeWidthPt"] },
-          { required: ["pageSizeHeightPt"] },
-          { required: ["useCustomHeaderFooterMargins"] },
-        ],
+        ...atLeastOne(documentStyleFields),
       },
     ),
     async execute(p, ctx) {

@@ -41,7 +41,7 @@ import {
   NonEmptyString,
   PositiveInteger,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -413,7 +413,6 @@ const contactWritableFields = {
   userDefined: t.Optional(t.Array(userDefined)),
   groups: t.Optional(t.Array(NonEmptyString)),
 };
-const writableContactKeys = Object.keys(contactWritableFields);
 
 const contactSchemas = {
   create: strictObject(contactWritableFields),
@@ -440,11 +439,15 @@ const contactSchemas = {
       fields: personFields,
       ...contactWritableFields,
     },
-    { anyOf: writableContactKeys.map((key) => ({ required: [key] })) },
+    atLeastOne(contactWritableFields),
   ),
   delete: strictObject({ contactId: Id }),
 };
 
+const groupChanges = {
+  name: optionalString(),
+  clientData: t.Optional(t.Array(clientData)),
+};
 const groupSchemas = {
   list: strictObject({
     returnAll: optionalBoolean,
@@ -461,13 +464,8 @@ const groupSchemas = {
     clientData: t.Optional(t.Array(clientData)),
   }),
   update: strictObject(
-    {
-      groupId: Id,
-      name: optionalString(),
-      clientData: t.Optional(t.Array(clientData)),
-      etag: optionalString(),
-    },
-    { anyOf: [{ required: ["name"] }, { required: ["clientData"] }] },
+    { groupId: Id, etag: optionalString(), ...groupChanges },
+    { ...atLeastOne(groupChanges) },
   ),
   delete: strictObject({ groupId: Id, deleteContacts: optionalBoolean }),
 };

@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne } from "../../_shared/schemas.js";
 import {
   compact,
   DocumentInput,
@@ -13,58 +14,47 @@ import {
 } from "./shared.js";
 
 export function registerFormattingActions(rl: RunlinePluginAPI) {
+  const paragraphStyleFields = {
+    alignment: t.Optional(
+      t.Union([
+        t.Literal("START"),
+        t.Literal("CENTER"),
+        t.Literal("END"),
+        t.Literal("JUSTIFIED"),
+      ]),
+    ),
+    namedStyleType: t.Optional(
+      t.Union([
+        t.Literal("NORMAL_TEXT"),
+        t.Literal("TITLE"),
+        t.Literal("SUBTITLE"),
+        t.Literal("HEADING_1"),
+        t.Literal("HEADING_2"),
+        t.Literal("HEADING_3"),
+        t.Literal("HEADING_4"),
+        t.Literal("HEADING_5"),
+        t.Literal("HEADING_6"),
+      ]),
+    ),
+    direction: t.Optional(
+      t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
+    ),
+    indentFirstLinePt: t.Optional(PositivePoints),
+    indentStartPt: t.Optional(PositivePoints),
+    indentEndPt: t.Optional(PositivePoints),
+    spaceAbovePt: t.Optional(PositivePoints),
+    spaceBelowPt: t.Optional(PositivePoints),
+    lineSpacing: t.Optional(t.Number({ minimum: 0 })),
+  };
   rl.registerAction("document.updateParagraphStyle", {
     access: "write",
     description:
       "Apply paragraph styling (alignment, named style, indents, spacing, direction) to the paragraphs intersecting the range.",
     inputSchema: t.Object(
-      {
-        ...DocumentInput,
-        ...RangeInput,
-        alignment: t.Optional(
-          t.Union([
-            t.Literal("START"),
-            t.Literal("CENTER"),
-            t.Literal("END"),
-            t.Literal("JUSTIFIED"),
-          ]),
-        ),
-        namedStyleType: t.Optional(
-          t.Union([
-            t.Literal("NORMAL_TEXT"),
-            t.Literal("TITLE"),
-            t.Literal("SUBTITLE"),
-            t.Literal("HEADING_1"),
-            t.Literal("HEADING_2"),
-            t.Literal("HEADING_3"),
-            t.Literal("HEADING_4"),
-            t.Literal("HEADING_5"),
-            t.Literal("HEADING_6"),
-          ]),
-        ),
-        direction: t.Optional(
-          t.Union([t.Literal("LEFT_TO_RIGHT"), t.Literal("RIGHT_TO_LEFT")]),
-        ),
-        indentFirstLinePt: t.Optional(PositivePoints),
-        indentStartPt: t.Optional(PositivePoints),
-        indentEndPt: t.Optional(PositivePoints),
-        spaceAbovePt: t.Optional(PositivePoints),
-        spaceBelowPt: t.Optional(PositivePoints),
-        lineSpacing: t.Optional(t.Number({ minimum: 0 })),
-      },
+      { ...DocumentInput, ...RangeInput, ...paragraphStyleFields },
       {
         ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["alignment"] },
-          { required: ["namedStyleType"] },
-          { required: ["direction"] },
-          { required: ["indentFirstLinePt"] },
-          { required: ["indentStartPt"] },
-          { required: ["indentEndPt"] },
-          { required: ["spaceAbovePt"] },
-          { required: ["spaceBelowPt"] },
-          { required: ["lineSpacing"] },
-        ],
+        ...atLeastOne(paragraphStyleFields),
       },
     ),
     async execute(p, ctx) {

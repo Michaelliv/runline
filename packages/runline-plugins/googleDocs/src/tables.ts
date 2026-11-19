@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne } from "../../_shared/schemas.js";
 import {
   buildLocation,
   compact,
@@ -145,6 +146,16 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const cellStyleFields = {
+    backgroundColorHex: t.Optional(HexColor),
+    paddingLeftPt: t.Optional(PositivePoints),
+    paddingRightPt: t.Optional(PositivePoints),
+    paddingTopPt: t.Optional(PositivePoints),
+    paddingBottomPt: t.Optional(PositivePoints),
+    contentAlignment: t.Optional(
+      t.Union([t.Literal("TOP"), t.Literal("MIDDLE"), t.Literal("BOTTOM")]),
+    ),
+  };
   rl.registerAction("document.updateTableCellStyle", {
     access: "write",
     description:
@@ -155,25 +166,11 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         ...TableLocationInput,
         rowSpan: t.Optional(PositiveSpan),
         columnSpan: t.Optional(PositiveSpan),
-        backgroundColorHex: t.Optional(HexColor),
-        paddingLeftPt: t.Optional(PositivePoints),
-        paddingRightPt: t.Optional(PositivePoints),
-        paddingTopPt: t.Optional(PositivePoints),
-        paddingBottomPt: t.Optional(PositivePoints),
-        contentAlignment: t.Optional(
-          t.Union([t.Literal("TOP"), t.Literal("MIDDLE"), t.Literal("BOTTOM")]),
-        ),
+        ...cellStyleFields,
       },
       {
         ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["backgroundColorHex"] },
-          { required: ["paddingLeftPt"] },
-          { required: ["paddingRightPt"] },
-          { required: ["paddingTopPt"] },
-          { required: ["paddingBottomPt"] },
-          { required: ["contentAlignment"] },
-        ],
+        ...atLeastOne(cellStyleFields),
       },
     ),
     async execute(p, ctx) {
@@ -295,6 +292,17 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const columnFields = {
+    widthPt: t.Optional(PositivePoints),
+    widthType: t.Optional(
+      t.Union([
+        t.Literal("WIDTH_TYPE_UNSPECIFIED"),
+        t.Literal("EVENLY_DISTRIBUTED"),
+        t.Literal("FIXED_WIDTH"),
+      ]),
+    ),
+    fields: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.updateTableColumnProperties", {
     access: "write",
     description:
@@ -306,24 +314,12 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         columnIndices: t.Optional(
           t.Array(t.Integer({ minimum: 0 }), { minItems: 1 }),
         ),
-        widthPt: t.Optional(PositivePoints),
-        widthType: t.Optional(
-          t.Union([
-            t.Literal("WIDTH_TYPE_UNSPECIFIED"),
-            t.Literal("EVENLY_DISTRIBUTED"),
-            t.Literal("FIXED_WIDTH"),
-          ]),
-        ),
-        fields: t.Optional(t.String({ minLength: 1 })),
         ...SegmentInput,
+        ...columnFields,
       },
       {
         ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["widthPt"] },
-          { required: ["widthType"] },
-          { required: ["fields"] },
-        ],
+        ...atLeastOne(columnFields),
       },
     ),
     async execute(p, ctx) {
@@ -354,6 +350,10 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const rowStyleFields = {
+    minRowHeightPt: t.Optional(PositivePoints),
+    fields: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.updateTableRowStyle", {
     access: "write",
     description:
@@ -365,13 +365,12 @@ export function registerTablesActions(rl: RunlinePluginAPI) {
         rowIndices: t.Optional(
           t.Array(t.Integer({ minimum: 0 }), { minItems: 1 }),
         ),
-        minRowHeightPt: t.Optional(PositivePoints),
-        fields: t.Optional(t.String({ minLength: 1 })),
         ...SegmentInput,
+        ...rowStyleFields,
       },
       {
         ...STRICT_OBJECT,
-        anyOf: [{ required: ["minRowHeightPt"] }, { required: ["fields"] }],
+        ...atLeastOne(rowStyleFields),
       },
     ),
     async execute(p, ctx) {

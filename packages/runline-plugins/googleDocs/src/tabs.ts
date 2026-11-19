@@ -1,5 +1,6 @@
 import type { RunlinePluginAPI } from "runline";
 import * as t from "typebox";
+import { atLeastOne } from "../../_shared/schemas.js";
 import {
   compact,
   DocumentInput,
@@ -60,6 +61,11 @@ export function registerTabActions(rl: RunlinePluginAPI) {
     },
   });
 
+  const tabChanges = {
+    title: t.Optional(t.String({ minLength: 1 })),
+    index: t.Optional(t.Integer({ minimum: 0 })),
+    parentTabId: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.updateDocumentTabProperties", {
     access: "write",
     description:
@@ -68,18 +74,12 @@ export function registerTabActions(rl: RunlinePluginAPI) {
       {
         ...DocumentInput,
         tabId: t.String({ minLength: 1 }),
-        title: t.Optional(t.String({ minLength: 1 })),
-        index: t.Optional(t.Integer({ minimum: 0 })),
-        parentTabId: t.Optional(t.String({ minLength: 1 })),
         fields: t.Optional(t.String({ minLength: 1 })),
+        ...tabChanges,
       },
       {
         ...STRICT_OBJECT,
-        anyOf: [
-          { required: ["title"] },
-          { required: ["index"] },
-          { required: ["parentTabId"] },
-        ],
+        ...atLeastOne(tabChanges),
       },
     ),
     async execute(p, ctx) {

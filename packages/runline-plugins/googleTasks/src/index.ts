@@ -36,7 +36,7 @@ import {
   googleConnection,
   Id,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -343,31 +343,23 @@ export default function googleTasks(rl: RunlinePluginAPI) {
     },
   });
 
+  const taskChanges = {
+    title: t.Optional(t.String()),
+    notes: t.Optional(t.String()),
+    due: t.Optional(GoogleTimestamp),
+    status: t.Optional(taskStatusSchema),
+    completed: t.Optional(GoogleTimestamp),
+    deleted: t.Optional(t.Boolean()),
+  };
   rl.registerAction("task.update", {
     access: "write",
     description:
       "Patch a task. Only supplied fields are sent. Set status=completed (and optionally `completed` timestamp) to mark done.",
     inputSchema: t.Object(
-      {
-        tasklist: Id,
-        task: Id,
-        title: t.Optional(t.String()),
-        notes: t.Optional(t.String()),
-        due: t.Optional(GoogleTimestamp),
-        status: t.Optional(taskStatusSchema),
-        completed: t.Optional(GoogleTimestamp),
-        deleted: t.Optional(t.Boolean()),
-      },
+      { tasklist: Id, task: Id, ...taskChanges },
       {
         additionalProperties: false,
-        anyOf: [
-          { required: ["title"] },
-          { required: ["notes"] },
-          { required: ["due"] },
-          { required: ["status"] },
-          { required: ["completed"] },
-          { required: ["deleted"] },
-        ],
+        ...atLeastOne(taskChanges),
       },
     ),
     async execute(p, ctx) {

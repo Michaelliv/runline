@@ -38,7 +38,7 @@ import {
   Id,
   NonEmptyString,
 } from "../../_shared/googleSchemas.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -1251,23 +1251,19 @@ export default function gmail(rl: RunlinePluginAPI) {
     },
   });
 
+  const labelChanges = {
+    name: t.Optional(NonEmptyString),
+    labelListVisibility: t.Optional(LabelListVisibility),
+    messageListVisibility: t.Optional(MessageListVisibility),
+  };
   rl.registerAction("label.update", {
     access: "write",
     description: "Update a label",
     inputSchema: t.Object(
-      {
-        id: Id,
-        name: t.Optional(NonEmptyString),
-        labelListVisibility: t.Optional(LabelListVisibility),
-        messageListVisibility: t.Optional(MessageListVisibility),
-      },
+      { id: Id, ...labelChanges },
       {
         ...strict,
-        anyOf: [
-          { required: ["name"] },
-          { required: ["labelListVisibility"] },
-          { required: ["messageListVisibility"] },
-        ],
+        ...atLeastOne(labelChanges),
       },
     ),
     async execute(p, ctx) {

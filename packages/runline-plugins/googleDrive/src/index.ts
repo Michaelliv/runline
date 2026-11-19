@@ -85,7 +85,7 @@ import {
   StringOrStringArray,
 } from "../../_shared/googleSchemas.js";
 import { readLocalFile } from "../../_shared/localFile.js";
-import { stringEnum } from "../../_shared/schemas.js";
+import { atLeastOne, stringEnum } from "../../_shared/schemas.js";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -799,6 +799,15 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     },
   });
 
+  const fileChanges = {
+    name: t.Optional(NonEmptyString),
+    mimeType: t.Optional(NonEmptyString),
+    trashed: t.Optional(t.Boolean()),
+    properties: t.Optional(StringMap),
+    appProperties: t.Optional(StringMap),
+    contentBase64: t.Optional(t.String()),
+    contentPath: t.Optional(NonEmptyString),
+  };
   rl.registerAction("file.update", {
     access: "write",
     description:
@@ -806,17 +815,11 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       {
         fileId: Id,
-        name: t.Optional(NonEmptyString),
-        mimeType: t.Optional(NonEmptyString),
-        trashed: t.Optional(t.Boolean()),
-        properties: t.Optional(StringMap),
-        appProperties: t.Optional(StringMap),
-        contentBase64: t.Optional(t.String()),
-        contentPath: t.Optional(NonEmptyString),
         keepRevisionForever: t.Optional(t.Boolean()),
         ocrLanguage: t.Optional(NonEmptyString),
         useContentAsIndexableText: t.Optional(t.Boolean()),
         fields: t.Optional(NonEmptyString),
+        ...fileChanges,
       },
       {
         additionalProperties: false,
@@ -838,15 +841,7 @@ export default function googleDrive(rl: RunlinePluginAPI) {
             ],
           })),
         ],
-        anyOf: [
-          { required: ["name"] },
-          { required: ["mimeType"] },
-          { required: ["trashed"] },
-          { required: ["properties"] },
-          { required: ["appProperties"] },
-          { required: ["contentBase64"] },
-          { required: ["contentPath"] },
-        ],
+        ...atLeastOne(fileChanges),
       },
     ),
     async execute(p, ctx) {
@@ -1371,23 +1366,19 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     },
   });
 
+  const driveChanges = {
+    name: t.Optional(NonEmptyString),
+    colorRgb: t.Optional(t.String({ pattern: "^#?[0-9A-Fa-f]{6}$" })),
+    restrictions: t.Optional(RawGoogleObject),
+  };
   rl.registerAction("drive.update", {
     access: "write",
     description: "Patch a shared drive",
     inputSchema: t.Object(
-      {
-        driveId: Id,
-        name: t.Optional(NonEmptyString),
-        colorRgb: t.Optional(t.String({ pattern: "^#?[0-9A-Fa-f]{6}$" })),
-        restrictions: t.Optional(RawGoogleObject),
-      },
+      { driveId: Id, ...driveChanges },
       {
         additionalProperties: false,
-        anyOf: [
-          { required: ["name"] },
-          { required: ["colorRgb"] },
-          { required: ["restrictions"] },
-        ],
+        ...atLeastOne(driveChanges),
       },
     ),
     async execute(p, ctx) {
@@ -1803,27 +1794,21 @@ export default function googleDrive(rl: RunlinePluginAPI) {
     },
   });
 
+  const revisionChanges = {
+    keepForever: t.Optional(t.Boolean()),
+    published: t.Optional(t.Boolean()),
+    publishAuto: t.Optional(t.Boolean()),
+    publishedOutsideDomain: t.Optional(t.Boolean()),
+  };
   rl.registerAction("revision.update", {
     access: "write",
     description:
       "Patch revision metadata. The most useful flag is keepForever — without it Drive can garbage-collect revisions after 30 days / 100 versions on Office files. Set keepForever=true on the head revision before any risky file.update so prior bytes are guaranteed recoverable.",
     inputSchema: t.Object(
-      {
-        fileId: Id,
-        revisionId: Id,
-        keepForever: t.Optional(t.Boolean()),
-        published: t.Optional(t.Boolean()),
-        publishAuto: t.Optional(t.Boolean()),
-        publishedOutsideDomain: t.Optional(t.Boolean()),
-      },
+      { fileId: Id, revisionId: Id, ...revisionChanges },
       {
         additionalProperties: false,
-        anyOf: [
-          { required: ["keepForever"] },
-          { required: ["published"] },
-          { required: ["publishAuto"] },
-          { required: ["publishedOutsideDomain"] },
-        ],
+        ...atLeastOne(revisionChanges),
       },
     ),
     async execute(p, ctx) {
