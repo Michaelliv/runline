@@ -1,4 +1,4 @@
-import type { TSchema } from "typebox";
+import type { Static, TSchema } from "typebox";
 import type { OAuth2Definition } from "../auth/types.js";
 import type { ConnectionUpdate } from "../connections/types.js";
 import type { CredentialBroker } from "../credentials/transport.js";
@@ -14,6 +14,36 @@ export interface InputField {
 export type LegacyInputSchema = Record<string, InputField>;
 export type TypedInputSchema = TSchema;
 export type InputSchema = LegacyInputSchema | TypedInputSchema;
+
+type FieldValue<F> = F extends { type: "string" }
+  ? string
+  : F extends { type: "number" }
+    ? number
+    : F extends { type: "boolean" }
+      ? boolean
+      : F extends { type: "array" }
+        ? unknown[]
+        : F extends { type: "object" }
+          ? Record<string, unknown>
+          : unknown;
+
+/** A legacy `inputs` map as the value a handler receives. */
+export type LegacyStatic<S> = {
+  [K in keyof S as S[K] extends { required: true } ? K : never]: FieldValue<
+    S[K]
+  >;
+} & {
+  [K in keyof S as S[K] extends { required: true } ? never : K]?: FieldValue<
+    S[K]
+  >;
+};
+
+/** What `execute` receives for an action declared with `S`. */
+export type InputOf<S> = S extends { "~kind": string }
+  ? Static<S>
+  : S extends LegacyInputSchema
+    ? LegacyStatic<S>
+    : Record<string, never>;
 
 export interface ConnectionSchemaField {
   type: string;

@@ -90,8 +90,8 @@ function makeTestPlugin() {
 
   api.registerAction("slow", {
     description: "Async action",
-    async execute(input) {
-      const { ms } = input as { ms: number };
+    inputSchema: { ms: { type: "number", required: true } },
+    async execute({ ms }) {
       await new Promise((r) => setTimeout(r, ms));
       return { waited: ms };
     },
