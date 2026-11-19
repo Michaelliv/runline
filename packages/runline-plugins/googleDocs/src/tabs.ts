@@ -23,6 +23,12 @@ function tabProperties(p: {
 }
 
 export function registerTabActions(rl: RunlinePluginAPI) {
+  /** What a tab is given on creating it, and what an update may change. */
+  const tabChanges = {
+    title: t.Optional(t.String({ minLength: 1 })),
+    index: t.Optional(t.Integer({ minimum: 0 })),
+    parentTabId: t.Optional(t.String({ minLength: 1 })),
+  };
   rl.registerAction("document.addDocumentTab", {
     access: "write",
     description:
@@ -30,9 +36,7 @@ export function registerTabActions(rl: RunlinePluginAPI) {
     inputSchema: t.Object(
       {
         ...DocumentInput,
-        title: t.Optional(t.String({ minLength: 1 })),
-        index: t.Optional(t.Integer({ minimum: 0 })),
-        parentTabId: t.Optional(t.String({ minLength: 1 })),
+        ...tabChanges,
       },
       STRICT,
     ),
@@ -60,11 +64,6 @@ export function registerTabActions(rl: RunlinePluginAPI) {
     },
   });
 
-  const tabChanges = {
-    title: t.Optional(t.String({ minLength: 1 })),
-    index: t.Optional(t.Integer({ minimum: 0 })),
-    parentTabId: t.Optional(t.String({ minLength: 1 })),
-  };
   rl.registerAction("document.updateDocumentTabProperties", {
     access: "write",
     description:

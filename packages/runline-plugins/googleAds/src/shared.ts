@@ -15,7 +15,7 @@ import { failedChange, unansweredChange } from "../../_shared/changes.js";
 import { googleFailure, googleResponse } from "../../_shared/googleAuth.js";
 import { GOOGLE_ADS_VERSION } from "../../_shared/googleCredentials.js";
 import { maskedFields } from "../../_shared/googleFieldMask.js";
-import { obj } from "../../_shared/provider.js";
+import { arr, obj } from "../../_shared/provider.js";
 import { stringEnum } from "../../_shared/schemas.js";
 
 export const PLUGIN = "googleAds";
@@ -175,11 +175,8 @@ interface AdsCall {
  */
 export function adsFailure(body: unknown): { code?: unknown; param?: unknown } {
   const error = obj(obj(body).error);
-  const errors = (Array.isArray(error.details) ? error.details : []).flatMap(
-    (detail) => {
-      const list = obj(detail).errors;
-      return Array.isArray(list) ? list.map(obj) : [];
-    },
+  const errors = arr(error.details).flatMap((detail) =>
+    arr(obj(detail).errors).map(obj),
   );
   const fields = errors
     .map((entry) => fieldPath(entry.location))
@@ -201,9 +198,7 @@ function errorCode(value: unknown): string | undefined {
 }
 
 function fieldPath(location: unknown): string | undefined {
-  const elements = obj(location).fieldPathElements;
-  if (!Array.isArray(elements)) return undefined;
-  const names = elements
+  const names = arr(obj(location).fieldPathElements)
     .map(obj)
     .flatMap((element) =>
       typeof element.fieldName !== "string"

@@ -115,7 +115,7 @@ export default function facebookGraph(rl: RunlinePluginAPI) {
         fields,
         queryParameters,
         body,
-      } = input as t.Static<typeof requestInput>;
+      } = input;
       const path = [
         graphApiVersion,
         pathSegment(node),

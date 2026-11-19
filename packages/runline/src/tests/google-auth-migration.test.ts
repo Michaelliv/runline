@@ -716,7 +716,7 @@ it("a list is read page by page until no token follows", async () => {
   assert.ok(asked.every((query) => query.pageSize === 2));
 });
 
-it("every Drive list follows its pages through the one loop", async () => {
+it("a Drive comment list follows its pages at its default page size", async () => {
   const urls: string[] = [];
   mock((url) => {
     urls.push(url);

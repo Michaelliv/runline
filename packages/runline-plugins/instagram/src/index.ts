@@ -59,8 +59,6 @@ import {
   send,
 } from "./shared.js";
 
-type In<S extends t.TSchema> = t.Static<S>;
-
 // ─── Default fields ─────────────────────────────────────────────
 
 /** An account's profile; the two hosts name its fields differently. */
@@ -786,7 +784,7 @@ export default function instagram(rl: RunlinePluginAPI) {
         );
         return { data: Array.isArray(me.data) ? me.data : [me] };
       }
-      const { limit, after } = input as In<typeof page>;
+      const { limit, after } = input;
       return edge(ctx, "me/assigned_instagram_accounts", {
         fields: "id,username",
         limit,
@@ -801,7 +799,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "The Facebook Pages a Facebook Login user manages, each with the Instagram professional account connected to it (instagram_business_account). graph.facebook.com only.",
     inputSchema: page,
     async execute(input, ctx) {
-      const { limit, after } = input as In<typeof page>;
+      const { limit, after } = input;
       return edge(ctx, "me/accounts", {
         fields: "id,name,instagram_business_account{id,username}",
         limit,
@@ -816,7 +814,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "An Instagram professional account's profile: username, name, bio, website, follower, following and media counts.",
     inputSchema: userGet,
     async execute(input, ctx) {
-      const { igUserId, fields } = input as In<typeof userGet>;
+      const { igUserId, fields } = input;
       return graph(ctx, {
         path: accountPath(ctx, igUserId),
         query: {
@@ -834,9 +832,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "An account's metrics over a period: reach, views, likes, comments, shares, saves, follows and unfollows, and the demographics of its followers and engaged audience. Meta keeps them 90 days, may lag 48 hours, and answers no data for a metric it lacks.",
     inputSchema: userInsights,
     async execute(input, ctx) {
-      const { igUserId, metric, metricType, breakdown, ...rest } = input as In<
-        typeof userInsights
-      >;
+      const { igUserId, metric, metricType, breakdown, ...rest } = input;
       return edge(ctx, `${accountPath(ctx, igUserId)}/insights`, {
         metric: metric.join(","),
         metric_type: metricType,
@@ -852,7 +848,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "How many posts the account published through the API in the last 24 hours (quota_usage), and the most it may (config.quota_total).",
     inputSchema: publishingLimit,
     async execute(input, ctx) {
-      const { igUserId, since } = input as In<typeof publishingLimit>;
+      const { igUserId, since } = input;
       return edge(
         ctx,
         `${accountPath(ctx, igUserId)}/content_publishing_limit`,
@@ -867,9 +863,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Another Business or Creator account's public profile and media, by its username: follower and media counts, and each post's likes and comments. graph.facebook.com only.",
     inputSchema: businessDiscovery,
     async execute(input, ctx) {
-      const { igUserId, username, fields } = input as In<
-        typeof businessDiscovery
-      >;
+      const { igUserId, username, fields } = input;
       return expansion(
         ctx,
         accountPath(ctx, igUserId),
@@ -887,7 +881,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "The account's posts and reels, newest first, a page at a time (stories: story.list). Meta lists the 10,000 most recent. media_url is absent for a video with copyrighted audio.",
     inputSchema: mediaList,
     async execute(input, ctx) {
-      const { igUserId, fields, ...query } = input as In<typeof mediaList>;
+      const { igUserId, fields, ...query } = input;
       return edge(ctx, `${accountPath(ctx, igUserId)}/media`, {
         fields: (fields ?? MEDIA_FIELDS).join(","),
         ...query,
@@ -901,7 +895,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "One post, reel or story: its caption, type, URL, permalink, time, and like and comment counts.",
     inputSchema: mediaGet,
     async execute(input, ctx) {
-      const { mediaId, fields } = input as In<typeof mediaGet>;
+      const { mediaId, fields } = input;
       return node(ctx, mediaId, fields ?? MEDIA_FIELDS);
     },
   });
@@ -911,7 +905,7 @@ export default function instagram(rl: RunlinePluginAPI) {
     description: "The images and videos of a carousel post.",
     inputSchema: mediaChildren,
     async execute(input, ctx) {
-      const { mediaId, fields, ...query } = input as In<typeof mediaChildren>;
+      const { mediaId, fields, ...query } = input;
       return edge(ctx, `${pathSegment(mediaId)}/children`, {
         fields: (fields ?? CHILD_FIELDS).join(","),
         ...query,
@@ -924,7 +918,7 @@ export default function instagram(rl: RunlinePluginAPI) {
     description: "Turn comments on a post on or off.",
     inputSchema: mediaUpdate,
     async execute(input, ctx) {
-      const { mediaId, commentEnabled } = input as In<typeof mediaUpdate>;
+      const { mediaId, commentEnabled } = input;
       return graph(ctx, {
         method: "POST",
         path: pathSegment(mediaId),
@@ -939,7 +933,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Delete a post, reel, story or a whole carousel; it cannot be undone. graph.facebook.com only.",
     inputSchema: mediaOnly,
     async execute(input, ctx) {
-      const { mediaId } = input as In<typeof mediaOnly>;
+      const { mediaId } = input;
       return graph(ctx, { method: "DELETE", path: pathSegment(mediaId) });
     },
   });
@@ -950,7 +944,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "A post's, reel's or story's lifetime metrics: reach, views, likes, comments, saves, shares and more, by its surface. A story's are kept 24 hours; a carousel's items have none.",
     inputSchema: mediaInsights,
     async execute(input, ctx) {
-      const { mediaId, metric, breakdown } = input as In<typeof mediaInsights>;
+      const { mediaId, metric, breakdown } = input;
       return edge(ctx, `${pathSegment(mediaId)}/insights`, {
         metric: metric.join(","),
         breakdown: breakdown?.join(","),
@@ -964,7 +958,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Publish a container as a post, reel, story or carousel, and answer the new media's id. The container must be FINISHED (container.get). Meta limits how many an account publishes in 24 hours (user.contentPublishingLimit). config_issue in the answer names a caption or tags the post went out without.",
     inputSchema: mediaPublish,
     async execute(input, ctx) {
-      const { igUserId, creationId } = input as In<typeof mediaPublish>;
+      const { igUserId, creationId } = input;
       return graph(ctx, {
         method: "POST",
         path: `${accountPath(ctx, igUserId)}/media_publish`,
@@ -979,7 +973,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "The account's stories of the last 24 hours. Live videos and reshared stories are not listed.",
     inputSchema: storyList,
     async execute(input, ctx) {
-      const { igUserId, fields, ...query } = input as In<typeof storyList>;
+      const { igUserId, fields, ...query } = input;
       return edge(ctx, `${accountPath(ctx, igUserId)}/stories`, {
         fields: (fields ?? STORY_FIELDS).join(","),
         ...query,
@@ -1000,7 +994,7 @@ export default function instagram(rl: RunlinePluginAPI) {
         postedAfter,
         postedBefore,
         ...query
-      } = input as In<typeof tagList>;
+      } = input;
       return edge(ctx, `${accountPath(ctx, igUserId)}/tags`, {
         fields: (fields ?? MEDIA_FIELDS).join(","),
         media_type: mediaType?.join(","),
@@ -1019,9 +1013,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "The first step of publishing: a container for an image, a reel, a story or a carousel. Meta fetches the media from imageUrl or videoUrl, which must be public; a local video goes through uploadType resumable and container.upload. Answers the container's id (and uri for an upload); wait until container.get answers FINISHED, then media.publish. A carousel is a container whose children are its items' containers. Containers expire after 24 hours.",
     inputSchema: containerCreate,
     async execute(input, ctx) {
-      const { igUserId, children, ...parameters } = input as In<
-        typeof containerCreate
-      >;
+      const { igUserId, children, ...parameters } = input;
       return graph(ctx, {
         method: "POST",
         path: `${accountPath(ctx, igUserId)}/media`,
@@ -1036,7 +1028,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "A container's status_code: IN_PROGRESS while Meta processes the media, FINISHED when it can be published, PUBLISHED, ERROR (status names the reason) or EXPIRED. Meta suggests asking once a minute, for at most 5 minutes.",
     inputSchema: containerGet,
     async execute(input, ctx) {
-      const { containerId, fields } = input as In<typeof containerGet>;
+      const { containerId, fields } = input;
       return node(ctx, containerId, fields ?? CONTAINER_FIELDS);
     },
   });
@@ -1047,9 +1039,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Send a video to a container created with uploadType resumable: a local file (contentPath), or a public URL Meta fetches (fileUrl). For apps on Facebook Login for Business, on graph.facebook.com.",
     inputSchema: containerUpload,
     async execute(input, ctx) {
-      const { containerId, contentPath, fileUrl } = input as In<
-        typeof containerUpload
-      >;
+      const { containerId, contentPath, fileUrl } = input;
       const bytes =
         contentPath === undefined
           ? undefined
@@ -1090,7 +1080,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "The top-level comments on a post, newest first, at most 50 a page. Replies are an edge: fields replies{id,text,username,timestamp}, or comment.listReplies.",
     inputSchema: commentList,
     async execute(input, ctx) {
-      const { mediaId, fields, ...query } = input as In<typeof commentList>;
+      const { mediaId, fields, ...query } = input;
       return edge(ctx, `${pathSegment(mediaId)}/comments`, {
         fields: (fields ?? COMMENT_FIELDS).join(","),
         ...query,
@@ -1104,7 +1094,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "One comment: its text, author, time, likes, whether it is hidden, and the media it is on.",
     inputSchema: commentGet,
     async execute(input, ctx) {
-      const { commentId, fields } = input as In<typeof commentGet>;
+      const { commentId, fields } = input;
       return node(ctx, commentId, fields ?? [...COMMENT_FIELDS, "media"]);
     },
   });
@@ -1114,7 +1104,7 @@ export default function instagram(rl: RunlinePluginAPI) {
     description: "Comment on one of the account's posts, as the account.",
     inputSchema: commentCreate,
     async execute(input, ctx) {
-      const { mediaId, message } = input as In<typeof commentCreate>;
+      const { mediaId, message } = input;
       return graph(ctx, {
         method: "POST",
         path: `${pathSegment(mediaId)}/comments`,
@@ -1128,9 +1118,7 @@ export default function instagram(rl: RunlinePluginAPI) {
     description: "The replies to a comment.",
     inputSchema: commentReplies,
     async execute(input, ctx) {
-      const { commentId, fields, ...query } = input as In<
-        typeof commentReplies
-      >;
+      const { commentId, fields, ...query } = input;
       return edge(ctx, `${pathSegment(commentId)}/replies`, {
         fields: (fields ?? COMMENT_FIELDS).join(","),
         ...query,
@@ -1144,7 +1132,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Reply to a comment on the account's media, in public. A reply to a reply joins the top-level comment's thread; a hidden comment takes none. To answer in a direct message, message.send with recipient.commentId.",
     inputSchema: commentReply,
     async execute(input, ctx) {
-      const { commentId, message } = input as In<typeof commentReply>;
+      const { commentId, message } = input;
       return graph(ctx, {
         method: "POST",
         path: `${pathSegment(commentId)}/replies`,
@@ -1159,7 +1147,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Hide a comment on the account's media, or show it again. The account's own comments always show.",
     inputSchema: commentUpdate,
     async execute(input, ctx) {
-      const { commentId, hide } = input as In<typeof commentUpdate>;
+      const { commentId, hide } = input;
       return graph(ctx, {
         method: "POST",
         path: pathSegment(commentId),
@@ -1174,7 +1162,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Delete a comment on the account's media; it cannot be undone.",
     inputSchema: commentOnly,
     async execute(input, ctx) {
-      const { commentId } = input as In<typeof commentOnly>;
+      const { commentId } = input;
       return graph(ctx, { method: "DELETE", path: pathSegment(commentId) });
     },
   });
@@ -1187,9 +1175,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "A comment by someone else that @mentions the account, by the comment ID a mentions webhook names; null when there is none.",
     inputSchema: mentionedComment,
     async execute(input, ctx) {
-      const { igUserId, commentId, fields } = input as In<
-        typeof mentionedComment
-      >;
+      const { igUserId, commentId, fields } = input;
       return expansion(
         ctx,
         accountPath(ctx, igUserId),
@@ -1205,7 +1191,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "A post by someone else whose caption @mentions the account, by the media ID a mentions webhook names; null when there is none.",
     inputSchema: mentionedMedia,
     async execute(input, ctx) {
-      const { igUserId, mediaId, fields } = input as In<typeof mentionedMedia>;
+      const { igUserId, mediaId, fields } = input;
       return expansion(
         ctx,
         accountPath(ctx, igUserId),
@@ -1221,9 +1207,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Comment, as the account, on someone else's post that @mentions it: on the post for a mention in its caption, or under the comment that mentions it. Not for stories, or for photos the account is only tagged in.",
     inputSchema: mentionReply,
     async execute(input, ctx) {
-      const { igUserId, mediaId, commentId, message } = input as In<
-        typeof mentionReply
-      >;
+      const { igUserId, mediaId, commentId, message } = input;
       return graph(ctx, {
         method: "POST",
         path: `${accountPath(ctx, igUserId)}/mentions`,
@@ -1240,7 +1224,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "A hashtag's ID, by its name. An account may query 30 different hashtags in 7 days (hashtag.listRecentlySearched). graph.facebook.com only, for apps with Instagram Public Content Access.",
     inputSchema: hashtagSearch,
     async execute(input, ctx) {
-      const { igUserId, q } = input as In<typeof hashtagSearch>;
+      const { igUserId, q } = input;
       return edge(ctx, "ig_hashtag_search", {
         user_id: accountId(ctx, igUserId),
         q,
@@ -1253,7 +1237,7 @@ export default function instagram(rl: RunlinePluginAPI) {
     description: "A hashtag's name, by its ID.",
     inputSchema: hashtagGet,
     async execute(input, ctx) {
-      const { hashtagId, fields } = input as In<typeof hashtagGet>;
+      const { hashtagId, fields } = input;
       return node(ctx, hashtagId, fields ?? HASHTAG_FIELDS);
     },
   });
@@ -1275,9 +1259,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       description: `${about} At most 50 a page, without their authors. Counts as querying the hashtag.`,
       inputSchema: hashtagMedia,
       async execute(input, ctx) {
-        const { igUserId, hashtagId, fields, ...query } = input as In<
-          typeof hashtagMedia
-        >;
+        const { igUserId, hashtagId, fields, ...query } = input;
         return edge(ctx, `${pathSegment(hashtagId)}/${edgeName}`, {
           user_id: accountId(ctx, igUserId),
           fields: (fields ?? HASHTAG_MEDIA_FIELDS).join(","),
@@ -1292,7 +1274,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "The hashtags counting against the account's limit of 30 in 7 days.",
     inputSchema: accountPage,
     async execute(input, ctx) {
-      const { igUserId, ...query } = input as In<typeof accountPage>;
+      const { igUserId, ...query } = input;
       return edge(
         ctx,
         `${accountPath(ctx, igUserId)}/recently_searched_hashtags`,
@@ -1309,9 +1291,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "The account's direct-message conversations, each with its id and updated_time, or the one with a given person. Requests untouched for 30 days are not listed.",
     inputSchema: conversationList,
     async execute(input, ctx) {
-      const { igUserId, userId, ...query } = input as In<
-        typeof conversationList
-      >;
+      const { igUserId, userId, ...query } = input;
       return edge(ctx, `${accountPath(ctx, igUserId)}/conversations`, {
         platform: "instagram",
         user_id: userId,
@@ -1326,7 +1306,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "A conversation's messages, as IDs with their times. message.get reads one; Meta answers details for the 20 most recent only.",
     inputSchema: conversationGet,
     async execute(input, ctx) {
-      const { conversationId, fields } = input as In<typeof conversationGet>;
+      const { conversationId, fields } = input;
       return node(ctx, conversationId, fields ?? CONVERSATION_FIELDS);
     },
   });
@@ -1337,7 +1317,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "One direct message: who sent it, to whom, when, and its text.",
     inputSchema: messageGet,
     async execute(input, ctx) {
-      const { messageId, fields } = input as In<typeof messageGet>;
+      const { messageId, fields } = input;
       return node(ctx, messageId, fields ?? MESSAGE_FIELDS);
     },
   });
@@ -1348,7 +1328,7 @@ export default function instagram(rl: RunlinePluginAPI) {
       "Send a direct message as the account: text or one attachment, to a person who messaged it within the last 24 hours (recipient.id), or once as a private reply to a comment's author (recipient.commentId). Answers recipient_id and message_id. The account cannot start a conversation.",
     inputSchema: messageSend,
     async execute(input, ctx) {
-      const { igUserId, ...body } = input as In<typeof messageSend>;
+      const { igUserId, ...body } = input;
       return graph(ctx, {
         method: "POST",
         path: `${accountPath(ctx, igUserId)}/messages`,
