@@ -5,8 +5,12 @@ import {
   realpathSync,
   statSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { satisfies, validRange } from "semver";
 import { PackageError } from "./errors.js";
+
+const require = createRequire(import.meta.url);
 
 /**
  * Modules runline supplies to every plugin it loads, from its own copy. A
@@ -26,6 +30,26 @@ export const HOST_MODULES = [
   ...new Set(HOST_MODULE_SPECIFIERS.map((s) => s.split("/")[0])),
 ];
 
+/** The version of a host module this runline supplies, when it can be read. */
+function hostModuleVersion(module: string): string | undefined {
+  try {
+    const pkg = require(
+      module === "runline" ? "../../package.json" : `${module}/package.json`,
+    );
+    return typeof pkg.version === "string" ? pkg.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export interface UnsatisfiedPeer {
+  module: string;
+  /** The range the package declares. */
+  range: string;
+  /** The version this runline supplies. */
+  version: string;
+}
+
 export interface PackageManifest {
   name?: string;
   version?: string;
@@ -33,6 +57,25 @@ export interface PackageManifest {
   pluginPaths: string[];
   /** Host modules the package wrongly lists in `dependencies`. */
   bundledHostModules: string[];
+  /** Host modules whose declared peer range this runline does not satisfy. */
+  unsatisfiedPeers: UnsatisfiedPeer[];
+}
+
+/**
+ * Peer ranges on host modules that the running versions fall outside. `"*"`
+ * is the range every package should declare, and always holds.
+ */
+function unsatisfiedPeers(peers: unknown): UnsatisfiedPeer[] {
+  if (!peers || typeof peers !== "object") return [];
+  const declared = peers as Record<string, unknown>;
+  return HOST_MODULES.flatMap((module) => {
+    const range = declared[module];
+    const version = hostModuleVersion(module);
+    if (typeof range !== "string" || !validRange(range) || !version) return [];
+    return satisfies(version, range, { includePrerelease: true })
+      ? []
+      : [{ module, range, version }];
+  });
 }
 
 const PLUGIN_FILE = /\.(ts|js|mjs|cjs)$/;
@@ -156,7 +199,11 @@ export function readPackageManifest(
         `Not a plugin module: ${root}`,
         { source },
       );
-    return { pluginPaths: [resolve(root)], bundledHostModules: [] };
+    return {
+      pluginPaths: [resolve(root)],
+      bundledHostModules: [],
+      unsatisfiedPeers: [],
+    };
   }
 
   let pkg: Record<string, unknown> = {};
@@ -263,5 +310,6 @@ export function readPackageManifest(
     version: typeof pkg.version === "string" ? pkg.version : undefined,
     pluginPaths,
     bundledHostModules,
+    unsatisfiedPeers: unsatisfiedPeers(pkg.peerDependencies),
   };
 }

@@ -54,10 +54,7 @@ export async function pluginRemove(
 }
 
 export async function pluginList(options: { json?: boolean }): Promise<void> {
-  const packages = await cliPackageManager({ quiet: true }).load();
-  await loadAllPlugins({ packages });
-  const sourceOf = (name: string) =>
-    packages.loaded.find((p) => p.plugin.name === name)?.source;
+  await loadAllPlugins({ packages: cliPackageManager({ quiet: true }) });
   const loaded = registry.listPlugins();
 
   if (options.json) {
@@ -66,7 +63,8 @@ export async function pluginList(options: { json?: boolean }): Promise<void> {
         name: p.name,
         version: p.version,
         actions: p.actions.map((a) => a.name),
-        source: sourceOf(p.name),
+        origin: p.sourceInfo?.origin,
+        source: p.sourceInfo?.source,
       })),
     );
     return;
@@ -78,8 +76,10 @@ export async function pluginList(options: { json?: boolean }): Promise<void> {
   }
 
   for (const p of loaded) {
-    const src = sourceOf(p.name);
-    const srcLabel = src ? chalk.dim(` (${src})`) : "";
+    const srcLabel =
+      p.sourceInfo && p.sourceInfo.origin !== "builtin"
+        ? chalk.dim(` (${p.sourceInfo.source})`)
+        : "";
     console.log(
       `  ${chalk.bold(p.name)} v${p.version}${srcLabel} — ${p.actions.length} action(s)`,
     );

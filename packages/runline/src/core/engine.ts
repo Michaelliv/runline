@@ -3,7 +3,10 @@ import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
 import type { RunlineConfig } from "../config/types.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
-import type { ConnectionProvider } from "../connections/types.js";
+import {
+  assertConnectionOwner,
+  type ConnectionProvider,
+} from "../connections/types.js";
 import type {
   CredentialBroker,
   CredentialBrokerCall,
@@ -528,6 +531,7 @@ export class ExecutionEngine {
 
     const handle = await this.connectionProvider.resolve({
       plugin: plugin.name,
+      owner: plugin.sourceInfo?.owner,
       action: action.name,
       schema: plugin.connectionConfigSchema,
       context,
@@ -538,6 +542,7 @@ export class ExecutionEngine {
         `Connection provider returned the wrong plugin for ${path}`,
       );
     }
+    assertConnectionOwner(connection, plugin);
     const connectionName = connection.name;
     const ctx: ActionContext = {
       connection,

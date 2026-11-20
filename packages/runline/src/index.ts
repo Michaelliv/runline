@@ -174,7 +174,6 @@ export {
   type CallOptions,
   type ConfiguredPackage,
   type InstallScope,
-  type LoadedPlugin,
   type LoadResult,
   type MissingAction,
   type PackageAction,
@@ -197,6 +196,7 @@ export {
   type PackageManifest,
   pluginEntryPoint,
   readPackageManifest,
+  type UnsatisfiedPeer,
 } from "./packages/manifest.js";
 export {
   type CommandOptions,
@@ -253,6 +253,7 @@ export type {
   LegacyConnectionSchema,
   OAuthConfig,
   PluginDef,
+  PluginSourceInfo,
 } from "./plugin/types.js";
 export type { RunlineExecuteOptions, RunlineOptions } from "./sdk.js";
 export { Runline } from "./sdk.js";

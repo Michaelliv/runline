@@ -407,7 +407,7 @@ export default function orders(rl: RunlinePluginAPI) {
 
 **[docs/credentials.md](docs/credentials.md)** is the full guide: which declaration fits your API (a key, several parts, an optional key, a host from config, OAuth with or without a person, AWS, a web app's cookie session), the request and path helpers, reporting failures without leaking provider text, what each `AuthError` code means, and where the secret lives when signing locally or under a host.
 
-Custom plugins are discovered from the nearest project `.runline/plugins/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then installed [packages](docs/packages.md), then the bundled built-ins named by configured connections. Project-local plugins win over same-named global or built-in plugins; duplicates discovered later are skipped and reported on stderr. A plugin from a package may never take a bundled plugin's name.
+Custom plugins are discovered from the nearest project `.runline/plugins/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then installed [packages](docs/packages.md), then the bundled built-ins named by configured connections. The first plugin with a name keeps it; duplicates discovered later are skipped and reported on stderr. A bundled plugin's name is the exception, because the name selects the connection: a package's plugin may never take it, and a local plugin takes it only when `config.json` lists the bundled plugin under `replaceableBuiltins`.
 
 To share plugins, publish them as a package: see **[docs/packages.md](docs/packages.md)** for `runline install`, the `runline.plugins` manifest, and the `PackageManager` library hosts embed.
 
@@ -539,6 +539,8 @@ runline init                           # create .runline/ directory
   "memoryLimitBytes": 67108864
 }
 ```
+
+`"replaceableBuiltins": ["github"]` names bundled plugins that a local plugin of the same name replaces; without it, such a local plugin is not loaded. A connection added through the CLI records where its plugin comes from (`owner`): a plugin of the same name from somewhere else does not inherit it.
 
 Env vars override config values. Plugins declare env var names in their connection schema (e.g. `GITHUB_TOKEN`).
 

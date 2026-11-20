@@ -136,12 +136,12 @@ describe("Runline.fromProject", () => {
     assert.equal(names.has("beta"), false);
   });
 
-  it("project-local plugin overrides a same-named builtin", async () => {
-    // If a user drops a plugin named "alpha" into .runline/plugins/,
-    // it should win over the builtin — project code is closer to the
-    // user's intent.
+  it("project-local plugin replaces a same-named builtin the config lists as replaceable", async () => {
+    // A plugin named "alpha" in .runline/plugins/ takes the builtin's
+    // name, and with it the builtin's connection, only by explicit config.
     const runlineDir = writeRunlineDir({
       connections: [{ name: "alpha", plugin: "alpha", config: {} }],
+      replaceableBuiltins: ["alpha"],
     });
     const pluginsDir = join(runlineDir, "plugins");
     mkdirSync(pluginsDir, { recursive: true });
@@ -160,5 +160,33 @@ describe("Runline.fromProject", () => {
     assert.ok(alpha);
     assert.equal(alpha.version, "9.9.9");
     assert.deepEqual(alpha.actions, ["override"]);
+  });
+
+  it("keeps the builtin when a same-named project-local plugin is not listed as replaceable", async () => {
+    const runlineDir = writeRunlineDir({
+      connections: [{ name: "alpha", plugin: "alpha", config: {} }],
+    });
+    mkdirSync(join(runlineDir, "plugins"), { recursive: true });
+    writeFileSync(
+      join(runlineDir, "plugins", "alpha.js"),
+      `export default function alpha(api) {
+        api.setName("alpha");
+        api.setVersion("9.9.9");
+        api.registerAction("override", { execute: () => "local" });
+      }`,
+    );
+
+    const original = console.error;
+    const errors: string[] = [];
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    try {
+      const rl = await Runline.fromProject(tempDir, { builtinDir });
+      const alpha = rl?.plugins().find((p) => p.name === "alpha");
+      assert.equal(alpha?.sourceInfo?.origin, "builtin");
+      assert.notEqual(alpha?.version, "9.9.9");
+    } finally {
+      console.error = original;
+    }
+    assert.match(errors.join("\n"), /has the name of a bundled plugin/);
   });
 });

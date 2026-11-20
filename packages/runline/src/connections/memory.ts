@@ -4,6 +4,7 @@ import {
   type ConnectionProvider,
   type ConnectionRequest,
   connectionPatch,
+  ownedBy,
 } from "./types.js";
 
 /**
@@ -36,14 +37,22 @@ export class MemoryConnectionProvider implements ConnectionProvider {
   }
 
   async resolve(request: ConnectionRequest): Promise<ConnectionHandle> {
-    let connection = [...this.connections.values()].find(
+    // The plugin's own connection first: one made for the asking owner.
+    const stored = [...this.connections.values()].filter(
       (value) => value.plugin === request.plugin,
     );
+    let connection =
+      stored.find((value) => value.owner === request.owner) ?? stored[0];
     if (!connection) {
       // Credential-free plugins also have a mutable, process-local connection.
       let name = request.plugin;
       while (this.connections.has(name)) name = `_${name}`;
-      connection = { name, plugin: request.plugin, config: {} };
+      connection = {
+        name,
+        plugin: request.plugin,
+        config: {},
+        ...ownedBy(request),
+      };
       this.connections.set(name, connection);
     }
     const name = connection.name;

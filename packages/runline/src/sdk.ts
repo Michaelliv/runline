@@ -183,12 +183,15 @@ export class Runline {
     version: string;
     actions: string[];
     connectionConfigSchema?: PluginDef["connectionConfigSchema"];
+    /** Where discovery found it; absent on a plugin the host supplied. */
+    sourceInfo?: PluginDef["sourceInfo"];
   }> {
     return this._registry.listPlugins().map((p) => ({
       name: p.name,
       version: p.version,
       actions: p.actions.map((a) => a.name),
       connectionConfigSchema: p.connectionConfigSchema,
+      ...(p.sourceInfo ? { sourceInfo: p.sourceInfo } : {}),
     }));
   }
 
@@ -204,7 +207,8 @@ export class Runline {
    * Load runline from a project directory.
    *
    * Discovers the `.runline/` config and registers:
-   *   - every plugin dropped into `.runline/plugins/`,
+   *   - every plugin dropped into `.runline/plugins/` (one named like a
+   *     bundled plugin only when `config.replaceableBuiltins` lists it),
    *   - every plugin listed in `.runline/plugins.json`,
    *   - every plugin in `~/.runline/plugins/`,
    *   - every configured package (`~/.runline` and, when `trust` allows,
@@ -259,6 +263,7 @@ export class Runline {
     const plugins = await discoverPlugins(configDir, {
       builtinAllowlist,
       builtinDir: options.builtinDir,
+      replaceableBuiltins: config.replaceableBuiltins,
       packages,
       userDir,
     });

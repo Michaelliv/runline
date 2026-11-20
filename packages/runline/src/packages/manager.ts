@@ -18,6 +18,7 @@ import {
   sep,
 } from "node:path";
 import lockfile from "proper-lockfile";
+import { gt, maxSatisfying, rcompare, satisfies } from "semver";
 import { defaultBuiltinDir, loadPluginFromPath } from "../plugin/loader.js";
 import type { PluginDef } from "../plugin/types.js";
 import {
@@ -72,7 +73,11 @@ export type PackageAction = "install" | "remove" | "update" | "check";
 
 export interface PackageProblem {
   level: "error" | "warning";
-  code: PackageErrorCode | "bundled_host_module" | "missing";
+  code:
+    | PackageErrorCode
+    | "bundled_host_module"
+    | "peer_unsatisfied"
+    | "missing";
   message: string;
   source?: string;
   plugin?: string;
@@ -177,17 +182,9 @@ export interface AvailableUpdate {
   latest: string;
 }
 
-export interface LoadedPlugin {
-  plugin: PluginDef;
-  source: string;
-  identity: string;
-  scope: InstallScope;
-  path: string;
-}
-
 export interface LoadResult {
+  /** Each with `sourceInfo`: its package's source, scope and identity (as `owner`). */
   plugins: PluginDef[];
-  loaded: LoadedPlugin[];
   problems: PackageProblem[];
 }
 
@@ -511,7 +508,11 @@ export class PackageManager {
           ? await this.gitHead(path)
           : readVersion(path)
         : undefined;
-      if (parsed.type === "npm" && parsed.pinned && from === parsed.version) {
+      if (
+        parsed.type === "npm" &&
+        from !== undefined &&
+        !(await this.npmNeedsUpdate(parsed, from, options.signal))
+      ) {
         results.push({ source: s, scope, from, to: from, changed: false });
         continue;
       }
@@ -550,7 +551,7 @@ export class PackageManager {
         if (parsed.type === "npm") {
           const latest = await this.npmLatest(parsed, options.signal);
           const installed = readVersion(path);
-          if (latest && latest !== installed)
+          if (latest && (!installed || gt(latest, installed)))
             results.push({ source, scope, installed, latest });
         } else {
           const remote = await this.gitRemoteHead(path, parsed, options.signal);
@@ -580,8 +581,8 @@ export class PackageManager {
   ): Promise<LoadResult> {
     assertNotAborted(options.signal);
     const problems: PackageProblem[] = [];
-    const loaded: LoadedPlugin[] = [];
-    const byName = new Map<string, LoadedPlugin>();
+    const plugins: PluginDef[] = [];
+    const sourceByName = new Map<string, string>();
     const reserved = this.reservedNames();
 
     // Trust is asked once per load; an untrusted project contributes nothing.
@@ -669,23 +670,29 @@ export class PackageManager {
           problems.push(reservedProblem(plugin.name, source));
           continue;
         }
-        const clash = byName.get(plugin.name);
-        if (clash) {
+        const clash = sourceByName.get(plugin.name);
+        if (clash !== undefined) {
           problems.push({
             level: "error",
             code: "name_conflict",
-            message: `Plugin "${plugin.name}" from ${source} was not loaded: ${clash.source} already provides it`,
+            message: `Plugin "${plugin.name}" from ${source} was not loaded: ${clash} already provides it`,
             source,
             plugin: plugin.name,
           });
           continue;
         }
-        const record = { plugin, source, identity, scope, path: pluginPath };
-        byName.set(plugin.name, record);
-        loaded.push(record);
+        plugin.sourceInfo = {
+          path: pluginPath,
+          source,
+          origin: "package",
+          scope,
+          owner: identity,
+        };
+        sourceByName.set(plugin.name, source);
+        plugins.push(plugin);
       }
     }
-    return { plugins: loaded.map((l) => l.plugin), loaded, problems };
+    return { plugins, problems };
   }
 
   /** npm packages carrying the `runline-plugin` keyword. */
@@ -852,8 +859,10 @@ export class PackageManager {
   /** Whether a package's files are on disk at the version or ref it is configured at. */
   private installed(parsed: ParsedSource, path: string): boolean {
     if (!existsSync(path)) return false;
-    if (parsed.type === "npm" && parsed.pinned)
-      return readVersion(path) === parsed.version;
+    if (parsed.type === "npm" && parsed.range) {
+      const version = readVersion(path);
+      return version !== undefined && satisfies(version, parsed.range);
+    }
     if (parsed.type === "git") return !existsSync(this.gitMarker(path));
     return true;
   }
@@ -885,6 +894,13 @@ export class PackageManager {
     }
     for (const module of manifest.bundledHostModules)
       problems.push(this.hostModuleProblem(source, module));
+    for (const peer of manifest.unsatisfiedPeers)
+      problems.push({
+        level: "warning",
+        code: "peer_unsatisfied",
+        message: `${source} needs ${peer.module} ${peer.range}; this is ${peer.module} ${peer.version}`,
+        source,
+      });
     const plugins: Array<{ plugin: PluginDef; path: string }> = [];
     for (const path of manifest.pluginPaths) {
       assertNotAborted(signal);
@@ -1142,6 +1158,27 @@ export class PackageManager {
       );
   }
 
+  /**
+   * Whether `update` has anything to install: a pinned version that is not
+   * the installed one, or a newer version inside the range. A failed lookup
+   * counts as yes, so an unreachable registry surfaces from the install.
+   */
+  private async npmNeedsUpdate(
+    source: NpmSource,
+    installed: string,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    if (source.pinned) return installed !== source.version;
+    try {
+      const latest = await this.npmLatest(source, signal);
+      return latest === undefined || gt(latest, installed);
+    } catch (error) {
+      if (isPackageError(error) && error.code === "aborted") throw error;
+      return true;
+    }
+  }
+
+  /** The newest published version the source's range (or dist-tag) allows. */
   private async npmLatest(
     source: NpmSource,
     signal?: AbortSignal,
@@ -1160,9 +1197,13 @@ export class PackageManager {
       | string
       | string[]
       | null;
-    return Array.isArray(parsed)
-      ? parsed[parsed.length - 1]
-      : (parsed ?? undefined);
+    if (!Array.isArray(parsed)) return parsed ?? undefined;
+    const versions = parsed.filter((v) => typeof v === "string");
+    return (
+      (source.range
+        ? maxSatisfying(versions, source.range)
+        : [...versions].sort(rcompare)[0]) ?? undefined
+    );
   }
 
   // ── git ────────────────────────────────────────────────

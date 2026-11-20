@@ -134,8 +134,17 @@ describe("parseSource", () => {
       spec: "@acme/orders@1.2.0",
       name: "@acme/orders",
       version: "1.2.0",
+      range: "1.2.0",
       pinned: true,
     });
+    assert.equal(
+      (parseSource("npm:orders@^1.2.0") as { range?: string }).range,
+      ">=1.2.0 <2.0.0-0",
+    );
+    assert.equal(
+      (parseSource("npm:orders@beta") as { range?: string }).range,
+      undefined,
+    );
     assert.equal(
       (parseSource("npm:orders@^1.2.0") as { pinned: boolean }).pinned,
       false,
@@ -417,9 +426,15 @@ ${pluginSource(
       { "index.js": pluginSource("orders") },
     );
     const pm = manager({ store: new MemoryPackageStore({ user: [a, b] }) });
-    const { loaded, problems } = await pm.load();
-    assert.equal(loaded.length, 1);
-    assert.equal(loaded[0].source, a);
+    const { plugins, problems } = await pm.load();
+    assert.equal(plugins.length, 1);
+    assert.deepEqual(plugins[0].sourceInfo, {
+      path: join(a, "index.js"),
+      source: a,
+      origin: "package",
+      scope: "user",
+      owner: `local:${a}`,
+    });
     assert.equal(problems[0].code, "name_conflict");
     assert.match(problems[0].message, new RegExp(a.replace(/[/\\]/g, ".")));
   });
@@ -454,15 +469,15 @@ ${pluginSource(
     const store = new MemoryPackageStore({ user: [v1], project: [v1] });
 
     const untrusted = await manager({ store }).load();
-    assert.equal(untrusted.loaded[0].scope, "user");
+    assert.equal(untrusted.plugins[0].sourceInfo?.scope, "user");
     assert.equal(untrusted.problems[0].code, "untrusted");
     await assert.rejects(manager({ store }).install(v1, { scope: "project" }), {
       code: "untrusted",
     });
 
     const trusted = await manager({ store, trust: () => true }).load();
-    assert.equal(trusted.loaded.length, 1);
-    assert.equal(trusted.loaded[0].scope, "project");
+    assert.equal(trusted.plugins.length, 1);
+    assert.equal(trusted.plugins[0].sourceInfo?.scope, "project");
   });
 
   it("installs npm packages through argv with scripts off and peers skipped", async () => {
@@ -667,6 +682,76 @@ ${pluginSource(
     assert.equal(listed.version, "1.0.0");
   });
 
+  it("treats an npm package outside its configured range as missing", async () => {
+    const fixture = writePackage(
+      join(tmp, "fixture"),
+      { name: "orders", version: "1.0.0" },
+      { "index.js": pluginSource("orders") },
+    );
+    const store = new MemoryPackageStore();
+    const pm = manager({ store, runner: fakeNpm({ orders: fixture }, []) });
+    await pm.install("npm:orders@^1.0.0");
+    assert.deepEqual((await pm.load()).problems, []);
+    await store.update("user", () => ({
+      entries: ["npm:orders@^2.0.0"],
+      result: undefined,
+    }));
+    assert.equal((await pm.load()).problems[0].code, "missing");
+    // A dist-tag is not a range: whatever is installed stands.
+    await store.update("user", () => ({
+      entries: ["npm:orders@beta"],
+      result: undefined,
+    }));
+    assert.deepEqual((await pm.load()).problems, []);
+  });
+
+  it("updates an npm range only when a newer version inside it exists", async () => {
+    const fixture = writePackage(
+      join(tmp, "fixture"),
+      { name: "orders", version: "1.4.0" },
+      { "index.js": pluginSource("orders") },
+    );
+    const calls: string[][] = [];
+    // The registry lists 1.0.0 and 1.4.0 (see fakeNpm's `view`).
+    const pm = manager({ runner: fakeNpm({ orders: fixture }, calls) });
+    await pm.install("npm:orders@^1.0.0");
+    calls.length = 0;
+    const [update] = await pm.update();
+    assert.equal(update.changed, false);
+    assert.deepEqual(
+      calls.map((c) => c[1]),
+      ["view"],
+      "nothing newer in range: no install",
+    );
+    assert.deepEqual(await pm.checkUpdates(), []);
+  });
+
+  it("warns when a package's peer range excludes this runline", async () => {
+    const fits = writePackage(
+      join(tmp, "fits"),
+      { peerDependencies: { runline: "*" } },
+      { "index.js": pluginSource("fits") },
+    );
+    const future = writePackage(
+      join(tmp, "future"),
+      { peerDependencies: { runline: ">=999.0.0" } },
+      { "index.js": pluginSource("future") },
+    );
+    const { plugins, problems } = await manager({
+      store: new MemoryPackageStore({ user: [fits, future] }),
+    }).load();
+    assert.deepEqual(
+      plugins.map((p) => p.name),
+      ["fits", "future"],
+    );
+    assert.equal(problems.length, 1);
+    assert.equal(problems[0].code, "peer_unsatisfied");
+    assert.match(
+      problems[0].message,
+      /needs runline >=999\.0\.0; this is runline \d/,
+    );
+  });
+
   it("treats a pinned npm package at another version as missing", async () => {
     const fixture = writePackage(
       join(tmp, "fixture"),
@@ -818,6 +903,88 @@ export default function (api) {
     assert.deepEqual(
       plugins.map((p) => p.name),
       ["tb"],
+    );
+  });
+
+  it("binds a connection to the plugin source it was made for", async () => {
+    const { Runline } = await import("../sdk.js");
+    const pkg = writePackage(
+      join(tmp, "orderspkg"),
+      {},
+      { "index.js": pluginSource("orders") },
+    );
+    const userDir = join(tmp, "home", ".runline");
+    mkdirSync(userDir, { recursive: true });
+    writeFileSync(
+      join(userDir, "config.json"),
+      JSON.stringify({ connections: [], packages: [pkg] }),
+    );
+    const project = join(tmp, "work");
+    const runlineDir = join(project, ".runline");
+    mkdirSync(join(runlineDir, "plugins"), { recursive: true });
+    writeFileSync(
+      join(runlineDir, "plugins", "notes.js"),
+      pluginSource("notes"),
+    );
+    const builtinDir = join(tmp, "builtins");
+    mkdirSync(builtinDir);
+    const run = async (connections: unknown[], code: string) => {
+      writeFileSync(
+        join(runlineDir, "config.json"),
+        JSON.stringify({ connections }),
+      );
+      const rl = await Runline.fromProject(project, { builtinDir, userDir });
+      try {
+        return await rl?.execute(code);
+      } finally {
+        rl?.dispose();
+      }
+    };
+    const orders = "return await orders.list({})";
+    const connection = (owner?: string) => ({
+      name: "orders",
+      plugin: "orders",
+      config: { token: "t" },
+      ...(owner ? { owner } : {}),
+    });
+
+    // Made for this package: used. No stored connection at all: fine too.
+    assert.equal(
+      (await run([connection(`local:${pkg}`)], orders))?.error,
+      undefined,
+    );
+    assert.equal((await run([], orders))?.error, undefined);
+    // Made for another package, or for no package: refused, naming both.
+    assert.match(
+      (await run([connection("npm:other")], orders))?.error ?? "",
+      /Connection "orders" was made for package npm:other, not for plugin "orders" from package local:/,
+    );
+    assert.match(
+      (await run([connection()], orders))?.error ?? "",
+      /was made for a bundled or local plugin/,
+    );
+    // The plugin's own connection is preferred over another owner's.
+    assert.equal(
+      (
+        await run(
+          [
+            { ...connection("npm:other"), name: "old" },
+            connection(`local:${pkg}`),
+          ],
+          orders,
+        )
+      )?.error,
+      undefined,
+    );
+    // A local plugin keeps using a connection that names no owner.
+    assert.equal(
+      (
+        await run(
+          [{ name: "notes", plugin: "notes", config: {} }],
+          "return await notes.list({})",
+        )
+      )?.error,
+      undefined,
     );
   });
 

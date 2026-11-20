@@ -52,6 +52,7 @@ export function readConnectionFile(path: string): ConnectionFile {
       Array.isArray(entry.config) ||
       (entry.generation !== undefined &&
         typeof entry.generation !== "string") ||
+      (entry.owner !== undefined && typeof entry.owner !== "string") ||
       names.has(entry.name)
     ) {
       throw new Error(

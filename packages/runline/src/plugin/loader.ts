@@ -3,8 +3,8 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
-import { findConfigDir } from "../config/loader.js";
-import type { LoadResult, PackageManager } from "../packages/manager.js";
+import { findConfigDir, loadConfigFrom } from "../config/loader.js";
+import type { PackageManager } from "../packages/manager.js";
 import {
   HOST_MODULE_SPECIFIERS,
   pluginEntryPoint,
@@ -13,7 +13,7 @@ import {
 import type { PluginFunction } from "./api.js";
 import { resolvePluginExport } from "./api.js";
 import { registry } from "./registry.js";
-import type { PluginDef } from "./types.js";
+import type { PluginDef, PluginSourceInfo } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -55,6 +55,10 @@ const jiti = createJiti(import.meta.url, {
   alias: HOST_ALIASES,
 });
 
+/**
+ * Load one plugin module. A `sourceInfo` the module declares is dropped:
+ * provenance is for discovery to state.
+ */
 export async function loadPluginFromPath(
   path: string,
   options: {
@@ -80,11 +84,16 @@ export async function loadPluginFromPath(
     typeof mod === "object" && mod !== null && "default" in mod
       ? mod.default
       : mod;
-  return resolvePluginExport(
+  const { sourceInfo: _declared, ...plugin } = resolvePluginExport(
     pluginExport as PluginDef | PluginFunction,
     options.defaultName ?? pluginId,
   );
+  loadedFrom.set(plugin, absPath);
+  return plugin;
 }
+
+/** The module each loaded plugin came from, for discovery's `sourceInfo.path`. */
+const loadedFrom = new WeakMap<PluginDef, string>();
 
 /** A folder's `package.json`, or undefined (reported) when it is unreadable. */
 function readPackageJson(dir: string): Record<string, unknown> | undefined {
@@ -266,12 +275,18 @@ export interface DiscoverOptions {
   builtinDir?: string;
 
   /**
-   * Configured packages to load after the project and global plugin
-   * folders and before the built-ins: a manager to load them, or the
-   * result of its `load()` when the caller already has one. Their problems
-   * are reported on stderr, like every other discovery failure here.
+   * Bundled plugins a local plugin of the same name replaces. A local
+   * plugin named like any other bundled plugin is not loaded: the name
+   * selects the connection, and so the credentials. Default: none.
    */
-  packages?: PackageManager | LoadResult;
+  replaceableBuiltins?: Iterable<string>;
+
+  /**
+   * Configured packages to load after the project and global plugin
+   * folders and before the built-ins. Their problems are reported on
+   * stderr, like every other discovery failure here.
+   */
+  packages?: PackageManager;
 
   /** Package sources loaded for this discovery only, never recorded. */
   temporaryPackages?: string[];
@@ -286,7 +301,11 @@ export function defaultBuiltinDir(): string {
 }
 
 /**
- * Discover and return all plugins from a config directory and global dir.
+ * Discover and return all plugins from a config directory and global dir,
+ * each with its `sourceInfo`. Local plugins come first, then packages, then
+ * the bundled plugins; the first plugin with a name keeps it, except that a
+ * local plugin never takes a bundled plugin's name unless that plugin is
+ * listed as replaceable.
  * Does NOT mutate any global state.
  */
 export async function discoverPlugins(
@@ -296,8 +315,17 @@ export async function discoverPlugins(
   const loaded = new Set<string>();
   const result: PluginDef[] = [];
 
+  const builtinDir = options.builtinDir ?? defaultBuiltinDir();
+  const builtinPlugins = await loadFromDirectory(builtinDir);
+  const builtinNames = new Set(builtinPlugins.map((p) => p.name));
+  const replaceable = new Set(options.replaceableBuiltins);
+  const replaced = new Set<string>();
+
   function addIfNew(plugin: PluginDef, source: string) {
     if (loaded.has(plugin.name)) {
+      // A replaced bundled plugin is left out by request, not by accident.
+      if (plugin.sourceInfo?.origin === "builtin" && replaced.has(plugin.name))
+        return;
       console.error(
         `[runline] Skipping duplicate plugin "${plugin.name}" from ${source}: a plugin with that name is already loaded`,
       );
@@ -307,48 +335,89 @@ export async function discoverPlugins(
     loaded.add(plugin.name);
   }
 
+  function addLocal(
+    plugins: PluginDef[],
+    source: string,
+    scope: "project" | "user",
+  ) {
+    for (const plugin of plugins) {
+      if (builtinNames.has(plugin.name)) {
+        if (!replaceable.has(plugin.name)) {
+          console.error(
+            `[runline] Plugin "${plugin.name}" from ${source} has the name of a bundled plugin and was not loaded. To replace the bundled plugin, list "${plugin.name}" under "replaceableBuiltins" in config.json.`,
+          );
+          continue;
+        }
+        replaced.add(plugin.name);
+      }
+      plugin.sourceInfo = sourceInfo(plugin, {
+        source,
+        origin: "local",
+        scope,
+        owner: "local",
+      });
+      addIfNew(plugin, source);
+    }
+  }
+
   if (configDir) {
     const projectPluginsDir = join(configDir, "plugins");
-    const projectPlugins = await loadFromDirectory(projectPluginsDir, {
-      skipLegacyInstallDirs: true,
-    });
-    for (const p of projectPlugins) addIfNew(p, projectPluginsDir);
-
-    const configPlugins = await loadPluginsFromConfig(configDir);
-    for (const p of configPlugins) addIfNew(p, join(configDir, "plugins.json"));
+    addLocal(
+      await loadFromDirectory(projectPluginsDir, {
+        skipLegacyInstallDirs: true,
+      }),
+      projectPluginsDir,
+      "project",
+    );
+    addLocal(
+      await loadPluginsFromConfig(configDir),
+      join(configDir, "plugins.json"),
+      "project",
+    );
   }
 
   const globalDir = join(
     options.userDir ?? join(homedir(), ".runline"),
     "plugins",
   );
-  const globalPlugins = await loadFromDirectory(globalDir, {
-    skipLegacyInstallDirs: true,
-  });
-  for (const p of globalPlugins) addIfNew(p, globalDir);
+  addLocal(
+    await loadFromDirectory(globalDir, { skipLegacyInstallDirs: true }),
+    globalDir,
+    "user",
+  );
 
   if (options.packages) {
-    const { loaded: fromPackages, problems } =
-      "load" in options.packages
-        ? await options.packages.load({ temporary: options.temporaryPackages })
-        : options.packages;
+    const { plugins: fromPackages, problems } = await options.packages.load({
+      temporary: options.temporaryPackages,
+    });
     for (const problem of problems)
       console.error(
         `[runline] ${problem.level === "warning" ? "Warning: " : ""}${problem.message}`,
       );
-    for (const p of fromPackages) addIfNew(p.plugin, p.source);
+    for (const p of fromPackages)
+      addIfNew(p, p.sourceInfo?.source ?? "a package");
   }
 
-  const builtinDir = options.builtinDir ?? defaultBuiltinDir();
-  const builtinPlugins = await loadFromDirectory(builtinDir);
   for (const p of builtinPlugins) {
     if (options.builtinAllowlist && !options.builtinAllowlist.has(p.name)) {
       continue;
     }
+    p.sourceInfo = sourceInfo(p, {
+      source: "builtin",
+      origin: "builtin",
+      owner: "builtin",
+    });
     addIfNew(p, builtinDir);
   }
 
   return result;
+}
+
+function sourceInfo(
+  plugin: PluginDef,
+  info: Omit<PluginSourceInfo, "path">,
+): PluginSourceInfo {
+  return { path: loadedFrom.get(plugin) ?? info.source, ...info };
 }
 
 /**
@@ -359,7 +428,12 @@ export async function loadAllPlugins(
   options: DiscoverOptions = {},
 ): Promise<void> {
   const configDir = findConfigDir();
-  const plugins = await discoverPlugins(configDir, options);
+  const plugins = await discoverPlugins(configDir, {
+    replaceableBuiltins: configDir
+      ? loadConfigFrom(join(configDir, "config.json")).replaceableBuiltins
+      : undefined,
+    ...options,
+  });
   for (const p of plugins) {
     registry.register(p);
   }

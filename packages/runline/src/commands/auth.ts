@@ -110,13 +110,18 @@ export async function auth(
       },
     });
 
-    await addConnection(connectionName, plugin, {
-      clientId,
-      clientSecret,
-      refreshToken: tokens.refreshToken,
-      accessToken: tokens.accessToken,
-      accessTokenExpiresAt: tokens.expiresAt,
-    });
+    await addConnection(
+      connectionName,
+      plugin,
+      {
+        clientId,
+        clientSecret,
+        refreshToken: tokens.refreshToken,
+        accessToken: tokens.accessToken,
+        accessTokenExpiresAt: tokens.expiresAt,
+      },
+      { owner: def.sourceInfo?.owner },
+    );
 
     if (options.json) {
       printJson({ ok: true, name: connectionName, plugin });

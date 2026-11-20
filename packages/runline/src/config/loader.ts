@@ -56,11 +56,16 @@ export async function addConnection(
   name: string,
   plugin: string,
   configValues: Record<string, unknown>,
+  options: {
+    /** The plugin's owner (`PluginSourceInfo.owner`), binding the connection to it. */
+    owner?: string;
+  } = {},
 ): Promise<void> {
   const conn = {
     name,
     plugin,
     config: structuredClone(configValues),
+    ...(options.owner === undefined ? {} : { owner: options.owner }),
     generation: randomUUID(),
   };
   await updateConnectionFile(configPath(), (data) => {

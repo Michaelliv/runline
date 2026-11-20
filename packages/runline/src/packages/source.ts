@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
+import { valid, validRange } from "semver";
 import { PackageError } from "./errors.js";
 
 export interface NpmSource {
@@ -7,8 +8,10 @@ export interface NpmSource {
   /** What npm is asked for: `name` or `name@version`. */
   spec: string;
   name: string;
-  /** Version or range after the `@`, when given. */
+  /** Version, range or dist-tag after the `@`, when given. */
   version?: string;
+  /** `version` as a semver range; undefined for a dist-tag or no version. */
+  range?: string;
   /** An exact version: `update` leaves it where it is. */
   pinned: boolean;
 }
@@ -35,13 +38,11 @@ export type ParsedSource = NpmSource | GitSource | LocalSource;
 
 /** npm's name rules, minus a leading dash: npm would read one as an option. */
 const NPM_NAME = /^(?:@[a-z0-9~][a-z0-9-._~]*\/)?[a-z0-9~][a-z0-9-._~]*$/;
-const EXACT_VERSION =
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 /** Characters git accepts in ref names we pass on; never a leading dash. */
 const SAFE_REF = /^[A-Za-z0-9._/][A-Za-z0-9._/+-]*$/;
 
 export function isExactVersion(version: string | undefined): boolean {
-  return version !== undefined && EXACT_VERSION.test(version);
+  return valid(version ?? "") !== null;
 }
 
 function parseNpm(source: string): NpmSource {
@@ -63,6 +64,9 @@ function parseNpm(source: string): NpmSource {
     spec: version ? `${name}@${version}` : name,
     name,
     version,
+    ...(version && validRange(version)
+      ? { range: validRange(version) as string }
+      : {}),
     pinned: isExactVersion(version),
   };
 }

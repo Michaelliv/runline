@@ -12,6 +12,11 @@ export interface RunlineConfig {
    * meaningfully affect it. Default 50.
    */
   maxRunsPerWorker?: number;
+  /**
+   * Bundled plugins a local plugin of the same name replaces. Without its
+   * name here, a local plugin named like a bundled one is not loaded.
+   */
+  replaceableBuiltins?: string[];
 }
 
 export const DEFAULT_CONFIG: RunlineConfig = {
