@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
 import { findConfigDir } from "../config/loader.js";
+import type { PackageManager } from "../packages/manager.js";
 import type { PluginFunction } from "./api.js";
 import { resolvePluginExport } from "./api.js";
 import { registry } from "./registry.js";
@@ -11,17 +12,44 @@ import type { PluginDef } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/** A module runline supplies, resolved from runline's own dependencies. */
+function hostModule(specifier: string): Record<string, string> {
+  try {
+    return { [specifier]: fileURLToPath(import.meta.resolve(specifier)) };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Plugins import runline (and the TypeBox it validates with) from the
+ * runline that loads them, never from a copy of their own: one credential
+ * transport, one set of error classes, one schema library per process.
+ * Packages list these as peerDependencies.
+ */
+const HOST_ALIASES: Record<string, string> = {
+  runline: new URL("../index.js", import.meta.url).pathname,
+  "runline/utils/cli": new URL("../utils/cli.js", import.meta.url).pathname,
+  "runline/utils/http": new URL("../utils/http.js", import.meta.url).pathname,
+  ...hostModule("typebox"),
+  ...hostModule("typebox/value"),
+  ...hostModule("typebox/compile"),
+};
+
 const jiti = createJiti(import.meta.url, {
   moduleCache: false,
   interopDefault: true,
   tryNative: false,
-  alias: {
-    runline: new URL("../index.js", import.meta.url).pathname,
-    "runline/utils/cli": new URL("../utils/cli.js", import.meta.url).pathname,
-  },
+  alias: HOST_ALIASES,
 });
 
-export async function loadPluginFromPath(path: string): Promise<PluginDef> {
+export async function loadPluginFromPath(
+  path: string,
+  options: {
+    /** The name a plugin gets when it declares none. Default: its file name. */
+    defaultName?: string;
+  } = {},
+): Promise<PluginDef> {
   let absPath = resolve(path);
 
   if (existsSync(absPath) && statSync(absPath).isDirectory()) {
@@ -65,7 +93,7 @@ export async function loadPluginFromPath(path: string): Promise<PluginDef> {
       : mod;
   return resolvePluginExport(
     pluginExport as PluginDef | PluginFunction,
-    pluginId,
+    options.defaultName ?? pluginId,
   );
 }
 
@@ -73,7 +101,24 @@ function isPrivatePluginDirectory(entry: string): boolean {
   return entry.startsWith("_") || entry.startsWith(".");
 }
 
-async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
+/**
+ * `npm/` and `git/` under a plugins folder are where runline's installer
+ * before 0.45 put packages; they are reached through plugins.json, never
+ * as plugins themselves.
+ */
+function isLegacyInstallDirectory(fullPath: string, entry: string): boolean {
+  if (entry === "npm") return existsSync(join(fullPath, "node_modules"));
+  if (entry === "git")
+    return !["index.ts", "index.js", "package.json", "src"].some((f) =>
+      existsSync(join(fullPath, f)),
+    );
+  return false;
+}
+
+async function loadFromDirectory(
+  dir: string,
+  options: { skipLegacyInstallDirs?: boolean } = {},
+): Promise<PluginDef[]> {
   const plugins: PluginDef[] = [];
   if (!existsSync(dir)) return plugins;
 
@@ -99,6 +144,11 @@ async function loadFromDirectory(dir: string): Promise<PluginDef[]> {
       }
     } else if (stat.isDirectory()) {
       if (isPrivatePluginDirectory(entry)) continue;
+      if (
+        options.skipLegacyInstallDirs &&
+        isLegacyInstallDirectory(fullPath, entry)
+      )
+        continue;
 
       const candidates = [
         join(fullPath, "index.ts"),
@@ -215,6 +265,19 @@ export interface DiscoverOptions {
    * without depending on the real bundled catalog.
    */
   builtinDir?: string;
+
+  /**
+   * Configured packages to load after the project and global plugin
+   * folders and before the built-ins. Their problems are reported on
+   * stderr, like every other discovery failure here.
+   */
+  packages?: PackageManager;
+
+  /** Package sources loaded for this discovery only, never recorded. */
+  temporaryPackages?: string[];
+
+  /** The user's runline folder. Default: `~/.runline`. */
+  userDir?: string;
 }
 
 /** Default path to the bundled plugin directory. */
@@ -246,16 +309,41 @@ export async function discoverPlugins(
 
   if (configDir) {
     const projectPluginsDir = join(configDir, "plugins");
-    const projectPlugins = await loadFromDirectory(projectPluginsDir);
+    const projectPlugins = await loadFromDirectory(projectPluginsDir, {
+      skipLegacyInstallDirs: true,
+    });
     for (const p of projectPlugins) addIfNew(p, projectPluginsDir);
 
     const configPlugins = await loadPluginsFromConfig(configDir);
     for (const p of configPlugins) addIfNew(p, join(configDir, "plugins.json"));
   }
 
-  const globalDir = join(homedir(), ".runline", "plugins");
-  const globalPlugins = await loadFromDirectory(globalDir);
+  // The pre-packages installer recorded global installs here.
+  const globalConfigDir = resolve(
+    options.userDir ?? join(homedir(), ".runline"),
+  );
+  if (!configDir || resolve(configDir) !== globalConfigDir) {
+    const globalConfigPlugins = await loadPluginsFromConfig(globalConfigDir);
+    for (const p of globalConfigPlugins)
+      addIfNew(p, join(globalConfigDir, "plugins.json"));
+  }
+
+  const globalDir = join(globalConfigDir, "plugins");
+  const globalPlugins = await loadFromDirectory(globalDir, {
+    skipLegacyInstallDirs: true,
+  });
   for (const p of globalPlugins) addIfNew(p, globalDir);
+
+  if (options.packages) {
+    const { loaded: fromPackages, problems } = await options.packages.load({
+      temporary: options.temporaryPackages,
+    });
+    for (const problem of problems)
+      console.error(
+        `[runline] ${problem.level === "warning" ? "Warning: " : ""}${problem.message}`,
+      );
+    for (const p of fromPackages) addIfNew(p.plugin, p.source);
+  }
 
   const builtinDir = options.builtinDir ?? defaultBuiltinDir();
   const builtinPlugins = await loadFromDirectory(builtinDir);

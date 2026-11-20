@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadConfigFrom } from "./config/loader.js";
 import type { RunlineConfig } from "./config/types.js";
@@ -11,6 +12,8 @@ import {
   type ExecuteResult,
   ExecutionEngine,
 } from "./core/engine.js";
+import { PackageManager } from "./packages/manager.js";
+import { FilePackageStore } from "./packages/store.js";
 import type { PluginFunction } from "./plugin/api.js";
 import { resolvePluginExport } from "./plugin/api.js";
 import { discoverPlugins } from "./plugin/loader.js";
@@ -221,7 +224,20 @@ export class Runline {
    */
   static async fromProject(
     cwd?: string,
-    options: { builtinDir?: string } = {},
+    options: {
+      builtinDir?: string;
+      /**
+       * Configured packages to load. Default: a manager over `~/.runline`
+       * and this project, that never installs (missing packages are
+       * skipped) and loads project packages only when `trust` allows.
+       * `false` loads none.
+       */
+      packages?: PackageManager | false;
+      /** Whether this project's packages may load. Default: no. */
+      trust?: (projectRoot: string) => boolean | Promise<boolean>;
+      /** The user's runline folder. Default: `~/.runline`. */
+      userDir?: string;
+    } = {},
   ): Promise<Runline | null> {
     const dir = cwd ?? process.cwd();
     const configDir = findRunlineDir(dir);
@@ -229,9 +245,25 @@ export class Runline {
 
     const config = loadConfigFrom(join(configDir, "config.json"));
     const builtinAllowlist = new Set(config.connections.map((c) => c.plugin));
+    const userDir = options.userDir ?? join(homedir(), ".runline");
+    const packages =
+      options.packages === false
+        ? undefined
+        : (options.packages ??
+          new PackageManager({
+            roots: { user: userDir, project: configDir },
+            store: new FilePackageStore({
+              user: join(userDir, "config.json"),
+              project: join(configDir, "config.json"),
+            }),
+            trust: options.trust,
+            onMissing: "skip",
+          }));
     const plugins = await discoverPlugins(configDir, {
       builtinAllowlist,
       builtinDir: options.builtinDir,
+      packages,
+      userDir,
     });
 
     const rl = new Runline({

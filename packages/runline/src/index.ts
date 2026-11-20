@@ -163,6 +163,7 @@ export type {
   SecretPlacement,
   StoredCookie,
 } from "./credentials/types.js";
+export * from "./packages/index.js";
 export type {
   ActionDefinition,
   PluginFunction,
