@@ -6,14 +6,22 @@ import { ExecutionEngine } from "../core/engine.js";
 import { loadAllPlugins } from "../plugin/loader.js";
 import { registry } from "../plugin/registry.js";
 import { printError, printJson } from "../utils/output.js";
+import { cliPackageManager } from "./packages.js";
 
 export async function exec(
   code: string,
-  options: { file?: boolean; json?: boolean; quiet?: boolean },
+  options: {
+    file?: boolean;
+    json?: boolean;
+    quiet?: boolean;
+    packages?: string[];
+  },
 ): Promise<void> {
   const config = loadConfig();
   await loadAllPlugins({
     builtinAllowlist: new Set(config.connections.map((c) => c.plugin)),
+    packages: cliPackageManager({ quiet: options.quiet || options.json }),
+    temporaryPackages: options.packages,
   });
   const configDir = findConfigDir() ?? join(process.cwd(), ".runline");
   const engine = new ExecutionEngine(registry, config, {
