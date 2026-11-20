@@ -13,7 +13,6 @@ import {
   ExecutionEngine,
 } from "./core/engine.js";
 import { PackageManager } from "./packages/manager.js";
-import { FilePackageStore } from "./packages/store.js";
 import type { PluginFunction } from "./plugin/api.js";
 import { resolvePluginExport } from "./plugin/api.js";
 import { discoverPlugins } from "./plugin/loader.js";
@@ -208,6 +207,8 @@ export class Runline {
    *   - every plugin dropped into `.runline/plugins/`,
    *   - every plugin listed in `.runline/plugins.json`,
    *   - every plugin in `~/.runline/plugins/`,
+   *   - every configured package (`~/.runline` and, when `trust` allows,
+   *     this project), never installing a missing one,
    *   - and — from the 188 builtins shipped with the package — only
    *     the ones named in `config.connections[].plugin`.
    *
@@ -250,12 +251,8 @@ export class Runline {
       options.packages === false
         ? undefined
         : (options.packages ??
-          new PackageManager({
+          PackageManager.forRunlineFolders({
             roots: { user: userDir, project: configDir },
-            store: new FilePackageStore({
-              user: join(userDir, "config.json"),
-              project: join(configDir, "config.json"),
-            }),
             trust: options.trust,
             onMissing: "skip",
           }));

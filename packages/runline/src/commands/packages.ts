@@ -1,17 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import { findConfigDir } from "../config/loader.js";
 import { isPackageError } from "../packages/errors.js";
 import {
-  type MissingAction,
   PackageManager,
   type PackageManagerName,
   type PackageReport,
+  type StagedPackage,
 } from "../packages/manager.js";
-import { FilePackageStore, type PackageScope } from "../packages/store.js";
+import { parseSource } from "../packages/source.js";
+import type { PackageScope } from "../packages/store.js";
 import {
   printError,
   printJson,
@@ -20,7 +21,7 @@ import {
 } from "../utils/output.js";
 
 /** The CLI's user folder: `~/.runline`. */
-export function userRoot(): string {
+function userRoot(): string {
   return join(homedir(), ".runline");
 }
 
@@ -47,7 +48,7 @@ function writeTrusted(paths: string[]): void {
   );
 }
 
-export function isProjectTrusted(projectRoot: string): boolean {
+function isProjectTrusted(projectRoot: string): boolean {
   return readTrusted().includes(resolve(projectRoot));
 }
 
@@ -72,23 +73,13 @@ function configuredPackageManager(): PackageManagerName | undefined {
  * entries in each folder's config.json.
  */
 export function cliPackageManager(
-  options: {
-    quiet?: boolean;
-    onMissing?: MissingAction;
-    trustProject?: boolean;
-  } = {},
+  options: { quiet?: boolean; trustProject?: boolean } = {},
 ): PackageManager {
-  const user = userRoot();
-  const project = findConfigDir() ?? undefined;
-  return new PackageManager({
-    roots: { user, project },
-    store: new FilePackageStore({
-      user: join(user, "config.json"),
-      project: project ? join(project, "config.json") : undefined,
-    }),
+  return PackageManager.forRunlineFolders({
+    roots: { user: userRoot(), project: findConfigDir() ?? undefined },
     packageManager: configuredPackageManager(),
     trust: (root) => options.trustProject === true || isProjectTrusted(root),
-    onMissing: options.onMissing ?? "install",
+    onMissing: "install",
     offline: process.env.RUNLINE_OFFLINE === "1",
     onEvent: options.quiet
       ? undefined
@@ -99,17 +90,28 @@ export function cliPackageManager(
   });
 }
 
+/**
+ * `-e` sources as the person typed them, with local paths made absolute
+ * against the working directory: the library takes no relative temporary path.
+ */
+export function temporarySources(sources: string[] | undefined): string[] {
+  return (sources ?? []).map((source) =>
+    parseSource(source).type === "local" ? resolve(source) : source,
+  );
+}
+
 function scopeOf(options: { local?: boolean }): PackageScope {
   return options.local ? "project" : "user";
 }
 
-function fail(err: unknown, json?: boolean): never {
+function fail(err: unknown, json?: boolean, report?: PackageReport): never {
   const message = err instanceof Error ? err.message : String(err);
   if (json)
     printJson({
       ok: false,
       error: message,
       code: isPackageError(err) ? err.code : undefined,
+      ...(report ? { report } : {}),
     });
   else printError(message);
   process.exit(1);
@@ -158,30 +160,43 @@ export async function packageInstall(
   options: { local?: boolean; yes?: boolean; json?: boolean; quiet?: boolean },
 ): Promise<void> {
   const scope = scopeOf(options);
+  const project = findConfigDir();
+  if (scope === "project" && !project)
+    fail(
+      new Error(
+        "No .runline folder here: run `runline init`, or install without --local",
+      ),
+      options.json,
+    );
   // Installing into a project is the person's explicit decision to trust it.
   const pm = cliPackageManager({
     quiet: options.quiet || options.json,
     trustProject: scope === "project",
   });
+  let staged: StagedPackage | undefined;
+  let report: PackageReport | undefined;
   try {
-    const staged = await pm.fetch(source, { scope });
-    const report = await pm.inspect(staged);
-    const blocking =
-      report.problems.some((p) => p.level === "error") ||
-      report.plugins.length === 0;
+    staged = await pm.fetch(source, { scope });
+    report = await pm.inspect(staged);
     if (!options.json) printReport(report);
-    if (blocking) {
+    const firstError = report.problems.find((p) => p.level === "error");
+    if (firstError) {
       await pm.discard(staged);
       fail(
-        new Error(
-          `${source} was not installed: it has no plugin that can load`,
-        ),
+        new Error(`${source} was not installed: ${firstError.message}`),
         options.json,
+        report,
       );
     }
     if (!options.yes) {
-      if (!process.stdin.isTTY || options.json)
-        fail(new Error("Pass --yes to install without a prompt"), options.json);
+      if (!process.stdin.isTTY || options.json) {
+        await pm.discard(staged);
+        fail(
+          new Error("Pass --yes to install without a prompt"),
+          options.json,
+          report,
+        );
+      }
       if (!(await confirm("Install? [y/N] "))) {
         await pm.discard(staged);
         console.log("Not installed.");
@@ -189,14 +204,14 @@ export async function packageInstall(
       }
     }
     await pm.commit(staged);
-    const project = findConfigDir();
     if (scope === "project" && project)
       writeTrusted([...readTrusted(), resolve(project)]);
     if (options.json) printJson({ ok: true, scope, ...report });
     else
       printSuccess(`Installed ${chalk.bold(report.name ?? source)} (${scope})`);
   } catch (err) {
-    fail(err, options.json);
+    if (staged) await pm.discard(staged).catch(() => {});
+    fail(err, options.json, report);
   }
 }
 
@@ -293,8 +308,11 @@ export async function packageTrust(
   dir: string | undefined,
   options: { revoke?: boolean; json?: boolean },
 ): Promise<void> {
+  // Trust is recorded for a project's .runline folder, the root packages see.
   const target = dir
-    ? resolve(dir, existsSync(join(resolve(dir), ".runline")) ? ".runline" : "")
+    ? basename(resolve(dir)) === ".runline"
+      ? resolve(dir)
+      : join(resolve(dir), ".runline")
     : findConfigDir();
   if (!target || !existsSync(target))
     fail(new Error("No .runline folder to trust here"), options.json);

@@ -8,11 +8,23 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import lockfile from "proper-lockfile";
 import { defaultBuiltinDir, loadPluginFromPath } from "../plugin/loader.js";
 import type { PluginDef } from "../plugin/types.js";
-import { PackageError, type PackageErrorCode } from "./errors.js";
+import {
+  isPackageError,
+  PackageError,
+  type PackageErrorCode,
+} from "./errors.js";
 import { readPackageManifest } from "./manifest.js";
 import {
   type CommandResult,
@@ -29,6 +41,7 @@ import {
 } from "./source.js";
 import {
   entrySource,
+  FilePackageStore,
   type PackageEntry,
   type PackageScope,
   type PackageStore,
@@ -187,21 +200,11 @@ export interface SearchResult {
 
 const NETWORK_TIMEOUT_MS = 10_000;
 
-/** The name a packaged plugin gets when it declares none: never loadable. */
-const UNDECLARED = "\u0000undeclared";
-
 /**
- * Why a loaded module is not a usable packaged plugin: it declares no name
- * (two packages' index.js would both become "index"), or no actions (the
- * module is not a plugin at all).
+ * The name a packaged plugin gets when it declares none, which makes it
+ * unusable: two packages' index.js would otherwise both become "index".
  */
-function unusable(plugin: PluginDef, path: string): string | undefined {
-  if (plugin.name === UNDECLARED)
-    return `${path} declares no plugin name (call api.setName)`;
-  if (!plugin.actions.length)
-    return `${path} registers no actions; it is not a runline plugin`;
-  return undefined;
-}
+const UNDECLARED = "\u0000undeclared";
 
 function assertNotAborted(signal?: AbortSignal): void {
   if (signal?.aborted)
@@ -223,7 +226,8 @@ let bundledNames: Set<string> | undefined;
 export function bundledPluginNames(
   builtinDir = defaultBuiltinDir(),
 ): Set<string> {
-  if (builtinDir === defaultBuiltinDir() && bundledNames) return bundledNames;
+  if (builtinDir === defaultBuiltinDir() && bundledNames)
+    return new Set(bundledNames);
   let names: Set<string>;
   try {
     names = new Set(
@@ -241,7 +245,7 @@ export function bundledPluginNames(
     names = new Set();
   }
   if (builtinDir === defaultBuiltinDir()) bundledNames = names;
-  return names;
+  return new Set(names);
 }
 
 /**
@@ -276,6 +280,23 @@ export class PackageManager {
     this.pm = options.packageManager ?? "npm";
   }
 
+  /**
+   * A manager over runline folders laid out as the CLI keeps them: entries
+   * under `"packages"` in each root's `config.json`.
+   */
+  static forRunlineFolders(
+    options: Omit<PackageManagerOptions, "store">,
+  ): PackageManager {
+    const { user, project } = options.roots;
+    return new PackageManager({
+      ...options,
+      store: new FilePackageStore({
+        user: user ? join(user, "config.json") : undefined,
+        project: project ? join(project, "config.json") : undefined,
+      }),
+    });
+  }
+
   // ── public API ────────────────────────────────────────
 
   /** Fetch a source into its scope's managed root without recording it. */
@@ -291,6 +312,7 @@ export class PackageManager {
       scope,
       identity: packageIdentity(parsed, root),
     };
+    assertUsableTemporary(parsed, scope, source);
     if (parsed.type === "local") {
       const path = resolveLocalPath(parsed.path, root);
       if (!existsSync(path))
@@ -319,60 +341,31 @@ export class PackageManager {
     const staged =
       typeof target === "string" ? await this.fetch(target, options) : target;
     const problems: PackageProblem[] = [];
-    const manifest = readPackageManifest(staged.path, staged.source);
-    for (const module of manifest.bundledHostModules)
-      problems.push(this.hostModuleProblem(staged.source, module));
+    const read = await this.readPlugins(
+      staged.path,
+      staged.source,
+      problems,
+      options.signal,
+    );
     const plugins: PluginReport[] = [];
-    for (const path of manifest.pluginPaths) {
-      assertNotAborted(options.signal);
-      let plugin: PluginDef;
-      try {
-        plugin = await this.loadPlugin(path);
-      } catch (error) {
-        problems.push({
-          level: "error",
-          code: "load_failed",
-          message: `Failed to load ${relative(staged.path, path) || path}: ${(error as Error).message}`,
-          source: staged.source,
-        });
-        continue;
-      }
-      const why = unusable(plugin, relative(staged.path, path) || path);
-      if (why) {
-        problems.push({
-          level: "error",
-          code: "load_failed",
-          message: why,
-          source: staged.source,
-        });
-        continue;
-      }
+    for (const { plugin } of read?.plugins ?? []) {
       if (this.reservedNames().has(plugin.name))
-        problems.push({
-          level: "error",
-          code: "name_reserved",
-          message: `Plugin "${plugin.name}" has the name of a bundled plugin and will not load`,
-          source: staged.source,
-          plugin: plugin.name,
-        });
+        problems.push(reservedProblem(plugin.name, staged.source));
       plugins.push(reportPlugin(plugin));
     }
     return {
       source: staged.source,
       identity: staged.identity,
       path: staged.path,
-      name: manifest.name,
-      version: manifest.version ?? staged.version,
+      name: read?.name,
+      version: read?.version ?? staged.version,
       plugins,
       problems,
     };
   }
 
   /** Record a fetched package in its scope, replacing an entry with the same identity. */
-  async commit(
-    staged: StagedPackage,
-    _options: CallOptions = {},
-  ): Promise<ConfiguredPackage> {
+  async commit(staged: StagedPackage): Promise<ConfiguredPackage> {
     if (staged.scope === "temporary")
       throw new PackageError(
         "invalid_source",
@@ -405,7 +398,11 @@ export class PackageManager {
     };
   }
 
-  /** Remove a fetched package from disk unless its scope records it. */
+  /**
+   * Undo a fetch that will not be committed: remove its files, or, when its
+   * scope records the same package at another version or ref, put that one
+   * back.
+   */
   async discard(
     staged: StagedPackage,
     options: CallOptions = {},
@@ -414,13 +411,17 @@ export class PackageManager {
     if (parsed.type === "local") return;
     if (staged.scope !== "temporary") {
       const root = await this.rootFor(staged.scope);
-      const entries = await this.store.read(staged.scope);
-      if (
-        entries.some(
-          (e) => this.identityOf(entrySource(e), root) === staged.identity,
-        )
-      )
+      const recorded = (await this.store.read(staged.scope))
+        .map(entrySource)
+        .find((s) => this.identityOf(s, root) === staged.identity);
+      if (recorded !== undefined) {
+        if (recorded !== staged.source)
+          await this.fetch(recorded, {
+            scope: staged.scope,
+            signal: options.signal,
+          });
         return;
+      }
     }
     await this.removeFromDisk(parsed, staged.scope, options.signal);
   }
@@ -430,8 +431,7 @@ export class PackageManager {
     source: string,
     options: ScopeOptions = {},
   ): Promise<ConfiguredPackage> {
-    const staged = await this.fetch(source, options);
-    return this.commit(staged, options);
+    return this.commit(await this.fetch(source, options));
   }
 
   /** Remove a configured package by identity: its entry, and its managed files. */
@@ -464,9 +464,9 @@ export class PackageManager {
   /** Configured packages in both scopes, as recorded, with what is on disk. */
   async list(): Promise<ConfiguredPackage[]> {
     const result: ConfiguredPackage[] = [];
-    for (const scope of await this.scopes()) {
+    for (const scope of this.scopes()) {
       // Listing reads entries only, so an untrusted project's are shown too.
-      const root = this.roots[scope] as string;
+      const root = this.rootPath(scope);
       for (const entry of await this.store.read(scope)) {
         const source = entrySource(entry);
         let identity = source;
@@ -511,21 +511,22 @@ export class PackageManager {
           ? await this.gitHead(path)
           : readVersion(path)
         : undefined;
+      if (parsed.type === "npm" && parsed.pinned && from === parsed.version) {
+        results.push({ source: s, scope, from, to: from, changed: false });
+        continue;
+      }
       await this.withEvents("update", s, `Updating ${s}`, () =>
-        this.withLock(root, options.signal, async () => {
-          if (parsed.type === "npm") {
-            if (from === undefined || !parsed.pinned || from !== parsed.version)
-              await this.installNpm(
+        this.withLock(root, options.signal, () =>
+          parsed.type === "npm"
+            ? this.installNpm(
                 parsed.version
                   ? parsed
                   : { ...parsed, spec: `${parsed.name}@latest` },
                 root,
                 options.signal,
-              );
-          } else {
-            await this.installGit(parsed, root, scope, options.signal);
-          }
-        }),
+              )
+            : this.installGit(parsed, root, scope, options.signal),
+        ),
       );
       const to =
         parsed.type === "git" ? await this.gitHead(path) : readVersion(path);
@@ -583,16 +584,14 @@ export class PackageManager {
     const byName = new Map<string, LoadedPlugin>();
     const reserved = this.reservedNames();
 
+    // Trust is asked once per load; an untrusted project contributes nothing.
+    const projectTrusted = await this.trusted();
     const packages: Array<{ entry: PackageEntry; scope: InstallScope }> = [];
     for (const source of options.temporary ?? [])
       packages.push({ entry: source, scope: "temporary" });
-    for (const scope of ["project", "user"] as const) {
-      if (
-        scope === "project" &&
-        this.roots.project &&
-        !(await this.trusted())
-      ) {
-        const entries = await this.safeRead(scope, problems);
+    for (const scope of this.scopes()) {
+      const entries = await this.safeRead(scope, problems);
+      if (scope === "project" && !projectTrusted) {
         if (entries.length)
           problems.push({
             level: "warning",
@@ -601,9 +600,7 @@ export class PackageManager {
           });
         continue;
       }
-      if (!(await this.scopes()).includes(scope)) continue;
-      for (const entry of await this.safeRead(scope, problems))
-        packages.push({ entry, scope });
+      for (const entry of entries) packages.push({ entry, scope });
     }
 
     const seen = new Set<string>();
@@ -611,11 +608,11 @@ export class PackageManager {
       assertNotAborted(options.signal);
       const source = entrySource(entry);
       let parsed: ParsedSource;
-      let root: string;
       let identity: string;
+      const root = this.rootPath(scope);
       try {
         parsed = parseSource(source);
-        root = await this.rootFor(scope);
+        assertUsableTemporary(parsed, scope, source);
         identity = packageIdentity(parsed, root);
       } catch (error) {
         problems.push(problemFrom(error, source));
@@ -624,14 +621,8 @@ export class PackageManager {
       if (seen.has(identity)) continue;
       seen.add(identity);
 
-      let path =
-        parsed.type === "local"
-          ? resolveLocalPath(parsed.path, root)
-          : this.installPath(parsed, root, scope);
-      if (
-        !existsSync(path) ||
-        (parsed.type === "git" && existsSync(this.gitMarker(path)))
-      ) {
+      let path = this.installPath(parsed, root, scope);
+      if (!this.installed(parsed, path)) {
         const action =
           parsed.type === "local"
             ? "error"
@@ -665,50 +656,17 @@ export class PackageManager {
         }
       }
 
-      let pluginPaths: string[];
-      try {
-        const manifest = readPackageManifest(path, source);
-        for (const module of manifest.bundledHostModules)
-          problems.push(this.hostModuleProblem(source, module));
-        pluginPaths = manifest.pluginPaths;
-      } catch (error) {
-        problems.push(problemFrom(error, source));
-        continue;
-      }
-
+      const read = await this.readPlugins(
+        path,
+        source,
+        problems,
+        options.signal,
+      );
       const filter = typeof entry === "string" ? undefined : entry.plugins;
-      for (const pluginPath of pluginPaths) {
-        let plugin: PluginDef;
-        try {
-          plugin = await this.loadPlugin(pluginPath);
-        } catch (error) {
-          problems.push({
-            level: "error",
-            code: "load_failed",
-            message: `Failed to load ${pluginPath}: ${(error as Error).message}`,
-            source,
-          });
-          continue;
-        }
-        const why = unusable(plugin, pluginPath);
-        if (why) {
-          problems.push({
-            level: "error",
-            code: "load_failed",
-            message: why,
-            source,
-          });
-          continue;
-        }
+      for (const { plugin, path: pluginPath } of read?.plugins ?? []) {
         if (filter && !selected(plugin.name, filter)) continue;
         if (reserved.has(plugin.name)) {
-          problems.push({
-            level: "error",
-            code: "name_reserved",
-            message: `Plugin "${plugin.name}" from ${source} has the name of a bundled plugin and was not loaded`,
-            source,
-            plugin: plugin.name,
-          });
+          problems.push(reservedProblem(plugin.name, source));
           continue;
         }
         const clash = byName.get(plugin.name);
@@ -754,7 +712,7 @@ export class PackageManager {
     });
     if (!response.ok)
       throw new PackageError(
-        "install_failed",
+        "registry_failed",
         `npm search failed: HTTP ${response.status}`,
       );
     const body = (await response.json()) as {
@@ -778,11 +736,9 @@ export class PackageManager {
 
   // ── scopes, roots, trust ───────────────────────────────
 
-  private async scopes(): Promise<PackageScope[]> {
-    const scopes: PackageScope[] = [];
-    if (this.roots.project) scopes.push("project");
-    if (this.roots.user) scopes.push("user");
-    return scopes;
+  /** Configured scopes, project first so its entries win. */
+  private scopes(): PackageScope[] {
+    return (["project", "user"] as const).filter((scope) => this.roots[scope]);
   }
 
   private async trusted(): Promise<boolean> {
@@ -790,7 +746,8 @@ export class PackageManager {
     return (await this.options.trust?.(this.roots.project)) === true;
   }
 
-  private async rootFor(scope: InstallScope): Promise<string> {
+  /** A scope's folder, without asking whether it is trusted. */
+  private rootPath(scope: InstallScope): string {
     if (scope === "temporary")
       return resolve(
         this.roots.temporary ?? join(tmpdir(), "runline-packages"),
@@ -801,6 +758,12 @@ export class PackageManager {
         "not_found",
         `No ${scope} folder is configured for packages`,
       );
+    return root;
+  }
+
+  /** A scope's folder for work that installs, records or removes: project scope must be trusted. */
+  private async rootFor(scope: InstallScope): Promise<string> {
+    const root = this.rootPath(scope);
     if (scope === "project" && !(await this.trusted()))
       throw new PackageError(
         "untrusted",
@@ -837,13 +800,12 @@ export class PackageManager {
       root: string;
     }> = [];
     let matched = false;
-    for (const scope of await this.scopes()) {
+    for (const scope of this.scopes()) {
       let root: string;
       try {
         root = await this.rootFor(scope);
       } catch (error) {
-        if (scope === "project" && (error as PackageError).code === "untrusted")
-          continue;
+        if (isPackageError(error) && error.code === "untrusted") continue;
         throw error;
       }
       const wanted = source ? this.identityOf(source, root) : undefined;
@@ -885,6 +847,78 @@ export class PackageManager {
     return this.options.loadPlugin
       ? this.options.loadPlugin(path)
       : loadPluginFromPath(path, { defaultName: UNDECLARED });
+  }
+
+  /** Whether a package's files are on disk at the version or ref it is configured at. */
+  private installed(parsed: ParsedSource, path: string): boolean {
+    if (!existsSync(path)) return false;
+    if (parsed.type === "npm" && parsed.pinned)
+      return readVersion(path) === parsed.version;
+    if (parsed.type === "git") return !existsSync(this.gitMarker(path));
+    return true;
+  }
+
+  /**
+   * A package's usable plugins: its manifest's modules, loaded, each with a
+   * name and at least one action. Everything else becomes a problem. Both
+   * `inspect` and `load` read packages through this, so they never disagree.
+   */
+  private async readPlugins(
+    root: string,
+    source: string,
+    problems: PackageProblem[],
+    signal?: AbortSignal,
+  ): Promise<
+    | {
+        name?: string;
+        version?: string;
+        plugins: Array<{ plugin: PluginDef; path: string }>;
+      }
+    | undefined
+  > {
+    let manifest: ReturnType<typeof readPackageManifest>;
+    try {
+      manifest = readPackageManifest(root, source);
+    } catch (error) {
+      problems.push(problemFrom(error, source));
+      return undefined;
+    }
+    for (const module of manifest.bundledHostModules)
+      problems.push(this.hostModuleProblem(source, module));
+    const plugins: Array<{ plugin: PluginDef; path: string }> = [];
+    for (const path of manifest.pluginPaths) {
+      assertNotAborted(signal);
+      const shown = relative(root, path) || path;
+      let plugin: PluginDef;
+      try {
+        plugin = await this.loadPlugin(path);
+      } catch (error) {
+        problems.push({
+          level: "error",
+          code: "load_failed",
+          message: `Failed to load ${shown}: ${(error as Error).message}`,
+          source,
+        });
+        continue;
+      }
+      const why =
+        plugin.name === UNDECLARED
+          ? `${shown} declares no plugin name (call api.setName)`
+          : plugin.actions.length === 0
+            ? `${shown} registers no actions; it is not a runline plugin`
+            : undefined;
+      if (why) {
+        problems.push({
+          level: "error",
+          code: "load_failed",
+          message: why,
+          source,
+        });
+        continue;
+      }
+      plugins.push({ plugin, path });
+    }
+    return { name: manifest.name, version: manifest.version, plugins };
   }
 
   private hostModuleProblem(source: string, module: string): PackageProblem {
@@ -935,16 +969,23 @@ export class PackageManager {
     assertNotAborted(signal);
     const dir = join(root, "packages");
     mkdirSync(dir, { recursive: true });
+    let compromised: Error | undefined;
     const release = await lockfile.lock(dir, {
       realpath: false,
       stale: 60_000,
       update: 10_000,
       retries: { retries: 60, factor: 1.2, minTimeout: 200, maxTimeout: 5_000 },
+      // proper-lockfile throws from a timer otherwise, outside any caller.
+      onCompromised: (error) => {
+        compromised = error;
+      },
     });
     try {
-      return await work();
+      const result = await work();
+      if (compromised) throw compromised;
+      return result;
     } finally {
-      await release();
+      await release().catch(() => {});
     }
   }
 
@@ -999,10 +1040,7 @@ export class PackageManager {
   }
 
   private gitMarker(path: string): string {
-    return join(
-      dirname(path),
-      `.${path.split(sep).pop()}.runline-update-incomplete`,
-    );
+    return join(dirname(path), `.${basename(path)}.runline-update-incomplete`);
   }
 
   // ── npm ────────────────────────────────────────────────
@@ -1111,6 +1149,7 @@ export class PackageManager {
     const spec = source.version
       ? `${source.name}@${source.version}`
       : `${source.name}@latest`;
+    // bun has no `view`; npm reads the same registry.
     const pm = this.pm === "pnpm" ? "pnpm" : "npm";
     const result = await this.run(pm, ["view", spec, "version", "--json"], {
       signal,
@@ -1128,11 +1167,13 @@ export class PackageManager {
 
   // ── git ────────────────────────────────────────────────
 
+  /** git with the `ext::` transport and repository hooks off. */
   private git(
     args: string[],
     cwd: string | undefined,
     signal: AbortSignal | undefined,
     source: string,
+    timeoutMs?: number,
   ): Promise<CommandResult> {
     return this.run(
       "git",
@@ -1143,11 +1184,7 @@ export class PackageManager {
         "core.hooksPath=/dev/null",
         ...args,
       ],
-      {
-        cwd,
-        signal,
-        source,
-      },
+      { cwd, signal, source, timeoutMs },
     );
   }
 
@@ -1273,15 +1310,17 @@ export class PackageManager {
   ): Promise<string | undefined> {
     const ref = source.ref ?? "HEAD";
     const out = (
-      await this.run("git", ["ls-remote", "--", "origin", ref], {
-        cwd: path,
+      await this.git(
+        ["ls-remote", "--", "origin", ref],
+        path,
         signal,
-        source: source.repo,
-        timeoutMs: NETWORK_TIMEOUT_MS,
-      })
+        source.repo,
+        NETWORK_TIMEOUT_MS,
+      )
     ).stdout;
     const lines = out.trim().split("\n").filter(Boolean);
-    if (!lines.length) return source.ref; // a commit sha is not advertised; it never moves
+    // A commit is not advertised by the remote, and never moves.
+    if (!lines.length) return undefined;
     const peeled = lines.find((l) => l.endsWith("^{}"));
     return (peeled ?? lines[0]).split(/\s+/)[0];
   }
@@ -1414,9 +1453,12 @@ export class PackageManager {
         .split("\n")
         .slice(-5)
         .join("\n");
+      const verb = args.find(
+        (a, i) => !a.startsWith("-") && args[i - 1] !== "-c",
+      );
       throw new PackageError(
         "install_failed",
-        `${command} ${args[0]} failed (exit ${result.code})${detail ? `: ${detail}` : ""}`,
+        `${command} ${verb ?? ""} failed (exit ${result.code})${detail ? `: ${detail}` : ""}`,
         {
           source: options.source,
         },
@@ -1424,6 +1466,29 @@ export class PackageManager {
     }
     return result;
   }
+}
+
+/**
+ * A temporary local source has no config file to be relative to, so it must
+ * be absolute (or start at `~`); the caller resolves what its user typed.
+ */
+function assertUsableTemporary(
+  parsed: ParsedSource,
+  scope: InstallScope,
+  source: string,
+): void {
+  if (
+    scope === "temporary" &&
+    parsed.type === "local" &&
+    !isAbsolute(parsed.path) &&
+    parsed.path !== "~" &&
+    !parsed.path.startsWith("~/")
+  )
+    throw new PackageError(
+      "invalid_source",
+      `A temporary local source must be an absolute path: ${source}`,
+      { source },
+    );
 }
 
 function selected(name: string, filter: string[]): boolean {
@@ -1436,7 +1501,7 @@ function selected(name: string, filter: string[]): boolean {
 }
 
 function problemFrom(error: unknown, source?: string): PackageProblem {
-  if (error instanceof PackageError)
+  if (isPackageError(error))
     return {
       level: "error",
       code: error.code,
@@ -1448,6 +1513,16 @@ function problemFrom(error: unknown, source?: string): PackageProblem {
     code: "load_failed",
     message: (error as Error)?.message ?? String(error),
     source,
+  };
+}
+
+function reservedProblem(plugin: string, source: string): PackageProblem {
+  return {
+    level: "error",
+    code: "name_reserved",
+    message: `Plugin "${plugin}" from ${source} has the name of a bundled plugin and is not loaded`,
+    source,
+    plugin,
   };
 }
 
@@ -1463,16 +1538,8 @@ function reportPlugin(plugin: PluginDef): PluginReport {
   };
   if (plugin.credential) {
     try {
-      const selection = plugin.credential({}) as unknown as {
-        type: {
-          id: string;
-          methods: Record<
-            string,
-            { targets?: Record<string, { baseUrl: string }> }
-          >;
-        };
-        method: string;
-      };
+      // Declarations that need connection config to choose targets throw on {}.
+      const selection = plugin.credential({});
       const targets = selection.type.methods[selection.method]?.targets ?? {};
       report.credential = {
         type: selection.type.id,

@@ -6,7 +6,7 @@ import { ExecutionEngine } from "../core/engine.js";
 import { loadAllPlugins } from "../plugin/loader.js";
 import { registry } from "../plugin/registry.js";
 import { printError, printJson } from "../utils/output.js";
-import { cliPackageManager } from "./packages.js";
+import { cliPackageManager, temporarySources } from "./packages.js";
 
 export async function exec(
   code: string,
@@ -21,7 +21,7 @@ export async function exec(
   await loadAllPlugins({
     builtinAllowlist: new Set(config.connections.map((c) => c.plugin)),
     packages: cliPackageManager({ quiet: options.quiet || options.json }),
-    temporaryPackages: options.packages,
+    temporaryPackages: temporarySources(options.packages),
   });
   const configDir = findConfigDir() ?? join(process.cwd(), ".runline");
   const engine = new ExecutionEngine(registry, config, {

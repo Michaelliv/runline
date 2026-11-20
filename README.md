@@ -407,7 +407,7 @@ export default function orders(rl: RunlinePluginAPI) {
 
 **[docs/credentials.md](docs/credentials.md)** is the full guide: which declaration fits your API (a key, several parts, an optional key, a host from config, OAuth with or without a person, AWS, a web app's cookie session), the request and path helpers, reporting failures without leaking provider text, what each `AuthError` code means, and where the secret lives when signing locally or under a host.
 
-Custom plugins are discovered from the nearest project `.runline/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then installed [packages](docs/packages.md), then the bundled built-ins named by configured connections. Project-local plugins win over same-named global or built-in plugins; duplicates discovered later are skipped and reported on stderr. A plugin from a package may never take a bundled plugin's name.
+Custom plugins are discovered from the nearest project `.runline/plugins/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then installed [packages](docs/packages.md), then the bundled built-ins named by configured connections. Project-local plugins win over same-named global or built-in plugins; duplicates discovered later are skipped and reported on stderr. A plugin from a package may never take a bundled plugin's name.
 
 To share plugins, publish them as a package: see **[docs/packages.md](docs/packages.md)** for `runline install`, the `runline.plugins` manifest, and the `PackageManager` library hosts embed.
 
@@ -423,7 +423,7 @@ Supported local layouts:
 .runline/plugins/orders/package.json   # { "main": "dist/index.js" }
 ```
 
-A package directory can also expose multiple plugins:
+A package directory can also expose multiple plugins, under the same rules as an installed package (paths and globs inside the folder, `!` excludes):
 
 ```json
 {
@@ -511,14 +511,14 @@ runline exec "<code>"                  # execute JS in the QuickJS runtime
 runline exec -f ./script.js            # execute a file
 runline actions                        # list all actions
 runline actions --connected            # only actions for configured connections
-runline install <source> [-l] [-y]    # install a package (npm:, git:, URL, path)
+runline install <source> [-l] [-y]     # install a package (npm:, git:, URL, path)
 runline remove <source> [-l]           # remove a package
 runline update [source]                # update unpinned packages
 runline list [--outdated]              # configured packages
 runline search [terms]                 # npm packages with the runline-plugin keyword
 runline trust [dir] [--revoke]         # let a project's packages load
 runline exec -e <source> "<code>"      # load a package for one run
-runline plugin list                    # list loaded plugins
+runline plugin list                    # loaded plugins and their packages
 runline connection add <n> -p <plugin> -s key=val  # add connection
 runline connection list                # list connections
 runline connection remove <name>       # remove a connection

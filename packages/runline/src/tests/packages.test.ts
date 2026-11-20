@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { PackageError } from "../packages/errors.js";
+import { isPackageError, PackageError } from "../packages/errors.js";
 import {
   PackageManager,
   type PackageManagerOptions,
@@ -219,7 +219,7 @@ describe("package stores", () => {
   it("rejects malformed entries", () => {
     assert.throws(
       () => new MemoryPackageStore({ user: [{ nope: 1 } as never] }),
-      { code: "invalid_manifest" },
+      { code: "invalid_config" },
     );
   });
 });
@@ -629,12 +629,81 @@ ${pluginSource(
     assert.equal(existsSync(tagged.installedPath as string), false);
   });
 
+  it("reports a package with no loadable manifest as a problem, not a throw", async () => {
+    const empty = join(tmp, "nothing");
+    mkdirSync(empty);
+    writeFileSync(join(empty, "package.json"), "{}");
+    const pm = manager();
+    const report = await pm.inspect(await pm.fetch(empty));
+    assert.deepEqual(report.plugins, []);
+    assert.equal(report.problems[0].code, "invalid_manifest");
+  });
+
+  it("puts the recorded version back when a fetch is discarded", async () => {
+    const v1 = writePackage(
+      join(tmp, "v1"),
+      { name: "orders", version: "1.0.0" },
+      { "index.js": pluginSource("orders") },
+    );
+    const v2 = writePackage(
+      join(tmp, "v2"),
+      { name: "orders", version: "2.0.0" },
+      { "index.js": pluginSource("orders") },
+    );
+    // Serves whichever version the spec names.
+    const runner: CommandRunner = {
+      async run(command, args, options) {
+        const fixture = args[1].endsWith("2.0.0") ? v2 : v1;
+        return fakeNpm({ orders: fixture }, []).run(command, args, options);
+      },
+    };
+    const pm = manager({ runner });
+    await pm.install("npm:orders@1.0.0");
+    const staged = await pm.fetch("npm:orders@2.0.0");
+    assert.equal(staged.version, "2.0.0");
+    await pm.discard(staged);
+    const [listed] = await pm.list();
+    assert.equal(listed.source, "npm:orders@1.0.0");
+    assert.equal(listed.version, "1.0.0");
+  });
+
+  it("treats a pinned npm package at another version as missing", async () => {
+    const fixture = writePackage(
+      join(tmp, "fixture"),
+      { name: "orders", version: "1.0.0" },
+      { "index.js": pluginSource("orders") },
+    );
+    const calls: string[][] = [];
+    const store = new MemoryPackageStore();
+    const pm = manager({ store, runner: fakeNpm({ orders: fixture }, calls) });
+    await pm.install("npm:orders@1.0.0");
+    await store.update("user", () => ({
+      entries: ["npm:orders@1.5.0"],
+      result: undefined,
+    }));
+    const { plugins, problems } = await pm.load();
+    assert.deepEqual(plugins, []);
+    assert.equal(problems[0].code, "missing");
+  });
+
+  it("refuses a relative temporary local source", async () => {
+    const { problems } = await manager().load({ temporary: ["./scratch"] });
+    assert.equal(problems[0].code, "invalid_source");
+  });
+
   it("raises PackageError with a code, and honours abort", async () => {
     const pm = manager();
     await assert.rejects(
       pm.install("./does-not-exist"),
       (e: unknown) => e instanceof PackageError && e.code === "missing_path",
     );
+    // Recognised from another copy of runline's module too.
+    const foreign = Object.assign(new Error("x"), {
+      name: "PackageError",
+      code: "offline",
+    });
+    assert.equal(isPackageError(foreign), true);
+    assert.equal(isPackageError(new Error("x")), false);
     await assert.rejects(manager({ roots: {} }).install("./x"), {
       code: "not_found",
     });
@@ -681,7 +750,7 @@ ${pluginSource(
 });
 
 describe("discovery with packages", () => {
-  it("no longer reports the old installer's npm folder as a broken plugin", async () => {
+  it("skips the npm folder `runline plugin install` wrote up to 0.44", async () => {
     const { discoverPlugins } = await import("../plugin/loader.js");
     mkdirSync(join(tmp, "home", ".runline", "plugins", "npm", "node_modules"), {
       recursive: true,
@@ -700,6 +769,32 @@ describe("discovery with packages", () => {
       console.error = original;
     }
     assert.deepEqual(errors, []);
+  });
+
+  it("holds a plugins-folder package to the manifest rules", async () => {
+    const { discoverPlugins } = await import("../plugin/loader.js");
+    const runlineDir = join(tmp, "work", ".runline");
+    writePackage(join(tmp, "outside"), {}, { "x.js": pluginSource("outside") });
+    writePackage(
+      join(runlineDir, "plugins", "escape"),
+      { runline: { plugins: ["../../../outside/x.js"] } },
+      {},
+    );
+    const builtinDir = join(tmp, "builtins");
+    mkdirSync(builtinDir);
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    try {
+      const plugins = await discoverPlugins(runlineDir, {
+        builtinDir,
+        userDir: join(tmp, "home", ".runline"),
+      });
+      assert.deepEqual(plugins, []);
+    } finally {
+      console.error = original;
+    }
+    assert.match(errors.join("\n"), /leaves the package/);
   });
 
   it("supplies typebox to a package that has no node_modules of its own", async () => {

@@ -4,7 +4,12 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
 import { findConfigDir } from "../config/loader.js";
-import type { PackageManager } from "../packages/manager.js";
+import type { LoadResult, PackageManager } from "../packages/manager.js";
+import {
+  HOST_MODULE_SPECIFIERS,
+  pluginEntryPoint,
+  readPackageManifest,
+} from "../packages/manifest.js";
 import type { PluginFunction } from "./api.js";
 import { resolvePluginExport } from "./api.js";
 import { registry } from "./registry.js";
@@ -12,12 +17,22 @@ import type { PluginDef } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/** A module runline supplies, resolved from runline's own dependencies. */
-function hostModule(specifier: string): Record<string, string> {
+/**
+ * Where a host module resolves: runline's own entry points beside this
+ * file, everything else from runline's dependencies.
+ */
+function hostModulePath(specifier: string): string | undefined {
+  if (specifier === "runline")
+    return new URL("../index.js", import.meta.url).pathname;
+  if (specifier.startsWith("runline/"))
+    return new URL(
+      `../${specifier.slice("runline/".length)}.js`,
+      import.meta.url,
+    ).pathname;
   try {
-    return { [specifier]: fileURLToPath(import.meta.resolve(specifier)) };
+    return fileURLToPath(import.meta.resolve(specifier));
   } catch {
-    return {};
+    return undefined;
   }
 }
 
@@ -25,16 +40,13 @@ function hostModule(specifier: string): Record<string, string> {
  * Plugins import runline (and the TypeBox it validates with) from the
  * runline that loads them, never from a copy of their own: one credential
  * transport, one set of error classes, one schema library per process.
- * Packages list these as peerDependencies.
  */
-const HOST_ALIASES: Record<string, string> = {
-  runline: new URL("../index.js", import.meta.url).pathname,
-  "runline/utils/cli": new URL("../utils/cli.js", import.meta.url).pathname,
-  "runline/utils/http": new URL("../utils/http.js", import.meta.url).pathname,
-  ...hostModule("typebox"),
-  ...hostModule("typebox/value"),
-  ...hostModule("typebox/compile"),
-};
+const HOST_ALIASES: Record<string, string> = Object.fromEntries(
+  HOST_MODULE_SPECIFIERS.flatMap((specifier) => {
+    const path = hostModulePath(specifier);
+    return path ? [[specifier, path]] : [];
+  }),
+);
 
 const jiti = createJiti(import.meta.url, {
   moduleCache: false,
@@ -53,32 +65,9 @@ export async function loadPluginFromPath(
   let absPath = resolve(path);
 
   if (existsSync(absPath) && statSync(absPath).isDirectory()) {
-    const candidates = [
-      join(absPath, "src", "index.ts"),
-      join(absPath, "src", "index.js"),
-      join(absPath, "index.ts"),
-      join(absPath, "index.js"),
-    ];
-
-    const pkgPath = join(absPath, "package.json");
-    if (existsSync(pkgPath)) {
-      try {
-        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-        if (pkg.main) candidates.unshift(join(absPath, pkg.main));
-      } catch (err) {
-        console.error(
-          `[runline] Failed to parse ${pkgPath}:`,
-          (err as Error).message,
-        );
-      }
-    }
-
-    const found = candidates.find((c) => existsSync(c));
-    if (found) {
-      absPath = found;
-    } else {
-      throw new Error(`No entry point found in ${absPath}`);
-    }
+    const found = pluginEntryPoint(absPath, readMain(absPath));
+    if (!found) throw new Error(`No entry point found in ${absPath}`);
+    absPath = found;
   }
 
   // Plugins may live outside the project/package tree. Load them
@@ -97,14 +86,34 @@ export async function loadPluginFromPath(
   );
 }
 
+/** A folder's `package.json`, or undefined (reported) when it is unreadable. */
+function readPackageJson(dir: string): Record<string, unknown> | undefined {
+  const pkgPath = join(dir, "package.json");
+  if (!existsSync(pkgPath)) return undefined;
+  try {
+    return JSON.parse(readFileSync(pkgPath, "utf-8"));
+  } catch (err) {
+    console.error(
+      `[runline] Failed to parse ${pkgPath}:`,
+      (err as Error).message,
+    );
+    return undefined;
+  }
+}
+
+function readMain(dir: string): string | undefined {
+  const main = readPackageJson(dir)?.main;
+  return typeof main === "string" ? main : undefined;
+}
+
 function isPrivatePluginDirectory(entry: string): boolean {
   return entry.startsWith("_") || entry.startsWith(".");
 }
 
 /**
- * `npm/` and `git/` under a plugins folder are where runline's installer
- * before 0.45 put packages; they are reached through plugins.json, never
- * as plugins themselves.
+ * `npm/` and `git/` under a plugins folder hold what `runline plugin
+ * install` wrote up to runline 0.44. plugins.json points into them; they
+ * are not plugins themselves.
  */
 function isLegacyInstallDirectory(fullPath: string, entry: string): boolean {
   if (entry === "npm") return existsSync(join(fullPath, "node_modules"));
@@ -150,50 +159,40 @@ async function loadFromDirectory(
       )
         continue;
 
-      const candidates = [
-        join(fullPath, "index.ts"),
-        join(fullPath, "index.js"),
-        join(fullPath, "src", "index.ts"),
-        join(fullPath, "src", "index.js"),
-      ];
-      const pkgJson = join(fullPath, "package.json");
-      let packagePluginPaths: string[] = [];
-
-      if (existsSync(pkgJson)) {
+      const pkg = readPackageJson(fullPath);
+      let paths: string[];
+      if (pkg?.runline !== undefined) {
+        // A folder declaring runline.plugins is a package: the same manifest
+        // rules as an installed one, so no path leaves the folder.
         try {
-          const pkg = JSON.parse(readFileSync(pkgJson, "utf-8"));
-          if (pkg.main) candidates.unshift(join(fullPath, pkg.main));
-          packagePluginPaths = pkg.runline?.plugins ?? [];
+          paths = readPackageManifest(fullPath).pluginPaths;
         } catch (err) {
           console.error(
-            `[runline] Failed to parse ${pkgJson}:`,
+            `[runline] Failed to load plugins from ${fullPath}:`,
             (err as Error).message,
           );
+          continue;
         }
-      }
-
-      const found = candidates.find((c) => existsSync(c));
-      if (found) {
-        try {
-          plugins.push(await loadPluginFromPath(found));
-        } catch (err) {
-          console.error(
-            `[runline] Failed to load plugin from ${found}:`,
-            (err as Error).message,
-          );
-        }
-      } else if (packagePluginPaths.length === 0) {
-        console.error(
-          `[runline] Failed to load plugin from ${fullPath}: No entry point found`,
+      } else {
+        const found = pluginEntryPoint(
+          fullPath,
+          typeof pkg?.main === "string" ? pkg.main : undefined,
         );
+        if (!found) {
+          console.error(
+            `[runline] Failed to load plugin from ${fullPath}: No entry point found`,
+          );
+          continue;
+        }
+        paths = [found];
       }
 
-      for (const p of packagePluginPaths) {
+      for (const path of paths) {
         try {
-          plugins.push(await loadPluginFromPath(join(fullPath, p)));
+          plugins.push(await loadPluginFromPath(path));
         } catch (err) {
           console.error(
-            `[runline] Failed to load plugin from ${join(fullPath, p)}:`,
+            `[runline] Failed to load plugin from ${path}:`,
             (err as Error).message,
           );
         }
@@ -268,10 +267,11 @@ export interface DiscoverOptions {
 
   /**
    * Configured packages to load after the project and global plugin
-   * folders and before the built-ins. Their problems are reported on
-   * stderr, like every other discovery failure here.
+   * folders and before the built-ins: a manager to load them, or the
+   * result of its `load()` when the caller already has one. Their problems
+   * are reported on stderr, like every other discovery failure here.
    */
-  packages?: PackageManager;
+  packages?: PackageManager | LoadResult;
 
   /** Package sources loaded for this discovery only, never recorded. */
   temporaryPackages?: string[];
@@ -318,26 +318,20 @@ export async function discoverPlugins(
     for (const p of configPlugins) addIfNew(p, join(configDir, "plugins.json"));
   }
 
-  // The pre-packages installer recorded global installs here.
-  const globalConfigDir = resolve(
+  const globalDir = join(
     options.userDir ?? join(homedir(), ".runline"),
+    "plugins",
   );
-  if (!configDir || resolve(configDir) !== globalConfigDir) {
-    const globalConfigPlugins = await loadPluginsFromConfig(globalConfigDir);
-    for (const p of globalConfigPlugins)
-      addIfNew(p, join(globalConfigDir, "plugins.json"));
-  }
-
-  const globalDir = join(globalConfigDir, "plugins");
   const globalPlugins = await loadFromDirectory(globalDir, {
     skipLegacyInstallDirs: true,
   });
   for (const p of globalPlugins) addIfNew(p, globalDir);
 
   if (options.packages) {
-    const { loaded: fromPackages, problems } = await options.packages.load({
-      temporary: options.temporaryPackages,
-    });
+    const { loaded: fromPackages, problems } =
+      "load" in options.packages
+        ? await options.packages.load({ temporary: options.temporaryPackages })
+        : options.packages;
     for (const problem of problems)
       console.error(
         `[runline] ${problem.level === "warning" ? "Warning: " : ""}${problem.message}`,

@@ -3,7 +3,7 @@ import { loadConfig } from "../config/loader.js";
 import { loadAllPlugins } from "../plugin/loader.js";
 import { registry } from "../plugin/registry.js";
 import { printJson } from "../utils/output.js";
-import { cliPackageManager } from "./packages.js";
+import { cliPackageManager, temporarySources } from "./packages.js";
 
 export async function actions(options: {
   json?: boolean;
@@ -12,7 +12,7 @@ export async function actions(options: {
 }): Promise<void> {
   await loadAllPlugins({
     packages: cliPackageManager({ quiet: options.json }),
-    temporaryPackages: options.packages,
+    temporaryPackages: temporarySources(options.packages),
   });
   const all = registry.getAllActions();
   const connectedPlugins = options.connected

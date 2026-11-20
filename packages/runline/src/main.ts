@@ -249,16 +249,16 @@ pluginCmd
   });
 
 pluginCmd
-  .command("remove <name>")
-  .description("Remove an installed plugin")
-  .action(async (name, _opts, cmd) => {
+  .command("remove <source>")
+  .description("Remove a package (same as `runline remove`, project first)")
+  .action(async (source, _opts, cmd) => {
     const globals = cmd.optsWithGlobals();
-    await pluginRemove(name, { json: globals.json });
+    await pluginRemove(source, { json: globals.json });
   });
 
 pluginCmd
   .command("list")
-  .description("List all plugins")
+  .description("List loaded plugins and the package each came from")
   .action(async (_opts, cmd) => {
     const globals = cmd.optsWithGlobals();
     await pluginList({ json: globals.json });

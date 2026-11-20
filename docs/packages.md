@@ -25,7 +25,7 @@ Before recording a package, `runline install` shows each plugin, how many of its
 
 Installs go to `~/.runline` by default. `--local` (`-l`) records the package in the project's `.runline` instead; that also trusts the project. A project's packages load only once the project is trusted: `runline trust [dir]`, `runline trust --revoke`.
 
-`runline plugin install|remove|list` still work: `plugin install` is `install --yes`.
+`runline plugin install` is `install --yes` into the project (`--global` for `~/.runline`); `plugin remove` removes from the project, else from `~/.runline`. Plugins that `plugin install` recorded in `plugins.json` up to runline 0.44 still load; remove them by editing that file.
 
 ## Sources
 
@@ -126,7 +126,9 @@ const runline = Runline.create({ plugins, connectionProvider });
 | `load({ temporary? })` | `{ plugins, loaded, problems }`; never throws for a bad package |
 | `search(terms)` | npm packages with the keyword |
 
-Every method takes `{ signal }`. Failures are `PackageError` with a `code` (`invalid_source`, `not_found`, `missing_path`, `install_failed`, `invalid_manifest`, `load_failed`, `name_reserved`, `name_conflict`, `untrusted`, `offline`, `aborted`, `unsafe_path`).
+Methods that fetch, run npm or git, or load plugins take `{ signal }`. Failures are `PackageError` with a `code` (`invalid_source`, `not_found`, `missing_path`, `install_failed`, `registry_failed`, `invalid_manifest`, `invalid_config`, `load_failed`, `name_reserved`, `name_conflict`, `untrusted`, `offline`, `aborted`, `unsafe_path`); `isPackageError` recognises one from any copy of runline.
+
+`discard` puts back the version or ref the scope records when the fetch replaced it. A pinned npm package whose installed version differs from its entry counts as missing on `load`. A temporary local source must be absolute.
 
 | Option | Default | Replace it to |
 |---|---|---|
@@ -136,9 +138,9 @@ Every method takes `{ signal }`. Failures are `PackageError` with a `code` (`inv
 | `packageManager` | `npm` | use `pnpm` or `bun` |
 | `trust` | refuse project scope | apply your own policy |
 | `onMissing` | `"skip"`: a host never installs unless it asks | install on load, as the CLI does |
-| `reservedNames` | the bundled plugins' names | add your host's own plugin names |
+| `reservedNames` | the bundled plugins' names | reserve your host's own plugin names too: pass `[...bundledPluginNames(), ...yours]` (the option replaces the default) |
 | `offline`, `fetch`, `registry`, `loadPlugin` | — | — |
 
-`Runline.fromProject(dir, { trust, userDir, packages })` loads configured packages too, never installing; project packages only when `trust` allows.
+`PackageManager.forRunlineFolders({ roots, ...options })` builds a manager over folders laid out as the CLI keeps them (entries in each root's `config.json`); the CLI and `Runline.fromProject` both use it.
 
-The functions from before packages (`installPlugin`, `removePlugin`, `listInstalled`, `parsePluginSource`) still work on `plugins.json` and are deprecated.
+`Runline.fromProject(dir, { trust, userDir, packages })` loads configured packages too, never installing; project packages only when `trust` allows. `discoverPlugins` takes `packages` as a manager or as a `load()` result already in hand.

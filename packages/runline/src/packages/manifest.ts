@@ -8,8 +8,23 @@ import {
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { PackageError } from "./errors.js";
 
-/** Modules runline supplies to plugins; a package lists them as peers. */
-export const HOST_MODULES = ["runline", "typebox"] as const;
+/**
+ * Modules runline supplies to every plugin it loads, from its own copy. A
+ * package lists their packages as peerDependencies, never as dependencies.
+ */
+export const HOST_MODULE_SPECIFIERS = [
+  "runline",
+  "runline/utils/cli",
+  "runline/utils/http",
+  "typebox",
+  "typebox/value",
+  "typebox/compile",
+] as const;
+
+/** The packages behind `HOST_MODULE_SPECIFIERS`. */
+export const HOST_MODULES = [
+  ...new Set(HOST_MODULE_SPECIFIERS.map((s) => s.split("/")[0])),
+];
 
 export interface PackageManifest {
   name?: string;
@@ -23,7 +38,7 @@ export interface PackageManifest {
 const PLUGIN_FILE = /\.(ts|js|mjs|cjs)$/;
 
 /** Whether `path`, symlinks followed, is `root` or beneath it. */
-export function within(root: string, path: string): boolean {
+function within(root: string, path: string): boolean {
   const realRoot = realpathSync(root);
   let real: string;
   try {
@@ -100,7 +115,14 @@ function expand(root: string, pattern: string): string[] {
   return current;
 }
 
-function entryPoint(dir: string, main?: string): string | undefined {
+/**
+ * A plugin folder's module: `main`, then `index.{ts,js}`, then
+ * `src/index.{ts,js}`. Every loader of a plugin folder uses this order.
+ */
+export function pluginEntryPoint(
+  dir: string,
+  main?: string,
+): string | undefined {
   const candidates = [
     ...(main ? [join(dir, main)] : []),
     join(dir, "index.ts"),
@@ -195,7 +217,7 @@ export function readPackageManifest(
     const found: string[] = [];
     for (const pattern of include) {
       for (const match of expand(root, pattern)) {
-        const file = isDir(match) ? entryPoint(match) : match;
+        const file = isDir(match) ? pluginEntryPoint(match) : match;
         if (
           !file ||
           excluded.has(resolve(match)) ||
@@ -222,7 +244,7 @@ export function readPackageManifest(
     pluginPaths = [...new Set(found)];
   } else {
     const main = typeof pkg.main === "string" ? pkg.main : undefined;
-    const file = entryPoint(root, main);
+    const file = pluginEntryPoint(root, main);
     if (file && !within(root, file))
       throw new PackageError(
         "invalid_manifest",

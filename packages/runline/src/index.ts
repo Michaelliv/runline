@@ -163,7 +163,65 @@ export type {
   SecretPlacement,
   StoredCookie,
 } from "./credentials/types.js";
-export * from "./packages/index.js";
+export {
+  isPackageError,
+  PackageError,
+  type PackageErrorCode,
+} from "./packages/errors.js";
+export {
+  type AvailableUpdate,
+  bundledPluginNames,
+  type CallOptions,
+  type ConfiguredPackage,
+  type InstallScope,
+  type LoadedPlugin,
+  type LoadResult,
+  type MissingAction,
+  type PackageAction,
+  type PackageEvent,
+  PackageManager,
+  type PackageManagerName,
+  type PackageManagerOptions,
+  type PackageProblem,
+  type PackageReport,
+  type PackageRoots,
+  type PackageUpdate,
+  type PluginReport,
+  type ScopeOptions,
+  type SearchResult,
+  type StagedPackage,
+} from "./packages/manager.js";
+export {
+  HOST_MODULE_SPECIFIERS,
+  HOST_MODULES,
+  type PackageManifest,
+  pluginEntryPoint,
+  readPackageManifest,
+} from "./packages/manifest.js";
+export {
+  type CommandOptions,
+  type CommandResult,
+  type CommandRunner,
+  nodeCommandRunner,
+} from "./packages/runner.js";
+export {
+  type GitSource,
+  isExactVersion,
+  type LocalSource,
+  type NpmSource,
+  type ParsedSource,
+  packageIdentity,
+  parseSource,
+  resolveLocalPath,
+} from "./packages/source.js";
+export {
+  entrySource,
+  FilePackageStore,
+  MemoryPackageStore,
+  type PackageEntry,
+  type PackageScope,
+  type PackageStore,
+} from "./packages/store.js";
 export type {
   ActionDefinition,
   PluginFunction,
@@ -174,13 +232,6 @@ export {
   isPluginFunction,
   resolvePluginExport,
 } from "./plugin/api.js";
-export type { InstalledPlugin, PluginSource } from "./plugin/installer.js";
-export {
-  installPlugin,
-  listInstalled,
-  parsePluginSource,
-  removePlugin,
-} from "./plugin/installer.js";
 export {
   discoverPlugins,
   loadAllPlugins,

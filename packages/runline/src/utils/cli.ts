@@ -1,4 +1,4 @@
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 export type OutputParser = "json" | "jsonlines" | "text";
 
@@ -45,7 +45,9 @@ export function syncExec(
 
 export function commandExists(name: string): boolean {
   try {
-    execSync(`which ${name}`, { stdio: "pipe" });
+    execFileSync(process.platform === "win32" ? "where" : "which", [name], {
+      stdio: "pipe",
+    });
     return true;
   } catch {
     return false;

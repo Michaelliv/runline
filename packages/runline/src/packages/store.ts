@@ -38,7 +38,7 @@ function validEntries(value: unknown, where: string): PackageEntry[] {
   if (value === undefined) return [];
   if (!Array.isArray(value))
     throw new PackageError(
-      "invalid_manifest",
+      "invalid_config",
       `${where}: "packages" must be an array`,
     );
   for (const entry of value) {
@@ -55,7 +55,7 @@ function validEntries(value: unknown, where: string): PackageEntry[] {
     )
       continue;
     throw new PackageError(
-      "invalid_manifest",
+      "invalid_config",
       `${where}: each package is a source string or { source, plugins? }`,
     );
   }
