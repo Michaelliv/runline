@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -9,7 +9,16 @@ import {
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { findConfigDir } from "../config/loader.js";
+import { parseSource } from "../packages/source.js";
 
+/**
+ * The installer before packages: entries in `plugins.json`, files under
+ * `.runline/plugins/{npm,git}`. Kept so existing callers and installs keep
+ * working; new code uses `PackageManager`, which records packages in
+ * config.json and owns `.runline/packages/`.
+ */
+
+/** @deprecated Use `parseSource` and `PackageManager`. */
 export interface PluginSource {
   type: "npm" | "git" | "local";
   name: string;
@@ -19,6 +28,7 @@ export interface PluginSource {
   subpath?: string;
 }
 
+/** @deprecated Use `ConfiguredPackage` from `PackageManager.list()`. */
 export interface InstalledPlugin {
   source: string;
   path: string;
@@ -27,6 +37,7 @@ export interface InstalledPlugin {
 
 const PLUGINS_FILE = "plugins.json";
 
+/** @deprecated Use `parseSource`. */
 export function parsePluginSource(source: string): PluginSource {
   if (source.startsWith("npm:")) {
     const rest = source.slice(4);
@@ -108,31 +119,39 @@ function getPluginsDir(global: boolean): string {
   return dir;
 }
 
-function getPluginsJsonPath(): string {
+function getPluginsJsonPath(global = false): string {
+  if (global) return join(homedir(), ".runline", PLUGINS_FILE);
   const configDir = findConfigDir();
   return configDir
     ? join(configDir, PLUGINS_FILE)
     : join(process.cwd(), ".runline", PLUGINS_FILE);
 }
 
-function readPluginsJson(): { plugins: InstalledPlugin[] } {
-  const path = getPluginsJsonPath();
+function readPluginsJson(global = false): { plugins: InstalledPlugin[] } {
+  const path = getPluginsJsonPath(global);
   if (!existsSync(path)) return { plugins: [] };
   return JSON.parse(readFileSync(path, "utf-8"));
 }
 
-function writePluginsJson(data: { plugins: InstalledPlugin[] }): void {
-  const path = getPluginsJsonPath();
+function writePluginsJson(
+  data: { plugins: InstalledPlugin[] },
+  global = false,
+): void {
+  const path = getPluginsJsonPath(global);
   mkdirSync(join(path, ".."), { recursive: true });
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
+/** @deprecated Use `PackageManager.install`. */
 export async function installPlugin(
   source: string,
   options?: { global?: boolean },
 ): Promise<{ path: string; name: string }> {
+  // Validates npm names and git refs, so nothing reaching npm or git starts with "-".
+  parseSource(source);
   const parsed = parsePluginSource(source);
-  const pluginsDir = getPluginsDir(options?.global ?? false);
+  const global = options?.global ?? false;
+  const pluginsDir = getPluginsDir(global);
 
   let installPath: string;
 
@@ -140,8 +159,23 @@ export async function installPlugin(
     case "npm": {
       const npmDir = join(pluginsDir, "npm");
       mkdirSync(npmDir, { recursive: true });
+      // Without a package.json here npm walks up and installs into whatever
+      // project encloses the folder.
+      if (!existsSync(join(npmDir, "package.json")))
+        writeFileSync(join(npmDir, "package.json"), '{ "private": true }\n');
       const spec = parsed.ref ? `${parsed.name}@${parsed.ref}` : parsed.name;
-      execSync(`npm install ${spec}`, { cwd: npmDir, stdio: "pipe" });
+      execFileSync(
+        "npm",
+        [
+          "install",
+          spec,
+          "--legacy-peer-deps",
+          "--ignore-scripts",
+          "--no-audit",
+          "--no-fund",
+        ],
+        { cwd: npmDir, stdio: "pipe" },
+      );
       installPath = join(npmDir, "node_modules", parsed.name);
       break;
     }
@@ -155,16 +189,51 @@ export async function installPlugin(
         urlObj.pathname.replace(/\.git$/, ""),
       );
       if (existsSync(gitDir)) {
-        execSync("git pull", { cwd: gitDir, stdio: "pipe" });
+        if (parsed.ref) {
+          execFileSync("git", ["fetch", "origin", "--", parsed.ref], {
+            cwd: gitDir,
+            stdio: "pipe",
+          });
+          execFileSync(
+            "git",
+            ["-c", "advice.detachedHead=false", "checkout", "FETCH_HEAD"],
+            {
+              cwd: gitDir,
+              stdio: "pipe",
+            },
+          );
+        } else {
+          execFileSync("git", ["pull", "--ff-only"], {
+            cwd: gitDir,
+            stdio: "pipe",
+          });
+        }
       } else {
         mkdirSync(join(gitDir, ".."), { recursive: true });
-        const refArg = parsed.ref ? `--branch ${parsed.ref}` : "";
-        execSync(`git clone ${refArg} ${parsed.url} ${gitDir}`, {
-          stdio: "pipe",
-        });
+        execFileSync("git", ["clone", "--", gitUrl, gitDir], { stdio: "pipe" });
+        if (parsed.ref)
+          execFileSync(
+            "git",
+            ["-c", "advice.detachedHead=false", "checkout", parsed.ref, "--"],
+            {
+              cwd: gitDir,
+              stdio: "pipe",
+            },
+          );
       }
       if (existsSync(join(gitDir, "package.json"))) {
-        execSync("npm install", { cwd: gitDir, stdio: "pipe" });
+        execFileSync(
+          "npm",
+          [
+            "install",
+            "--omit=dev",
+            "--legacy-peer-deps",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+          ],
+          { cwd: gitDir, stdio: "pipe" },
+        );
       }
       installPath = parsed.subpath ? join(gitDir, parsed.subpath) : gitDir;
       break;
@@ -179,7 +248,7 @@ export async function installPlugin(
     }
   }
 
-  const data = readPluginsJson();
+  const data = readPluginsJson(global);
   const existing = data.plugins.findIndex((p) => p.source === source);
   const entry: InstalledPlugin = {
     source,
@@ -191,38 +260,65 @@ export async function installPlugin(
   } else {
     data.plugins.push(entry);
   }
-  writePluginsJson(data);
+  writePluginsJson(data, global);
 
   return { path: installPath, name: parsed.name };
 }
 
+/**
+ * Remove an entry whose name or source is exactly `name`, from the project's
+ * plugins.json and then the global one.
+ * @deprecated Use `PackageManager.remove`.
+ */
 export function removePlugin(name: string): boolean {
-  const data = readPluginsJson();
-  const idx = data.plugins.findIndex(
-    (p) => p.name === name || p.source.includes(name),
-  );
-  if (idx < 0) return false;
+  for (const global of [false, true]) {
+    const data = readPluginsJson(global);
+    const idx = data.plugins.findIndex(
+      (p) => p.name === name || p.source === name,
+    );
+    if (idx < 0) continue;
 
-  const plugin = data.plugins[idx];
-  const parsed = parsePluginSource(plugin.source);
+    const plugin = data.plugins[idx];
+    const parsed = parsePluginSource(plugin.source);
 
-  if (parsed.type !== "local" && existsSync(plugin.path)) {
-    rmSync(plugin.path, { recursive: true, force: true });
+    if (parsed.type === "npm") {
+      const npmDir = join(getPluginsDir(global), "npm");
+      if (existsSync(join(npmDir, "node_modules", parsed.name)))
+        execFileSync(
+          "npm",
+          [
+            "uninstall",
+            parsed.name,
+            "--legacy-peer-deps",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+          ],
+          { cwd: npmDir, stdio: "pipe" },
+        );
+    } else if (parsed.type === "git" && existsSync(plugin.path)) {
+      rmSync(plugin.path, { recursive: true, force: true });
+    }
+
+    data.plugins.splice(idx, 1);
+    writePluginsJson(data, global);
+    return true;
   }
-
-  data.plugins.splice(idx, 1);
-  writePluginsJson(data);
-  return true;
+  return false;
 }
 
+/** @deprecated Use `PackageManager.list`. */
 export function listInstalled(): Array<{
   name: string;
   type: string;
   source: string;
   path: string;
 }> {
-  const data = readPluginsJson();
-  return data.plugins.map((p) => {
+  const entries = [
+    ...readPluginsJson(false).plugins,
+    ...readPluginsJson(true).plugins,
+  ];
+  return entries.map((p) => {
     const parsed = parsePluginSource(p.source);
     return {
       name: p.name || parsed.name,
