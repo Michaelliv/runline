@@ -20,8 +20,9 @@ cd packages/runline && node scripts/generate-plugin-table.js --write
 
 ## Checks
 
-`bun run check` runs `scripts/lint-plugin-access.ts` against the built plugins. It fails when:
+`bun run check` runs `scripts/lint-plugin-access.ts`, which loads every plugin from source. It fails when:
 
+- a plugin does not load
 - an action has no `access` label
 - an action whose verb mutates, such as `create`, `update`, `delete`, or `send`, is not labeled `write`
 - a plugin's name differs from its folder name

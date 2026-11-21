@@ -57,6 +57,8 @@ Set `RUNLINE_OAUTH_CALLBACK_PORT` to change the port. Runline renews the access 
 
 ## List and remove connections
 
+List the stored connections, or remove one by name:
+
 ```bash
 runline connection list
 runline connection remove gh

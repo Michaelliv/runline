@@ -96,6 +96,21 @@ export function assertConnectionOwner(
   );
 }
 
+/**
+ * The connection a request resolves to, of those stored for its plugin: one
+ * made for the asking owner, else the first. `assertConnectionOwner` then
+ * decides whether the plugin may use it.
+ */
+export function connectionFor<T extends ConnectionConfig>(
+  stored: T[],
+  request: ConnectionRequest,
+): T | undefined {
+  const forPlugin = stored.filter((entry) => entry.plugin === request.plugin);
+  return (
+    forPlugin.find((entry) => entry.owner === request.owner) ?? forPlugin[0]
+  );
+}
+
 /** The owner a connection created for this request carries, when one is known. */
 export function ownedBy(request: ConnectionRequest): { owner?: string } {
   return request.owner === undefined ? {} : { owner: request.owner };

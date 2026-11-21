@@ -152,6 +152,8 @@ Runline looks for plugins in this order:
 
 The first plugin with a name keeps it, and runline reports later duplicates on stderr. A plugin that does not call `setName` is named after its module file, which for a folder is `index`, so always set the name.
 
+A plugin's name is a variable in the code that calls it. It must be a JavaScript identifier, and it cannot be a reserved word or one of the runtime's own names: `actions`, `console`, `fetch`, `require`, and `FerroSearch`. Runline refuses a plugin with any other name when it loads.
+
 A `plugins` folder accepts these layouts:
 
 | Entry | Loaded module |
@@ -159,7 +161,7 @@ A `plugins` folder accepts these layouts:
 | `orders.ts` or `orders.js` | The file |
 | `orders/` with a `package.json` that sets `main` | The `main` module |
 | `orders/` with a `package.json` that sets `runline.plugins` | Every listed module, under the [package rules](packages.md#create-a-package) |
-| `orders/` otherwise | `index.ts`, `index.js`, `src/index.ts`, or `src/index.js` |
+| `orders/` otherwise | The first of `src/index.ts`, `src/index.js`, `index.ts`, and `index.js` |
 
 Runline skips entries whose names start with `_` or `.`, and files ending in `.d.ts` or `.test.ts`.
 
@@ -187,7 +189,7 @@ Plugin modules and their `execute` functions run in the host process, with full 
 
 Loading a plugin runs its module. Keep work out of the module's top level and out of the registration function, which runs on every start.
 
-A module can also default-export a plain object with `name`, `version`, and `actions`. The function form is preferred because it validates the plugin name.
+A module can also default-export a plain object with `name`, `version`, and `actions`. The function form is preferred because it gives the module the typed plugin API.
 
 ## Debug a plugin
 
@@ -199,7 +201,7 @@ runline exec 'return actions.describe("weather.forecast.get")'
 runline exec 'return actions.check("weather.forecast.get", { latitude: 52.52 })'
 ```
 
-`runline actions --json` prints every loaded action with its schema. Load failures appear on stderr with the module path. Common causes are a name that is not a JavaScript identifier, a missing entry point, a malformed `package.json` or `plugins.json`, an untrusted project, and a name that another plugin already holds.
+`runline actions --json` prints every loaded action with its schema. Load failures appear on stderr with the module path. Common causes are a name that cannot be a variable, a missing entry point, a malformed `package.json` or `plugins.json`, an untrusted project, and a name that another plugin already holds.
 
 ## Share a plugin
 

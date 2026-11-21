@@ -108,6 +108,7 @@ Code runs in a Node.js worker thread, not in the process that runs actions.
 | Plugin globals and `actions` | Call and inspect actions |
 | `console` | Captured into the run's logs |
 | `require` | Loads Node.js built-in modules and modules resolvable from the working directory |
+| `FerroSearch` | The full-text index class behind `actions.find()`, for searching data inside a run |
 | `fetch` | Disabled. Throws when called |
 | `process.env` | Empty. The host's environment is not passed to the worker |
 | `process.exit()` | Throws. Return a value instead |

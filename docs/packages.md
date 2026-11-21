@@ -70,7 +70,7 @@ Name each plugin module under the `runline` key:
 
 Paths are relative to the package root. The array accepts `*`, `**`, and `?` patterns and `!` exclusions; patterns skip dot-prefixed entries and `node_modules`. Runline refuses a path that leaves the package, including through a symlink.
 
-Without `runline.plugins`, runline loads the module named by `main`, then `index.ts` or `index.js`, then `src/index.ts` or `src/index.js`.
+Without `runline.plugins`, runline loads the module named by `main`, then `src/index.ts` or `src/index.js`, then `index.ts` or `index.js`.
 
 Each module default-exports a plugin, as described in [Plugins](plugins.md). A packaged plugin must set its name and register at least one action. Runline does not fall back to the file name, because two packages would both become `index`.
 
@@ -84,7 +84,7 @@ Put packages that a plugin imports at runtime in `dependencies`. Runline install
 
 Runline supplies these modules to every plugin from its own copy:
 
-- `runline`, `runline/utils/cli`, and `runline/utils/http`
+- `runline` and `runline/utils/cli`
 - `typebox`, `typebox/value`, and `typebox/compile`
 
 Declare `runline` and `typebox` in `peerDependencies` with a `"*"` range. Runline does not install peers.

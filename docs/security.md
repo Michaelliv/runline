@@ -57,7 +57,7 @@ Two commands record trust for you, because each is an explicit decision about th
 - `runline init` trusts the `.runline` folder it creates.
 - `runline install --local` trusts the project it installs into.
 
-Decisions are stored by the resolved path of the `.runline` folder in:
+Decisions are stored by the real path of the `.runline` folder, with symbolic links resolved, in:
 
 ```text
 ~/.runline/trust.json

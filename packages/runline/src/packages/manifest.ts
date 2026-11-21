@@ -19,7 +19,6 @@ const require = createRequire(import.meta.url);
 export const HOST_MODULE_SPECIFIERS = [
   "runline",
   "runline/utils/cli",
-  "runline/utils/http",
   "typebox",
   "typebox/value",
   "typebox/compile",
@@ -159,8 +158,8 @@ function expand(root: string, pattern: string): string[] {
 }
 
 /**
- * A plugin folder's module: `main`, then `index.{ts,js}`, then
- * `src/index.{ts,js}`. Every loader of a plugin folder uses this order.
+ * A plugin folder's module: `main`, then `src/index.{ts,js}`, then
+ * `index.{ts,js}`. Every loader of a plugin folder uses this order.
  */
 export function pluginEntryPoint(
   dir: string,
@@ -168,10 +167,10 @@ export function pluginEntryPoint(
 ): string | undefined {
   const candidates = [
     ...(main ? [join(dir, main)] : []),
-    join(dir, "index.ts"),
-    join(dir, "index.js"),
     join(dir, "src", "index.ts"),
     join(dir, "src", "index.js"),
+    join(dir, "index.ts"),
+    join(dir, "index.js"),
   ];
   return candidates.find((c) => existsSync(c) && !isDir(c));
 }
@@ -179,7 +178,7 @@ export function pluginEntryPoint(
 /**
  * Read a package's plugins: `package.json` `runline.plugins` (paths and
  * globs relative to the root, `!pattern` excludes), else its `main`, else
- * `index.{ts,js}` or `src/index.{ts,js}`. A single file is itself the plugin.
+ * `src/index.{ts,js}` or `index.{ts,js}`. A single file is itself the plugin.
  * Paths that leave the package root, through `..` or a symlink, are refused.
  */
 export function readPackageManifest(

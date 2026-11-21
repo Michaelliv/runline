@@ -27,12 +27,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  */
 function hostModulePath(specifier: string): string | undefined {
   if (specifier === "runline")
-    return new URL("../index.js", import.meta.url).pathname;
+    return fileURLToPath(new URL("../index.js", import.meta.url));
   if (specifier.startsWith("runline/"))
-    return new URL(
-      `../${specifier.slice("runline/".length)}.js`,
-      import.meta.url,
-    ).pathname;
+    return fileURLToPath(
+      new URL(`../${specifier.slice("runline/".length)}.js`, import.meta.url),
+    );
   try {
     return fileURLToPath(import.meta.resolve(specifier));
   } catch {
@@ -66,8 +65,11 @@ const jiti = createJiti(import.meta.url, {
 export async function loadPluginFromPath(
   path: string,
   options: {
-    /** The name a plugin gets when it declares none. Default: its file name. */
-    defaultName?: string;
+    /**
+     * The name a plugin gets when it declares none. Default: its file
+     * name. `null`: none, so the plugin must declare one.
+     */
+    defaultName?: string | null;
   } = {},
 ): Promise<PluginDef> {
   let absPath = resolve(path);
@@ -90,7 +92,7 @@ export async function loadPluginFromPath(
       : mod;
   const { sourceInfo: _declared, ...plugin } = resolvePluginExport(
     pluginExport as PluginDef | PluginFunction,
-    options.defaultName ?? pluginId,
+    options.defaultName === undefined ? pluginId : options.defaultName,
   );
   loadedFrom.set(plugin, absPath);
   return plugin;
@@ -152,9 +154,9 @@ export function pluginEntryNames(dir: string): string[] {
 }
 
 /**
- * `npm/` and `git/` under a plugins folder hold what `runline plugin
- * install` wrote up to runline 0.44. plugins.json points into them; they
- * are not plugins themselves.
+ * `npm/` and `git/` under a plugins folder are the install folders of
+ * runline 0.44 and earlier. plugins.json points into them; they are not
+ * plugins themselves.
  */
 function isLegacyInstallDirectory(fullPath: string, entry: string): boolean {
   if (entry === "npm") return existsSync(join(fullPath, "node_modules"));

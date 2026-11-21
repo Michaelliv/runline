@@ -51,7 +51,48 @@ export interface RunlinePluginAPI {
 
 export type PluginFunction = (api: RunlinePluginAPI) => void;
 
-export function createPluginAPI(pluginId: string): {
+/**
+ * What every run's scope holds besides the plugins. A plugin is a global in
+ * that scope under its own name, so it cannot be named like one of these.
+ */
+export const RUNTIME_GLOBALS = [
+  "actions",
+  "console",
+  "fetch",
+  "require",
+  "FerroSearch",
+] as const;
+
+/**
+ * A plugin's name is a variable in the code that calls it. One that cannot
+ * be a variable there would fail every run, for every plugin, so it is
+ * refused when the plugin loads.
+ */
+export function assertPluginName(name: unknown): asserts name is string {
+  if (typeof name !== "string" || !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)) {
+    throw new Error(
+      `Invalid plugin name "${name}": must be a valid JS identifier (no hyphens, no dots). Use camelCase.`,
+    );
+  }
+  let declarable = !(RUNTIME_GLOBALS as readonly string[]).includes(name);
+  try {
+    // The engine's own declaration of a run's names. Reserved words pass
+    // the pattern above and fail here.
+    new Function(name, '"use strict";');
+  } catch {
+    declarable = false;
+  }
+  if (!declarable)
+    throw new Error(
+      `Invalid plugin name "${name}": the name is reserved by JavaScript or by the code runtime.`,
+    );
+}
+
+/**
+ * `pluginId` names the plugin until it calls `setName`. `null` means there
+ * is no such fallback: a plugin that sets no name does not resolve.
+ */
+export function createPluginAPI(pluginId: string | null): {
   api: RunlinePluginAPI;
   resolve: () => PluginDef;
 } {
@@ -65,11 +106,7 @@ export function createPluginAPI(pluginId: string): {
 
   const api: RunlinePluginAPI = {
     setName(n: string) {
-      if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(n)) {
-        throw new Error(
-          `Invalid plugin name "${n}": must be a valid JS identifier (no hyphens, no dots). Use camelCase.`,
-        );
-      }
+      assertPluginName(n);
       name = n;
     },
     setVersion(v: string) {
@@ -97,18 +134,21 @@ export function createPluginAPI(pluginId: string): {
     },
     log: {
       info(msg: string) {
-        console.log(`[${name}] ${msg}`);
+        console.log(`[${name ?? "plugin"}] ${msg}`);
       },
       warn(msg: string) {
-        console.warn(`[${name}] ${msg}`);
+        console.warn(`[${name ?? "plugin"}] ${msg}`);
       },
       error(msg: string) {
-        console.error(`[${name}] ${msg}`);
+        console.error(`[${name ?? "plugin"}] ${msg}`);
       },
     },
   };
 
   function resolve(): PluginDef {
+    if (name === null)
+      throw new Error("declares no plugin name (call api.setName)");
+    assertPluginName(name);
     const plugin: PluginDef = {
       name,
       version,
@@ -157,9 +197,13 @@ function warnSelfPrefixedActions(plugin: PluginDef): void {
   }
 }
 
+/**
+ * A module's export as a plugin definition with a usable name. `pluginId`
+ * names a function-form plugin that sets none; `null` requires it to.
+ */
 export function resolvePluginExport(
   exported: PluginFunction | PluginDef,
-  pluginId: string,
+  pluginId: string | null,
 ): PluginDef {
   if (isPluginFunction(exported)) {
     const { api, resolve } = createPluginAPI(pluginId);
@@ -170,10 +214,11 @@ export function resolvePluginExport(
   }
   if (exported && typeof exported === "object" && "actions" in exported) {
     const plugin = exported as PluginDef;
+    assertPluginName(plugin.name);
     warnSelfPrefixedActions(plugin);
     return plugin;
   }
   throw new Error(
-    `Invalid plugin export from "${pluginId}": expected a function or { name, actions } object`,
+    `Invalid plugin export${pluginId === null ? "" : ` from "${pluginId}"`}: expected a function or { name, actions } object`,
   );
 }

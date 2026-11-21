@@ -201,12 +201,6 @@ export interface SearchResult {
 
 const NETWORK_TIMEOUT_MS = 10_000;
 
-/**
- * The name a packaged plugin gets when it declares none, which makes it
- * unusable: two packages' index.js would otherwise both become "index".
- */
-const UNDECLARED = "\u0000undeclared";
-
 function assertNotAborted(signal?: AbortSignal): void {
   if (signal?.aborted)
     throw new PackageError("aborted", "Package operation aborted");
@@ -863,10 +857,14 @@ export class PackageManager {
       : onMissing;
   }
 
+  /**
+   * A packaged plugin declares its own name: its file's would make two
+   * packages' index.js the same plugin.
+   */
   private loadPlugin(path: string): Promise<PluginDef> {
     return this.options.loadPlugin
       ? this.options.loadPlugin(path)
-      : loadPluginFromPath(path, { defaultName: UNDECLARED });
+      : loadPluginFromPath(path, { defaultName: null });
   }
 
   /** Whether a package's files are on disk at the version or ref it is configured at. */
@@ -930,17 +928,11 @@ export class PackageManager {
         });
         continue;
       }
-      const why =
-        plugin.name === UNDECLARED
-          ? `${shown} declares no plugin name (call api.setName)`
-          : plugin.actions.length === 0
-            ? `${shown} registers no actions; it is not a runline plugin`
-            : undefined;
-      if (why) {
+      if (plugin.actions.length === 0) {
         problems.push({
           level: "error",
           code: "load_failed",
-          message: why,
+          message: `${shown} registers no actions; it is not a runline plugin`,
           source,
         });
         continue;

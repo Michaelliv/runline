@@ -99,6 +99,12 @@ A source is `npm:<name>[@version]`, `git:<host>/<path>[@ref]`, a git URL, or a l
 
 ## Plugins
 
+```sh
+runline plugin list
+```
+
+See [Plugins](plugins.md) for how plugins load.
+
 - `plugin list`<br>
   Lists loaded plugins with their versions, action counts, and the folder or package each came from.
 - `plugin install <source>`<br>
@@ -116,7 +122,7 @@ runline trust
 - `init`<br>
   Creates `.runline/config.json` and `.runline/plugins/` in the working directory and trusts the new project.
 - `trust [dir]`<br>
-  Allows the plugins and packages of a project's `.runline` folder to load. The default is the nearest one.
+  Allows the plugins and packages of a project's `.runline` folder to load. The default is the nearest one. Your own `~/.runline` folder needs no trust and is refused.
 - `trust --revoke`<br>
   Withdraws that trust.
 

@@ -603,6 +603,71 @@ export default function ledger(api) {
     assert.deepEqual(quiet.lines, []);
   });
 
+  it("refuses a plugin whose name cannot be a variable, and runs the rest", async () => {
+    writeConfig([]);
+    writeFileSync(
+      join(pluginsDir, "healthy.js"),
+      `export default function healthy(api) {
+        api.setName("healthy");
+        api.registerAction("ping", { execute: () => "pong" });
+      }`,
+    );
+    // Named after its file, which is no identifier.
+    writeFileSync(
+      join(pluginsDir, "my-tool.js"),
+      `export default function (api) {
+        api.registerAction("ping", { execute: () => "pong" });
+      }`,
+    );
+    // An object export is held to the same rule as setName.
+    for (const name of ["console", "class", "has space"])
+      writeFileSync(
+        join(pluginsDir, `object${name.length}.js`),
+        `export default { name: ${JSON.stringify(name)}, version: "1.0.0", actions: [{ name: "ping", execute: () => "pong" }] };`,
+      );
+
+    const stderr = captureStderr();
+    let rl: Runline | null;
+    try {
+      rl = await Runline.fromProject(tempDir, isolated());
+    } finally {
+      stderr.restore();
+    }
+    assert.deepEqual(
+      rl?.plugins().map((p) => p.name),
+      ["healthy"],
+    );
+    const output = stderr.lines.join("\n");
+    for (const name of ["my-tool", "console", "class", "has space"])
+      assert.match(output, new RegExp(`Invalid plugin name "${name}"`));
+    const run = await rl?.execute("return await healthy.ping()");
+    assert.equal(run?.error, undefined, run?.error);
+    assert.equal(run?.result, "pong");
+    rl?.dispose();
+  });
+
+  it("prefers src/index over index in a plugin folder", async () => {
+    writeConfig([]);
+    const dir = join(pluginsDir, "both");
+    mkdirSync(join(dir, "src"), { recursive: true });
+    for (const [file, action] of [
+      ["index.js", "root"],
+      [join("src", "index.js"), "src"],
+    ])
+      writeFileSync(
+        join(dir, file),
+        `export default function both(api) {
+          api.setName("both");
+          api.registerAction("${action}", { execute: () => null });
+        }`,
+      );
+    const [plugin] = await discoverPlugins(runlineDir, isolated());
+    assert.deepEqual(
+      plugin.actions.map((a) => a.name),
+      ["src"],
+    );
+  });
+
   it("drops a sourceInfo a plugin module declares for itself", async () => {
     writeConfig([]);
     writeFileSync(

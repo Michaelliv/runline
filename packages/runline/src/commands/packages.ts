@@ -294,6 +294,11 @@ export async function packageTrust(
   if (!target || !existsSync(target))
     fail(new Error("No .runline folder to trust here"), options.json);
   const path = resolve(target);
+  if (path === resolve(userConfigDir()))
+    fail(
+      new Error(`${path} is your own folder: its plugins always load`),
+      options.json,
+    );
   setProjectTrusted(path, !options.revoke);
   if (options.json) printJson({ ok: true, path, trusted: !options.revoke });
   else

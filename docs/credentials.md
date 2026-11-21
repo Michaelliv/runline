@@ -78,7 +78,7 @@ Find what the API requires in the first column:
 
 ## Recipes
 
-Every declaration here passes runline's own validation, the same a host runs, which rejects a malformed one with `invalid_definition`, and signs a request beneath its target: `packages/runline/src/tests/credentials-docs.test.ts` runs each recipe's block as written. [Trying it](#test-a-declaration) shows how to check yours.
+Every declaration here passes runline's own validation, the same a host runs, which rejects a malformed one with `invalid_definition`, and signs a request beneath its target: `packages/runline/src/tests/credentials-docs.test.ts` runs each recipe's block as written. [Test a declaration](#test-a-declaration) shows how to check yours.
 
 ### A key or token
 

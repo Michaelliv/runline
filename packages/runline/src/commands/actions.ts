@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { loadConfig } from "../config/loader.js";
 import { loadAllPlugins } from "../plugin/loader.js";
 import { registry } from "../plugin/registry.js";
+import { helpInputs } from "../plugin/schema.js";
 import { printJson } from "../utils/output.js";
 import { cliPackageManager, temporarySources } from "./packages.js";
 
@@ -62,10 +63,15 @@ export async function actions(options: {
       const desc = action.description
         ? chalk.dim(` — ${action.description}`)
         : "";
-      const schema = action.inputSchema
+      // The notation `actions.describe` gives its signatures.
+      const inputs = Object.entries(helpInputs(action.inputSchema));
+      const schema = inputs.length
         ? chalk.dim(
-            ` (${Object.entries(action.inputSchema)
-              .map(([k, v]) => `${k}: ${v.type}${v.required ? "" : "?"}`)
+            ` (${inputs
+              .map(
+                ([key, input]) =>
+                  `${key}${input.required ? "" : "?"}: ${input.displayType ?? input.type}`,
+              )
               .join(", ")})`,
           )
         : "";
