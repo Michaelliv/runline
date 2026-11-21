@@ -4,7 +4,7 @@ Runline runs JavaScript that calls actions. Actions come from plugins, and a plu
 
 ## 1. Install runline
 
-Install the command-line interface from npm. This requires Node.js 22.12 or newer:
+Install the command-line interface from npm. This requires Node.js 22.12 or newer, or 20.19 or newer on the Node.js 20 line:
 
 ```bash
 npm install -g runline

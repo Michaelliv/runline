@@ -36,9 +36,8 @@ const credential = staticCredential({
   auth: { kind: "bearer" },
   local: { secret: "apiKey" },
   targets: {
-    api: { baseUrl: "https://api.orders.example/v1/", methods: ["GET", "POST"] },
+    api: { baseUrl: "https://api.orders.example/v1/", methods: ["GET"] },
   },
-  probe: { target: "api", path: "me", method: "GET", acceptedStatuses: [200] },
 });
 
 // When the plugin registers:
@@ -49,7 +48,6 @@ rl.setConnectionSchema(t.Object({ apiKey: t.String({ env: "ORDERS_API_KEY" }) })
 return credentialJson(ctx, credential, "orders", {
   target: "api",
   path: `orgs/${pathSegment(orgId)}/orders`,
-  query: { limit },
 });
 ```
 
@@ -614,7 +612,7 @@ Add a connection and call an action to check a declaration end to end:
 
 ```bash
 runline connection add orders --plugin orders --set apiKey=$ORDERS_API_KEY
-runline exec 'return await orders.list({ orgId: "acme", limit: 1 })'
+runline exec 'return await orders.list({ orgId: "acme" })'
 runline actions --json   # loaded actions and schemas; loader errors on stderr
 ```
 

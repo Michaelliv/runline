@@ -163,7 +163,7 @@ A `plugins` folder accepts these layouts:
 | `orders/` with a `package.json` that sets `runline.plugins` | Every listed module, under the [package rules](packages.md#create-a-package) |
 | `orders/` otherwise | The first of `src/index.ts`, `src/index.js`, `index.ts`, and `index.js` |
 
-Runline skips entries whose names start with `_` or `.`, and files ending in `.d.ts` or `.test.ts`.
+Runline skips folders whose names start with `_` or `.`, and files ending in `.d.ts` or `.test.ts`.
 
 `plugins.json` lists modules that live elsewhere. Relative paths resolve from the `.runline` folder:
 

@@ -49,7 +49,7 @@ Settings are top-level keys of `config.json`:
 | `replaceableBuiltins` | `string[]` | `[]` | Bundled plugins that a local plugin of the same name may replace |
 | `packageManager` | `"npm" \| "pnpm" \| "bun"` | `"npm"` | The program that installs npm packages. Read from `~/.runline/config.json` only |
 
-Runline adds a `generation` value to each connection it writes. It identifies one login, so a token renewal that started before a connection was replaced cannot overwrite the replacement.
+Runline adds a `generation` value to each connection it writes, to tell one login from a later one with the same name.
 
 Other tools keep their own keys in the same file. `pi-runline` reads `piPlugins` and `showStatus`.
 

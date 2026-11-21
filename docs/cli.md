@@ -30,7 +30,7 @@ runline actions --connected
 See [Run Code](usage.md) for the calling conventions and the runtime.
 
 - `exec <code>`, alias `e`<br>
-  Runs JavaScript and prints the returned value. Logs go to stderr. A failed run exits with status 1. With `--json`, prints `{ result, logs }` or `{ error, logs }`.
+  Runs JavaScript and prints the returned value. Logs go to stderr, and `--quiet` hides them. A failed run exits with status 1. With `--json`, prints `{ result, logs }` or `{ error, logs }`.
 - `exec -f`, `--file`<br>
   Treats `<code>` as the path of a file to run.
 - `exec -e`, `--package <source>`<br>

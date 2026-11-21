@@ -10,7 +10,7 @@ Use runline from the [command line](docs/cli.md), embed it with the [TypeScript 
 
 ## Getting started
 
-Install the command-line interface. This requires Node.js 22.12 or newer:
+Install the command-line interface. This requires Node.js 22.12 or newer, or 20.19 or newer on the Node.js 20 line:
 
 ```bash
 npm install -g runline
@@ -43,24 +43,7 @@ runline exec 'return actions.find("create issue")'
 runline exec 'return actions.describe("github.issue.create")'
 ```
 
-See the [documentation](docs/index.md) for the full [quickstart](docs/quickstart.md) and guides.
-
-## Documentation
-
-| Page | Contents |
-|---|---|
-| [Quickstart](docs/quickstart.md) | Install runline, add a connection, and run code |
-| [How Runline Works](docs/how-runline-works.md) | Plugins, actions, connections, and the runtime |
-| [Run Code](docs/usage.md) | Calling conventions, discovery, results, and logs |
-| [Connections](docs/connections.md) | Keys, environment variables, and OAuth logins |
-| [Plugins](docs/plugins.md) | Write a plugin and understand how plugins load |
-| [Credentials](docs/credentials.md) | Declare how a plugin's requests are signed |
-| [Packages](docs/packages.md) | Install and distribute plugins through npm or git |
-| [Security](docs/security.md) | What runs where, project trust, and credentials |
-| [SDK](docs/sdk.md) | Embed runline in an application |
-| [Command Line](docs/cli.md) | Every command and option |
-| [Configuration](docs/configuration.md) | Files, settings, and environment variables |
-| [Bundled Plugins](docs/bundled-plugins.md) | Every plugin that ships with runline |
+See the [documentation](docs/index.md) for the [quickstart](docs/quickstart.md), the guides, and the [command](docs/cli.md) and [configuration](docs/configuration.md) reference.
 
 ## Permissions
 

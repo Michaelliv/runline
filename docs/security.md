@@ -94,7 +94,7 @@ A connection belongs to the plugin source it was made for, which prevents anothe
 
 A package's plugins run with the same permissions as any other plugin.
 
-`runline install` lists a package's plugins, how many of their actions read and write, and the hosts their credentials are sent to, then asks for confirmation. To build that summary it imports the package's plugin modules, before it asks. Install scripts do not run.
+`runline install` imports a package's plugin modules to build the summary it shows, before it asks for confirmation. Install scripts do not run.
 
 Review a package's source before installing it, and a project's `.runline/plugins/` folder before trusting it. Pin an exact version or a commit when a package must not change underneath you. See [Packages](packages.md).
 
