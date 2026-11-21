@@ -11,7 +11,7 @@ export default {
   response: { object: { id: "m1" } },
   target: "api",
   wire: {
-    url: "https://plugins.twake.app/plugins/runline/actions/message/save",
+    url: "https://plugins.twake.app/plugins/n8n/actions/message/save",
     header: ["authorization", "Bearer twake_key"],
   },
 } satisfies CredentialFixture;

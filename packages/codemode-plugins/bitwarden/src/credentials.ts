@@ -46,9 +46,9 @@ export const bitwardenCredential: CredentialDeclaration = (config) => {
                   : "https://identity.bitwarden.com/connect/token",
                 clientAuthentication: "client_secret_post",
                 parameters: {
-                  deviceName: "runline",
+                  deviceName: "codemode",
                   deviceType: "2",
-                  deviceIdentifier: "runline",
+                  deviceIdentifier: "codemode",
                 },
               },
             },

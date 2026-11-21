@@ -229,7 +229,7 @@ export async function createSession(
 ): Promise<Record<string, unknown>> {
   const cfg = cfgOf(ctx);
   const body = {
-    dt: "Android, runline",
+    dt: "Android, codemode",
     av: APP_VERSION,
     os: "16",
     device_generated_token: cfg.deviceGeneratedToken,
