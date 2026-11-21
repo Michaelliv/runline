@@ -66,8 +66,16 @@ A host that passes folders itself, through `userDir` or `PackageManager` roots, 
 - A plugin's `import … from "runline"` resolves to codemode.
 - The `runline` key in a package's `package.json` is read where there is no `codemode` key.
 - The `RUNLINE_*` environment variables are read where the `CODEMODE_*` ones are unset.
+- `PackageManager.forRunlineFolders()` builds the same manager as `forCodemodeFolders()`.
+- `codemode search` also finds packages published with the `runline-plugin` keyword.
 
-`codemode search` finds packages by the `codemode-plugin` keyword only. Add it to a package published with `runline-plugin`.
+## Understand what changed at once
+
+Three things carry the new name from 0.46.0, with nothing to keep the old one:
+
+- Lines codemode writes to stderr start with `[codemode]`, not `[runline]`. Update anything that matches on the prefix.
+- An AWS role that codemode assumes gets the session name `codemode` by default. A policy that matches the session name `runline` needs `roleSessionName: "runline"` in the connection, or an update.
+- A few plugins identify themselves to their provider in a `User-Agent` header, which now says `codemode`.
 
 ## Understand what did not move
 

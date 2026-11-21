@@ -1,9 +1,10 @@
 /**
  * Codemode was called runline through 0.45. Until `LEGACY_NAMES_REMOVED_IN`
  * the runline names keep working: the `.runline` folders, the `RUNLINE_*`
- * environment variables, the `runline` key in a package.json and the
- * `runline` module name in a plugin's imports. Each is reported once per
- * process when it is used, with the name that replaces it.
+ * environment variables, the `runline` key in a package.json, the `runline`
+ * module name in a plugin's imports, `PackageManager.forRunlineFolders` and
+ * the `runline-plugin` npm keyword. Each is reported once per process when
+ * it is used, with the name that replaces it.
  */
 export const LEGACY_NAMES_REMOVED_IN = "0.48.0";
 

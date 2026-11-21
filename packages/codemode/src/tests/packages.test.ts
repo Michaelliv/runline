@@ -801,38 +801,36 @@ ${pluginSource(
     });
   });
 
-  it("searches npm by the codemode-plugin keyword", async () => {
-    let requested = "";
+  it("searches npm by the codemode-plugin keyword, and by runline's", async () => {
+    const requested: string[] = [];
+    const found = (name: string) => ({
+      package: { name, version: "1.0.0", description: name },
+    });
     const pm = manager({
       fetch: (async (url: string) => {
-        requested = url;
+        const text = decodeURIComponent(url);
+        requested.push(text);
         return new Response(
           JSON.stringify({
-            objects: [
-              {
-                package: {
-                  name: "@acme/orders",
-                  version: "1.0.0",
-                  description: "Orders",
-                },
-              },
-            ],
+            objects: text.includes("keywords:codemode-plugin")
+              ? [found("@acme/orders")]
+              : [found("@acme/orders"), found("@old/tools")],
           }),
         );
       }) as typeof fetch,
     });
-    assert.deepEqual(await pm.search("orders"), [
-      {
-        name: "@acme/orders",
-        version: "1.0.0",
-        description: "Orders",
-        source: "npm:@acme/orders",
-      },
-    ]);
-    assert.match(
-      decodeURIComponent(requested),
-      /text=keywords:codemode-plugin orders/,
-    );
+    const original = console.error;
+    console.error = () => {};
+    try {
+      assert.deepEqual(
+        (await pm.search("orders")).map((r) => r.source),
+        ["npm:@acme/orders", "npm:@old/tools"],
+      );
+    } finally {
+      console.error = original;
+    }
+    assert.match(requested[0], /text=keywords:codemode-plugin orders/);
+    assert.match(requested[1], /text=keywords:runline-plugin orders/);
 
     const down = manager({
       fetch: (async () => {
@@ -848,6 +846,19 @@ ${pluginSource(
       code: "registry_failed",
       message: /HTTP 503/,
     });
+  });
+
+  it("builds the same manager under the runline name of forCodemodeFolders", async () => {
+    const original = console.error;
+    console.error = () => {};
+    try {
+      const pm = PackageManager.forRunlineFolders({
+        roots: { user: join(tmp, "user") },
+      });
+      assert.deepEqual(await pm.list(), []);
+    } finally {
+      console.error = original;
+    }
   });
 
   it("names bundled plugins by their folders and files, skipping private ones", () => {

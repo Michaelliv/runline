@@ -25,6 +25,7 @@ import {
   pluginEntryNames,
 } from "../plugin/loader.js";
 import type { PluginDef } from "../plugin/types.js";
+import { legacyName } from "../utils/deprecation.js";
 import {
   isPackageError,
   PackageError,
@@ -201,6 +202,9 @@ export interface SearchResult {
 
 const NETWORK_TIMEOUT_MS = 10_000;
 
+/** The npm keywords that mark a plugin package: codemode's, then runline's. */
+const PLUGIN_KEYWORDS = ["codemode-plugin", "runline-plugin"];
+
 function assertNotAborted(signal?: AbortSignal): void {
   if (signal?.aborted)
     throw new PackageError("aborted", "Package operation aborted");
@@ -288,6 +292,17 @@ export class PackageManager {
         project: project ? join(project, "config.json") : undefined,
       }),
     });
+  }
+
+  /** `forCodemodeFolders` under its runline name. */
+  static forRunlineFolders(
+    options: Omit<PackageManagerOptions, "store">,
+  ): PackageManager {
+    legacyName(
+      "PackageManager.forRunlineFolders()",
+      "PackageManager.forCodemodeFolders()",
+    );
+    return PackageManager.forCodemodeFolders(options);
   }
 
   // ── public API ────────────────────────────────────────
@@ -695,7 +710,7 @@ export class PackageManager {
     return { plugins, problems };
   }
 
-  /** npm packages carrying the `codemode-plugin` keyword. */
+  /** npm packages carrying a plugin keyword. */
   async search(
     terms: string,
     options: CallOptions & { size?: number } = {},
@@ -705,47 +720,54 @@ export class PackageManager {
     const registry = (
       this.options.registry ?? "https://registry.npmjs.org"
     ).replace(/\/+$/, "");
-    const text = `keywords:codemode-plugin ${terms}`.trim();
-    const url = `${registry}/-/v1/search?text=${encodeURIComponent(text)}&size=${options.size ?? 20}`;
     const signal = options.signal
       ? AbortSignal.any([
           options.signal,
           AbortSignal.timeout(NETWORK_TIMEOUT_MS),
         ])
       : AbortSignal.timeout(NETWORK_TIMEOUT_MS);
-    let body: {
-      objects?: Array<{
-        package?: { name?: string; version?: string; description?: string };
-      }>;
-    };
-    try {
-      const response = await doFetch(url, {
-        signal,
-        headers: { accept: "application/json" },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      body = (await response.json()) as typeof body;
-    } catch (error) {
-      if (options.signal?.aborted)
-        throw new PackageError("aborted", "Package operation aborted");
-      throw new PackageError(
-        "registry_failed",
-        `npm search failed: ${(error as Error).message}`,
-        { cause: error },
-      );
+    // The registry reads several keywords in one query as "all of them",
+    // so each keyword is its own query.
+    const found = new Map<string, SearchResult>();
+    for (const keyword of PLUGIN_KEYWORDS) {
+      const text = `keywords:${keyword} ${terms}`.trim();
+      const url = `${registry}/-/v1/search?text=${encodeURIComponent(text)}&size=${options.size ?? 20}`;
+      let body: {
+        objects?: Array<{
+          package?: { name?: string; version?: string; description?: string };
+        }>;
+      };
+      try {
+        const response = await doFetch(url, {
+          signal,
+          headers: { accept: "application/json" },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        body = (await response.json()) as typeof body;
+      } catch (error) {
+        if (options.signal?.aborted)
+          throw new PackageError("aborted", "Package operation aborted");
+        throw new PackageError(
+          "registry_failed",
+          `npm search failed: ${(error as Error).message}`,
+          { cause: error },
+        );
+      }
+      for (const { package: p } of body.objects ?? []) {
+        if (typeof p?.name !== "string" || typeof p.version !== "string")
+          continue;
+        if (found.has(p.name)) continue;
+        if (keyword !== PLUGIN_KEYWORDS[0])
+          legacyName(`the npm keyword "${keyword}"`, `"${PLUGIN_KEYWORDS[0]}"`);
+        found.set(p.name, {
+          name: p.name,
+          version: p.version,
+          description: p.description,
+          source: `npm:${p.name}`,
+        });
+      }
     }
-    return (body.objects ?? [])
-      .map((o) => o.package)
-      .filter(
-        (p): p is { name: string; version: string; description?: string } =>
-          typeof p?.name === "string" && typeof p.version === "string",
-      )
-      .map((p) => ({
-        name: p.name,
-        version: p.version,
-        description: p.description,
-        source: `npm:${p.name}`,
-      }));
+    return [...found.values()];
   }
 
   // ── scopes, roots, trust ───────────────────────────────
