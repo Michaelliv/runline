@@ -71,6 +71,22 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
       - run: bun --filter @shiftlabs/codemode build
+      # npm can hold a first publish for approval and takes minutes to serve
+      # a tarball. runline is installable only once the codemode it depends
+      # on is, so it waits for that tarball instead of for the job before it.
+      - name: Wait for the codemode it forwards to
+        if: matrix.package == 'runline'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          URL="https://registry.npmjs.org/@shiftlabs/codemode/-/codemode-$VERSION.tgz"
+          for attempt in $(seq 1 90); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' "$URL")" = "200" ]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::$URL is not served after 30 minutes; runline was not published"
+          exit 1
       - name: Publish to npm
         working-directory: packages/${{ matrix.package }}
         run: |
