@@ -1,6 +1,10 @@
-import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { loadConfigFrom } from "./config/loader.js";
+import { join } from "node:path";
+import {
+  findConfigDir,
+  loadConfigFrom,
+  userConfigDir,
+} from "./config/loader.js";
+import { isProjectTrusted } from "./config/trust.js";
 import type { RunlineConfig } from "./config/types.js";
 import { DEFAULT_CONFIG } from "./config/types.js";
 import { FileConnectionProvider } from "./connections/file.js";
@@ -11,6 +15,7 @@ import {
   type ExecuteResult,
   ExecutionEngine,
 } from "./core/engine.js";
+import { PackageManager } from "./packages/manager.js";
 import type { PluginFunction } from "./plugin/api.js";
 import { resolvePluginExport } from "./plugin/api.js";
 import { discoverPlugins } from "./plugin/loader.js";
@@ -181,12 +186,15 @@ export class Runline {
     version: string;
     actions: string[];
     connectionConfigSchema?: PluginDef["connectionConfigSchema"];
+    /** Where discovery found it; absent on a plugin the host supplied. */
+    sourceInfo?: PluginDef["sourceInfo"];
   }> {
     return this._registry.listPlugins().map((p) => ({
       name: p.name,
       version: p.version,
       actions: p.actions.map((a) => a.name),
       connectionConfigSchema: p.connectionConfigSchema,
+      ...(p.sourceInfo ? { sourceInfo: p.sourceInfo } : {}),
     }));
   }
 
@@ -202,11 +210,15 @@ export class Runline {
    * Load runline from a project directory.
    *
    * Discovers the `.runline/` config and registers:
-   *   - every plugin dropped into `.runline/plugins/`,
-   *   - every plugin listed in `.runline/plugins.json`,
+   *   - when the project is trusted, every plugin dropped into
+   *     `.runline/plugins/` (one named like a bundled plugin only when
+   *     `config.replaceableBuiltins` lists it) and every plugin listed in
+   *     `.runline/plugins.json`,
    *   - every plugin in `~/.runline/plugins/`,
-   *   - and — from the 188 builtins shipped with the package — only
-   *     the ones named in `config.connections[].plugin`.
+   *   - every configured package (`~/.runline` and, when trusted, this
+   *     project), never installing a missing one,
+   *   - and, of the bundled plugins, only the ones named in
+   *     `config.connections[].plugin`.
    *
    * Gating the builtins keeps `runline.actions()` scoped to what the
    * project actually configured. Without this, a project with a
@@ -221,17 +233,48 @@ export class Runline {
    */
   static async fromProject(
     cwd?: string,
-    options: { builtinDir?: string } = {},
+    options: {
+      builtinDir?: string;
+      /**
+       * Configured packages to load. Default: a manager over `~/.runline`
+       * and this project, that never installs (missing packages are
+       * skipped) and loads project packages only when `trust` allows.
+       * `false` loads none.
+       */
+      packages?: PackageManager | false;
+      /**
+       * Whether this project's plugin files and packages may load.
+       * Default: whether `<userDir>/trust.json` lists it (`runline trust`).
+       */
+      trust?: (projectRoot: string) => boolean | Promise<boolean>;
+      /** The user's runline folder. Default: `~/.runline`. */
+      userDir?: string;
+    } = {},
   ): Promise<Runline | null> {
-    const dir = cwd ?? process.cwd();
-    const configDir = findRunlineDir(dir);
+    const configDir = findConfigDir(cwd);
     if (!configDir) return null;
 
     const config = loadConfigFrom(join(configDir, "config.json"));
     const builtinAllowlist = new Set(config.connections.map((c) => c.plugin));
+    const userDir = options.userDir ?? userConfigDir();
+    const trust =
+      options.trust ?? ((root: string) => isProjectTrusted(root, userDir));
+    const packages =
+      options.packages === false
+        ? undefined
+        : (options.packages ??
+          PackageManager.forRunlineFolders({
+            roots: { user: userDir, project: configDir },
+            trust,
+            onMissing: "skip",
+          }));
     const plugins = await discoverPlugins(configDir, {
       builtinAllowlist,
       builtinDir: options.builtinDir,
+      replaceableBuiltins: config.replaceableBuiltins,
+      trust,
+      packages,
+      userDir,
     });
 
     const rl = new Runline({
@@ -249,15 +292,4 @@ export class Runline {
 
     return rl;
   }
-}
-
-function findRunlineDir(from: string): string | null {
-  let dir = resolve(from);
-  while (true) {
-    if (existsSync(join(dir, ".runline"))) return join(dir, ".runline");
-    const parent = join(dir, "..");
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
 }

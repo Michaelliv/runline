@@ -295,6 +295,8 @@ describe("connection adapters", () => {
     );
     const rl = await Runline.fromProject(dir, {
       builtinDir: join(dir, "empty-builtins"),
+      userDir: join(dir, "home", ".runline"),
+      trust: () => true,
     });
     try {
       assert.ok(rl);

@@ -10,7 +10,9 @@ import {
   type ConnectionHandle,
   type ConnectionProvider,
   type ConnectionRequest,
+  connectionFor,
   connectionPatch,
+  ownedBy,
 } from "./types.js";
 
 /**
@@ -30,8 +32,9 @@ export class FileConnectionProvider implements ConnectionProvider {
   async resolve(request: ConnectionRequest): Promise<ConnectionHandle> {
     const plugin = request.plugin;
     const schema = structuredClone(request.schema);
-    const connection = readConnectionFile(this.path).connections.find(
-      (entry) => entry.plugin === plugin,
+    const connection = connectionFor(
+      readConnectionFile(this.path).connections,
+      request,
     );
     const name = connection?.name ?? plugin;
     const generation = connection?.generation;
@@ -48,7 +51,8 @@ export class FileConnectionProvider implements ConnectionProvider {
     return {
       read: async () => {
         // A credential-free binding never attaches to an account created later.
-        if (!connection) return hydrate({ name, plugin, config: {} });
+        if (!connection)
+          return hydrate({ name, plugin, config: {}, ...ownedBy(request) });
         const current = find(readConnectionFile(this.path));
         if (!current) throw missing();
         return hydrate(current);

@@ -28,7 +28,13 @@ export {
   removeConnection,
   saveConfig,
   updateConnectionConfig,
+  userConfigDir,
 } from "./config/loader.js";
+export {
+  isProjectTrusted,
+  setProjectTrusted,
+  trustedProjects,
+} from "./config/trust.js";
 export type { RunlineConfig } from "./config/types.js";
 export { DEFAULT_CONFIG } from "./config/types.js";
 export { FileConnectionProvider } from "./connections/file.js";
@@ -163,6 +169,65 @@ export type {
   SecretPlacement,
   StoredCookie,
 } from "./credentials/types.js";
+export {
+  isPackageError,
+  PackageError,
+  type PackageErrorCode,
+} from "./packages/errors.js";
+export {
+  type AvailableUpdate,
+  bundledPluginNames,
+  type CallOptions,
+  type ConfiguredPackage,
+  type InstallScope,
+  type LoadResult,
+  type MissingAction,
+  type PackageAction,
+  type PackageEvent,
+  PackageManager,
+  type PackageManagerName,
+  type PackageManagerOptions,
+  type PackageProblem,
+  type PackageReport,
+  type PackageRoots,
+  type PackageUpdate,
+  type PluginReport,
+  type ScopeOptions,
+  type SearchResult,
+  type StagedPackage,
+} from "./packages/manager.js";
+export {
+  HOST_MODULE_SPECIFIERS,
+  HOST_MODULES,
+  type PackageManifest,
+  pluginEntryPoint,
+  readPackageManifest,
+  type UnsatisfiedPeer,
+} from "./packages/manifest.js";
+export {
+  type CommandOptions,
+  type CommandResult,
+  type CommandRunner,
+  nodeCommandRunner,
+} from "./packages/runner.js";
+export {
+  type GitSource,
+  isExactVersion,
+  type LocalSource,
+  type NpmSource,
+  type ParsedSource,
+  packageIdentity,
+  parseSource,
+  resolveLocalPath,
+} from "./packages/source.js";
+export {
+  entrySource,
+  FilePackageStore,
+  MemoryPackageStore,
+  type PackageEntry,
+  type PackageScope,
+  type PackageStore,
+} from "./packages/store.js";
 export type {
   ActionDefinition,
   PluginFunction,
@@ -173,13 +238,6 @@ export {
   isPluginFunction,
   resolvePluginExport,
 } from "./plugin/api.js";
-export type { InstalledPlugin, PluginSource } from "./plugin/installer.js";
-export {
-  installPlugin,
-  listInstalled,
-  parsePluginSource,
-  removePlugin,
-} from "./plugin/installer.js";
 export {
   discoverPlugins,
   loadAllPlugins,
@@ -201,6 +259,7 @@ export type {
   LegacyConnectionSchema,
   OAuthConfig,
   PluginDef,
+  PluginSourceInfo,
 } from "./plugin/types.js";
 export type { RunlineExecuteOptions, RunlineOptions } from "./sdk.js";
 export { Runline } from "./sdk.js";

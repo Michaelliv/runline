@@ -7,6 +7,7 @@ import { loadAllPlugins } from "../plugin/loader.js";
 import { registry } from "../plugin/registry.js";
 import { connectionFields } from "../plugin/schema.js";
 import { printError, printJson, printSuccess } from "../utils/output.js";
+import { cliPackageManager } from "./packages.js";
 
 export async function auth(
   plugin: string,
@@ -18,7 +19,10 @@ export async function auth(
     quiet?: boolean;
   },
 ): Promise<void> {
-  await loadAllPlugins();
+  await loadAllPlugins({
+    builtinAllowlist: new Set([plugin]),
+    packages: cliPackageManager({ quiet: true, onMissing: "skip" }),
+  });
   const def = registry.getPlugin(plugin);
   if (!def) {
     printError(`Plugin "${plugin}" not found. Run \`runline plugin list\`.`);
@@ -109,13 +113,18 @@ export async function auth(
       },
     });
 
-    await addConnection(connectionName, plugin, {
-      clientId,
-      clientSecret,
-      refreshToken: tokens.refreshToken,
-      accessToken: tokens.accessToken,
-      accessTokenExpiresAt: tokens.expiresAt,
-    });
+    await addConnection(
+      connectionName,
+      plugin,
+      {
+        clientId,
+        clientSecret,
+        refreshToken: tokens.refreshToken,
+        accessToken: tokens.accessToken,
+        accessTokenExpiresAt: tokens.expiresAt,
+      },
+      { owner: def.sourceInfo?.owner },
+    );
 
     if (options.json) {
       printJson({ ok: true, name: connectionName, plugin });

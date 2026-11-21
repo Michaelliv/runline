@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { connectionFields } from "../plugin/schema.js";
 import type { ConnectionConfig, ConnectionSchema } from "../plugin/types.js";
 import { readConnectionFile, updateConnectionFile } from "./store.js";
@@ -9,8 +10,14 @@ import { DEFAULT_CONFIG, type RunlineConfig } from "./types.js";
 const CONFIG_DIR_NAME = ".runline";
 const CONFIG_FILE = "config.json";
 
-export function findConfigDir(): string | null {
-  let dir = process.cwd();
+/** The user's own runline folder: `~/.runline`. */
+export function userConfigDir(): string {
+  return join(homedir(), CONFIG_DIR_NAME);
+}
+
+/** The nearest `.runline` folder at or above `from`. */
+export function findConfigDir(from: string = process.cwd()): string | null {
+  let dir = resolve(from);
   while (true) {
     const candidate = join(dir, CONFIG_DIR_NAME);
     if (existsSync(candidate)) return candidate;
@@ -56,11 +63,16 @@ export async function addConnection(
   name: string,
   plugin: string,
   configValues: Record<string, unknown>,
+  options: {
+    /** The plugin's owner (`PluginSourceInfo.owner`), binding the connection to it. */
+    owner?: string;
+  } = {},
 ): Promise<void> {
   const conn = {
     name,
     plugin,
     config: structuredClone(configValues),
+    ...(options.owner === undefined ? {} : { owner: options.owner }),
     generation: randomUUID(),
   };
   await updateConnectionFile(configPath(), (data) => {

@@ -3,11 +3,15 @@ import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
 import type { RunlineConfig } from "../config/types.js";
 import { MemoryConnectionProvider } from "../connections/memory.js";
-import type { ConnectionProvider } from "../connections/types.js";
+import {
+  assertConnectionOwner,
+  type ConnectionProvider,
+} from "../connections/types.js";
 import type {
   CredentialBroker,
   CredentialBrokerCall,
 } from "../credentials/transport.js";
+import { RUNTIME_GLOBALS } from "../plugin/api.js";
 import type { PluginRegistry } from "../plugin/registry.js";
 import {
   dropUndefined,
@@ -528,6 +532,7 @@ export class ExecutionEngine {
 
     const handle = await this.connectionProvider.resolve({
       plugin: plugin.name,
+      owner: plugin.sourceInfo?.owner,
       action: action.name,
       schema: plugin.connectionConfigSchema,
       context,
@@ -538,6 +543,7 @@ export class ExecutionEngine {
         `Connection provider returned the wrong plugin for ${path}`,
       );
     }
+    assertConnectionOwner(connection, plugin);
     const connectionName = connection.name;
     const ctx: ActionContext = {
       connection,
@@ -738,14 +744,7 @@ function buildWorkerSource(
   // Injected into every body's scope. `require` is here because bodies are
   // compiled with `new Function`, whose scope is the worker's global object.
   // Explicit injection gives bodies access to the host JS runtime.
-  const injectNames = [
-    ...pluginNames,
-    "actions",
-    "console",
-    "fetch",
-    "require",
-    "FerroSearch",
-  ];
+  const injectNames = [...pluginNames, ...RUNTIME_GLOBALS];
 
   const wrapped = `"use strict";
 const { parentPort: __port } = require("node:worker_threads");
@@ -845,7 +844,7 @@ const { Check: __schemaCheck, Errors: __schemaErrors } = require(${JSON.stringif
 
 // The host's own normalizeActionInput, by its source, so a check sees the
 // arguments exactly as validation and execute do. The closure keeps the
-// helper names it calls out of the scope plugin globals are declared in.
+// helper names it calls out of this module's scope.
 const __normalizeActionInput = (() => {
 ${dropUndefined.toString()}
 return ${normalizeActionInput.toString()};
@@ -1070,8 +1069,6 @@ const actions = new Proxy(__actionsApi, {
     return __makeProxy([String(prop)]);
   },
 });
-
-${pluginNames.map((n) => `const ${n} = __makeProxy(['${n}']);`).join("\n")}
 
 const console = {
   log: (...a) => __log('log', a.map(__fmt).join(' ')),

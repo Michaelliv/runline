@@ -3,9 +3,8 @@
  * builtins named by `.runline/config.json` connections — never the full
  * bundled catalog.
  *
- * Regression test for the "agent sees all 188 plugins" bug: before
- * builtins were gated, `rl.actions()` returned every action shipped
- * with the package regardless of what a workspace had configured.
+ * Ungated, `rl.actions()` would return every action shipped with the
+ * package regardless of what a workspace had configured.
  *
  * These tests don't rely on the real bundled plugins (which only
  * exist under `dist/` after a build). They stand up a fake builtin
@@ -14,10 +13,17 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { setProjectTrusted } from "../config/trust.js";
 import { Runline } from "../sdk.js";
 
 describe("Runline.fromProject", () => {
@@ -53,6 +59,15 @@ describe("Runline.fromProject", () => {
     if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
   });
 
+  /** The fake builtins, an empty folder in place of the real `~/.runline`, and a trusted project. */
+  function isolated() {
+    return {
+      builtinDir,
+      userDir: join(tempDir, "home", ".runline"),
+      trust: () => true,
+    };
+  }
+
   function writeRunlineDir(cfg: object) {
     const dir = join(tempDir, ".runline");
     mkdirSync(dir, { recursive: true });
@@ -61,7 +76,7 @@ describe("Runline.fromProject", () => {
   }
 
   it("returns null when no .runline directory is present", async () => {
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.equal(rl, null);
   });
 
@@ -70,7 +85,7 @@ describe("Runline.fromProject", () => {
       connections: [{ name: "alpha", plugin: "alpha", config: {} }],
     });
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl, "expected Runline instance");
 
     const names = new Set(rl.plugins().map((p) => p.name));
@@ -84,7 +99,7 @@ describe("Runline.fromProject", () => {
 
   it("registers no builtins when connections are empty", async () => {
     writeRunlineDir({ connections: [] });
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     assert.equal(
       rl.plugins().length,
@@ -92,6 +107,114 @@ describe("Runline.fromProject", () => {
       "empty connections should yield no builtins",
     );
     assert.equal(rl.actions().length, 0);
+  });
+
+  it("imports no bundled plugin the connections do not name", async () => {
+    // A bundled plugin that is not asked for is not even imported.
+    writeFileSync(join(builtinDir, "gamma.js"), `throw new Error("imported");`);
+    writeRunlineDir({
+      connections: [{ name: "alpha", plugin: "alpha", config: {} }],
+    });
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    try {
+      const rl = await Runline.fromProject(tempDir, isolated());
+      assert.deepEqual(
+        rl?.plugins().map((p) => p.name),
+        ["alpha"],
+      );
+    } finally {
+      console.error = original;
+    }
+    assert.deepEqual(errors, []);
+  });
+
+  it("loads a project's plugin files only once the project is trusted", async () => {
+    const runlineDir = writeRunlineDir({ connections: [] });
+    const marker = join(tempDir, "imported");
+    mkdirSync(join(runlineDir, "plugins"), { recursive: true });
+    writeFileSync(
+      join(runlineDir, "plugins", "localOnly.js"),
+      `import { writeFileSync } from "node:fs";
+      writeFileSync(${JSON.stringify(marker)}, "");
+      export default function localOnly(api) {
+        api.setName("localOnly");
+        api.registerAction("ping", { execute: () => "pong" });
+      }`,
+    );
+    const userDir = join(tempDir, "home", ".runline");
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    try {
+      // No decision recorded: nothing of the project is imported.
+      const untrusted = await Runline.fromProject(tempDir, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(untrusted?.plugins(), []);
+      assert.equal(existsSync(marker), false);
+      assert.match(errors.join("\n"), /not loaded: the project is not trusted/);
+
+      // The decision `runline trust` records in the user's folder.
+      setProjectTrusted(runlineDir, true, userDir);
+      const trusted = await Runline.fromProject(tempDir, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(
+        trusted?.plugins().map((p) => p.name),
+        ["localOnly"],
+      );
+      assert.equal(existsSync(marker), true);
+
+      setProjectTrusted(runlineDir, false, userDir);
+      const revoked = await Runline.fromProject(tempDir, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(revoked?.plugins(), []);
+    } finally {
+      console.error = original;
+    }
+  });
+
+  it("recognizes a trusted project reached through a symlink", async () => {
+    const runlineDir = writeRunlineDir({ connections: [] });
+    mkdirSync(join(runlineDir, "plugins"), { recursive: true });
+    writeFileSync(
+      join(runlineDir, "plugins", "localOnly.js"),
+      `export default function localOnly(api) {
+        api.setName("localOnly");
+        api.registerAction("ping", { execute: () => "pong" });
+      }`,
+    );
+    const userDir = join(tempDir, "home", ".runline");
+    const linked = `${tempDir}-link`;
+    symlinkSync(tempDir, linked);
+    try {
+      // Trusted under one path, opened under the other: one project.
+      setProjectTrusted(join(linked, ".runline"), true, userDir);
+      const direct = await Runline.fromProject(tempDir, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(
+        direct?.plugins().map((p) => p.name),
+        ["localOnly"],
+      );
+      const throughLink = await Runline.fromProject(linked, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(
+        throughLink?.plugins().map((p) => p.name),
+        ["localOnly"],
+      );
+    } finally {
+      rmSync(linked, { force: true });
+    }
   });
 
   it("still loads project-local plugins regardless of allowlist", async () => {
@@ -108,7 +231,7 @@ describe("Runline.fromProject", () => {
       }`,
     );
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     const names = rl.plugins().map((p) => p.name);
     assert.deepEqual(names, ["localOnly"]);
@@ -128,7 +251,7 @@ describe("Runline.fromProject", () => {
       }`,
     );
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     const names = new Set(rl.plugins().map((p) => p.name));
     assert.ok(names.has("alpha"));
@@ -136,12 +259,12 @@ describe("Runline.fromProject", () => {
     assert.equal(names.has("beta"), false);
   });
 
-  it("project-local plugin overrides a same-named builtin", async () => {
-    // If a user drops a plugin named "alpha" into .runline/plugins/,
-    // it should win over the builtin — project code is closer to the
-    // user's intent.
+  it("project-local plugin replaces a same-named builtin the config lists as replaceable", async () => {
+    // A plugin named "alpha" in .runline/plugins/ takes the builtin's
+    // name, and with it the builtin's connection, only by explicit config.
     const runlineDir = writeRunlineDir({
       connections: [{ name: "alpha", plugin: "alpha", config: {} }],
+      replaceableBuiltins: ["alpha"],
     });
     const pluginsDir = join(runlineDir, "plugins");
     mkdirSync(pluginsDir, { recursive: true });
@@ -154,11 +277,39 @@ describe("Runline.fromProject", () => {
       }`,
     );
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     const alpha = rl.plugins().find((p) => p.name === "alpha");
     assert.ok(alpha);
     assert.equal(alpha.version, "9.9.9");
     assert.deepEqual(alpha.actions, ["override"]);
+  });
+
+  it("keeps the builtin when a same-named project-local plugin is not listed as replaceable", async () => {
+    const runlineDir = writeRunlineDir({
+      connections: [{ name: "alpha", plugin: "alpha", config: {} }],
+    });
+    mkdirSync(join(runlineDir, "plugins"), { recursive: true });
+    writeFileSync(
+      join(runlineDir, "plugins", "alpha.js"),
+      `export default function alpha(api) {
+        api.setName("alpha");
+        api.setVersion("9.9.9");
+        api.registerAction("override", { execute: () => "local" });
+      }`,
+    );
+
+    const original = console.error;
+    const errors: string[] = [];
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    try {
+      const rl = await Runline.fromProject(tempDir, isolated());
+      const alpha = rl?.plugins().find((p) => p.name === "alpha");
+      assert.equal(alpha?.sourceInfo?.origin, "builtin");
+      assert.notEqual(alpha?.version, "9.9.9");
+    } finally {
+      console.error = original;
+    }
+    assert.match(errors.join("\n"), /has the name of a bundled plugin/);
   });
 });

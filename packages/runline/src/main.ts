@@ -11,7 +11,17 @@ import {
 } from "./commands/connection.js";
 import { exec } from "./commands/exec.js";
 import { init } from "./commands/init.js";
+import {
+  packageInstall,
+  packageList,
+  packageRemove,
+  packageSearch,
+  packageTrust,
+  packageUpdate,
+} from "./commands/packages.js";
 import { pluginInstall, pluginList, pluginRemove } from "./commands/plugin.js";
+
+const collect = (value: string, previous: string[]) => [...previous, value];
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
@@ -48,24 +58,33 @@ https://github.com/Michaelliv/runline`,
 program
   .command("exec <code>")
   .alias("e")
-  .description("Execute JavaScript code in the QuickJS runtime")
+  .description("Execute JavaScript code that calls plugin actions")
   .option("-f, --file", "Treat <code> as a file path")
+  .option(
+    "-e, --package <source>",
+    "Load a package for this run only (repeatable)",
+    collect,
+    [],
+  )
   .addHelpText(
     "after",
     `
-The code runs in a QuickJS runtime with an \`actions\` proxy.
-Each installed plugin is a top-level global. Dot-chain into resource and action.
-Configure the built-in \`node\` plugin to expose host-backed fs/path/os/process/crypto/fetch actions.
+The code runs as the body of an async function in a worker thread.
+Each loaded plugin is a global: dot-chain into its action and await the call.
+The \`actions\` object lists, finds, describes and checks actions.
+A bundled plugin is loaded once a connection names it.
 
 Examples:
   $ runline exec 'return await docker.containers.list()'
   $ runline exec -f ./scripts/deploy.js
-  $ runline exec 'return await github.repo.list({ owner: "torvalds" })'`,
+  $ runline exec 'return actions.find("create issue")'
+  $ runline exec 'return await github.user.listRepos({ username: "torvalds" })'`,
   )
   .action(async (code, opts, cmd) => {
     const globals = cmd.optsWithGlobals();
     await exec(code, {
       file: opts.file,
+      packages: opts.package,
       json: globals.json,
       quiet: globals.quiet,
     });
@@ -78,9 +97,19 @@ program
     "-c, --connected",
     "Only show actions for plugins with configured connections",
   )
+  .option(
+    "-e, --package <source>",
+    "Load a package for this listing only (repeatable)",
+    collect,
+    [],
+  )
   .action(async (opts, cmd) => {
     const globals = cmd.optsWithGlobals();
-    await actions({ json: globals.json, connected: opts.connected });
+    await actions({
+      json: globals.json,
+      connected: opts.connected,
+      packages: opts.package,
+    });
   });
 
 // ── connection ──────────────────────────────────────────
@@ -94,12 +123,7 @@ connCmd
   .command("add <name>")
   .description("Add a connection")
   .requiredOption("-p, --plugin <plugin>", "Plugin name")
-  .option(
-    "-s, --set <key=value...>",
-    "Config values",
-    (v: string, prev: string[]) => [...prev, v],
-    [],
-  )
+  .option("-s, --set <key=value...>", "Config values", collect, [])
   .action(async (name, opts, cmd) => {
     const globals = cmd.optsWithGlobals();
     await connectionAdd(name, {
@@ -125,13 +149,96 @@ connCmd
     await connectionList({ json: globals.json });
   });
 
+// ── packages ────────────────────────────────────────────
+
+program
+  .command("install <source>")
+  .description(
+    "Install a plugin package (npm:<name>[@version], git:<host>/<path>[@ref], URL, or path)",
+  )
+  .option(
+    "-l, --local",
+    "Record it in the project's .runline instead of ~/.runline",
+  )
+  .option("-y, --yes", "Install without asking")
+  .addHelpText(
+    "after",
+    `
+Fetches the package, shows its plugins, their read/write actions and the
+hosts their credentials reach, and asks before recording it. Install
+scripts never run.
+
+Examples:
+  $ runline install npm:@acme/runline-orders@1.2.0
+  $ runline install git:github.com/acme/runline-tools@v1 --local
+  $ runline install ./tools/orders`,
+  )
+  .action(async (source, opts, cmd) => {
+    const globals = cmd.optsWithGlobals();
+    await packageInstall(source, {
+      local: opts.local,
+      yes: opts.yes,
+      json: globals.json,
+      quiet: globals.quiet,
+    });
+  });
+
+program
+  .command("remove <source>")
+  .alias("uninstall")
+  .description("Remove a configured package and its installed files")
+  .option("-l, --local", "Remove it from the project's .runline")
+  .action(async (source, opts, cmd) => {
+    const globals = cmd.optsWithGlobals();
+    await packageRemove(source, {
+      local: opts.local,
+      json: globals.json,
+      quiet: globals.quiet,
+    });
+  });
+
+program
+  .command("update [source]")
+  .description("Update configured packages (exact versions stay pinned)")
+  .action(async (source, _opts, cmd) => {
+    const globals = cmd.optsWithGlobals();
+    await packageUpdate(source, { json: globals.json, quiet: globals.quiet });
+  });
+
+program
+  .command("list")
+  .alias("ls")
+  .description("List configured packages")
+  .option("--outdated", "Show packages with newer versions available")
+  .action(async (opts, cmd) => {
+    const globals = cmd.optsWithGlobals();
+    await packageList({ json: globals.json, outdated: opts.outdated });
+  });
+
+program
+  .command("search [terms]")
+  .description("Search npm for packages with the runline-plugin keyword")
+  .action(async (terms, _opts, cmd) => {
+    const globals = cmd.optsWithGlobals();
+    await packageSearch(terms ?? "", { json: globals.json });
+  });
+
+program
+  .command("trust [dir]")
+  .description("Allow a project's .runline plugins and packages to load")
+  .option("--revoke", "Stop trusting it")
+  .action(async (dir, opts, cmd) => {
+    const globals = cmd.optsWithGlobals();
+    await packageTrust(dir, { revoke: opts.revoke, json: globals.json });
+  });
+
 // ── plugin ──────────────────────────────────────────────
 
 const pluginCmd = program.command("plugin").description("Manage plugins");
 
 pluginCmd
   .command("install <source>")
-  .description("Install a plugin (npm:pkg, git:repo, or local path)")
+  .description("Install a plugin package (same as `runline install --yes`)")
   .option("-g, --global", "Install globally")
   .action(async (source, opts, cmd) => {
     const globals = cmd.optsWithGlobals();
@@ -139,16 +246,16 @@ pluginCmd
   });
 
 pluginCmd
-  .command("remove <name>")
-  .description("Remove an installed plugin")
-  .action(async (name, _opts, cmd) => {
+  .command("remove <source>")
+  .description("Remove a package (same as `runline remove`, project first)")
+  .action(async (source, _opts, cmd) => {
     const globals = cmd.optsWithGlobals();
-    await pluginRemove(name, { json: globals.json });
+    await pluginRemove(source, { json: globals.json });
   });
 
 pluginCmd
   .command("list")
-  .description("List all plugins")
+  .description("List loaded plugins and the package each came from")
   .action(async (_opts, cmd) => {
     const globals = cmd.optsWithGlobals();
     await pluginList({ json: globals.json });

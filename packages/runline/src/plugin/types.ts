@@ -68,6 +68,31 @@ export interface ConnectionConfig {
   name: string;
   plugin: string;
   config: Record<string, unknown>;
+  /**
+   * The owner (`PluginSourceInfo.owner`) of the plugin this connection was
+   * made for. A plugin of the same name from another owner is refused the
+   * connection, and a package's plugin is refused one with no owner.
+   */
+  owner?: string;
+}
+
+/**
+ * Where a discovered plugin came from. Discovery and the package manager set
+ * it; a plugin module cannot declare its own.
+ */
+export interface PluginSourceInfo {
+  /** The plugin's module. */
+  path: string;
+  /** `builtin`, the folder or plugins.json a local plugin was found in, or a package's source as configured. */
+  source: string;
+  origin: "builtin" | "local" | "package";
+  scope?: "user" | "project" | "temporary";
+  /**
+   * Who a connection made for this plugin belongs to: `builtin`, `local`, or
+   * the package's identity (`npm:<name>`, `git:<host>/<path>`, `local:<path>`),
+   * which stays the same across versions and refs.
+   */
+  owner: string;
 }
 
 export interface ActionContext {
@@ -172,6 +197,8 @@ export interface PluginDef {
   /** How a connection's config becomes what its requests are signed with;
    *  present on plugins whose requests go through the credential registry. */
   credential?: CredentialDeclaration;
+  /** Set by discovery; absent on a plugin a host constructs or loads itself. */
+  sourceInfo?: PluginSourceInfo;
   /** @internal */
   initHooks?: Array<(config: Record<string, unknown>) => void>;
 }

@@ -1,17 +1,28 @@
 # runline-plugins
 
-Built-in plugins for runline. This is a private workspace package — it is not published independently. At build time, `bun --filter runline build` compiles these plugins and copies the output into `packages/runline/dist/plugins/`, so every install of `runline` ships with the full catalog.
+The plugins bundled with runline. This workspace package is private and is not published. The `runline` build compiles it and copies the output into `packages/runline/dist/plugins/`, so every installation of `runline` contains all of them.
 
-## Why a separate package?
+The plugins are a separate package so that they compile in their own pass, apart from the library.
 
-Organizational. The plugins are their own compilation unit (one `tsc --noCheck` pass over the built-in plugin catalog) rather than being included in the runline library's `tsc`. Keeps the library build fast and the tree tidy.
+## Add a plugin
 
-## Adding a plugin
+1. Create `packages/runline-plugins/<name>/src/index.ts`. Runline finds bundled plugins by folder, so the folder name must be the plugin's name.
+2. Default-export a function that receives a `RunlinePluginAPI`. See [Plugins](../../docs/plugins.md).
+3. If the plugin calls an authenticated API, declare its credential and send every request through the credential helpers. See [Credentials](../../docs/credentials.md). Reuse `_shared/googleCredentials.ts` or `_shared/microsoftCredentials.ts` for a Google or Microsoft API.
+4. Label every action with `access: "read"` or `access: "write"`. Use `write` for anything that creates, changes, deletes, sends, uploads, executes, triggers, imports, deploys, or may otherwise affect an external system.
+5. Add an icon named `<name>.svg` or `<name>.png` to `icons/`.
+6. Build and regenerate the plugin table:
 
-1. Create `packages/runline-plugins/<name>/src/index.ts`
-2. Export a default function that receives a `RunlinePluginAPI` (see the [monorepo README](../../README.md#writing-a-plugin))
-3. If it calls an authenticated API, declare its credential and send every request through the credential helpers: [docs/credentials.md](../../docs/credentials.md). Reuse `_shared/googleCredentials.ts` or `_shared/microsoftCredentials.ts` for a Google or Microsoft API.
-4. Add `access: "read"` or `access: "write"` to every action. Use `write` for mutations, sends, uploads, executions, triggers, imports, deploys, config changes, local file writes, and ambiguous external side effects. `bun run check` enforces the label (`scripts/lint-plugin-access.ts`): every action declares one, and an action whose verb mutates (`create`, `update`, `delete`, `send`, …) is `write`.
-5. `bun --filter runline build` — the plugin is picked up automatically
+```bash
+bun --filter runline build
+cd packages/runline && node scripts/generate-plugin-table.js --write
+```
 
-The plugin loader discovers entries by walking `dist/plugins/*/src/index.js`.
+## Checks
+
+`bun run check` runs `scripts/lint-plugin-access.ts`, which loads every plugin from source. It fails when:
+
+- a plugin does not load
+- an action has no `access` label
+- an action whose verb mutates, such as `create`, `update`, `delete`, or `send`, is not labeled `write`
+- a plugin's name differs from its folder name

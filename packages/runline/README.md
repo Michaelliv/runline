@@ -1,20 +1,33 @@
 # runline
 
-The runline library and CLI. Published on npm as [`runline`](https://www.npmjs.com/package/runline). See the [monorepo README](../../README.md) for the full story, quickstart, and plugin catalog.
+The runline library and command-line interface, published on npm as [`runline`](https://www.npmjs.com/package/runline). See the [repository README](../../README.md) and the [documentation](../../docs/index.md) for installation and usage.
 
-## What lives here
+## Layout
 
-- `src/` — the library source (SDK, engine, plugin API, loader, CLI commands)
-- `scripts/` — tooling (e.g. `generate-plugin-table.js` for the root README)
-- `dist/plugins/` — populated at build time by copying `packages/runline-plugins/dist`
+| Path | Contents |
+|---|---|
+| `src/` | The engine, plugin API and loader, connections, credentials, package manager, and commands |
+| `src/tests/` | The test suite |
+| `scripts/` | Repository tooling, such as the generator for the bundled plugin table |
+| `dist/plugins/` | The bundled plugins, copied from `packages/runline-plugins/dist` by the build |
 
 ## Scripts
 
-```bash
-bun run dev -- exec 'return 1 + 2'   # run the CLI from source
-bun run build                         # compile + bundle built-in plugins
-bun run test                          # bun test src/tests
-bun run check                         # biome check
-```
+Run these from this folder:
 
-`build` does two things: compiles `src/` with `tsc`, then invokes `bun --filter runline-plugins build` and copies the output into `dist/plugins/` so the published package ships with every built-in plugin.
+| Task | Command |
+|---|---|
+| Run the command-line interface from source | `bun run dev -- exec 'return 1 + 2'` |
+| Compile the library and bundle the plugins | `bun run build` |
+| Run the tests | `bun run test` |
+| Typecheck the source and the tests | `bun run typecheck` |
+| Lint and check formatting | `bun run check` |
+
+`build` compiles `src/` with `tsc`, builds `runline-plugins`, and copies the result into `dist/plugins/`, so the published package contains every bundled plugin.
+
+Regenerate the table in [`docs/bundled-plugins.md`](../../docs/bundled-plugins.md) after adding or changing a bundled plugin. The script reads the built plugins:
+
+```bash
+bun run build
+node scripts/generate-plugin-table.js --write
+```

@@ -4,7 +4,15 @@ import {
   loadConfig,
   removeConnection,
 } from "../config/loader.js";
-import { printError, printJson, printSuccess } from "../utils/output.js";
+import { loadAllPlugins } from "../plugin/loader.js";
+import { registry } from "../plugin/registry.js";
+import {
+  printError,
+  printJson,
+  printSuccess,
+  printWarn,
+} from "../utils/output.js";
+import { cliPackageManager } from "./packages.js";
 
 export async function connectionAdd(
   name: string,
@@ -20,11 +28,23 @@ export async function connectionAdd(
     configValues[kv.slice(0, eq)] = kv.slice(eq + 1);
   }
 
-  await addConnection(name, options.plugin, configValues);
+  // The connection is bound to where the plugin comes from today, so a
+  // plugin of the same name from elsewhere does not inherit it. Finding
+  // that out imports one bundled plugin at most and installs nothing.
+  await loadAllPlugins({
+    builtinAllowlist: new Set([options.plugin]),
+    packages: cliPackageManager({ quiet: true, onMissing: "skip" }),
+  });
+  const owner = registry.getPlugin(options.plugin)?.sourceInfo?.owner;
+  await addConnection(name, options.plugin, configValues, { owner });
 
   if (options.json) {
-    printJson({ ok: true, name, plugin: options.plugin });
+    printJson({ ok: true, name, plugin: options.plugin, owner });
   } else {
+    if (owner === undefined)
+      printWarn(
+        `No plugin named "${options.plugin}" is installed. A package's plugin will need its connection added again once installed.`,
+      );
     printSuccess(
       `Connection ${chalk.bold(name)} added (plugin: ${options.plugin})`,
     );
@@ -59,6 +79,7 @@ export async function connectionList(options: {
       connections.map((c) => ({
         name: c.name,
         plugin: c.plugin,
+        owner: c.owner,
         config: Object.fromEntries(
           Object.keys(c.config).map((key) => [key, "[redacted]"]),
         ),
@@ -73,6 +94,8 @@ export async function connectionList(options: {
   }
 
   for (const c of connections) {
-    console.log(`  ${chalk.bold(c.name)} (${c.plugin})`);
+    const owner =
+      c.owner && c.owner !== "builtin" ? chalk.dim(` from ${c.owner}`) : "";
+    console.log(`  ${chalk.bold(c.name)} (${c.plugin})${owner}`);
   }
 }
