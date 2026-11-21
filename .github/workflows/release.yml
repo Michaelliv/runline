@@ -51,10 +51,15 @@ jobs:
     strategy:
       # One job per package, in order: runline forwards to the codemode
       # published just before it, and its failure does not undo codemode's.
+      # Each publishes with the token that covers its name on npm.
       fail-fast: false
       max-parallel: 1
       matrix:
-        package: [codemode, runline]
+        include:
+          - package: codemode
+            token: SHIFTLABS_NPM_TOKEN
+          - package: runline
+            token: NPM_TOKEN
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -75,7 +80,7 @@ jobs:
             npm publish --access public
           fi
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets[matrix.token] }}
 
   release:
     needs: publish
