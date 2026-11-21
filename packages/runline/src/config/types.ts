@@ -6,12 +6,12 @@ export interface RunlineConfig {
   connections: ConnectionConfig[];
   /** Execution timeout in ms. Default 30_000. */
   timeoutMs: number;
-  /** Memory limit for QuickJS in bytes. Default 64MB. */
+  /** Memory limit for one run in bytes. Default 64MB. */
   memoryLimitBytes: number;
   /**
    * Bodies one pooled worker may run before being retired. Bounds cross-run
    * global contamination; memory is a per-thread cost so this does not
-   * meaningfully affect it. Default 50.
+   * meaningfully affect it. Default 500.
    */
   maxRunsPerWorker?: number;
   /** Installed plugin packages; `PackageManager` reads and writes them. */

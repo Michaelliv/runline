@@ -156,7 +156,7 @@ describe("the credentials guide's recipes", () => {
   it("every recipe has a checked block", () => {
     const recipes = GUIDE.slice(
       GUIDE.indexOf("\n## Recipes\n"),
-      GUIDE.indexOf("\n## Making requests\n"),
+      GUIDE.indexOf("\n## Make requests\n"),
     )
       .split("\n### ")
       .slice(1);

@@ -25,7 +25,7 @@ Before recording a package, runline lists its plugins, how many of their actions
 | Remove a package and its entry | `runline remove <source>` |
 | Find packages on npm | `runline search [terms]` |
 
-Personal installs are recorded in `~/.runline/config.json`. Add `--local` or `-l` to record the package in the project's `.runline/config.json` instead. Runline loads a project's packages only after the project is trusted, and `install --local` trusts the project it installs into. See [Project Trust](trust.md).
+Personal installs are recorded in `~/.runline/config.json`. Add `--local` or `-l` to record the package in the project's `.runline/config.json` instead. Runline loads a project's packages only after the project is trusted, and `install --local` trusts the project it installs into. See [Project trust](security.md#understand-project-trust).
 
 Use `--package` or `-e` to load a package for one invocation without recording it:
 
@@ -33,7 +33,7 @@ Use `--package` or `-e` to load a package for one invocation without recording i
 runline exec -e npm:@example/runline-orders 'return await orders.list({})'
 ```
 
-`runline plugin install <source>` is `runline install --local --yes`; add `--global` for a personal install.
+`runline plugin install <source>` is `runline install --local --yes`; add `--global` for a personal install. See [Command Line](cli.md#package-commands) for every package command and option.
 
 ## Choose a source
 
@@ -72,7 +72,7 @@ Paths are relative to the package root. The array accepts `*`, `**`, and `?` pat
 
 Without `runline.plugins`, runline loads the module named by `main`, then `index.ts` or `index.js`, then `src/index.ts` or `src/index.js`.
 
-Each module default-exports a plugin, as described in [Writing a Plugin](../README.md#writing-a-plugin). A packaged plugin must set its name and register at least one action. Runline does not fall back to the file name, because two packages would both become `index`.
+Each module default-exports a plugin, as described in [Plugins](plugins.md). A packaged plugin must set its name and register at least one action. Runline does not fall back to the file name, because two packages would both become `index`.
 
 Runline loads TypeScript and JavaScript modules directly. It never runs install scripts, so a package that needs a build step must publish the built files.
 
@@ -124,7 +124,7 @@ A connection belongs to the plugin source it was made for. `runline connection a
 
 A packaged plugin uses only connections made for its package. Runline refuses a connection made for another package, or for a bundled or local plugin with the same name, and names both in the error. Add the connection again to use it with the new plugin. Removing a package leaves its connections in place.
 
-This keeps a connection with the plugin it was made for. It is not a sandbox: plugin code runs inside the runline process with that process's permissions.
+This keeps a connection with the plugin it was made for. It is not a sandbox: plugin code runs inside the runline process with that process's permissions. Review third-party package source before installing it. See [Security](security.md).
 
 ## Understand scope and identity
 
@@ -140,7 +140,7 @@ Files are kept in managed folders that runline never scans for plugins:
 <project>/.runline/packages/          the same layout, for project installs
 ```
 
-Set `packageManager` in `~/.runline/config.json`, or `RUNLINE_PACKAGE_MANAGER`, to `npm`, `pnpm`, or `bun`. The default is `npm`. Set `RUNLINE_OFFLINE=1` to disable every network step.
+Set `packageManager` in `~/.runline/config.json`, or `RUNLINE_PACKAGE_MANAGER`, to `npm`, `pnpm`, or `bun`. The default is `npm`. Set `RUNLINE_OFFLINE=1` to disable every network step. See [Configuration](configuration.md).
 
 ## Embed the package manager
 

@@ -58,7 +58,7 @@ https://github.com/Michaelliv/runline`,
 program
   .command("exec <code>")
   .alias("e")
-  .description("Execute JavaScript code in the QuickJS runtime")
+  .description("Execute JavaScript code that calls plugin actions")
   .option("-f, --file", "Treat <code> as a file path")
   .option(
     "-e, --package <source>",
@@ -69,14 +69,16 @@ program
   .addHelpText(
     "after",
     `
-The code runs in a QuickJS runtime with an \`actions\` proxy.
-Each installed plugin is a top-level global. Dot-chain into resource and action.
-Configure the built-in \`node\` plugin to expose host-backed fs/path/os/process/crypto/fetch actions.
+The code runs as the body of an async function in a worker thread.
+Each loaded plugin is a global: dot-chain into its action and await the call.
+The \`actions\` object lists, finds, describes and checks actions.
+A bundled plugin is loaded once a connection names it.
 
 Examples:
   $ runline exec 'return await docker.containers.list()'
   $ runline exec -f ./scripts/deploy.js
-  $ runline exec 'return await github.repo.list({ owner: "torvalds" })'`,
+  $ runline exec 'return actions.find("create issue")'
+  $ runline exec 'return await github.user.listRepos({ username: "torvalds" })'`,
   )
   .action(async (code, opts, cmd) => {
     const globals = cmd.optsWithGlobals();

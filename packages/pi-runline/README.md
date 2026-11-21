@@ -1,90 +1,104 @@
 # pi-runline
 
-Code mode for [pi](https://github.com/mariozechner/pi).
+`pi-runline` is a [Pi](https://pi.dev) extension that adds [runline](../../README.md) to an agent as one tool. The agent writes JavaScript that calls runline actions, and discovers those actions from inside the code it runs.
 
-An extension that plugs [runline](https://www.npmjs.com/package/runline) into coding agents. The agent gets one native tool, in-sandbox action discovery, a fuzzy picker for choosing which built-in plugins to expose, and a guided credential prompt for the ones it hasn't seen before.
+Use it when a Pi agent should work with services such as GitHub, Slack, or Linear without a separate tool for each endpoint.
 
 ## Install
 
+Install the extension as a Pi package:
+
 ```bash
-pi install pi-runline
+pi install npm:pi-runline
 ```
 
-## How the agent uses it
+The extension activates in a folder that has a `.runline` folder at or above it. Create one with the runline command-line interface:
 
-On session start, if the current working directory has a `.runline/` (or one is configured globally — see below), the extension registers a single tool and injects a short primer naming the enabled plugins:
-
-- **`execute_runline`** — run JavaScript in runline's QuickJS sandbox. Every enabled plugin is a top-level global; `return` surfaces the result; logs are captured.
-
-Discovery happens **inside the sandbox**, not as a separate tool. The agent uses an `actions` object to explore the catalog without paying for a full schema dump in its system prompt:
-
-```js
-actions.list()                  // every "plugin.action" path
-actions.list("github")          // filter to one plugin
-actions.find("create issue")    // ranked fuzzy search (ferrosearch)
-actions.describe("github.issue.create")
-// → { path, plugin, action, access, description, signature, inputs }
-actions.check("github.issue.create", { owner: "a" })
-// → { ok, missing, unknown, typeErrors, signature }   (does NOT call the action)
+```bash
+npm install -g runline
+runline init
 ```
 
-Unknown paths throw with did-you-mean suggestions, so typos are self-correcting. Recommended flow: `find` → `describe` → `check` → call.
+## Choose plugins
 
-Calling actions is unchanged — plugin globals and `actions.<plugin>.<action>(...)` are the same call:
+Run `/runline-plugins` in a Pi session to choose which plugins the agent is told about:
 
-```js
+```text
+/runline-plugins
+```
+
+The picker lists every bundled plugin and the plugin files in the project and in `~/.runline/plugins/`. Nothing is enabled until you choose.
+
+| Key | Action |
+|---|---|
+| Type | Filter the list |
+| `Up`, `Down` | Move the highlight |
+| `Space` | Enable or disable the highlighted plugin |
+| `Alt+R` | Enter new credentials for the highlighted plugin |
+| `Enter` | Save |
+| `Escape` | Cancel |
+
+After you save, the extension offers to set up each newly enabled plugin that needs credentials and has no connection. It asks for each field of the plugin's connection schema and writes the connection to `.runline/config.json`. It skips a plugin whose required fields are all set through environment variables.
+
+Runline loads a bundled plugin only when the project has a connection for it. For a plugin that needs no credentials, or takes them from the environment, add the connection yourself:
+
+```bash
+runline connection add node --plugin node
+```
+
+Plugins that use OAuth are connected with `runline auth <plugin>`. See [Connections](../../docs/connections.md).
+
+## Understand what the agent receives
+
+At the start of a session, the extension loads the project with the runline SDK and adds one message to the conversation. The message names the enabled plugins and explains how to discover and call actions.
+
+The agent then uses a single tool:
+
+| Tool | Behavior |
+|---|---|
+| `execute_runline` | Runs JavaScript in the runline runtime. Each loaded plugin is a global, `return` produces the result, and console output is returned as logs |
+
+The agent finds actions from inside that code instead of reading schemas from its prompt:
+
+```javascript
+actions.find("create issue");
+actions.describe("github.issue.create");
+actions.check("github.issue.create", { owner: "acme" });
 return await github.issue.create({ owner: "acme", repo: "api", title: "Bug" });
 ```
 
-## `/runline-plugins` — the picker
+See [Run Code](../../docs/usage.md) for the calling conventions and the runtime.
 
-Typing `/runline-plugins` in a pi session opens a fuzzy multi-select over every built-in plugin.
+## Configure the extension
 
-```
-╭─────────────────────────────────────────────╮
-│ runline plugins · 5/226 enabled             │
-│ type to filter · space toggle · ^A toggle   │
-│                                             │
-│ filter ❯ gith                               │
-│                                             │
-│ ❯ ◉ github       34 actions                 │
-│   ◯ gitlab       17 actions                 │
-│   ...                                       │
-╰─────────────────────────────────────────────╯
-```
-
-Keys: `type` to filter · `↑/↓` to move · `space` to toggle · `Ctrl-A` to toggle all visible · `enter` to save · `esc` to cancel.
-
-After saving, any newly-enabled plugin with a `connectionConfigSchema` that doesn't already have a connection (and can't be fully resolved from env vars) will prompt you field-by-field for credentials. Values are written to `.runline/config.json` under `connections[]`.
-
-## Configuration
-
-### Per-project — `.runline/config.json`
+The extension keeps two keys in the project's `.runline/config.json`, next to runline's own settings:
 
 ```json
 {
-  "showStatus": true,
-  "piPlugins": ["github", "slack", "linear"],
-  "connections": [
-    { "name": "github", "plugin": "github", "config": { "token": "ghp_..." } }
-  ]
+  "piPlugins": ["github", "linear", "slack"],
+  "showStatus": true
 }
 ```
 
-- **`piPlugins`** — the allowlist the extension uses. If missing or empty, nothing is exposed to the agent and the status bar says `runline: /runline-plugins to enable`.
-- **`showStatus`** — set to `false` to silence the status bar entry for this project.
-- **`connections`** — standard runline connections (shared with the CLI and SDK).
+| Key | Default | Description |
+|---|---|---|
+| `piPlugins` | None | The plugins named to the agent. `/runline-plugins` writes it |
+| `showStatus` | `true` | Shows the number of enabled plugins and actions in Pi's status line |
 
-### Global — `~/.pi/agent/runline.json`
+To use one runline project from every folder, name it in `~/.pi/agent/runline.json`:
 
 ```json
-{ "project": "~/Projects/my-runline-project" }
+{
+  "project": "~/Projects/my-runline-project"
+}
 ```
 
-Fallback used when the current cwd has no `.runline/` anywhere up the tree. Useful when you want the runline tools available in every pi session without scattering `.runline/` folders.
+The extension uses this project when the working folder has no `.runline` folder at or above it.
 
-## How plugin allow-listing works
+## Understand the limits
 
-The extension deliberately exposes nothing by default. That's on purpose — thousands of actions is a lot of context budget. You pick the plugins that matter for a given project, commit the allowlist to `.runline/config.json`, and the agent only ever sees the ones you enabled in its primer.
+`piPlugins` controls what the agent is told about, not what it can call. The runtime holds every plugin runline loads for the project: its plugin files, its packages, and the bundled plugins that have a connection. An agent that guesses the name of a loaded plugin that is not in `piPlugins` can still call it. Remove a plugin's connection, file, or package to make it unreachable.
 
-Note that the QuickJS sandbox itself still registers every runline plugin as a global (and `actions.list()` will surface them all), so in principle an agent could guess and call a disabled plugin. In practice the primer only advertises the allowlisted ones, and unconfigured plugins error out at first action call anyway. Plumbing the allowlist into the sandbox registry is on the roadmap.
+Runline loads the project's own plugin files and packages only after the project is trusted. Run `runline trust` in a project that `runline init` did not create.
+
+Actions run with the permissions of the Pi process, and actions that write run without asking. See [Security](../../docs/security.md).
