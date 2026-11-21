@@ -22,8 +22,8 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - run: bun --filter runline build
-      - run: bun --filter runline test
+      - run: bun --filter @shiftlabs/codemode build
+      - run: bun --filter @shiftlabs/codemode test
       - run: bun run check
 
   verify-versions:
@@ -34,27 +34,32 @@ jobs:
       - name: Tag matches package versions
         run: |
           TAG="${GITHUB_REF_NAME#v}"
+          CODEMODE=$(node -p "require('./packages/codemode/package.json').version")
           RUNLINE=$(node -p "require('./packages/runline/package.json').version")
-          PI=$(node -p "require('./packages/pi-runline/package.json').version")
-          echo "tag=$TAG runline=$RUNLINE pi-runline=$PI"
-          if [ "$RUNLINE" != "$TAG" ]; then
-            echo "::error::packages/runline/package.json version ($RUNLINE) does not match tag ($TAG)"
-            exit 1
-          fi
-          if [ "$PI" != "$TAG" ]; then
-            echo "::error::packages/pi-runline/package.json version ($PI) does not match tag ($TAG)"
-            exit 1
-          fi
+          FORWARDS_TO=$(node -p "require('./packages/runline/package.json').dependencies['@shiftlabs/codemode']")
+          echo "tag=$TAG codemode=$CODEMODE runline=$RUNLINE forwards-to=$FORWARDS_TO"
+          for VERSION in "$CODEMODE" "$RUNLINE" "$FORWARDS_TO"; do
+            if [ "$VERSION" != "$TAG" ]; then
+              echo "::error::a package version ($VERSION) does not match tag ($TAG)"
+              exit 1
+            fi
+          done
 
   publish:
     needs: verify-versions
     runs-on: ubuntu-latest
     strategy:
-      # Publish each package in its own job so a failure in one doesn't
-      # silently skip the other.
+      # One job per package, in order: runline forwards to the codemode
+      # published just before it, and its failure does not undo codemode's.
+      # Each publishes with the token that covers its name on npm.
       fail-fast: false
+      max-parallel: 1
       matrix:
-        package: [runline, pi-runline]
+        include:
+          - package: codemode
+            token: SHIFTLABS_NPM_TOKEN
+          - package: runline
+            token: NPM_TOKEN
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -65,9 +70,7 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
-      # runline must be built before publishing. pi-runline has no build
-      # step of its own and imports runline at runtime.
-      - run: bun --filter runline build
+      - run: bun --filter @shiftlabs/codemode build
       - name: Publish to npm
         working-directory: packages/${{ matrix.package }}
         run: |
@@ -77,7 +80,7 @@ jobs:
             npm publish --access public
           fi
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets[matrix.token] }}
 
   release:
     needs: publish

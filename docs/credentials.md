@@ -1,8 +1,8 @@
 # Credentials
 
-A plugin that calls an authenticated API declares its credential. The declaration states what the secret is, how it is placed in a request, and which HTTPS targets may receive it. Runline signs every request from that declaration, so the plugin never builds an `Authorization` header, reads a token, or refreshes one.
+A plugin that calls an authenticated API declares its credential. The declaration states what the secret is, how it is placed in a request, and which HTTPS targets may receive it. Codemode signs every request from that declaration, so the plugin never builds an `Authorization` header, reads a token, or refreshes one.
 
-Use this page when you write a plugin, bundled or your own, that needs a key, a token, an OAuth login, AWS credentials, or a cookie session. To embed runline with credentials kept outside the process that runs plugins, see [Sign requests in the host](sdk.md#sign-requests-in-the-host).
+Use this page when you write a plugin, bundled or your own, that needs a key, a token, an OAuth login, AWS credentials, or a cookie session. To embed codemode with credentials kept outside the process that runs plugins, see [Sign requests in the host](sdk.md#sign-requests-in-the-host).
 
 ## Understand the model
 
@@ -18,7 +18,7 @@ flowchart LR
 ```
 
 - A declaration is a function from the connection's config to a selection: the credential type with its methods, each with an authentication kind and targets, which method this connection uses, and any OAuth application, resource owner, or AWS role. It is pure. It performs no IO and never reads action input. `staticCredential` and `awsCredential` build one for you. OAuth and cookie-session declarations are written out.
-- A request helper, such as `credentialJson`, `credentialOk`, or `credentialRequest`, takes a target name and a path beneath it, never a URL. Runline refuses anything outside the declared targets, methods, and headers before it sends a byte.
+- A request helper, such as `credentialJson`, `credentialOk`, or `credentialRequest`, takes a target name and a path beneath it, never a URL. Codemode refuses anything outside the declared targets, methods, and headers before it sends a byte.
 - The signer adds the secret, renews it when it expires or is rejected, and stores the renewal. When a host keeps credentials, the plugin's process never holds the secret. The same plugin code runs either way.
 
 This design has three consequences. The secret can reach only the hosts the plugin declared. A provider's error text, which can echo a secret, never reaches an error message. A host can sign for plugin code it does not trust with its tokens.
@@ -28,7 +28,7 @@ This design has three consequences. The secret can reach only the hosts the plug
 The [orders plugin](plugins.md#authenticate-requests) in the plugin guide is built around one credential. These are its credential parts:
 
 ```typescript
-import { credentialJson, pathSegment, staticCredential } from "runline";
+import { credentialJson, pathSegment, staticCredential } from "@shiftlabs/codemode";
 
 // A bearer token from the connection's `apiKey`, sent only beneath this base.
 const credential = staticCredential({
@@ -53,7 +53,7 @@ return credentialJson(ctx, credential, "orders", {
 
 Four things make it work:
 
-1. `setCredential(credential)` tells runline (and a host) how this plugin signs. Without it, the request helpers still sign locally, but a host cannot broker for the plugin.
+1. `setCredential(credential)` tells codemode (and a host) how this plugin signs. Without it, the request helpers still sign locally, but a host cannot broker for the plugin.
 2. `local: { secret: "apiKey" }` names the flat config field the secret comes from when this process signs it itself, as the CLI does. The connection schema declares that field, with the environment variable that fills it.
 3. The target `api` is the only place the token may go: an HTTPS base ending in `/`, and the methods allowed there.
 4. Caller input goes into the path through `pathSegment`, which refuses `..`, empty values and separators instead of encoding them.
@@ -76,7 +76,7 @@ Find what the API requires in the first column:
 
 ## Recipes
 
-Every declaration here passes runline's own validation, the same a host runs, which rejects a malformed one with `invalid_definition`, and signs a request beneath its target: `packages/runline/src/tests/credentials-docs.test.ts` runs each recipe's block as written. [Test a declaration](#test-a-declaration) shows how to check yours.
+Every declaration here passes codemode's own validation, the same a host runs, which rejects a malformed one with `invalid_definition`, and signs a request beneath its target: `packages/codemode/src/tests/credentials-docs.test.ts` runs each recipe's block as written. [Test a declaration](#test-a-declaration) shows how to check yours.
 
 ### A key or token
 
@@ -227,7 +227,7 @@ staticCredential({
 
 ### OAuth with a person's consent
 
-The person consents once in a browser; the connection then holds a refresh token, and the signer renews the access token whenever it is about to expire or the API rejects it. Two declarations work together: `setOAuth` drives `runline auth <plugin>`, which runs the consent and stores the tokens, and `setCredential` says how requests are signed and renewed.
+The person consents once in a browser; the connection then holds a refresh token, and the signer renews the access token whenever it is about to expire or the API rejects it. Two declarations work together: `setOAuth` drives `codemode auth <plugin>`, which runs the consent and stores the tokens, and `setCredential` says how requests are signed and renewed.
 
 <!-- check: {"clientId": "c-1", "clientSecret": "s-1", "refreshToken": "r-1"} -->
 ```typescript
@@ -236,8 +236,8 @@ import {
   configChoice,
   credentialJson,
   grantSchema,
-  type RunlinePluginAPI,
-} from "runline";
+  type CodemodePluginAPI,
+} from "@shiftlabs/codemode";
 import * as t from "typebox";
 
 const SCOPES = ["contacts.read", "contacts.write"];
@@ -282,7 +282,7 @@ const credential: CredentialDeclaration = (config) => {
   };
 };
 
-export default function acme(rl: RunlinePluginAPI) {
+export default function acme(rl: CodemodePluginAPI) {
   rl.setName("acme");
   rl.setVersion("1.0.0");
   rl.setCredential(credential);
@@ -313,8 +313,8 @@ export default function acme(rl: RunlinePluginAPI) {
 
 ```bash
 export ACME_CLIENT_ID=… ACME_CLIENT_SECRET=…
-runline auth acme        # opens the browser, stores the tokens in a connection
-runline exec 'return await acme.contact.list({})'
+codemode auth acme        # opens the browser, stores the tokens in a connection
+codemode exec 'return await acme.contact.list({})'
 ```
 
 - `schema: grantSchema` and `field: "grant"` are the stored shape every OAuth method uses: one revisioned grant. You never read it.
@@ -322,7 +322,7 @@ runline exec 'return await acme.contact.list({})'
 - `clientAuthentication` is how the token endpoint wants the client: `client_secret_post` (form fields), `client_secret_basic` (Basic auth), `client_id` (the id alone), `client_id_basic` (a public client: Basic with an empty secret), or `none`. See the [token endpoint fields](credentials-reference.md#token-endpoints) for JSON encodings, envelopes and provider-specific parameters.
 - A provider whose rejection is a `403`, not a `401`, declares `rejectionStatus: 403`.
 - `setOAuth` takes `publicClient: true` (PKCE, no secret), `redirectUri` for a provider that only accepts a loopback URI it published, and `grant` when several plugins share one consent (as every Google plugin does). For a provider whose token request needs more than a form post, give `setOAuth({ protocol: definition, scopes })` the same `OAuth2Definition` instead of `authUrl` and `tokenUrl`.
-- A renewal that the provider refuses because the grant is dead (`invalid_grant`) is `reconnect_required`: run `runline auth` again. Any other refusal of the token request is `provider_rejected`, with the provider's status: usually the client itself (its secret, its redirect URI).
+- A renewal that the provider refuses because the grant is dead (`invalid_grant`) is `reconnect_required`: run `codemode auth` again. Any other refusal of the token request is `provider_rejected`, with the provider's status: usually the client itself (its secret, its redirect URI).
 
 ### OAuth without a person
 
@@ -386,7 +386,7 @@ Declare AWS credentials with `awsCredential`, and one target for each service an
 
 <!-- check: {"accessKeyId": "AKIAEXAMPLE", "secretAccessKey": "s-1", "region": "eu-west-1"} -->
 ```typescript
-import { awsCredential, awsJson, awsRegion, awsTarget } from "runline";
+import { awsCredential, awsJson, awsRegion, awsTarget } from "@shiftlabs/codemode";
 
 const credential = awsCredential({
   id: "aws",
@@ -410,7 +410,7 @@ The connection holds `accessKeyId`, `secretAccessKey` and, for a session's key, 
 
 | Config | Effect |
 |---|---|
-| `roleArn` | The key only assumes this role through STS; requests sign with the role's sessions, renewed five minutes before they expire. `roleSessionName` (default `runline`), `roleExternalId`, `roleDurationSeconds` (900 to 43200) shape the session. |
+| `roleArn` | The key only assumes this role through STS; requests sign with the role's sessions, renewed five minutes before they expire. `roleSessionName` (default `codemode`), `roleExternalId`, `roleDurationSeconds` (900 to 43200) shape the session. |
 | `stsRegion`, else `region`, else `us-east-1` | Where sessions are requested. |
 | `awsProfile` | Sign with an AWS CLI profile's key instead of a stored one (an SSO login), through `aws configure export-credentials`. Local signing only; a host ignores it. A profile with no login is `reconnect_required`: run `aws sso login`. |
 
@@ -422,7 +422,7 @@ Use a cookie declaration for a web app that has no API and keeps its session in 
 
 <!-- check: {"username": "me@acme.example", "password": "pw-1"} -->
 ```typescript
-import { type CredentialDeclaration, cookieSessionSchema } from "runline";
+import { type CredentialDeclaration, cookieSessionSchema } from "@shiftlabs/codemode";
 
 const credential: CredentialDeclaration = (config) => ({
   type: {
@@ -508,15 +508,15 @@ Anything the credential layer itself refuses is an `AuthError` with a `code`. Se
 Add a connection and call an action to check a declaration end to end:
 
 ```bash
-runline connection add orders --plugin orders --set apiKey=$ORDERS_API_KEY
-runline exec 'return await orders.list({ orgId: "acme" })'
-runline actions --json   # loaded actions and schemas; loader errors on stderr
+codemode connection add orders --plugin orders --set apiKey=$ORDERS_API_KEY
+codemode exec 'return await orders.list({ orgId: "acme" })'
+codemode actions --json   # loaded actions and schemas; loader errors on stderr
 ```
 
 A declaration error shows up on the first request, as `invalid_definition`. To check one without a request, register its type:
 
 ```typescript
-import { CredentialRegistry } from "runline";
+import { CredentialRegistry } from "@shiftlabs/codemode";
 new CredentialRegistry().register(credential({ apiKey: "x" }).type); // throws invalid_definition
 ```
 

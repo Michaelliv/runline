@@ -1,12 +1,12 @@
 {
-  "name": "runline-monorepo",
+  "name": "codemode-monorepo",
   "private": true,
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "build": "bun --filter runline build && bun --filter pi-runline build",
+    "build": "bun --filter @shiftlabs/codemode build",
     "test": "bun run --filter '*' test",
     "check": "bunx @biomejs/biome check . && bun run lint:access",
     "lint:access": "bun scripts/lint-plugin-access.ts",

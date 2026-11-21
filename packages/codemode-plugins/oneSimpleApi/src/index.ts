@@ -1,0 +1,251 @@
+import {
+  type ActionContext,
+  credentialJson,
+  type CodemodePluginAPI,
+} from "@shiftlabs/codemode";
+import { oneSimpleApiCredential } from "./credentials.js";
+
+function apiRequest(
+  ctx: ActionContext,
+  path: string,
+  qs: Record<string, unknown> = {},
+): Promise<unknown> {
+  return credentialJson(ctx, oneSimpleApiCredential, "oneSimpleApi", {
+    target: "api",
+    path,
+    query: { output: "json", ...qs },
+  });
+}
+
+export default function oneSimpleApi(rl: CodemodePluginAPI) {
+  rl.setName("oneSimpleApi");
+  rl.setVersion("0.1.0");
+  rl.setCredential(oneSimpleApiCredential);
+
+  rl.setConnectionSchema({
+    apiToken: {
+      type: "string",
+      required: true,
+      description: "OneSimpleAPI token",
+      env: "ONE_SIMPLE_API_TOKEN",
+    },
+  });
+
+  // ── Website ─────────────────────────────────────────
+
+  rl.registerAction("website.pdf", {
+    access: "write",
+    description: "Generate a PDF from a webpage (returns URL to the PDF)",
+    inputSchema: {
+      url: { type: "string", required: true, description: "Webpage URL" },
+      page: {
+        type: "string",
+        required: false,
+        description: "Page size: A0-A6, Letter, Legal, Tabloid, Ledger",
+      },
+      force: {
+        type: "boolean",
+        required: false,
+        description: "Force refresh (default false)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const qs: Record<string, unknown> = { url: p.url };
+      if (p.page) qs.page = p.page;
+      qs.force = p.force ? "yes" : "no";
+      return apiRequest(ctx, "pdf", qs);
+    },
+  });
+
+  rl.registerAction("website.screenshot", {
+    access: "write",
+    description: "Take a screenshot of a webpage (returns URL to the image)",
+    inputSchema: {
+      url: { type: "string", required: true, description: "Webpage URL" },
+      screen: {
+        type: "string",
+        required: false,
+        description:
+          "Screen size: phone, phone-landscape, tablet, tablet-landscape, retina",
+      },
+      fullpage: {
+        type: "boolean",
+        required: false,
+        description: "Capture full page (default false)",
+      },
+      force: {
+        type: "boolean",
+        required: false,
+        description: "Force refresh (default false)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const qs: Record<string, unknown> = { url: p.url };
+      if (p.screen) qs.screen = p.screen;
+      qs.fullpage = p.fullpage ? "yes" : "no";
+      qs.force = p.force ? "yes" : "no";
+      return apiRequest(ctx, "screenshot", qs);
+    },
+  });
+
+  rl.registerAction("website.seo", {
+    access: "read",
+    description: "Get SEO information from a webpage",
+    inputSchema: {
+      url: { type: "string", required: true, description: "Webpage URL" },
+      headers: {
+        type: "boolean",
+        required: false,
+        description: "Include response headers (default false)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const qs: Record<string, unknown> = { url: p.url };
+      if (p.headers) qs.headers = "yes";
+      return apiRequest(ctx, "page_info", qs);
+    },
+  });
+
+  // ── Social Profile ──────────────────────────────────
+
+  rl.registerAction("socialProfile.instagram", {
+    access: "read",
+    description: "Get details about an Instagram profile",
+    inputSchema: {
+      profile: {
+        type: "string",
+        required: true,
+        description: "Instagram profile name",
+      },
+    },
+    async execute(input, ctx) {
+      const { profile } = input as Record<string, unknown>;
+      return apiRequest(ctx, "instagram_profile", { profile });
+    },
+  });
+
+  rl.registerAction("socialProfile.spotify", {
+    access: "read",
+    description: "Get details about a Spotify artist",
+    inputSchema: {
+      profile: {
+        type: "string",
+        required: true,
+        description: "Spotify artist name",
+      },
+    },
+    async execute(input, ctx) {
+      const { profile } = input as Record<string, unknown>;
+      return apiRequest(ctx, "spotify_profile", { profile });
+    },
+  });
+
+  // ── Information ─────────────────────────────────────
+
+  rl.registerAction("information.exchangeRate", {
+    access: "read",
+    description: "Convert a value between currencies",
+    inputSchema: {
+      value: {
+        type: "string",
+        required: true,
+        description: "Value to convert",
+      },
+      fromCurrency: {
+        type: "string",
+        required: true,
+        description: "Source currency (e.g. USD)",
+      },
+      toCurrency: {
+        type: "string",
+        required: true,
+        description: "Target currency (e.g. EUR)",
+      },
+    },
+    async execute(input, ctx) {
+      const { value, fromCurrency, toCurrency } = input as Record<
+        string,
+        unknown
+      >;
+      return apiRequest(ctx, "exchange_rate", {
+        from_value: value,
+        from_currency: fromCurrency,
+        to_currency: toCurrency,
+      });
+    },
+  });
+
+  rl.registerAction("information.imageMetadata", {
+    access: "read",
+    description: "Get metadata from an image URL",
+    inputSchema: {
+      url: { type: "string", required: true, description: "Image URL" },
+    },
+    async execute(input, ctx) {
+      const { url } = input as Record<string, unknown>;
+      return apiRequest(ctx, "image_info", { url, raw: true });
+    },
+  });
+
+  // ── Utility ─────────────────────────────────────────
+
+  rl.registerAction("utility.validateEmail", {
+    access: "read",
+    description: "Validate an email address",
+    inputSchema: {
+      email: {
+        type: "string",
+        required: true,
+        description: "Email address to validate",
+      },
+    },
+    async execute(input, ctx) {
+      const { email } = input as Record<string, unknown>;
+      return apiRequest(ctx, "email", { email });
+    },
+  });
+
+  rl.registerAction("utility.expandUrl", {
+    access: "read",
+    description: "Expand a shortened URL",
+    inputSchema: {
+      url: { type: "string", required: true, description: "Shortened URL" },
+    },
+    async execute(input, ctx) {
+      const { url } = input as Record<string, unknown>;
+      return apiRequest(ctx, "unshorten", { url });
+    },
+  });
+
+  rl.registerAction("utility.qrCode", {
+    access: "write",
+    description: "Generate a QR code (returns URL to the image)",
+    inputSchema: {
+      message: {
+        type: "string",
+        required: true,
+        description: "Content for the QR code (URL, text, etc.)",
+      },
+      size: {
+        type: "string",
+        required: false,
+        description: "Size: Small, Medium, Large",
+      },
+      format: {
+        type: "string",
+        required: false,
+        description: "Format: PNG or SVG",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const qs: Record<string, unknown> = { message: p.message };
+      if (p.size) qs.size = p.size;
+      if (p.format) qs.format = p.format;
+      return apiRequest(ctx, "qr_code", qs);
+    },
+  });
+}

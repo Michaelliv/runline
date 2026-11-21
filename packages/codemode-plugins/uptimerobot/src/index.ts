@@ -1,0 +1,430 @@
+import {
+  type ActionContext,
+  credentialJson,
+  type CodemodePluginAPI,
+} from "@shiftlabs/codemode";
+import { uptimerobotCredential } from "./credentials.js";
+
+/** An UptimeRobot form call; an answer whose stat is not "ok" is a failure. */
+async function apiRequest(
+  ctx: ActionContext,
+  endpoint: string,
+  body: Record<string, unknown> = {},
+): Promise<unknown> {
+  const data = await credentialJson<Record<string, unknown>>(
+    ctx,
+    uptimerobotCredential,
+    "uptimerobot",
+    { target: "api", path: endpoint, method: "POST", form: body },
+  );
+  if (data.stat !== "ok")
+    throw new Error(`UptimeRobot error: ${JSON.stringify(data)}`);
+  return data;
+}
+
+export default function uptimerobot(rl: CodemodePluginAPI) {
+  rl.setName("uptimerobot");
+  rl.setVersion("0.1.0");
+  rl.setCredential(uptimerobotCredential);
+
+  rl.setConnectionSchema({
+    apiKey: {
+      type: "string",
+      required: true,
+      description: "UptimeRobot API key",
+      env: "UPTIMEROBOT_API_KEY",
+    },
+  });
+
+  // ── Account ─────────────────────────────────────────
+
+  rl.registerAction("account.get", {
+    access: "read",
+    description: "Get account details",
+    inputSchema: {},
+    async execute(_input, ctx) {
+      const data = (await apiRequest(ctx, "getAccountDetails")) as Record<
+        string,
+        unknown
+      >;
+      return data.account;
+    },
+  });
+
+  // ── Monitor ─────────────────────────────────────────
+
+  rl.registerAction("monitor.create", {
+    access: "write",
+    description: "Create a monitor",
+    inputSchema: {
+      friendlyName: { type: "string", required: true },
+      url: { type: "string", required: true },
+      type: {
+        type: "number",
+        required: true,
+        description: "1=HTTP(s), 2=Keyword, 3=Ping, 4=Port, 5=Heartbeat",
+      },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "newMonitor", {
+        friendly_name: p.friendlyName,
+        url: p.url,
+        type: p.type,
+      })) as Record<string, unknown>;
+      return data.monitor;
+    },
+  });
+
+  rl.registerAction("monitor.get", {
+    access: "read",
+    description: "Get a monitor by ID",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const data = (await apiRequest(ctx, "getMonitors", {
+        monitors: (input as Record<string, unknown>).id,
+      })) as Record<string, unknown>;
+      return data.monitors;
+    },
+  });
+
+  rl.registerAction("monitor.list", {
+    access: "read",
+    description: "List monitors",
+    inputSchema: { limit: { type: "number", required: false } },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const body: Record<string, unknown> = {};
+      if (p.limit) body.limit = p.limit;
+      const data = (await apiRequest(ctx, "getMonitors", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.monitors;
+    },
+  });
+
+  rl.registerAction("monitor.update", {
+    access: "write",
+    description: "Update a monitor",
+    inputSchema: {
+      id: { type: "string", required: true },
+      friendlyName: { type: "string", required: false },
+      url: { type: "string", required: false },
+      type: { type: "number", required: false },
+    },
+    async execute(input, ctx) {
+      const { id, ...fields } = input as Record<string, unknown>;
+      const body: Record<string, unknown> = { id };
+      if (fields.friendlyName) body.friendly_name = fields.friendlyName;
+      if (fields.url) body.url = fields.url;
+      if (fields.type) body.type = fields.type;
+      const data = (await apiRequest(ctx, "editMonitor", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.monitor;
+    },
+  });
+
+  rl.registerAction("monitor.delete", {
+    access: "write",
+    description: "Delete a monitor",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const data = (await apiRequest(ctx, "deleteMonitor", {
+        id: (input as Record<string, unknown>).id,
+      })) as Record<string, unknown>;
+      return data.monitor;
+    },
+  });
+
+  rl.registerAction("monitor.reset", {
+    access: "write",
+    description: "Reset a monitor's stats",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const data = (await apiRequest(ctx, "resetMonitor", {
+        id: (input as Record<string, unknown>).id,
+      })) as Record<string, unknown>;
+      return data.monitor;
+    },
+  });
+
+  // ── Alert Contact ───────────────────────────────────
+
+  rl.registerAction("alertContact.create", {
+    access: "write",
+    description: "Create an alert contact",
+    inputSchema: {
+      friendlyName: { type: "string", required: true },
+      value: { type: "string", required: true, description: "Email or phone" },
+      type: {
+        type: "number",
+        required: true,
+        description: "1=SMS, 2=Email, 3=Twitter, 5=Pushbullet, 11=Slack",
+      },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "newAlertContact", {
+        friendly_name: p.friendlyName,
+        value: p.value,
+        type: p.type,
+      })) as Record<string, unknown>;
+      return data.alertcontact;
+    },
+  });
+
+  rl.registerAction("alertContact.get", {
+    access: "read",
+    description: "Get an alert contact by ID",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const data = (await apiRequest(ctx, "getAlertContacts", {
+        alert_contacts: (input as Record<string, unknown>).id,
+      })) as Record<string, unknown>;
+      return data.alert_contacts;
+    },
+  });
+
+  rl.registerAction("alertContact.list", {
+    access: "read",
+    description: "List alert contacts",
+    inputSchema: { limit: { type: "number", required: false } },
+    async execute(input, ctx) {
+      const body: Record<string, unknown> = {};
+      if ((input as Record<string, unknown>)?.limit)
+        body.limit = (input as Record<string, unknown>).limit;
+      const data = (await apiRequest(ctx, "getAlertContacts", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.alert_contacts;
+    },
+  });
+
+  rl.registerAction("alertContact.update", {
+    access: "write",
+    description: "Update an alert contact",
+    inputSchema: {
+      id: { type: "string", required: true },
+      friendlyName: { type: "string", required: false },
+      value: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const { id, ...fields } = input as Record<string, unknown>;
+      const body: Record<string, unknown> = { id };
+      if (fields.friendlyName) body.friendly_name = fields.friendlyName;
+      if (fields.value) body.value = fields.value;
+      const data = (await apiRequest(ctx, "editAlertContact", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.alert_contact;
+    },
+  });
+
+  rl.registerAction("alertContact.delete", {
+    access: "write",
+    description: "Delete an alert contact",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const data = (await apiRequest(ctx, "deleteAlertContact", {
+        id: (input as Record<string, unknown>).id,
+      })) as Record<string, unknown>;
+      return data.alert_contact;
+    },
+  });
+
+  // ── Maintenance Window ──────────────────────────────
+
+  rl.registerAction("maintenanceWindow.create", {
+    access: "write",
+    description: "Create a maintenance window",
+    inputSchema: {
+      friendlyName: { type: "string", required: true },
+      type: {
+        type: "number",
+        required: true,
+        description: "1=Once, 2=Daily, 3=Weekly, 4=Monthly",
+      },
+      startTime: {
+        type: "string",
+        required: true,
+        description: "ISO datetime for once, HH:mm for recurring",
+      },
+      duration: {
+        type: "number",
+        required: true,
+        description: "Duration in minutes",
+      },
+      value: {
+        type: "number",
+        required: false,
+        description: "Day of week (1-7) or month (1-28) for weekly/monthly",
+      },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const body: Record<string, unknown> = {
+        friendly_name: p.friendlyName,
+        type: p.type,
+        start_time: p.startTime,
+        duration: p.duration,
+      };
+      if (p.value) body.value = p.value;
+      const data = (await apiRequest(ctx, "newMWindow", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.mwindow;
+    },
+  });
+
+  rl.registerAction("maintenanceWindow.get", {
+    access: "read",
+    description: "Get a maintenance window",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const data = (await apiRequest(ctx, "getMWindows", {
+        mwindows: (input as Record<string, unknown>).id,
+      })) as Record<string, unknown>;
+      return data.mwindows;
+    },
+  });
+
+  rl.registerAction("maintenanceWindow.list", {
+    access: "read",
+    description: "List maintenance windows",
+    inputSchema: { limit: { type: "number", required: false } },
+    async execute(input, ctx) {
+      const body: Record<string, unknown> = {};
+      if ((input as Record<string, unknown>)?.limit)
+        body.limit = (input as Record<string, unknown>).limit;
+      const data = (await apiRequest(ctx, "getMWindows", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.mwindows;
+    },
+  });
+
+  rl.registerAction("maintenanceWindow.update", {
+    access: "write",
+    description: "Update a maintenance window",
+    inputSchema: {
+      id: { type: "string", required: true },
+      friendlyName: { type: "string", required: false },
+      duration: { type: "number", required: false },
+      startTime: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const { id, ...fields } = input as Record<string, unknown>;
+      const body: Record<string, unknown> = { id };
+      if (fields.friendlyName) body.friendly_name = fields.friendlyName;
+      if (fields.duration) body.duration = fields.duration;
+      if (fields.startTime) body.start_time = fields.startTime;
+      const data = (await apiRequest(ctx, "editMWindow", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.mwindow;
+    },
+  });
+
+  rl.registerAction("maintenanceWindow.delete", {
+    access: "write",
+    description: "Delete a maintenance window",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(ctx, "deleteMWindow", {
+        id: (input as Record<string, unknown>).id,
+      });
+    },
+  });
+
+  // ── Public Status Page ──────────────────────────────
+
+  rl.registerAction("publicStatusPage.create", {
+    access: "write",
+    description: "Create a public status page",
+    inputSchema: {
+      friendlyName: { type: "string", required: true },
+      monitors: {
+        type: "string",
+        required: true,
+        description: "Monitor IDs (comma-separated or 0 for all)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const data = (await apiRequest(ctx, "newPSP", {
+        friendly_name: p.friendlyName,
+        monitors: p.monitors,
+      })) as Record<string, unknown>;
+      return data.psp;
+    },
+  });
+
+  rl.registerAction("publicStatusPage.get", {
+    access: "read",
+    description: "Get a public status page",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const data = (await apiRequest(ctx, "getPSPs", {
+        psps: (input as Record<string, unknown>).id,
+      })) as Record<string, unknown>;
+      return data.psps;
+    },
+  });
+
+  rl.registerAction("publicStatusPage.list", {
+    access: "read",
+    description: "List public status pages",
+    inputSchema: { limit: { type: "number", required: false } },
+    async execute(input, ctx) {
+      const body: Record<string, unknown> = {};
+      if ((input as Record<string, unknown>)?.limit)
+        body.limit = (input as Record<string, unknown>).limit;
+      const data = (await apiRequest(ctx, "getPSPs", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.psps;
+    },
+  });
+
+  rl.registerAction("publicStatusPage.update", {
+    access: "write",
+    description: "Update a public status page",
+    inputSchema: {
+      id: { type: "string", required: true },
+      friendlyName: { type: "string", required: false },
+      monitors: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const { id, ...fields } = input as Record<string, unknown>;
+      const body: Record<string, unknown> = { id };
+      if (fields.friendlyName) body.friendly_name = fields.friendlyName;
+      if (fields.monitors) body.monitors = fields.monitors;
+      const data = (await apiRequest(ctx, "editPSP", body)) as Record<
+        string,
+        unknown
+      >;
+      return data.psp;
+    },
+  });
+
+  rl.registerAction("publicStatusPage.delete", {
+    access: "write",
+    description: "Delete a public status page",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      const data = (await apiRequest(ctx, "deletePSP", {
+        id: (input as Record<string, unknown>).id,
+      })) as Record<string, unknown>;
+      return data.psp;
+    },
+  });
+}

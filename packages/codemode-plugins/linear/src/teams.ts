@@ -1,0 +1,201 @@
+import type { CodemodePluginAPI } from "@shiftlabs/codemode";
+import * as t from "typebox";
+import {
+  bindGetAction,
+  bindListAction,
+  gql,
+  requireUnscoped,
+  TEAM_FIELDS,
+  USER_FIELDS,
+  withScopedNote,
+} from "./shared.js";
+
+export function registerTeamActions(rl: CodemodePluginAPI) {
+  const listAction = bindListAction(rl);
+  const getAction = bindGetAction(rl);
+
+  listAction(
+    "team.list",
+    "List teams whose issues you can access.",
+    "teams",
+    "TeamFilter",
+    TEAM_FIELDS,
+  );
+  getAction("team.get", "Get a team by ID or key.", "team", TEAM_FIELDS);
+  rl.registerAction("team.create", {
+    access: "write",
+    description: withScopedNote(
+      "Create a team. Most settings have sensible defaults.",
+    ),
+    inputSchema: t.Object({
+      name: t.String({ description: "The name of the team" }),
+      key: t.Optional(
+        t.String({
+          description:
+            "The key of the team. If not given, the key will be generated based on the name",
+        }),
+      ),
+      description: t.Optional(
+        t.String({ description: "The description of the team" }),
+      ),
+      icon: t.Optional(t.String({ description: "The icon of the team" })),
+      color: t.Optional(
+        t.String({ description: "The color of the team (hex)" }),
+      ),
+      private: t.Optional(
+        t.Boolean({ description: "Whether the team is private" }),
+      ),
+      timezone: t.Optional(
+        t.String({ description: "The timezone of the team" }),
+      ),
+      cyclesEnabled: t.Optional(
+        t.Boolean({ description: "Whether the team uses cycles" }),
+      ),
+      cycleDuration: t.Optional(
+        t.Number({ description: "The duration of each cycle in weeks (Int)" }),
+      ),
+      cycleCooldownTime: t.Optional(
+        t.Number({
+          description: "The cooldown time after each cycle in weeks (Int)",
+        }),
+      ),
+      cycleStartDay: t.Optional(
+        t.Number({
+          description:
+            "The day of the week that a new cycle starts. 0=Sun..6=Sat (Float)",
+        }),
+      ),
+      upcomingCycleCount: t.Optional(
+        t.Number({ description: "How many upcoming cycles to create (Float)" }),
+      ),
+      issueEstimationType: t.Optional(
+        t.String({
+          description:
+            "The issue estimation type: notUsed | exponential | fibonacci | linear | tShirt",
+        }),
+      ),
+      triageEnabled: t.Optional(
+        t.Boolean({
+          description: "Whether triage mode is enabled for the team",
+        }),
+      ),
+      parentId: t.Optional(
+        t.String({ description: "The parent team ID (for sub-teams)" }),
+      ),
+      id: t.Optional(
+        t.String({
+          description:
+            "The identifier in UUID v4 format. If none is provided, the backend will generate one",
+        }),
+      ),
+      copySettingsFromTeamId: t.Optional(
+        t.String({ description: "The team id to copy settings from, if any" }),
+      ),
+    }),
+    async execute(input, ctx) {
+      requireUnscoped(ctx, "team.create");
+      const { copySettingsFromTeamId, ...fields } = input as Record<
+        string,
+        unknown
+      >;
+      const data = await gql(
+        ctx,
+        `mutation($input: TeamCreateInput!, $copySettingsFromTeamId: String) { teamCreate(input: $input, copySettingsFromTeamId: $copySettingsFromTeamId) { success team { ${TEAM_FIELDS} } } }`,
+        {
+          input: fields,
+          copySettingsFromTeamId: copySettingsFromTeamId ?? null,
+        },
+      );
+      return (data.teamCreate as Record<string, unknown>)?.team;
+    },
+  });
+  rl.registerAction("team.update", {
+    access: "write",
+    description: withScopedNote(
+      "Update a team. Requires team owner or workspace admin permissions.",
+    ),
+    inputSchema: t.Object({
+      id: t.String({ description: "The identifier of the team to update" }),
+      name: t.Optional(t.String({ description: "The name of the team" })),
+      key: t.Optional(t.String({ description: "The key of the team" })),
+      description: t.Optional(
+        t.String({ description: "The description of the team" }),
+      ),
+      icon: t.Optional(t.String({ description: "The icon of the team" })),
+      color: t.Optional(
+        t.String({ description: "The color of the team (hex)" }),
+      ),
+      private: t.Optional(
+        t.Boolean({ description: "Whether the team is private" }),
+      ),
+      timezone: t.Optional(
+        t.String({ description: "The timezone of the team" }),
+      ),
+      cyclesEnabled: t.Optional(
+        t.Boolean({ description: "Whether the team uses cycles" }),
+      ),
+      cycleDuration: t.Optional(
+        t.Number({ description: "The duration of each cycle in weeks (Int)" }),
+      ),
+      cycleCooldownTime: t.Optional(
+        t.Number({
+          description: "The cooldown time after each cycle in weeks (Int)",
+        }),
+      ),
+      cycleStartDay: t.Optional(
+        t.Number({
+          description:
+            "The day of the week that a new cycle starts. 0=Sun..6=Sat (Float)",
+        }),
+      ),
+      upcomingCycleCount: t.Optional(
+        t.Number({ description: "How many upcoming cycles to create (Float)" }),
+      ),
+      issueEstimationType: t.Optional(
+        t.String({
+          description:
+            "The issue estimation type: notUsed | exponential | fibonacci | linear | tShirt",
+        }),
+      ),
+      triageEnabled: t.Optional(
+        t.Boolean({
+          description: "Whether triage mode is enabled for the team",
+        }),
+      ),
+    }),
+    async execute(input, ctx) {
+      requireUnscoped(ctx, "team.update");
+      const { id, ...fields } = input as Record<string, unknown>;
+      const data = await gql(
+        ctx,
+        `mutation($id: String!, $input: TeamUpdateInput!) { teamUpdate(id: $id, input: $input) { success team { ${TEAM_FIELDS} } } }`,
+        { id, input: fields },
+      );
+      return (data.teamUpdate as Record<string, unknown>)?.team;
+    },
+  });
+  rl.registerAction("team.members", {
+    access: "read",
+    description:
+      "List members of a team. Same people surface as user.list, narrowed to one team.",
+    inputSchema: t.Object({
+      id: t.String({ description: "The identifier of the team" }),
+      limit: t.Optional(
+        t.Number({ description: "Max members to return (default 50)" }),
+      ),
+    }),
+    async execute(input, ctx) {
+      // Team membership is workspace metadata, like user.list: readable
+      // under a scoped connection (SHFT-1644).
+      const { id, limit } = input as { id: string; limit?: number };
+      const data = await gql(
+        ctx,
+        `query($id: String!, $first: Int) {
+          team(id: $id) { members(first: $first) { nodes { ${USER_FIELDS} } } }
+        }`,
+        { id, first: limit ?? 50 },
+      );
+      return (data.team as Record<string, unknown> | null)?.members;
+    },
+  });
+}

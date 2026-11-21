@@ -28,9 +28,9 @@
  */
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { loadPluginFromPath } from "../packages/runline/src/plugin/loader.ts";
+import { loadPluginFromPath } from "../packages/codemode/src/plugin/loader.ts";
 
-const PLUGINS_DIR = join(import.meta.dir, "../packages/runline-plugins");
+const PLUGINS_DIR = join(import.meta.dir, "../packages/codemode-plugins");
 
 const MUTATING_VERBS = new Set([
   "add",

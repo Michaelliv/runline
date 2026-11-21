@@ -1,0 +1,700 @@
+import {
+  type ActionContext,
+  credentialJson,
+  type HttpMethod,
+  pathSegment,
+  type CodemodePluginAPI,
+} from "@shiftlabs/codemode";
+import { trelloCredential } from "./credentials.js";
+
+function apiRequest(
+  ctx: ActionContext,
+  method: HttpMethod,
+  path: string,
+  body?: Record<string, unknown>,
+  query?: Record<string, unknown>,
+): Promise<unknown> {
+  return credentialJson(ctx, trelloCredential, "trello", {
+    target: "api",
+    path,
+    method,
+    query,
+    ...(body && Object.keys(body).length > 0 && method !== "GET"
+      ? { json: body }
+      : {}),
+  });
+}
+
+export default function trello(rl: CodemodePluginAPI) {
+  rl.setName("trello");
+  rl.setVersion("0.1.0");
+  rl.setCredential(trelloCredential);
+
+  rl.setConnectionSchema({
+    apiKey: {
+      type: "string",
+      required: true,
+      description: "Trello API key",
+      env: "TRELLO_API_KEY",
+    },
+    token: {
+      type: "string",
+      required: true,
+      description: "Trello API token",
+      env: "TRELLO_TOKEN",
+    },
+  });
+
+  // ── Board ───────────────────────────────────────────
+
+  rl.registerAction("board.create", {
+    access: "write",
+    description: "Create a board",
+    inputSchema: {
+      name: { type: "string", required: true },
+      description: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(ctx, "POST", "boards", {
+        name: p.name,
+        desc: p.description,
+      });
+    },
+  });
+
+  rl.registerAction("board.get", {
+    access: "read",
+    description: "Get a board by ID",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "GET",
+        `boards/${pathSegment((input as Record<string, unknown>).id)}`,
+      );
+    },
+  });
+
+  rl.registerAction("board.update", {
+    access: "write",
+    description: "Update a board",
+    inputSchema: {
+      id: { type: "string", required: true },
+      name: { type: "string", required: false },
+      description: { type: "string", required: false },
+      closed: { type: "boolean", required: false },
+    },
+    async execute(input, ctx) {
+      const { id, ...fields } = input as Record<string, unknown>;
+      const qs: Record<string, unknown> = {};
+      if (fields.name) qs.name = fields.name;
+      if (fields.description !== undefined) qs.desc = fields.description;
+      if (fields.closed !== undefined) qs.closed = fields.closed;
+      return apiRequest(ctx, "PUT", `boards/${pathSegment(id)}`, undefined, qs);
+    },
+  });
+
+  rl.registerAction("board.delete", {
+    access: "write",
+    description: "Delete a board",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `boards/${pathSegment((input as Record<string, unknown>).id)}`,
+      );
+    },
+  });
+
+  // ── Board Member ────────────────────────────────────
+
+  rl.registerAction("boardMember.list", {
+    access: "read",
+    description: "List members of a board",
+    inputSchema: {
+      boardId: { type: "string", required: true },
+      limit: { type: "number", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const data = (await apiRequest(
+        ctx,
+        "GET",
+        `boards/${pathSegment(p.boardId)}/members`,
+      )) as unknown[];
+      return p.limit ? data.slice(0, p.limit as number) : data;
+    },
+  });
+
+  rl.registerAction("boardMember.add", {
+    access: "write",
+    description: "Add a member to a board",
+    inputSchema: {
+      boardId: { type: "string", required: true },
+      memberId: { type: "string", required: true },
+      type: {
+        type: "string",
+        required: true,
+        description: "admin, normal, or observer",
+      },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "PUT",
+        `boards/${pathSegment(p.boardId)}/members/${pathSegment(p.memberId)}`,
+        undefined,
+        { type: p.type },
+      );
+    },
+  });
+
+  rl.registerAction("boardMember.remove", {
+    access: "write",
+    description: "Remove a member from a board",
+    inputSchema: {
+      boardId: { type: "string", required: true },
+      memberId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `boards/${pathSegment(p.boardId)}/members/${pathSegment(p.memberId)}`,
+      );
+    },
+  });
+
+  // ── Card ────────────────────────────────────────────
+
+  rl.registerAction("card.create", {
+    access: "write",
+    description: "Create a card",
+    inputSchema: {
+      listId: { type: "string", required: true },
+      name: { type: "string", required: true },
+      description: { type: "string", required: false },
+      due: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const body: Record<string, unknown> = { idList: p.listId, name: p.name };
+      if (p.description) body.desc = p.description;
+      if (p.due) body.due = p.due;
+      return apiRequest(ctx, "POST", "cards", body);
+    },
+  });
+
+  rl.registerAction("card.get", {
+    access: "read",
+    description: "Get a card by ID",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "GET",
+        `cards/${pathSegment((input as Record<string, unknown>).id)}`,
+      );
+    },
+  });
+
+  rl.registerAction("card.update", {
+    access: "write",
+    description: "Update a card",
+    inputSchema: {
+      id: { type: "string", required: true },
+      name: { type: "string", required: false },
+      description: { type: "string", required: false },
+      closed: { type: "boolean", required: false },
+      idList: { type: "string", required: false },
+      due: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const { id, ...fields } = input as Record<string, unknown>;
+      const qs: Record<string, unknown> = {};
+      if (fields.name) qs.name = fields.name;
+      if (fields.description !== undefined) qs.desc = fields.description;
+      if (fields.closed !== undefined) qs.closed = fields.closed;
+      if (fields.idList) qs.idList = fields.idList;
+      if (fields.due) qs.due = fields.due;
+      return apiRequest(ctx, "PUT", `cards/${pathSegment(id)}`, undefined, qs);
+    },
+  });
+
+  rl.registerAction("card.delete", {
+    access: "write",
+    description: "Delete a card",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `cards/${pathSegment((input as Record<string, unknown>).id)}`,
+      );
+    },
+  });
+
+  // ── Card Comment ────────────────────────────────────
+
+  rl.registerAction("cardComment.create", {
+    access: "write",
+    description: "Add a comment to a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      text: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "POST",
+        `cards/${pathSegment(p.cardId)}/actions/comments`,
+        { text: p.text },
+      );
+    },
+  });
+
+  rl.registerAction("cardComment.update", {
+    access: "write",
+    description: "Update a comment on a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+      text: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "PUT",
+        `cards/${pathSegment(p.cardId)}/actions/${pathSegment(p.commentId)}/comments`,
+        undefined,
+        { text: p.text },
+      );
+    },
+  });
+
+  rl.registerAction("cardComment.delete", {
+    access: "write",
+    description: "Delete a comment from a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      commentId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `cards/${pathSegment(p.cardId)}/actions/${pathSegment(p.commentId)}/comments`,
+      );
+    },
+  });
+
+  // ── List ────────────────────────────────────────────
+
+  rl.registerAction("list.create", {
+    access: "write",
+    description: "Create a list on a board",
+    inputSchema: {
+      boardId: { type: "string", required: true },
+      name: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(ctx, "POST", "lists", {
+        idBoard: p.boardId,
+        name: p.name,
+      });
+    },
+  });
+
+  rl.registerAction("list.get", {
+    access: "read",
+    description: "Get a list by ID",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "GET",
+        `lists/${pathSegment((input as Record<string, unknown>).id)}`,
+      );
+    },
+  });
+
+  rl.registerAction("list.listAll", {
+    access: "read",
+    description: "List all lists on a board",
+    inputSchema: {
+      boardId: { type: "string", required: true },
+      limit: { type: "number", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const data = (await apiRequest(
+        ctx,
+        "GET",
+        `boards/${pathSegment(p.boardId)}/lists`,
+      )) as unknown[];
+      return p.limit ? data.slice(0, p.limit as number) : data;
+    },
+  });
+
+  rl.registerAction("list.getCards", {
+    access: "read",
+    description: "Get cards in a list",
+    inputSchema: {
+      listId: { type: "string", required: true },
+      limit: { type: "number", required: false },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as Record<string, unknown>;
+      const data = (await apiRequest(
+        ctx,
+        "GET",
+        `lists/${pathSegment(p.listId)}/cards`,
+      )) as unknown[];
+      return p.limit ? data.slice(0, p.limit as number) : data;
+    },
+  });
+
+  rl.registerAction("list.update", {
+    access: "write",
+    description: "Update a list",
+    inputSchema: {
+      id: { type: "string", required: true },
+      name: { type: "string", required: false },
+      closed: { type: "boolean", required: false },
+    },
+    async execute(input, ctx) {
+      const { id, ...fields } = input as Record<string, unknown>;
+      const qs: Record<string, unknown> = {};
+      if (fields.name) qs.name = fields.name;
+      if (fields.closed !== undefined) qs.closed = fields.closed;
+      return apiRequest(ctx, "PUT", `lists/${pathSegment(id)}`, undefined, qs);
+    },
+  });
+
+  // ── Attachment ──────────────────────────────────────
+
+  rl.registerAction("attachment.create", {
+    access: "write",
+    description: "Add a URL attachment to a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      url: { type: "string", required: true },
+      name: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const body: Record<string, unknown> = { url: p.url };
+      if (p.name) body.name = p.name;
+      return apiRequest(
+        ctx,
+        "POST",
+        `cards/${pathSegment(p.cardId)}/attachments`,
+        body,
+      );
+    },
+  });
+
+  rl.registerAction("attachment.get", {
+    access: "read",
+    description: "Get an attachment",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      id: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "GET",
+        `cards/${pathSegment(p.cardId)}/attachments/${pathSegment(p.id)}`,
+      );
+    },
+  });
+
+  rl.registerAction("attachment.list", {
+    access: "read",
+    description: "List attachments on a card",
+    inputSchema: { cardId: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "GET",
+        `cards/${pathSegment((input as Record<string, unknown>).cardId)}/attachments`,
+      );
+    },
+  });
+
+  rl.registerAction("attachment.delete", {
+    access: "write",
+    description: "Delete an attachment from a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      id: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `cards/${pathSegment(p.cardId)}/attachments/${pathSegment(p.id)}`,
+      );
+    },
+  });
+
+  // ── Checklist ───────────────────────────────────────
+
+  rl.registerAction("checklist.create", {
+    access: "write",
+    description: "Create a checklist on a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      name: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "POST",
+        `cards/${pathSegment(p.cardId)}/checklists`,
+        {
+          name: p.name,
+        },
+      );
+    },
+  });
+
+  rl.registerAction("checklist.get", {
+    access: "read",
+    description: "Get a checklist by ID",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "GET",
+        `checklists/${pathSegment((input as Record<string, unknown>).id)}`,
+      );
+    },
+  });
+
+  rl.registerAction("checklist.list", {
+    access: "read",
+    description: "List checklists on a card",
+    inputSchema: { cardId: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "GET",
+        `cards/${pathSegment((input as Record<string, unknown>).cardId)}/checklists`,
+      );
+    },
+  });
+
+  rl.registerAction("checklist.delete", {
+    access: "write",
+    description: "Delete a checklist from a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      id: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `cards/${pathSegment(p.cardId)}/checklists/${pathSegment(p.id)}`,
+      );
+    },
+  });
+
+  rl.registerAction("checklist.createItem", {
+    access: "write",
+    description: "Create a check item in a checklist",
+    inputSchema: {
+      checklistId: { type: "string", required: true },
+      name: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "POST",
+        `checklists/${pathSegment(p.checklistId)}/checkItems`,
+        { name: p.name },
+      );
+    },
+  });
+
+  rl.registerAction("checklist.updateItem", {
+    access: "write",
+    description: "Update a check item on a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      checkItemId: { type: "string", required: true },
+      state: {
+        type: "string",
+        required: false,
+        description: "complete or incomplete",
+      },
+      name: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      const qs: Record<string, unknown> = {};
+      if (p.state) qs.state = p.state;
+      if (p.name) qs.name = p.name;
+      return apiRequest(
+        ctx,
+        "PUT",
+        `cards/${pathSegment(p.cardId)}/checkItem/${pathSegment(p.checkItemId)}`,
+        undefined,
+        qs,
+      );
+    },
+  });
+
+  rl.registerAction("checklist.deleteItem", {
+    access: "write",
+    description: "Delete a check item from a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      checkItemId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `cards/${pathSegment(p.cardId)}/checkItem/${pathSegment(p.checkItemId)}`,
+      );
+    },
+  });
+
+  // ── Label ───────────────────────────────────────────
+
+  rl.registerAction("label.create", {
+    access: "write",
+    description: "Create a label on a board",
+    inputSchema: {
+      boardId: { type: "string", required: true },
+      name: { type: "string", required: true },
+      color: {
+        type: "string",
+        required: true,
+        description:
+          "green, yellow, orange, red, purple, blue, sky, lime, pink, black, null",
+      },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(ctx, "POST", "labels", {
+        idBoard: p.boardId,
+        name: p.name,
+        color: p.color,
+      });
+    },
+  });
+
+  rl.registerAction("label.get", {
+    access: "read",
+    description: "Get a label by ID",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "GET",
+        `labels/${pathSegment((input as Record<string, unknown>).id)}`,
+      );
+    },
+  });
+
+  rl.registerAction("label.list", {
+    access: "read",
+    description: "List labels on a board",
+    inputSchema: { boardId: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "GET",
+        `board/${pathSegment((input as Record<string, unknown>).boardId)}/labels`,
+      );
+    },
+  });
+
+  rl.registerAction("label.update", {
+    access: "write",
+    description: "Update a label",
+    inputSchema: {
+      id: { type: "string", required: true },
+      name: { type: "string", required: false },
+      color: { type: "string", required: false },
+    },
+    async execute(input, ctx) {
+      const { id, ...fields } = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "PUT",
+        `labels/${pathSegment(id)}`,
+        undefined,
+        fields,
+      );
+    },
+  });
+
+  rl.registerAction("label.delete", {
+    access: "write",
+    description: "Delete a label",
+    inputSchema: { id: { type: "string", required: true } },
+    async execute(input, ctx) {
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `labels/${pathSegment((input as Record<string, unknown>).id)}`,
+      );
+    },
+  });
+
+  rl.registerAction("label.addToCard", {
+    access: "write",
+    description: "Add a label to a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      labelId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "POST",
+        `cards/${pathSegment(p.cardId)}/idLabels`,
+        {
+          value: p.labelId,
+        },
+      );
+    },
+  });
+
+  rl.registerAction("label.removeFromCard", {
+    access: "write",
+    description: "Remove a label from a card",
+    inputSchema: {
+      cardId: { type: "string", required: true },
+      labelId: { type: "string", required: true },
+    },
+    async execute(input, ctx) {
+      const p = input as Record<string, unknown>;
+      return apiRequest(
+        ctx,
+        "DELETE",
+        `cards/${pathSegment(p.cardId)}/idLabels/${pathSegment(p.labelId)}`,
+      );
+    },
+  });
+}

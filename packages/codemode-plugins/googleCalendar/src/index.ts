@@ -1,0 +1,1119 @@
+/**
+ * Google Calendar plugin for codemode.
+ *
+ * Authentication mirrors the gmail plugin: the Google grant's OAuth2
+ * user flow, seeded once via `codemode auth googleCalendar`, with the
+ * access token refreshed lazily (60 s skew) and cached on the
+ * connection as the grant's.
+ *
+ * Surface area:
+ *
+ *   calendar.list / calendar.get / calendar.availability   (freeBusy)
+ *   calendar.listColors
+ *
+ *   event.create / event.get / event.list / event.update /
+ *   event.delete / event.move / event.listInstances
+ *
+ * RRULE handling: callers can either supply a full `rrule` string
+ * (e.g. `FREQ=WEEKLY;INTERVAL=2;COUNT=5`) or the decomposed
+ * `repeatFrequency` / `repeatHowManyTimes` / `repeatUntil` fields,
+ * and the plugin assembles a single `RRULE:…` line. `event.get`
+ * and `event.list` attach a `nextOccurrence` field to recurring
+ * events, computed locally via the `rrule` package so we don't
+ * need a second API round-trip. Callers who want Google to expand
+ * the series server-side can pass `singleEvents=true` on list, or
+ * call `event.listInstances`.
+ */
+
+import { randomUUID } from "node:crypto";
+import {
+  type ActionContext,
+  type CodemodePluginAPI,
+  pathSegment,
+} from "@shiftlabs/codemode";
+import rrulePkg from "rrule";
+import * as t from "typebox";
+import {
+  googleCredential,
+  googleJsonRequest,
+  googleListAll,
+  googleOAuth,
+} from "../../_shared/googleAuth.js";
+import {
+  googleConnection,
+  Id,
+  NonEmptyString,
+  NonEmptyStringArray,
+  optionalBoolean,
+  optionalString,
+  PositiveInteger,
+  StringOrStringArray,
+} from "../../_shared/googleSchemas.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  strictObject,
+  stringEnum,
+} from "../../_shared/schemas.js";
+
+// `rrule` ships as CJS; named imports fail under Node ESM.
+const { RRule } = rrulePkg as unknown as {
+  RRule: typeof import("rrule").RRule;
+};
+
+// ─── Types ───────────────────────────────────────────────────────
+
+type Ctx = ActionContext;
+
+interface EventDateTime {
+  dateTime?: string;
+  date?: string;
+  timeZone?: string;
+}
+
+interface Reminder {
+  method: "email" | "popup";
+  minutes: number;
+}
+
+interface ConferenceCreateRequest {
+  createRequest: {
+    requestId: string;
+    conferenceSolutionKey: { type: string };
+  };
+}
+
+type EventBody = {
+  id?: string;
+  summary?: string;
+  description?: string;
+  location?: string;
+  colorId?: string;
+  start?: EventDateTime;
+  end?: EventDateTime;
+  attendees?: Array<{ email: string }>;
+  recurrence?: string[];
+  reminders?: { useDefault: boolean; overrides?: Reminder[] };
+  guestsCanInviteOthers?: boolean;
+  guestsCanModify?: boolean;
+  guestsCanSeeOtherGuests?: boolean;
+  transparency?: string;
+  visibility?: string;
+  conferenceData?: ConferenceCreateRequest;
+};
+
+// ─── Request ─────────────────────────────────────────────────────
+
+const API_BASE = "https://www.googleapis.com/calendar/v3";
+
+async function calRequest(
+  ctx: Ctx,
+  method: string,
+  path: string,
+  body?: Record<string, unknown>,
+  qs?: Record<string, unknown>,
+): Promise<unknown> {
+  return googleJsonRequest(
+    ctx,
+    "googleCalendar",
+    SCOPES,
+    method,
+    `${API_BASE}${path}`,
+    body,
+    qs,
+  );
+}
+
+function paginateAll(
+  ctx: Ctx,
+  path: string,
+  key: string,
+  qs: Record<string, unknown>,
+): Promise<Record<string, unknown>[]> {
+  return googleListAll(
+    (query) => calRequest(ctx, "GET", path, undefined, query),
+    key,
+    { ...qs, maxResults: qs.maxResults ?? 100 },
+  );
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────
+
+function encodeCalendarId(id: string): string {
+  // Calendar IDs are email-shaped. Decoding first tolerates
+  // already-encoded input from upstream callers.
+  return pathSegment(decodeURIComponent(id));
+}
+
+/** Attendees from addresses, each of which may itself be a comma-separated list. */
+function splitAttendees(input: string | string[]): Array<{ email: string }> {
+  return (typeof input === "string" ? [input] : input)
+    .flatMap((s) => s.split(","))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((email) => ({ email }));
+}
+
+function buildRecurrence(
+  p: t.Static<t.TObject<typeof recurrenceFields>>,
+): string[] | undefined {
+  if (p.rrule) {
+    const s = p.rrule.startsWith("RRULE:") ? p.rrule : `RRULE:${p.rrule}`;
+    return [s];
+  }
+  const parts: string[] = [];
+  if (p.repeatFrequency) {
+    parts.push(`FREQ=${p.repeatFrequency.toUpperCase()}`);
+  }
+  if (p.repeatHowManyTimes !== undefined) {
+    parts.push(`COUNT=${p.repeatHowManyTimes}`);
+  }
+  if (p.repeatUntil) {
+    // Google wants UTC basic-format: YYYYMMDDTHHMMSSZ.
+    const d = new Date(p.repeatUntil);
+    if (Number.isNaN(d.getTime())) {
+      throw new Error(`googleCalendar: invalid repeatUntil "${p.repeatUntil}"`);
+    }
+    const iso = d.toISOString(); // 2026-01-02T03:04:05.000Z
+    const compact = iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    parts.push(`UNTIL=${compact}`);
+  }
+  if (parts.length === 0) return undefined;
+  return [`RRULE:${parts.join(";")}`];
+}
+
+function buildEventTimes(
+  start: string | undefined,
+  end: string | undefined,
+  allDay: boolean,
+  timeZone?: string,
+): { start: EventDateTime; end: EventDateTime } {
+  if (allDay) {
+    const fmt = (v: string | undefined) => {
+      const d = new Date(String(v));
+      if (Number.isNaN(d.getTime()))
+        throw new Error(`googleCalendar: invalid date "${v}"`);
+      return d.toISOString().slice(0, 10);
+    };
+    return { start: { date: fmt(start) }, end: { date: fmt(end) } };
+  }
+  const toISO = (v: string | undefined) => {
+    const d = new Date(String(v));
+    if (Number.isNaN(d.getTime()))
+      throw new Error(`googleCalendar: invalid dateTime "${v}"`);
+    return d.toISOString();
+  };
+  return {
+    start: { dateTime: toISO(start), timeZone },
+    end: { dateTime: toISO(end), timeZone },
+  };
+}
+
+// ─── Next-occurrence resolution ─────────────────────────────────
+
+interface RecurringEvent {
+  id?: string;
+  recurrence?: string[];
+  start?: { date?: string; dateTime?: string; timeZone?: string };
+  end?: { date?: string; dateTime?: string; timeZone?: string };
+  nextOccurrence?: {
+    start: { dateTime: string; timeZone?: string };
+    end: { dateTime: string; timeZone?: string };
+  };
+}
+
+/**
+ * For each recurring event in `items`, compute the next occurrence
+ * after `now` by combining its own `start` (DTSTART) with the first
+ * `RRULE:` line in `recurrence`, and stash it as `nextOccurrence`.
+ *
+ * Rules:
+ *   • skip events whose RRULE has already ended (UNTIL in the past);
+ *   • preserve the original duration on the computed next instance;
+ *   • swallow per-event parse errors (warn, continue).
+ */
+function addNextOccurrence<T extends RecurringEvent>(items: T[]): T[] {
+  const now = new Date();
+  for (const item of items) {
+    if (!item.recurrence) continue;
+    const rule = item.recurrence.find((r) =>
+      r.toUpperCase().startsWith("RRULE"),
+    );
+    if (!rule) continue;
+    try {
+      const startISO = item.start?.dateTime ?? item.start?.date;
+      const endISO = item.end?.dateTime ?? item.end?.date;
+      if (!startISO || !endISO) continue;
+      const start = new Date(startISO);
+      const end = new Date(endISO);
+      const dtstart = `DTSTART:${start
+        .toISOString()
+        .replace(/[-:]/g, "")
+        .replace(/\.\d{3}/, "")}`;
+      const rrule = RRule.fromString(`${dtstart}\n${rule}`);
+      const until = rrule.options?.until;
+      if (until && until < now) continue;
+      const nextStart = rrule.after(now, false);
+      if (!nextStart) continue;
+      const duration = end.getTime() - start.getTime();
+      const nextEnd = new Date(nextStart.getTime() + duration);
+      item.nextOccurrence = {
+        start: {
+          dateTime: nextStart.toISOString(),
+          timeZone: item.start?.timeZone,
+        },
+        end: { dateTime: nextEnd.toISOString(), timeZone: item.end?.timeZone },
+      };
+    } catch (err) {
+      console.warn(
+        `googleCalendar: failed to resolve next occurrence for ${item.id}: ${(err as Error).message}`,
+      );
+    }
+  }
+  return items;
+}
+
+function applyEventFields(
+  body: EventBody,
+  p: t.Static<t.TObject<typeof eventMutableFields>> & {
+    id?: string;
+    conferenceSolution?: string;
+  },
+): void {
+  if (p.summary !== undefined) body.summary = p.summary;
+  if (p.description !== undefined) body.description = p.description;
+  if (p.location !== undefined) body.location = p.location;
+  if (p.colorId !== undefined) body.colorId = p.colorId;
+  if (p.id !== undefined) body.id = p.id;
+  if (p.transparency !== undefined) body.transparency = p.transparency;
+  if (p.visibility !== undefined) body.visibility = p.visibility;
+  if (p.guestsCanInviteOthers !== undefined)
+    body.guestsCanInviteOthers = p.guestsCanInviteOthers;
+  if (p.guestsCanModify !== undefined) body.guestsCanModify = p.guestsCanModify;
+  if (p.guestsCanSeeOtherGuests !== undefined)
+    body.guestsCanSeeOtherGuests = p.guestsCanSeeOtherGuests;
+
+  if (p.attendees !== undefined) {
+    body.attendees = splitAttendees(p.attendees);
+  }
+
+  if (p.reminders !== undefined || p.useDefaultReminders !== undefined) {
+    const useDefault = p.useDefaultReminders !== false && !p.reminders;
+    body.reminders = { useDefault };
+    if (p.reminders) {
+      body.reminders.overrides = p.reminders;
+    }
+  }
+
+  if (p.conferenceSolution) {
+    body.conferenceData = {
+      createRequest: {
+        requestId: randomUUID(),
+        conferenceSolutionKey: { type: p.conferenceSolution },
+      },
+    };
+  }
+}
+
+// ─── Plugin ──────────────────────────────────────────────────────
+
+const SCOPES = ["https://www.googleapis.com/auth/calendar"];
+
+const optionalPositiveInteger = t.Optional(PositiveInteger);
+const calendarId = NonEmptyString;
+const accessRole = stringEnum([
+  "freeBusyReader",
+  "reader",
+  "writer",
+  "owner",
+] as const);
+const sendUpdates = stringEnum(["all", "externalOnly", "none"] as const);
+const reminder = strictObject({
+  method: stringEnum(["email", "popup"] as const),
+  minutes: t.Integer({ minimum: 0 }),
+});
+const reminders = t.Array(reminder);
+const attendees = StringOrStringArray;
+const recurrenceFields = {
+  rrule: t.Optional(NonEmptyString),
+  repeatFrequency: t.Optional(
+    stringEnum(["daily", "weekly", "monthly", "yearly"] as const),
+  ),
+  repeatHowManyTimes: t.Optional(PositiveInteger),
+  repeatUntil: t.Optional(NonEmptyString),
+};
+const recurrenceConstraints = [
+  { not: { required: ["repeatHowManyTimes", "repeatUntil"] } },
+  { not: { required: ["rrule", "repeatFrequency"] } },
+  { not: { required: ["rrule", "repeatHowManyTimes"] } },
+  { not: { required: ["rrule", "repeatUntil"] } },
+  {
+    anyOf: [
+      {
+        not: {
+          anyOf: [
+            { required: ["repeatHowManyTimes"] },
+            { required: ["repeatUntil"] },
+          ],
+        },
+      },
+      { required: ["repeatFrequency"] },
+    ],
+  },
+] as const;
+const eventMutableFields = {
+  summary: optionalString(),
+  description: optionalString(),
+  location: optionalString(),
+  colorId: optionalString(),
+  transparency: t.Optional(stringEnum(["opaque", "transparent"] as const)),
+  visibility: t.Optional(
+    stringEnum(["default", "public", "private", "confidential"] as const),
+  ),
+  guestsCanInviteOthers: optionalBoolean,
+  guestsCanModify: optionalBoolean,
+  guestsCanSeeOtherGuests: optionalBoolean,
+  attendees: t.Optional(attendees),
+  reminders: t.Optional(reminders),
+  useDefaultReminders: optionalBoolean,
+};
+const eventListFields = {
+  q: optionalString(),
+  timeMin: optionalString("ISO datetime"),
+  timeMax: optionalString("ISO datetime"),
+  updatedMin: optionalString("ISO datetime"),
+  timeZone: optionalString(),
+  iCalUID: optionalString(),
+  orderBy: t.Optional(stringEnum(["startTime", "updated"] as const)),
+  singleEvents: optionalBoolean,
+  showDeleted: optionalBoolean,
+  showHiddenInvitations: optionalBoolean,
+  maxAttendees: optionalPositiveInteger,
+  maxResults: optionalPositiveInteger,
+  pageToken: optionalString(),
+  returnAll: optionalBoolean,
+  fields: optionalString(),
+  nextOccurrence: optionalBoolean,
+};
+
+/** The calendars an availability check is about: one, or several. */
+const availabilityCalendars = {
+  calendarId: t.Optional(calendarId),
+  calendarIds: t.Optional(NonEmptyStringArray),
+};
+const calendarSchemas = {
+  list: strictObject({
+    returnAll: optionalBoolean,
+    maxResults: optionalPositiveInteger,
+    pageToken: optionalString(),
+    showHidden: optionalBoolean,
+    showDeleted: optionalBoolean,
+    minAccessRole: t.Optional(accessRole),
+  }),
+  get: strictObject({ calendarId }),
+  availability: strictObject(
+    {
+      ...availabilityCalendars,
+      timeMin: NonEmptyString,
+      timeMax: NonEmptyString,
+      timeZone: optionalString(),
+      outputFormat: t.Optional(
+        stringEnum(["availability", "bookedSlots", "raw"] as const),
+      ),
+    },
+    exactlyOne(availabilityCalendars),
+  ),
+  listColors: strictObject({}),
+};
+
+/** What makes an event.update a change: a field, new times, or a recurrence. */
+const eventChanges = {
+  ...eventMutableFields,
+  start: optionalString(),
+  rrule: recurrenceFields.rrule,
+  repeatFrequency: recurrenceFields.repeatFrequency,
+};
+const eventSchemas = {
+  create: strictObject(
+    {
+      calendarId,
+      ...eventMutableFields,
+      start: NonEmptyString,
+      end: NonEmptyString,
+      allDay: optionalBoolean,
+      timeZone: optionalString(),
+      id: optionalString("Custom event ID"),
+      ...recurrenceFields,
+      conferenceSolution: t.Optional(
+        stringEnum([
+          "eventHangout",
+          "eventNamedHangout",
+          "hangoutsMeet",
+        ] as const),
+      ),
+      sendUpdates: t.Optional(sendUpdates),
+      maxAttendees: optionalPositiveInteger,
+    },
+    { allOf: recurrenceConstraints },
+  ),
+  get: strictObject({
+    calendarId,
+    eventId: Id,
+    timeZone: optionalString(),
+    maxAttendees: optionalPositiveInteger,
+    nextOccurrence: optionalBoolean,
+  }),
+  list: strictObject({ calendarId, ...eventListFields }),
+  listInstances: strictObject({
+    calendarId,
+    eventId: Id,
+    timeMin: optionalString(),
+    timeMax: optionalString(),
+    timeZone: optionalString(),
+    showDeleted: optionalBoolean,
+    maxResults: optionalPositiveInteger,
+    pageToken: optionalString(),
+    returnAll: optionalBoolean,
+  }),
+  update: strictObject(
+    {
+      calendarId,
+      eventId: Id,
+      modifyTarget: t.Optional(stringEnum(["instance", "series"] as const)),
+      ...eventChanges,
+      end: optionalString(),
+      allDay: optionalBoolean,
+      timeZone: optionalString(),
+      ...recurrenceFields,
+      sendUpdates: t.Optional(sendUpdates),
+      maxAttendees: optionalPositiveInteger,
+      sendNotifications: optionalBoolean,
+    },
+    {
+      allOf: [
+        ...recurrenceConstraints,
+        {
+          anyOf: [
+            {
+              not: {
+                anyOf: [{ required: ["start"] }, { required: ["end"] }],
+              },
+            },
+            { required: ["start", "end"] },
+          ],
+        },
+        {
+          not: {
+            required: ["allDay"],
+            not: { required: ["start"] },
+          },
+        },
+        {
+          not: {
+            required: ["timeZone"],
+            not: { required: ["start"] },
+          },
+        },
+      ],
+      ...atLeastOne(eventChanges),
+    },
+  ),
+  delete: strictObject({
+    calendarId,
+    eventId: Id,
+    sendUpdates: t.Optional(sendUpdates),
+  }),
+  move: strictObject({
+    calendarId,
+    eventId: Id,
+    destinationCalendarId: calendarId,
+    sendUpdates: t.Optional(sendUpdates),
+  }),
+};
+
+const freeBusySchema = strictObject({
+  calendarIds: NonEmptyStringArray,
+  timeMin: NonEmptyString,
+  timeMax: NonEmptyString,
+  timeZone: optionalString(),
+  groupExpansionMax: optionalPositiveInteger,
+  calendarExpansionMax: optionalPositiveInteger,
+});
+
+const calendarListChanges = {
+  colorId: optionalString(),
+  backgroundColor: optionalString(),
+  foregroundColor: optionalString(),
+  summaryOverride: optionalString(),
+  selected: optionalBoolean,
+  hidden: optionalBoolean,
+  defaultReminders: t.Optional(reminders),
+};
+const calendarListSchemas = {
+  list: strictObject({
+    minAccessRole: t.Optional(accessRole),
+    showDeleted: optionalBoolean,
+    showHidden: optionalBoolean,
+    returnAll: optionalBoolean,
+  }),
+  insert: strictObject({
+    calendarId,
+    colorRgbFormat: optionalBoolean,
+    defaultReminders: t.Optional(reminders),
+    summaryOverride: optionalString(),
+  }),
+  patch: strictObject(
+    { calendarId, ...calendarListChanges },
+    atLeastOne(calendarListChanges),
+  ),
+  delete: strictObject({ calendarId }),
+};
+
+const aclRole = stringEnum([
+  "none",
+  "freeBusyReader",
+  "reader",
+  "writer",
+  "owner",
+] as const);
+const aclSchemas = {
+  list: strictObject({ calendarId, returnAll: optionalBoolean }),
+  insert: strictObject(
+    {
+      calendarId,
+      role: aclRole,
+      scopeType: stringEnum(["default", "user", "group", "domain"] as const),
+      scopeValue: optionalString(),
+      sendNotifications: optionalBoolean,
+    },
+    {
+      anyOf: [
+        {
+          properties: { scopeType: { const: "default" } },
+          not: { required: ["scopeValue"] },
+        },
+        {
+          properties: {
+            scopeType: { enum: ["user", "group", "domain"] },
+          },
+          required: ["scopeValue"],
+        },
+      ],
+    },
+  ),
+  update: strictObject({ calendarId, ruleId: Id, role: aclRole }),
+  delete: strictObject({ calendarId, ruleId: Id }),
+};
+
+const settingsSchemas = {
+  list: strictObject({ returnAll: optionalBoolean }),
+  get: strictObject({ setting: NonEmptyString }),
+};
+
+export default function googleCalendar(rl: CodemodePluginAPI) {
+  rl.setName("googleCalendar");
+  rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleCalendar", SCOPES));
+
+  rl.setOAuth(googleOAuth("googleCalendar", SCOPES, "GOOGLE_CALENDAR"));
+
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_CALENDAR")));
+
+  // ── Calendar ──────────────────────────────────────────
+
+  rl.registerAction("calendar.list", {
+    access: "read",
+    description: "List calendars the authenticated user has access to",
+    inputSchema: calendarSchemas.list,
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      if (p.showHidden) qs.showHidden = p.showHidden;
+      if (p.showDeleted) qs.showDeleted = p.showDeleted;
+      if (p.minAccessRole) qs.minAccessRole = p.minAccessRole;
+      if (p.pageToken) qs.pageToken = p.pageToken;
+      if (p.returnAll)
+        return paginateAll(ctx, "/users/me/calendarList", "items", qs);
+      if (p.maxResults) qs.maxResults = p.maxResults;
+      return calRequest(ctx, "GET", "/users/me/calendarList", undefined, qs);
+    },
+  });
+
+  rl.registerAction("calendar.get", {
+    access: "read",
+    description: "Get a calendar's metadata (including conference solutions)",
+    inputSchema: calendarSchemas.get,
+    async execute({ calendarId }, ctx) {
+      return calRequest(
+        ctx,
+        "GET",
+        `/users/me/calendarList/${encodeCalendarId(calendarId)}`,
+      );
+    },
+  });
+
+  rl.registerAction("calendar.availability", {
+    access: "read",
+    description:
+      "Check free/busy information for one or more calendars over a time range",
+    inputSchema: calendarSchemas.availability,
+    async execute(p, ctx) {
+      const ids = p.calendarIds ?? (p.calendarId ? [p.calendarId] : []);
+      const body: Record<string, unknown> = {
+        timeMin: new Date(p.timeMin).toISOString(),
+        timeMax: new Date(p.timeMax).toISOString(),
+        items: ids.map((id) => ({ id })),
+      };
+      if (p.timeZone) body.timeZone = p.timeZone;
+
+      const res = (await calRequest(ctx, "POST", "/freeBusy", body)) as {
+        calendars: Record<
+          string,
+          { busy?: Array<{ start: string; end: string }>; errors?: unknown }
+        >;
+      };
+
+      const fmt = p.outputFormat ?? "raw";
+      if (fmt === "raw") return res;
+      if (ids.length === 1) {
+        const entry = res.calendars?.[ids[0]];
+        if (entry?.errors) {
+          throw new Error(
+            `googleCalendar: freeBusy error ${JSON.stringify(entry.errors)}`,
+          );
+        }
+        const busy = entry?.busy ?? [];
+        if (fmt === "availability") return { available: busy.length === 0 };
+        if (fmt === "bookedSlots") return busy;
+      }
+      // Multi-calendar: return a map per ID with the same shape as the single case.
+      const out: Record<string, unknown> = {};
+      for (const id of ids) {
+        const entry = res.calendars?.[id];
+        const busy = entry?.busy ?? [];
+        if (fmt === "availability") out[id] = { available: busy.length === 0 };
+        else if (fmt === "bookedSlots") out[id] = busy;
+      }
+      return out;
+    },
+  });
+
+  rl.registerAction("calendar.listColors", {
+    access: "read",
+    description:
+      "List event and calendar color palettes available in Google Calendar",
+    inputSchema: calendarSchemas.listColors,
+    async execute(_input, ctx) {
+      return calRequest(ctx, "GET", "/colors");
+    },
+  });
+
+  // ── Event ─────────────────────────────────────────────
+
+  rl.registerAction("event.create", {
+    access: "write",
+    description: "Create a calendar event",
+    inputSchema: eventSchemas.create,
+    async execute(p, ctx) {
+      const body: EventBody = {};
+      const times = buildEventTimes(
+        p.start,
+        p.end,
+        p.allDay === true,
+        p.timeZone,
+      );
+      body.start = times.start;
+      body.end = times.end;
+      applyEventFields(body, p);
+      const recurrence = buildRecurrence(p);
+      if (recurrence) body.recurrence = recurrence;
+
+      const qs: Record<string, unknown> = {};
+      if (p.sendUpdates) qs.sendUpdates = p.sendUpdates;
+      if (p.maxAttendees) qs.maxAttendees = p.maxAttendees;
+      if (body.conferenceData) qs.conferenceDataVersion = 1;
+
+      return calRequest(
+        ctx,
+        "POST",
+        `/calendars/${encodeCalendarId(p.calendarId)}/events`,
+        body,
+        qs,
+      );
+    },
+  });
+
+  rl.registerAction("event.get", {
+    access: "read",
+    description: "Get a single event",
+    inputSchema: eventSchemas.get,
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      if (p.timeZone) qs.timeZone = p.timeZone;
+      if (p.maxAttendees) qs.maxAttendees = p.maxAttendees;
+      const res = (await calRequest(
+        ctx,
+        "GET",
+        `/calendars/${encodeCalendarId(p.calendarId)}/events/${pathSegment(p.eventId)}`,
+        undefined,
+        qs,
+      )) as RecurringEvent;
+      if (p.nextOccurrence !== false) addNextOccurrence([res]);
+      return res;
+    },
+  });
+
+  rl.registerAction("event.list", {
+    access: "read",
+    description:
+      "List events in a calendar. Set `singleEvents=true` to expand recurring events into instances.",
+    inputSchema: eventSchemas.list,
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      for (const k of [
+        "q",
+        "timeZone",
+        "iCalUID",
+        "orderBy",
+        "singleEvents",
+        "showDeleted",
+        "showHiddenInvitations",
+        "maxAttendees",
+        "pageToken",
+        "fields",
+      ] as const) {
+        if (p[k] !== undefined) qs[k] = p[k];
+      }
+      if (p.timeMin) qs.timeMin = new Date(p.timeMin).toISOString();
+      if (p.timeMax) qs.timeMax = new Date(p.timeMax).toISOString();
+      if (p.updatedMin) qs.updatedMin = new Date(p.updatedMin).toISOString();
+
+      const path = `/calendars/${encodeCalendarId(p.calendarId)}/events`;
+      const attachNext = p.nextOccurrence !== false && p.singleEvents !== true;
+      if (p.returnAll) {
+        const items = (await paginateAll(
+          ctx,
+          path,
+          "items",
+          qs,
+        )) as RecurringEvent[];
+        if (attachNext) addNextOccurrence(items);
+        return items;
+      }
+      if (p.maxResults) qs.maxResults = p.maxResults;
+      const res = (await calRequest(ctx, "GET", path, undefined, qs)) as {
+        items?: RecurringEvent[];
+      };
+      if (attachNext && Array.isArray(res.items)) addNextOccurrence(res.items);
+      return res;
+    },
+  });
+
+  rl.registerAction("event.listInstances", {
+    access: "read",
+    description: "List instances of a recurring event",
+    inputSchema: eventSchemas.listInstances,
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      if (p.timeMin) qs.timeMin = new Date(p.timeMin).toISOString();
+      if (p.timeMax) qs.timeMax = new Date(p.timeMax).toISOString();
+      if (p.timeZone) qs.timeZone = p.timeZone;
+      if (p.showDeleted) qs.showDeleted = p.showDeleted;
+      if (p.pageToken) qs.pageToken = p.pageToken;
+      const path = `/calendars/${encodeCalendarId(
+        p.calendarId,
+      )}/events/${pathSegment(p.eventId)}/instances`;
+      if (p.returnAll) return paginateAll(ctx, path, "items", qs);
+      if (p.maxResults) qs.maxResults = p.maxResults;
+      return calRequest(ctx, "GET", path, undefined, qs);
+    },
+  });
+
+  rl.registerAction("event.update", {
+    access: "write",
+    description:
+      "Patch an event (only supplied fields are changed). Set modifyTarget='series' to edit the entire recurrence instead of a single instance.",
+    inputSchema: eventSchemas.update,
+    async execute(p, ctx) {
+      let eventId = p.eventId;
+      const calendarId = encodeCalendarId(p.calendarId);
+
+      // Series edit: resolve the instance's recurringEventId and patch that instead.
+      if (p.modifyTarget === "series") {
+        const instance = (await calRequest(
+          ctx,
+          "GET",
+          `/calendars/${calendarId}/events/${pathSegment(eventId)}`,
+        )) as { recurringEventId?: string };
+        if (!instance.recurringEventId) {
+          throw new Error(
+            `googleCalendar: event ${eventId} is not part of a recurrence series`,
+          );
+        }
+        eventId = instance.recurringEventId;
+      }
+
+      const body: EventBody = {};
+      if (p.start !== undefined || p.end !== undefined) {
+        const times = buildEventTimes(
+          p.start,
+          p.end,
+          p.allDay === true,
+          p.timeZone,
+        );
+        body.start = times.start;
+        body.end = times.end;
+      }
+      applyEventFields(body, p);
+      const recurrence = buildRecurrence(p);
+      if (recurrence) body.recurrence = recurrence;
+
+      const qs: Record<string, unknown> = {};
+      if (p.sendUpdates) qs.sendUpdates = p.sendUpdates;
+      if (p.sendNotifications !== undefined)
+        qs.sendNotifications = p.sendNotifications;
+      if (p.maxAttendees) qs.maxAttendees = p.maxAttendees;
+
+      return calRequest(
+        ctx,
+        "PATCH",
+        `/calendars/${calendarId}/events/${pathSegment(eventId)}`,
+        body,
+        qs,
+      );
+    },
+  });
+
+  rl.registerAction("event.delete", {
+    access: "write",
+    description: "Delete an event",
+    inputSchema: eventSchemas.delete,
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      if (p.sendUpdates) qs.sendUpdates = p.sendUpdates;
+      return calRequest(
+        ctx,
+        "DELETE",
+        `/calendars/${encodeCalendarId(p.calendarId)}/events/${pathSegment(p.eventId)}`,
+        undefined,
+        qs,
+      );
+    },
+  });
+
+  rl.registerAction("event.move", {
+    access: "write",
+    description: "Move an event from one calendar to another",
+    inputSchema: eventSchemas.move,
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {
+        destination: p.destinationCalendarId,
+      };
+      if (p.sendUpdates) qs.sendUpdates = p.sendUpdates;
+      return calRequest(
+        ctx,
+        "POST",
+        `/calendars/${encodeCalendarId(p.calendarId)}/events/${pathSegment(p.eventId)}/move`,
+        undefined,
+        qs,
+      );
+    },
+  });
+
+  // ─── FreeBusy ────────────────────────────────────────────────────
+
+  rl.registerAction("freeBusy.query", {
+    access: "read",
+    description:
+      "Query free/busy windows across one or more calendars in a time range. Returns an array of busy intervals per calendar id, plus any errors.",
+    inputSchema: freeBusySchema,
+    async execute(p, ctx) {
+      const body = {
+        timeMin: p.timeMin,
+        timeMax: p.timeMax,
+        timeZone: p.timeZone,
+        groupExpansionMax: p.groupExpansionMax,
+        calendarExpansionMax: p.calendarExpansionMax,
+        items: p.calendarIds.map((id) => ({ id })),
+      };
+      return calRequest(ctx, "POST", `/freeBusy`, body);
+    },
+  });
+
+  // ─── Calendar list management ───────────────────────────────────
+
+  rl.registerAction("calendarList.list", {
+    access: "read",
+    description:
+      "List calendars on the user's calendar list (the user's left sidebar).",
+    inputSchema: calendarListSchemas.list,
+    async execute(p, ctx) {
+      const qs = {
+        minAccessRole: p.minAccessRole,
+        showDeleted: p.showDeleted,
+        showHidden: p.showHidden,
+        maxResults: 250,
+      };
+      if (p.returnAll ?? true)
+        return paginateAll(ctx, "/users/me/calendarList", "items", qs);
+      const res = (await calRequest(
+        ctx,
+        "GET",
+        "/users/me/calendarList",
+        undefined,
+        qs,
+      )) as { items?: unknown[] };
+      return res.items ?? [];
+    },
+  });
+
+  rl.registerAction("calendarList.insert", {
+    access: "write",
+    description: "Add a calendar (by id) to the user's calendar list.",
+    inputSchema: calendarListSchemas.insert,
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = { id: p.calendarId };
+      if (p.summaryOverride) body.summaryOverride = p.summaryOverride;
+      if (p.defaultReminders) body.defaultReminders = p.defaultReminders;
+      return calRequest(ctx, "POST", "/users/me/calendarList", body, {
+        colorRgbFormat: p.colorRgbFormat,
+      });
+    },
+  });
+
+  rl.registerAction("calendarList.patch", {
+    access: "write",
+    description:
+      "Patch a calendar entry on the user's calendar list (colors, summary override, reminders, selected).",
+    inputSchema: calendarListSchemas.patch,
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = {};
+      for (const k of [
+        "colorId",
+        "backgroundColor",
+        "foregroundColor",
+        "summaryOverride",
+        "selected",
+        "hidden",
+        "defaultReminders",
+      ] as const) {
+        if (p[k] !== undefined) body[k] = p[k];
+      }
+      return calRequest(
+        ctx,
+        "PATCH",
+        `/users/me/calendarList/${encodeCalendarId(p.calendarId)}`,
+        body,
+        {
+          colorRgbFormat:
+            p.backgroundColor || p.foregroundColor ? true : undefined,
+        },
+      );
+    },
+  });
+
+  rl.registerAction("calendarList.delete", {
+    access: "write",
+    description:
+      "Remove a calendar from the user's calendar list (does not delete the underlying calendar).",
+    inputSchema: calendarListSchemas.delete,
+    async execute(p, ctx) {
+      await calRequest(
+        ctx,
+        "DELETE",
+        `/users/me/calendarList/${encodeCalendarId(p.calendarId)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  // ─── ACL (calendar sharing) ──────────────────────────────────────
+
+  rl.registerAction("acl.list", {
+    access: "read",
+    description: "List ACL rules on a calendar.",
+    inputSchema: aclSchemas.list,
+    async execute(p, ctx) {
+      const path = `/calendars/${encodeCalendarId(p.calendarId)}/acl`;
+      if (p.returnAll ?? true)
+        return paginateAll(ctx, path, "items", { maxResults: 250 });
+      const res = (await calRequest(ctx, "GET", path)) as { items?: unknown[] };
+      return res.items ?? [];
+    },
+  });
+
+  rl.registerAction("acl.insert", {
+    access: "write",
+    description:
+      "Add an ACL rule to a calendar. Roles: 'none' | 'freeBusyReader' | 'reader' | 'writer' | 'owner'.",
+    inputSchema: aclSchemas.insert,
+    async execute(p, ctx) {
+      const body = {
+        role: p.role,
+        scope: { type: p.scopeType, value: p.scopeValue },
+      };
+      return calRequest(
+        ctx,
+        "POST",
+        `/calendars/${encodeCalendarId(p.calendarId)}/acl`,
+        body,
+        { sendNotifications: p.sendNotifications },
+      );
+    },
+  });
+
+  rl.registerAction("acl.update", {
+    access: "write",
+    description: "Patch an ACL rule's role.",
+    inputSchema: aclSchemas.update,
+    async execute(p, ctx) {
+      return calRequest(
+        ctx,
+        "PATCH",
+        `/calendars/${encodeCalendarId(p.calendarId)}/acl/${pathSegment(p.ruleId)}`,
+        { role: p.role },
+      );
+    },
+  });
+
+  rl.registerAction("acl.delete", {
+    access: "write",
+    description: "Remove an ACL rule.",
+    inputSchema: aclSchemas.delete,
+    async execute(p, ctx) {
+      await calRequest(
+        ctx,
+        "DELETE",
+        `/calendars/${encodeCalendarId(p.calendarId)}/acl/${pathSegment(p.ruleId)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  // ─── Settings ────────────────────────────────────────────────────
+
+  rl.registerAction("settings.list", {
+    access: "read",
+    description:
+      "List the user's calendar settings (timezone, week start, working location, etc.).",
+    inputSchema: settingsSchemas.list,
+    async execute(_input, ctx) {
+      return paginateAll(ctx, "/users/me/settings", "items", {
+        maxResults: 100,
+      });
+    },
+  });
+
+  rl.registerAction("settings.get", {
+    access: "read",
+    description:
+      "Get a single setting by key (e.g. 'timezone', 'weekStart', 'locale').",
+    inputSchema: settingsSchemas.get,
+    async execute(p, ctx) {
+      return calRequest(
+        ctx,
+        "GET",
+        `/users/me/settings/${pathSegment(p.setting)}`,
+      );
+    },
+  });
+}

@@ -1,0 +1,83 @@
+import { credentialJson, pathSegment, type CodemodePluginAPI } from "@shiftlabs/codemode";
+import { mailgunCredential, mailgunRegion } from "./credentials.js";
+
+export default function mailgun(rl: CodemodePluginAPI) {
+  rl.setName("mailgun");
+  rl.setVersion("0.1.0");
+  rl.setCredential(mailgunCredential);
+
+  rl.setConnectionSchema({
+    apiKey: {
+      type: "string",
+      required: true,
+      description: "Mailgun API key",
+      env: "MAILGUN_API_KEY",
+    },
+    apiDomain: {
+      type: "string",
+      required: false,
+      description:
+        "API domain: 'api.mailgun.net' (US, default) or 'api.eu.mailgun.net' (EU)",
+      default: "api.mailgun.net",
+      env: "MAILGUN_API_DOMAIN",
+    },
+    emailDomain: {
+      type: "string",
+      required: true,
+      description: "Sending domain (e.g. mg.example.com)",
+      env: "MAILGUN_EMAIL_DOMAIN",
+    },
+  });
+
+  rl.registerAction("email.send", {
+    access: "write",
+    description: "Send an email via Mailgun",
+    inputSchema: {
+      to: {
+        type: "string",
+        required: true,
+        description: "Recipient email(s), comma-separated",
+      },
+      from: {
+        type: "string",
+        required: true,
+        description: "Sender (e.g. 'Name <user@domain.com>')",
+      },
+      subject: { type: "string", required: true },
+      text: { type: "string", required: false, description: "Plain text body" },
+      html: { type: "string", required: false, description: "HTML body" },
+      cc: {
+        type: "string",
+        required: false,
+        description: "CC recipients, comma-separated",
+      },
+      bcc: {
+        type: "string",
+        required: false,
+        description: "BCC recipients, comma-separated",
+      },
+    },
+    async execute(input, ctx) {
+      const { to, from, subject, text, html, cc, bcc } = input as Record<
+        string,
+        unknown
+      >;
+      const cfg = ctx.connection.config;
+
+      return credentialJson(ctx, mailgunCredential, "mailgun", {
+        target: mailgunRegion(cfg),
+        path: `${pathSegment(cfg.emailDomain)}/messages`,
+        method: "POST",
+        form: {
+          to,
+          from,
+          subject,
+          text: text || undefined,
+          html: html || undefined,
+          cc: cc || undefined,
+          bcc: bcc || undefined,
+        },
+      });
+    },
+  });
+}

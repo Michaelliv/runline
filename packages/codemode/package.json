@@ -1,0 +1,109 @@
+{
+  "name": "@shiftlabs/codemode",
+  "version": "0.46.0",
+  "description": "Code mode for agents — turn any API or command into a callable action",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./utils/cli": {
+      "types": "./dist/utils/cli.d.ts",
+      "import": "./dist/utils/cli.js",
+      "default": "./dist/utils/cli.js"
+    },
+    "./legacy": {
+      "types": "./dist/legacy.d.ts",
+      "import": "./dist/legacy.js",
+      "default": "./dist/legacy.js"
+    },
+    "./main": {
+      "import": "./dist/main.js",
+      "default": "./dist/main.js"
+    }
+  },
+  "bin": {
+    "codemode": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && bun --filter codemode-plugins build && rm -rf dist/plugins && cp -R ../codemode-plugins/dist dist/plugins",
+    "prepublishOnly": "bun run build",
+    "dev": "bun run src/main.ts",
+    "test": "bun test src/tests",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "format": "bunx @biomejs/biome format --write src/",
+    "lint": "bunx @biomejs/biome lint src/",
+    "check": "bunx @biomejs/biome check src/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shift-labs-ai/codemode.git"
+  },
+  "homepage": "https://github.com/shift-labs-ai/codemode#readme",
+  "bugs": {
+    "url": "https://github.com/shift-labs-ai/codemode/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "agent",
+    "tools",
+    "mcp",
+    "sandbox",
+    "cli"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
+    "@types/bun": "^1.2.17",
+    "@types/node": "^25.5.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/semver": "^7.8.0",
+    "typescript": "^5.8.0"
+  },
+  "peerDependencies": {
+    "@react-email/components": "^1.0.12",
+    "@react-email/render": "^2.1.0",
+    "playwright": "^1.57.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sucrase": "^3.35.1"
+  },
+  "peerDependenciesMeta": {
+    "@react-email/components": {
+      "optional": true
+    },
+    "@react-email/render": {
+      "optional": true
+    },
+    "playwright": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "sucrase": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@shift-labs/ferrosearch": "^0.1.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3",
+    "fast-xml-parser": "^5.11.2",
+    "jiti": "^2.7.0",
+    "proper-lockfile": "^4.1.2",
+    "rrule": "^2.8.1",
+    "semver": "^7.8.5",
+    "typebox": "^1.1.35",
+    "zod": "^4.2.1"
+  }
+}

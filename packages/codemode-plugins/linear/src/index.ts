@@ -1,0 +1,52 @@
+import type { CodemodePluginAPI } from "@shiftlabs/codemode";
+import * as t from "typebox";
+import { registerAttachmentActions } from "./attachments.js";
+import { registerCommentActions } from "./comments.js";
+import { linearCredential } from "./credentials.js";
+import { registerCycleActions } from "./cycles.js";
+import { registerInitiativeActions } from "./initiatives.js";
+import { registerIssueActions } from "./issues.js";
+import { registerLabelActions } from "./labels.js";
+import { registerOrganizationActions } from "./organization.js";
+import { registerProjectActions } from "./projects.js";
+import { registerStateActions } from "./states.js";
+import { registerTeamActions } from "./teams.js";
+import { registerUserActions } from "./users.js";
+import { registerViewActions } from "./views.js";
+import { registerWebhookActions } from "./webhooks.js";
+
+export default function linear(rl: CodemodePluginAPI) {
+  rl.setName("linear");
+  rl.setVersion("0.6.0");
+  rl.setCredential(linearCredential);
+  rl.setConnectionSchema(
+    t.Object({
+      apiKey: t.String({
+        description:
+          "Linear API key (https://linear.app/settings/account/security)",
+        env: "LINEAR_API_KEY",
+      }),
+      scopeLabelIds: t.Optional(
+        t.String({
+          description:
+            "Comma-separated Linear issue label UUIDs (label names also accepted and resolved). When set, issue/comment/attachment access is restricted to issues with one of these labels; workspace metadata such as teams, states, labels, cycles and users stays readable.",
+          env: "LINEAR_SCOPE_LABEL_IDS",
+        }),
+      ),
+    }),
+  );
+
+  registerIssueActions(rl);
+  registerCommentActions(rl);
+  registerStateActions(rl);
+  registerLabelActions(rl);
+  registerProjectActions(rl);
+  registerViewActions(rl);
+  registerCycleActions(rl);
+  registerInitiativeActions(rl);
+  registerTeamActions(rl);
+  registerUserActions(rl);
+  registerAttachmentActions(rl);
+  registerOrganizationActions(rl);
+  registerWebhookActions(rl);
+}

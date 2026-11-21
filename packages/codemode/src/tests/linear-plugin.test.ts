@@ -1,0 +1,1716 @@
+import assert from "node:assert/strict";
+import { afterEach, describe, it } from "node:test";
+import linear from "../../../codemode-plugins/linear/src/index.js";
+import { createPluginAPI } from "../plugin/api.js";
+import { isTypedInputSchema, validateTypedInput } from "../plugin/schema.js";
+import type { ActionContext, PluginDef } from "../plugin/types.js";
+import { getAction, stubFetch, typedSchema } from "./helpers/plugin.js";
+
+const originalFetch = globalThis.fetch;
+
+const LINEAR_ACTIONS = [
+  "attachment.create",
+  "attachment.delete",
+  "attachment.get",
+  "attachment.linkURL",
+  "attachment.list",
+  "attachment.update",
+  "comment.create",
+  "comment.delete",
+  "comment.get",
+  "comment.list",
+  "comment.update",
+  "cycle.archive",
+  "cycle.create",
+  "cycle.get",
+  "cycle.list",
+  "cycle.update",
+  "initiative.addProject",
+  "initiative.create",
+  "initiative.delete",
+  "initiative.get",
+  "initiative.list",
+  "initiative.removeProject",
+  "initiative.update",
+  "issue.addLabel",
+  "issue.addLink",
+  "issue.archive",
+  "issue.create",
+  "issue.delete",
+  "issue.get",
+  "issue.list",
+  "issue.removeLabel",
+  "issue.search",
+  "issue.subscribe",
+  "issue.unarchive",
+  "issue.unsubscribe",
+  "issue.update",
+  "label.create",
+  "label.delete",
+  "label.get",
+  "label.list",
+  "label.restore",
+  "label.retire",
+  "label.update",
+  "milestone.create",
+  "milestone.delete",
+  "milestone.get",
+  "milestone.list",
+  "milestone.update",
+  "org.get",
+  "project.create",
+  "project.delete",
+  "project.get",
+  "project.list",
+  "project.search",
+  "project.unarchive",
+  "project.update",
+  "projectUpdate.archive",
+  "projectUpdate.create",
+  "projectUpdate.list",
+  "projectUpdate.update",
+  "state.create",
+  "state.get",
+  "state.list",
+  "state.update",
+  "team.create",
+  "team.cyclesDeleteAll",
+  "team.get",
+  "team.list",
+  "team.members",
+  "team.update",
+  "user.get",
+  "user.list",
+  "user.me",
+  "user.update",
+  "view.create",
+  "view.delete",
+  "view.get",
+  "view.initiatives",
+  "view.issues",
+  "view.list",
+  "view.projects",
+  "view.update",
+  "view.updates",
+  "webhook.create",
+  "webhook.delete",
+  "webhook.get",
+  "webhook.list",
+  "webhook.rotateSecret",
+  "webhook.update",
+] as const;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+function makeLinear(): PluginDef {
+  const { api, resolve } = createPluginAPI("linear");
+  linear(api);
+  return resolve();
+}
+
+function ctx(config: Record<string, unknown> = {}): ActionContext {
+  return {
+    connection: {
+      name: "linear",
+      plugin: "linear",
+      config: { apiKey: "lin_test", ...config },
+    },
+    log: {
+      info() {},
+      warn() {},
+      error() {},
+    },
+    async updateConnection() {},
+  };
+}
+
+type MockOpts = {
+  /**
+   * Answer the scope-label directory lookup (name → id) transparently.
+   * Scoped suites below configure the scope by label *name*; the identity
+   * mapping keeps their assertions about ids unchanged. The resolution
+   * suite turns this off to assert the lookup itself.
+   */
+  autoResolveLabels?: boolean;
+};
+
+const DIRECTORY_QUERY = /issueLabels\(first: 250/;
+
+function mockLinear(
+  assertRequest: (body: {
+    query: string;
+    variables?: Record<string, unknown>;
+  }) => unknown,
+  opts?: MockOpts,
+) {
+  mockLinearSequence([assertRequest], opts);
+}
+
+function mockLinearSequence(
+  assertions: Array<
+    (body: { query: string; variables?: Record<string, unknown> }) => unknown
+  >,
+  opts: MockOpts = {},
+) {
+  let i = 0;
+  stubFetch(async (input: RequestInfo | URL, init?: RequestInit) => {
+    assert.equal(String(input), "https://api.linear.app/graphql");
+    assert.equal(init?.method, "POST");
+    // The credential transport signs with a Headers instance.
+    assert.match(
+      String(new Headers(init?.headers).get("authorization")),
+      /^lin_/,
+    );
+    // Asserted on every request in the suite: the API key travels on all of
+    // them, and a followed redirect would carry it off to another host.
+    assert.equal(init?.redirect, "error");
+
+    const body = JSON.parse(String(init?.body)) as {
+      query: string;
+      variables?: Record<string, unknown>;
+    };
+    if (opts.autoResolveLabels !== false && DIRECTORY_QUERY.test(body.query)) {
+      return new Response(
+        JSON.stringify({
+          data: {
+            issueLabels: {
+              nodes: ["label-allowed", "label-other"].map((name) => ({
+                id: name,
+                name,
+              })),
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    const assertRequest = assertions[i++];
+    assert.ok(assertRequest, `unexpected Linear request ${i}: ${body.query}`);
+    const data = assertRequest(body);
+
+    return new Response(JSON.stringify({ data }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  });
+}
+
+describe("linear plugin action surface", () => {
+  it("registers the expected public actions", () => {
+    const plugin = makeLinear();
+    const actions = plugin.actions.map((a) => a.name).sort();
+    assert.deepEqual(actions, [...LINEAR_ACTIONS]);
+  });
+
+  // SHFT-1066: an input is named as Linear names that argument, so a
+  // result's `id` goes straight back in: `issue(id:)`, `customView(id:)`,
+  // `team(id:)`. Fields of Linear's own input types keep Linear's names
+  // (`IssueRelationCreateInput.issueId`), and team.cyclesDeleteAll keeps
+  // `teamId` so its team-wide blast radius stays in plain sight.
+  it("names each input as Linear names that argument", () => {
+    const plugin = makeLinear();
+    const inputs = (name: string) =>
+      Object.keys(typedSchema(plugin, name).properties ?? {});
+    for (const name of [
+      "issue.get",
+      "issue.update",
+      "issue.delete",
+      "issue.archive",
+      "issue.unarchive",
+      "issue.addLabel",
+      "issue.removeLabel",
+      "issue.subscribe",
+      "issue.unsubscribe",
+      "view.issues",
+      "view.projects",
+      "view.initiatives",
+      "view.updates",
+      "team.members",
+    ]) {
+      const own = `${name.split(".")[0]}Id`;
+      assert.ok(inputs(name).includes("id"), `${name} takes id`);
+      assert.ok(!inputs(name).includes(own), `${name} takes no ${own}`);
+    }
+    assert.ok(inputs("issue.addLink").includes("issueId"));
+    assert.ok(inputs("team.cyclesDeleteAll").includes("teamId"));
+    assert.match(
+      String(typedSchema(plugin, "issue.get").properties?.id?.description),
+      /UUID or identifier/,
+    );
+  });
+
+  it("exposes comment creation under the comment namespace only", () => {
+    const plugin = makeLinear();
+    assert.ok(plugin.actions.some((a) => a.name === "comment.create"));
+    assert.ok(!plugin.actions.some((a) => a.name === "issue.addComment"));
+    assert.ok(!plugin.actions.some((a) => a.name === "issue.listComments"));
+  });
+});
+
+// The description is all an agent sees when it picks an action (actions.find,
+// the Vex catalog). If a scoped connection cannot run an action, the
+// description has to say so - otherwise the agent discovers it, calls it, and
+// burns a turn learning it was blocked.
+describe("linear scoped-availability notes match behaviour", () => {
+  const NOTE = "Unavailable on scoped connections.";
+  // A fetch failure surfaces as the credential transport's opaque error.
+  const SENTINEL = "Authenticated request failed";
+
+  it("carries the note on exactly the actions a scoped connection cannot run", async () => {
+    const plugin = makeLinear();
+    // Any action that gets past the scope gate hits fetch; stop it there.
+    stubFetch(async () => {
+      throw new Error("linear-test: reached the network");
+    });
+
+    const scoped = ctx({
+      apiKey: "lin_notes",
+      scopeLabelIds: "11111111-1111-4111-8111-111111111111",
+    });
+    const missingNote: string[] = [];
+    const staleNote: string[] = [];
+
+    for (const action of plugin.actions) {
+      let isBlocked = false;
+      try {
+        await action.execute(
+          { id: "x", teamId: "x", issueId: "x", viewId: "x" },
+          scoped,
+        );
+      } catch (err) {
+        isBlocked = String(err).includes(
+          "not available to scoped Linear connections",
+        );
+        if (!isBlocked && !String(err).includes(SENTINEL))
+          throw new Error(`${action.name}: unexpected failure - ${err}`);
+      }
+      const hasNote = String(action.description).includes(NOTE);
+      if (isBlocked && !hasNote) missingNote.push(action.name);
+      if (!isBlocked && hasNote) staleNote.push(action.name);
+    }
+
+    assert.deepEqual(
+      missingNote,
+      [],
+      "blocked under scope but the description does not say so",
+    );
+    assert.deepEqual(
+      staleNote,
+      [],
+      "description claims blocked but the action runs",
+    );
+  });
+});
+
+describe("linear plugin comment actions", () => {
+  it("comment.create calls Linear's commentCreate mutation", async () => {
+    const action = getAction(makeLinear(), "comment.create");
+
+    mockLinear((body) => {
+      assert.match(body.query, /commentCreate\(input: \$input\)/);
+      assert.deepEqual(body.variables, {
+        input: {
+          issueId: "THE-123",
+          body: "Resolved by PR #123.",
+        },
+      });
+      return {
+        commentCreate: {
+          success: true,
+          comment: {
+            id: "comment-1",
+            body: "Resolved by PR #123.",
+            issue: { id: "issue-1", identifier: "THE-123" },
+          },
+        },
+      };
+    });
+
+    const result = await action.execute(
+      { issueId: "THE-123", body: "Resolved by PR #123." },
+      ctx(),
+    );
+
+    assert.deepEqual(result, {
+      id: "comment-1",
+      body: "Resolved by PR #123.",
+      issue: { id: "issue-1", identifier: "THE-123" },
+    });
+  });
+
+  it("comment.update calls Linear's commentUpdate mutation", async () => {
+    const action = getAction(makeLinear(), "comment.update");
+
+    mockLinear((body) => {
+      assert.match(body.query, /commentUpdate\(id: \$id, input: \$input\)/);
+      assert.deepEqual(body.variables, {
+        id: "comment-1",
+        input: { body: "Updated note" },
+      });
+      return {
+        commentUpdate: {
+          success: true,
+          comment: { id: "comment-1", body: "Updated note" },
+        },
+      };
+    });
+
+    const result = await action.execute(
+      { id: "comment-1", body: "Updated note" },
+      ctx(),
+    );
+
+    assert.deepEqual(result, { id: "comment-1", body: "Updated note" });
+  });
+
+  it("comment.delete calls Linear's commentDelete mutation", async () => {
+    const action = getAction(makeLinear(), "comment.delete");
+
+    mockLinear((body) => {
+      assert.match(body.query, /commentDelete\(id: \$id\)/);
+      assert.deepEqual(body.variables, { id: "comment-1" });
+      return { commentDelete: { success: true } };
+    });
+
+    const result = await action.execute({ id: "comment-1" }, ctx());
+
+    assert.deepEqual(result, { success: true });
+  });
+});
+
+describe("linear plugin cycle actions", () => {
+  it("cycle.archive calls Linear's cycleArchive mutation", async () => {
+    const action = getAction(makeLinear(), "cycle.archive");
+
+    mockLinear((body) => {
+      assert.match(body.query, /cycleArchive\(id: \$id\)/);
+      assert.deepEqual(body.variables, { id: "cycle-1" });
+      return { cycleArchive: { success: true } };
+    });
+
+    const result = await action.execute({ id: "cycle-1" }, ctx());
+
+    assert.deepEqual(result, { success: true });
+  });
+
+  it("cycle.archive requires the cycle id", () => {
+    const action = getAction(makeLinear(), "cycle.archive");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    assert.equal(
+      validateTypedInput(action.inputSchema, {}).ok,
+      false,
+      "archiving without an id must be rejected",
+    );
+    assert.equal(validateTypedInput(action.inputSchema, { id: "c1" }).ok, true);
+  });
+
+  it("team.cyclesDeleteAll passes the TEAM id to teamCyclesDelete", async () => {
+    // Linear's teamCyclesDelete takes a team id and wipes every cycle that
+    // team has. The action must not be reachable under a name or parameter
+    // that reads as a single-cycle delete.
+    const action = getAction(makeLinear(), "team.cyclesDeleteAll");
+
+    mockLinear((body) => {
+      assert.match(body.query, /teamCyclesDelete\(id: \$id\)/);
+      assert.deepEqual(body.variables, { id: "team-1" });
+      return { teamCyclesDelete: { success: true } };
+    });
+
+    const result = await action.execute({ teamId: "team-1" }, ctx());
+
+    assert.deepEqual(result, { success: true });
+  });
+
+  it("the destructive team-wide delete is not exposed as cycle.delete", () => {
+    const plugin = makeLinear();
+    const names = plugin.actions.map((a) => a.name);
+    assert.ok(
+      !names.includes("cycle.delete"),
+      "cycle.delete would read as removing one cycle while deleting a team's entire cycle history",
+    );
+    const action = getAction(plugin, "team.cyclesDeleteAll");
+    assert.match(String(action.description), /^DESTRUCTIVE:/);
+    assert.ok(
+      "teamId" in
+        (typedSchema(plugin, "team.cyclesDeleteAll").properties ?? {}),
+      "the parameter must be named teamId so the blast radius is obvious",
+    );
+  });
+});
+
+describe("linear plugin initiative actions", () => {
+  it("initiative.addProject returns relationship data for verification", async () => {
+    const action = getAction(makeLinear(), "initiative.addProject");
+
+    mockLinear((body) => {
+      assert.match(body.query, /initiativeToProjectCreate\(input: \$input\)/);
+      assert.match(
+        body.query,
+        /initiative \{ id name projects \{ nodes \{ id name \} \} \}/,
+      );
+      assert.match(body.query, /project \{ id name \}/);
+      assert.deepEqual(body.variables, {
+        input: { initiativeId: "init-1", projectId: "project-1" },
+      });
+      return {
+        initiativeToProjectCreate: {
+          success: true,
+          initiativeToProject: {
+            id: "link-1",
+            initiative: {
+              id: "init-1",
+              name: "Initiative",
+              projects: { nodes: [{ id: "project-1", name: "Project" }] },
+            },
+            project: { id: "project-1", name: "Project" },
+          },
+        },
+      };
+    });
+
+    assert.deepEqual(
+      await action.execute(
+        { initiativeId: "init-1", projectId: "project-1" },
+        ctx(),
+      ),
+      {
+        success: true,
+        initiativeToProject: {
+          id: "link-1",
+          initiative: {
+            id: "init-1",
+            name: "Initiative",
+            projects: [{ id: "project-1", name: "Project" }],
+          },
+          project: { id: "project-1", name: "Project" },
+        },
+      },
+    );
+  });
+
+  it("initiative.removeProject uses the link id returned by initiative.addProject", async () => {
+    const action = getAction(makeLinear(), "initiative.removeProject");
+
+    mockLinear((body) => {
+      assert.match(body.query, /initiativeToProjectDelete\(id: \$id\)/);
+      assert.deepEqual(body.variables, { id: "link-1" });
+      return { initiativeToProjectDelete: { success: true } };
+    });
+
+    assert.deepEqual(await action.execute({ id: "link-1" }, ctx()), {
+      success: true,
+    });
+  });
+});
+
+describe("linear plugin custom view actions", () => {
+  it("view.create accepts common issue filter shapes documented in descriptions", async () => {
+    const action = getAction(makeLinear(), "view.create");
+    const filters = {
+      byLabel: { labels: { id: { in: ["label-id"] } } },
+      byProject: { project: { id: { eq: "project-id" } } },
+      byAssignee: { assignee: { id: { eq: "user-id" } } },
+      byState: { state: { id: { eq: "state-id" } } },
+      byPriority: { priority: { eq: 1 } },
+      dueThisWeek: { dueDate: { gte: "2026-06-09", lte: "2026-06-16" } },
+      agenda: {
+        and: [
+          { assignee: { id: { eq: "user-id" } } },
+          { state: { type: { nin: ["completed", "canceled"] } } },
+          {
+            or: [{ priority: { lte: 2 } }, { dueDate: { lte: "2026-06-16" } }],
+          },
+        ],
+      },
+    };
+    const entries = Object.entries(filters);
+
+    mockLinearSequence(
+      entries.map(([name, filterData], index) => (body) => {
+        assert.match(body.query, /customViewCreate\(input: \$input\)/);
+        assert.deepEqual(body.variables?.input, {
+          name,
+          shared: false,
+          teamId: "team-1",
+          filterData,
+        });
+        return {
+          customViewCreate: {
+            success: true,
+            customView: { id: `view-${index}` },
+          },
+        };
+      }),
+    );
+
+    for (const [index, [name, filterData]] of entries.entries()) {
+      assert.deepEqual(
+        await action.execute(
+          {
+            name,
+            shared: false,
+            teamId: "team-1",
+            filterData,
+          },
+          ctx(),
+        ),
+        { id: `view-${index}` },
+      );
+    }
+  });
+});
+
+describe("linear plugin scoped issue access", () => {
+  const scopedCtx = () =>
+    ctx({ apiKey: "lin_scoped", scopeLabelIds: "label-allowed" });
+
+  it("auto-applies configured scope labels on issue.create", async () => {
+    const action = getAction(makeLinear(), "issue.create");
+
+    mockLinear((body) => {
+      assert.match(body.query, /issueCreate\(input: \$input\)/);
+      assert.deepEqual(body.variables?.input, {
+        teamId: "team-1",
+        title: "Scoped issue",
+        labelIds: ["label-other", "label-allowed"],
+      });
+      return { issueCreate: { success: true, issue: { id: "issue-1" } } };
+    });
+
+    await action.execute(
+      { teamId: "team-1", title: "Scoped issue", labelIds: ["label-other"] },
+      scopedCtx(),
+    );
+  });
+
+  it("injects the scope label filter on issue.list", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+
+    mockLinear((body) => {
+      assert.match(body.query, /issues\(/);
+      assert.deepEqual(body.variables?.filter, {
+        and: [
+          { team: { id: { eq: "team-1" } } },
+          { labels: { id: { in: ["label-allowed"] } } },
+        ],
+      });
+      return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+    });
+
+    await action.execute({ teamId: "team-1" }, scopedCtx());
+  });
+
+  it("rejects direct issue.get when the issue lacks the scope label", async () => {
+    const action = getAction(makeLinear(), "issue.get");
+
+    mockLinear((body) => {
+      assert.match(body.query, /issue\(id: \$id\)/);
+      return {
+        issue: {
+          id: "issue-1",
+          labels: { nodes: [{ id: "label-other", name: "Other" }] },
+        },
+      };
+    });
+
+    await assert.rejects(
+      action.execute({ id: "ISS-1" }, scopedCtx()),
+      /not available to this scoped connection/,
+    );
+  });
+
+  it("checks scope before mutating issues", async () => {
+    const action = getAction(makeLinear(), "issue.delete");
+
+    mockLinearSequence([
+      (body) => {
+        assert.match(body.query, /issue\(id: \$id\)/);
+        assert.deepEqual(body.variables, { id: "ISS-1" });
+        return {
+          issue: {
+            id: "issue-1",
+            labels: { nodes: [{ id: "label-allowed", name: "Allowed" }] },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /issueDelete\(id: \$id/);
+        assert.deepEqual(body.variables, { id: "ISS-1", perm: null });
+        return { issueDelete: { success: true } };
+      },
+    ]);
+
+    const result = await action.execute({ id: "ISS-1" }, scopedCtx());
+    assert.deepEqual(result, { success: true });
+  });
+
+  it("refuses to remove a required scope label", async () => {
+    const action = getAction(makeLinear(), "issue.removeLabel");
+
+    mockLinear((body) => {
+      assert.match(body.query, /issue\(id: \$id\)/);
+      return {
+        issue: {
+          id: "issue-1",
+          labels: { nodes: [{ id: "label-allowed", name: "Allowed" }] },
+        },
+      };
+    });
+
+    await assert.rejects(
+      action.execute({ id: "ISS-1", labelId: "label-allowed" }, scopedCtx()),
+      /Cannot remove a required Linear scope label/,
+    );
+  });
+
+  it("disables workspace-wide comment listing under scoped config", async () => {
+    const action = getAction(makeLinear(), "comment.list");
+
+    await assert.rejects(
+      action.execute({}, scopedCtx()),
+      /comment.list is not available to scoped Linear connections/,
+    );
+  });
+
+  it("blocks broad non-ticket surfaces under scoped config", async () => {
+    for (const name of [
+      "project.list",
+      "project.get",
+      "org.get",
+      "webhook.list",
+    ] as const) {
+      const action = getAction(makeLinear(), name);
+      await assert.rejects(
+        action.execute({ id: "x" }, scopedCtx()),
+        /not available to scoped Linear connections/,
+      );
+    }
+  });
+
+  // SHFT-1644: the scope restricts issue *content*. Blocking cycles and
+  // users left a scoped agent unable to answer "what is assigned to me this
+  // cycle" at all, so it bypassed the plugin and called Linear directly.
+  it("keeps cycle and user reads available under scoped config", async () => {
+    const reads = [
+      ["cycle.list", {}, "cycles", { nodes: [], pageInfo: {} }],
+      ["cycle.get", { id: "cycle-1" }, "cycle", { id: "cycle-1" }],
+      ["user.list", {}, "users", { nodes: [], pageInfo: {} }],
+      ["user.get", { id: "me" }, "user", { id: "user-1" }],
+      ["team.members", { id: "team-1" }, "team", { members: { nodes: [] } }],
+    ] as const;
+
+    for (const [name, input, rootField, payload] of reads) {
+      const action = getAction(makeLinear(), name);
+      mockLinear((body) => {
+        assert.match(body.query, new RegExp(`${rootField}\\(`));
+        return { [rootField]: payload };
+      });
+      await action.execute(input, scopedCtx());
+    }
+  });
+
+  it("still blocks cycle and user writes under scoped config", async () => {
+    for (const [name, input] of [
+      ["cycle.archive", { id: "cycle-1" }],
+      ["team.cyclesDeleteAll", { teamId: "team-1" }],
+      ["user.update", { id: "me", name: "x" }],
+    ] as const) {
+      const action = getAction(makeLinear(), name);
+      await assert.rejects(
+        action.execute(input, scopedCtx()),
+        /not available to scoped Linear connections/,
+      );
+    }
+  });
+
+  // SHFT-1644: a scope value that is not a UUID (e.g. `requester:yosi`) made
+  // Linear reject every issue query with "each value in in must be a UUID".
+  // Names must resolve to ids, and an unknown one must say so.
+  it("resolves configured label names to UUIDs, once per connection", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const LABEL_ID = "e9fc5d53-a992-4952-9607-fa49ef892689";
+
+    mockLinearSequence(
+      [
+        (body) => {
+          assert.match(body.query, /issueLabels\(first: 250/);
+          return {
+            issueLabels: {
+              nodes: [{ id: LABEL_ID, name: "requester:yosi" }],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          };
+        },
+        (body) => {
+          assert.match(body.query, /issues\(/);
+          assert.deepEqual(body.variables?.filter, {
+            labels: { id: { in: [LABEL_ID] } },
+          });
+          return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+        },
+        (body) => {
+          // second call reuses the cached directory: no lookup request
+          assert.match(body.query, /issues\(/);
+          assert.deepEqual(body.variables?.filter, {
+            labels: { id: { in: [LABEL_ID] } },
+          });
+          return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+        },
+      ],
+      { autoResolveLabels: false },
+    );
+
+    const scoped = ctx({
+      apiKey: "lin_resolve",
+      scopeLabelIds: "requester:yosi",
+    });
+    await action.execute({}, scoped);
+    await action.execute({}, scoped);
+  });
+
+  it("fails with an actionable message when the scope value matches nothing", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const empty = (body: { query: string }) => {
+      assert.match(body.query, /issueLabels\(first: 250/);
+      return {
+        issueLabels: {
+          nodes: [],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      };
+    };
+
+    // The miss triggers one cache-bypassing re-read before giving up.
+    mockLinearSequence([empty, empty], { autoResolveLabels: false });
+
+    await assert.rejects(
+      action.execute(
+        {},
+        ctx({ apiKey: "lin_unknown", scopeLabelIds: "requester:yosi" }),
+      ),
+      /neither a label UUID nor the name of a label/,
+    );
+  });
+
+  // Label names are not unique in Linear: every team may own a `bug`, and a
+  // case-insensitive match widens that further. Resolving to whichever
+  // paginated last would scope the connection to a label nobody chose.
+  it("refuses an ambiguous label name instead of picking one", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const ENG = "1f2e3d4c-5b6a-4798-8765-43210fedcba9";
+    const OPS = "9abcdef0-1234-4567-8901-234567890abc";
+
+    mockLinearSequence(
+      [
+        () => ({
+          issueLabels: {
+            nodes: [
+              { id: ENG, name: "bug", team: { key: "ENG" } },
+              { id: OPS, name: "Bug", team: { key: "OPS" } },
+            ],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+      ],
+      { autoResolveLabels: false },
+    );
+
+    await assert.rejects(
+      action.execute(
+        {},
+        ctx({ apiKey: "lin_ambiguous", scopeLabelIds: "bug" }),
+      ),
+      (e: Error) => {
+        assert.match(e.message, /ambiguous: 2 labels share that name/);
+        // The candidates are what makes the error actionable.
+        assert.match(e.message, /team ENG/);
+        assert.match(e.message, /team OPS/);
+        assert.ok(e.message.includes(ENG) && e.message.includes(OPS));
+        return true;
+      },
+    );
+  });
+
+  it("resolves a workspace label whose name no other label shares", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const ID = "2b3c4d5e-6f70-4812-9a3b-4c5d6e7f8091";
+
+    mockLinearSequence(
+      [
+        () => ({
+          issueLabels: {
+            // A workspace label carries no team; the directory must accept that.
+            nodes: [{ id: ID, name: "requester:yosi", team: null }],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+        (body) => {
+          assert.deepEqual(body.variables?.filter, {
+            labels: { id: { in: [ID] } },
+          });
+          return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+        },
+      ],
+      { autoResolveLabels: false },
+    );
+
+    await action.execute(
+      {},
+      ctx({ apiKey: "lin_workspace", scopeLabelIds: "requester:yosi" }),
+    );
+  });
+
+  // A label created after the directory was first read must not stay
+  // unresolvable for the lifetime of the process.
+  it("re-reads the directory when a name is missing from the cache", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const LABEL_ID = "7c1d2a18-0a2c-4d31-9c2e-7f0f3b0c55aa";
+    const scoped = ctx({ apiKey: "lin_late", scopeLabelIds: "shipped-later" });
+
+    mockLinearSequence(
+      [
+        // first read: the label does not exist yet (cached)
+        () => ({
+          issueLabels: {
+            nodes: [],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+        // forced re-read after the miss: still absent, so this call fails
+        () => ({
+          issueLabels: {
+            nodes: [],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+        // the label now exists; the next attempt re-reads and finds it
+        () => ({
+          issueLabels: {
+            nodes: [{ id: LABEL_ID, name: "shipped-later" }],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        }),
+        (body) => {
+          assert.match(body.query, /issues\(/);
+          assert.deepEqual(body.variables?.filter, {
+            labels: { id: { in: [LABEL_ID] } },
+          });
+          return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+        },
+      ],
+      { autoResolveLabels: false },
+    );
+
+    await assert.rejects(
+      action.execute({}, scoped),
+      /neither a label UUID nor the name of a label/,
+    );
+    await action.execute({}, scoped);
+  });
+
+  it("skips the lookup entirely when every scope value is a UUID", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    const LABEL_ID = "e9fc5d53-a992-4952-9607-fa49ef892689";
+
+    mockLinear((body) => {
+      assert.match(body.query, /issues\(/);
+      assert.deepEqual(body.variables?.filter, {
+        labels: { id: { in: [LABEL_ID] } },
+      });
+      return { issues: { nodes: [], pageInfo: { hasNextPage: false } } };
+    });
+
+    await action.execute({}, ctx({ scopeLabelIds: LABEL_ID }));
+  });
+
+  // A brokered connection carries no secret, so two people's connections can
+  // share every public field. Whose workspace a directory belongs to is known
+  // only to the broker; a directory read for one call must not answer another.
+  it("never answers one brokered connection from another's label directory", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+    stubFetch(async () => {
+      throw new Error("a brokered plugin must not reach the network itself");
+    });
+    const brokerFor = (labelId: string, seen: unknown[]) => ({
+      async request(input: { body?: string | Uint8Array }) {
+        const body = JSON.parse(String(input.body)) as {
+          query: string;
+          variables?: Record<string, unknown>;
+        };
+        if (DIRECTORY_QUERY.test(body.query))
+          return Response.json({
+            data: {
+              issueLabels: {
+                nodes: [{ id: labelId, name: "requester:yosi" }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          });
+        seen.push(body.variables?.filter);
+        return Response.json({
+          data: { issues: { nodes: [], pageInfo: { hasNextPage: false } } },
+        });
+      },
+      async probe() {
+        return { outcome: "unverified" as const };
+      },
+    });
+    const brokered = (labelId: string, seen: unknown[]): ActionContext => ({
+      connection: {
+        name: "linear",
+        plugin: "linear",
+        config: { scopeLabelIds: "requester:yosi" },
+      },
+      credentials: brokerFor(labelId, seen),
+      log: { info() {}, warn() {}, error() {} },
+      async updateConnection() {},
+    });
+    const DANA = "11111111-1111-4111-8111-111111111111";
+    const GABI = "22222222-2222-4222-8222-222222222222";
+    const dana: unknown[] = [];
+    const gabi: unknown[] = [];
+    await action.execute({}, brokered(DANA, dana));
+    await action.execute({}, brokered(GABI, gabi));
+    assert.deepEqual(dana, [{ labels: { id: { in: [DANA] } } }]);
+    assert.deepEqual(gabi, [{ labels: { id: { in: [GABI] } } }]);
+  });
+
+  it("injects the scope label filter on issue.search with caller filters", async () => {
+    const action = getAction(makeLinear(), "issue.search");
+
+    mockLinear((body) => {
+      assert.match(body.query, /searchIssues/);
+      assert.deepEqual(body.variables?.filter, {
+        and: [
+          { state: { type: { eq: "started" } } },
+          { labels: { id: { in: ["label-allowed"] } } },
+        ],
+      });
+      return {
+        searchIssues: {
+          nodes: [],
+          totalCount: 0,
+          pageInfo: { hasNextPage: false },
+        },
+      };
+    });
+
+    await action.execute(
+      { term: "bug", filter: { state: { type: { eq: "started" } } } },
+      scopedCtx(),
+    );
+  });
+
+  it("preserves scope labels when issue.update replaces labelIds", async () => {
+    const action = getAction(makeLinear(), "issue.update");
+
+    mockLinearSequence([
+      (body) => {
+        assert.match(body.query, /issue\(id: \$id\)/);
+        return {
+          issue: {
+            id: "issue-1",
+            labels: { nodes: [{ id: "label-allowed", name: "Allowed" }] },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /issueUpdate\(id: \$id, input: \$input\)/);
+        assert.deepEqual(body.variables?.input, {
+          title: "Updated",
+          labelIds: ["label-other", "label-allowed"],
+        });
+        return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
+      },
+    ]);
+
+    await action.execute(
+      { id: "ISS-1", title: "Updated", labelIds: ["label-other"] },
+      scopedCtx(),
+    );
+  });
+
+  it("rejects issue.update attempts to remove a scope label", async () => {
+    const action = getAction(makeLinear(), "issue.update");
+
+    mockLinear((body) => {
+      assert.match(body.query, /issue\(id: \$id\)/);
+      return {
+        issue: {
+          id: "issue-1",
+          labels: { nodes: [{ id: "label-allowed", name: "Allowed" }] },
+        },
+      };
+    });
+
+    await assert.rejects(
+      action.execute(
+        { id: "ISS-1", removedLabelIds: ["label-allowed"] },
+        scopedCtx(),
+      ),
+      /Cannot remove a required Linear scope label/,
+    );
+  });
+
+  it("checks parent issue scope before adding comments or listing comments", async () => {
+    const createComment = getAction(makeLinear(), "comment.create");
+    const listComments = getAction(makeLinear(), "comment.list");
+
+    mockLinearSequence([
+      (body) => {
+        assert.match(body.query, /issue\(id: \$id\)/);
+        return {
+          issue: {
+            id: "issue-1",
+            labels: { nodes: [{ id: "label-allowed", name: "Allowed" }] },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /commentCreate\(input: \$input\)/);
+        return {
+          commentCreate: { success: true, comment: { id: "comment-1" } },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /issue\(id: \$id\)/);
+        return {
+          issue: {
+            id: "issue-1",
+            labels: { nodes: [{ id: "label-allowed", name: "Allowed" }] },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /comments\(first: \$first\)/);
+        return {
+          issue: {
+            comments: {
+              nodes: [{ id: "comment-1" }],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        };
+      },
+    ]);
+
+    assert.deepEqual(
+      await createComment.execute(
+        { issueId: "ISS-1", body: "hi" },
+        scopedCtx(),
+      ),
+      { id: "comment-1" },
+    );
+    assert.deepEqual(
+      await listComments.execute({ issueId: "ISS-1" }, scopedCtx()),
+      {
+        nodes: [{ id: "comment-1" }],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+    );
+  });
+
+  it("checks parent issue scope before attachment create/link actions", async () => {
+    const create = getAction(makeLinear(), "attachment.create");
+    const link = getAction(makeLinear(), "attachment.linkURL");
+
+    mockLinearSequence([
+      (body) => {
+        assert.match(body.query, /issue\(id: \$id\)/);
+        return {
+          issue: {
+            id: "issue-1",
+            labels: { nodes: [{ id: "label-allowed", name: "Allowed" }] },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /attachmentCreate\(input: \$input\)/);
+        return {
+          attachmentCreate: { success: true, attachment: { id: "att-1" } },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /issue\(id: \$id\)/);
+        return {
+          issue: {
+            id: "issue-1",
+            labels: { nodes: [{ id: "label-allowed", name: "Allowed" }] },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /attachmentLinkURL/);
+        return {
+          attachmentLinkURL: { success: true, attachment: { id: "att-2" } },
+        };
+      },
+    ]);
+
+    assert.deepEqual(
+      await create.execute(
+        { issueId: "ISS-1", title: "Trace", url: "https://example.test" },
+        scopedCtx(),
+      ),
+      { id: "att-1" },
+    );
+    assert.deepEqual(
+      await link.execute(
+        { issueId: "ISS-1", url: "https://example.test" },
+        scopedCtx(),
+      ),
+      { id: "att-2" },
+    );
+  });
+
+  it("allows direct comment actions only through scoped parent issues", async () => {
+    const get = getAction(makeLinear(), "comment.get");
+    const update = getAction(makeLinear(), "comment.update");
+    const del = getAction(makeLinear(), "comment.delete");
+
+    mockLinearSequence([
+      (body) => {
+        assert.match(body.query, /comment\(id: \$id\).*issue/s);
+        return {
+          comment: {
+            id: "comment-1",
+            issue: { labels: { nodes: [{ id: "label-allowed" }] } },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /comment\(id: \$id\) \{ id body url/s);
+        return { comment: { id: "comment-1", body: "hi" } };
+      },
+      (body) => {
+        assert.match(body.query, /comment\(id: \$id\).*issue/s);
+        return {
+          comment: {
+            id: "comment-1",
+            issue: { labels: { nodes: [{ id: "label-allowed" }] } },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /commentUpdate\(id: \$id, input: \$input\)/);
+        return {
+          commentUpdate: { success: true, comment: { id: "comment-1" } },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /comment\(id: \$id\).*issue/s);
+        return {
+          comment: {
+            id: "comment-1",
+            issue: { labels: { nodes: [{ id: "label-allowed" }] } },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /commentDelete\(id: \$id\)/);
+        return { commentDelete: { success: true } };
+      },
+    ]);
+
+    assert.deepEqual(await get.execute({ id: "comment-1" }, scopedCtx()), {
+      id: "comment-1",
+      body: "hi",
+    });
+    assert.deepEqual(
+      await update.execute({ id: "comment-1", body: "updated" }, scopedCtx()),
+      { id: "comment-1" },
+    );
+    assert.deepEqual(await del.execute({ id: "comment-1" }, scopedCtx()), {
+      success: true,
+    });
+  });
+
+  it("rejects direct comment actions when the parent issue is out of scope", async () => {
+    const action = getAction(makeLinear(), "comment.get");
+
+    mockLinear((body) => {
+      assert.match(body.query, /comment\(id: \$id\).*issue/s);
+      return {
+        comment: {
+          id: "comment-1",
+          issue: { labels: { nodes: [{ id: "label-other" }] } },
+        },
+      };
+    });
+
+    await assert.rejects(
+      action.execute({ id: "comment-1" }, scopedCtx()),
+      /Linear comment is not available/,
+    );
+  });
+
+  it("allows direct attachment actions only through scoped parent issues", async () => {
+    const get = getAction(makeLinear(), "attachment.get");
+    const update = getAction(makeLinear(), "attachment.update");
+    const del = getAction(makeLinear(), "attachment.delete");
+
+    mockLinearSequence([
+      (body) => {
+        assert.match(body.query, /attachment\(id: \$id\).*issue/s);
+        return {
+          attachment: {
+            id: "att-1",
+            issue: { labels: { nodes: [{ id: "label-allowed" }] } },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /attachment\(id: \$id\) \{ id title/s);
+        return { attachment: { id: "att-1", title: "Trace" } };
+      },
+      (body) => {
+        assert.match(body.query, /attachment\(id: \$id\).*issue/s);
+        return {
+          attachment: {
+            id: "att-1",
+            issue: { labels: { nodes: [{ id: "label-allowed" }] } },
+          },
+        };
+      },
+      (body) => {
+        assert.match(
+          body.query,
+          /attachmentUpdate\(id: \$id, input: \$input\)/,
+        );
+        return {
+          attachmentUpdate: { success: true, attachment: { id: "att-1" } },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /attachment\(id: \$id\).*issue/s);
+        return {
+          attachment: {
+            id: "att-1",
+            issue: { labels: { nodes: [{ id: "label-allowed" }] } },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /attachmentDelete\(id: \$id\)/);
+        return { attachmentDelete: { success: true } };
+      },
+    ]);
+
+    assert.deepEqual(await get.execute({ id: "att-1" }, scopedCtx()), {
+      id: "att-1",
+      title: "Trace",
+    });
+    assert.deepEqual(
+      await update.execute({ id: "att-1", title: "Updated" }, scopedCtx()),
+      { id: "att-1" },
+    );
+    assert.deepEqual(await del.execute({ id: "att-1" }, scopedCtx()), {
+      success: true,
+    });
+  });
+
+  it("rejects direct attachment actions when the parent issue is out of scope", async () => {
+    const action = getAction(makeLinear(), "attachment.get");
+
+    mockLinear((body) => {
+      assert.match(body.query, /attachment\(id: \$id\).*issue/s);
+      return {
+        attachment: {
+          id: "att-1",
+          issue: { labels: { nodes: [{ id: "label-other" }] } },
+        },
+      };
+    });
+
+    await assert.rejects(
+      action.execute({ id: "att-1" }, scopedCtx()),
+      /Linear attachment is not available/,
+    );
+  });
+
+  it("scopes view.issues and blocks other view connection surfaces", async () => {
+    const issues = getAction(makeLinear(), "view.issues");
+
+    mockLinear((body) => {
+      assert.match(body.query, /customView\(id: \$id\)/);
+      assert.deepEqual(body.variables?.filter, {
+        labels: { id: { in: ["label-allowed"] } },
+      });
+      return {
+        customView: {
+          issues: { nodes: [], pageInfo: { hasNextPage: false } },
+        },
+      };
+    });
+
+    await issues.execute({ id: "view-1" }, scopedCtx());
+
+    for (const name of [
+      "view.projects",
+      "view.initiatives",
+      "view.updates",
+    ] as const) {
+      const action = getAction(makeLinear(), name);
+      await assert.rejects(
+        action.execute({ id: "view-1" }, scopedCtx()),
+        /not available to scoped Linear connections/,
+      );
+    }
+  });
+
+  it("keeps broad surfaces available when scope labels are not configured", async () => {
+    const action = getAction(makeLinear(), "project.list");
+
+    mockLinear((body) => {
+      assert.match(body.query, /projects\(/);
+      return { projects: { nodes: [], pageInfo: { hasNextPage: false } } };
+    });
+
+    assert.deepEqual(await action.execute({}, ctx()), {
+      nodes: [],
+      pageInfo: { hasNextPage: false },
+    });
+  });
+});
+
+// SHFT-1262: agents read an issue before mutating it, so its lists must
+// read as lists: a GraphQL connection (`labels: { nodes }`) reads as "no
+// labels", and re-adding a label that is present fails. Every nested list
+// is a plain array; a page keeps { nodes, pageInfo }.
+describe("linear response contract", () => {
+  const LABELS = [
+    { id: "label-1", name: "scope:small", color: "#16A34A" },
+    { id: "label-2", name: "Bug", color: "#EB5757" },
+  ];
+  const issueOnWire = {
+    id: "issue-1",
+    identifier: "SHFT-1",
+    state: { id: "state-1", name: "Todo", type: "unstarted" },
+    team: { id: "team-1", key: "SHFT", name: "Shift" },
+    parent: null,
+    labels: { nodes: LABELS },
+  };
+  const issueReturned = { ...issueOnWire, labels: LABELS };
+
+  it("returns one issue shape, labels an array, from get, create and update", async () => {
+    mockLinearSequence([
+      () => ({ issue: issueOnWire }),
+      () => ({ issueCreate: { success: true, issue: issueOnWire } }),
+      () => ({ issueUpdate: { success: true, issue: issueOnWire } }),
+    ]);
+    const plugin = makeLinear();
+    assert.deepEqual(
+      await getAction(plugin, "issue.get").execute({ id: "SHFT-1" }, ctx()),
+      issueReturned,
+    );
+    assert.deepEqual(
+      await getAction(plugin, "issue.create").execute(
+        { teamId: "team-1", title: "T" },
+        ctx(),
+      ),
+      issueReturned,
+    );
+    assert.deepEqual(
+      await getAction(plugin, "issue.update").execute(
+        { id: "SHFT-1", title: "T" },
+        ctx(),
+      ),
+      issueReturned,
+    );
+  });
+
+  it("returns every other nested list as an array", async () => {
+    const plugin = makeLinear();
+    for (const [name, input, wire, returned] of [
+      [
+        "project.get",
+        { id: "project-1" },
+        {
+          project: {
+            id: "project-1",
+            teams: { nodes: [{ id: "t", key: "K" }] },
+          },
+        },
+        { id: "project-1", teams: [{ id: "t", key: "K" }] },
+      ],
+      [
+        "initiative.get",
+        { id: "init-1" },
+        { initiative: { id: "init-1", projects: { nodes: [] } } },
+        { id: "init-1", projects: [] },
+      ],
+      [
+        "team.members",
+        { id: "team-1" },
+        { team: { members: { nodes: [{ id: "user-1" }] } } },
+        [{ id: "user-1" }],
+      ],
+    ] as const) {
+      mockLinear(() => wire);
+      assert.deepEqual(
+        await getAction(plugin, name).execute(input, ctx()),
+        returned,
+        name,
+      );
+    }
+  });
+
+  it("keeps a page's nodes beside its cursor, its rows flattened", async () => {
+    const plugin = makeLinear();
+    const pageInfo = { hasNextPage: true, endCursor: "c1" };
+    mockLinear((body) => {
+      // A list row names its team by id, which a follow-up mutation needs.
+      assert.match(body.query, /team \{ id key \}/);
+      return {
+        issues: {
+          nodes: [{ id: "issue-1", team: { id: "team-1", key: "SHFT" } }],
+          pageInfo,
+        },
+      };
+    });
+    assert.deepEqual(await getAction(plugin, "issue.list").execute({}, ctx()), {
+      nodes: [{ id: "issue-1", team: { id: "team-1", key: "SHFT" } }],
+      pageInfo,
+    });
+    mockLinear(() => ({
+      projects: {
+        nodes: [{ id: "p", teams: { nodes: [{ id: "t", key: "K" }] } }],
+        pageInfo,
+      },
+    }));
+    assert.deepEqual(
+      await getAction(plugin, "project.list").execute({}, ctx()),
+      { nodes: [{ id: "p", teams: [{ id: "t", key: "K" }] }], pageInfo },
+    );
+    mockLinear(() => ({
+      searchProjects: { nodes: [{ id: "p" }], totalCount: 1 },
+    }));
+    assert.deepEqual(
+      await getAction(plugin, "project.search").execute({ term: "p" }, ctx()),
+      { nodes: [{ id: "p" }], totalCount: 1 },
+    );
+  });
+
+  it("returns an attachment's metadata and a view's filters exactly as stored", async () => {
+    const plugin = makeLinear();
+    const stored = { nodes: [{ id: "from-an-integration" }] };
+    mockLinear(() => ({ attachment: { id: "att-1", metadata: stored } }));
+    assert.deepEqual(
+      await getAction(plugin, "attachment.get").execute({ id: "att-1" }, ctx()),
+      { id: "att-1", metadata: stored },
+    );
+    mockLinear(() => ({ customView: { id: "view-1", filterData: stored } }));
+    assert.deepEqual(
+      await getAction(plugin, "view.get").execute({ id: "view-1" }, ctx()),
+      { id: "view-1", filterData: stored },
+    );
+  });
+});
+
+// SHFT-883: Linear's issueUpdate accepts null for clearable relations
+// (cycleId: null removes the issue from its cycle), but the action schema
+// only allowed strings — so "unset" was inexpressible via the API. The
+// schema must distinguish omitted (leave unchanged) from null (clear) and
+// pass null through to the mutation untouched.
+describe("linear issue.update nullable clearable fields", () => {
+  const CLEARABLE_FIELDS = [
+    "assigneeId",
+    "projectId",
+    "projectMilestoneId",
+    "cycleId",
+    "parentId",
+    "estimate",
+    "dueDate",
+    "snoozedUntilAt",
+  ] as const;
+
+  it("accepts null for every clearable field", () => {
+    const action = getAction(makeLinear(), "issue.update");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    for (const field of CLEARABLE_FIELDS) {
+      const validation = validateTypedInput(action.inputSchema, {
+        id: "SHFT-1",
+        [field]: null,
+      });
+      assert.equal(
+        validation.ok,
+        true,
+        `${field}: null must validate, got: ${validation.errors.join("; ")}`,
+      );
+    }
+  });
+
+  it("still rejects null for non-clearable fields", () => {
+    const action = getAction(makeLinear(), "issue.update");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    for (const field of ["title", "stateId", "teamId"] as const) {
+      const validation = validateTypedInput(action.inputSchema, {
+        id: "SHFT-1",
+        [field]: null,
+      });
+      assert.equal(validation.ok, false, `${field}: null must be rejected`);
+    }
+  });
+
+  it("passes cycleId: null through to issueUpdate to clear the cycle", async () => {
+    const action = getAction(makeLinear(), "issue.update");
+
+    mockLinear((body) => {
+      assert.match(body.query, /issueUpdate\(id: \$id, input: \$input\)/);
+      assert.deepEqual(body.variables, {
+        id: "SHFT-1",
+        input: { cycleId: null },
+      });
+      return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
+    });
+
+    const result = await action.execute({ id: "SHFT-1", cycleId: null }, ctx());
+    assert.deepEqual(result, { id: "issue-1" });
+  });
+
+  it("omitted fields stay omitted — null is not injected", async () => {
+    const action = getAction(makeLinear(), "issue.update");
+
+    mockLinear((body) => {
+      assert.deepEqual(body.variables, {
+        id: "SHFT-1",
+        input: { title: "Only title" },
+      });
+      return { issueUpdate: { success: true, issue: { id: "issue-1" } } };
+    });
+
+    await action.execute({ id: "SHFT-1", title: "Only title" }, ctx());
+  });
+});
+
+// SHFT-883 paper cuts: issue.list silently dropped unknown keys (so
+// `first: 100` validated, was discarded, and the default 50 looked like a
+// clamp), and its projection never hydrated `cycle`, making cycle
+// membership invisible from list output.
+describe("linear issue.list pagination and cycle hydration", () => {
+  it("rejects unknown keys like `first` instead of silently dropping them", () => {
+    const action = getAction(makeLinear(), "issue.list");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    const validation = validateTypedInput(action.inputSchema, { first: 100 });
+    assert.equal(validation.ok, false);
+  });
+
+  it("documents pagination on the limit input", () => {
+    const description = String(
+      typedSchema(makeLinear(), "issue.list").properties?.limit?.description ??
+        "",
+    );
+    assert.match(description, /pageInfo/);
+  });
+
+  it("hydrates cycle in the list projection", async () => {
+    const action = getAction(makeLinear(), "issue.list");
+
+    mockLinear((body) => {
+      assert.match(body.query, /cycle \{ id number name \}/);
+      return {
+        issues: {
+          nodes: [
+            {
+              id: "issue-1",
+              cycle: { id: "cycle-1", number: 14, name: "Honda" },
+            },
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      };
+    });
+
+    const result = (await action.execute({}, ctx())) as {
+      nodes: Array<{ cycle: unknown }>;
+    };
+    assert.deepEqual(result.nodes[0].cycle, {
+      id: "cycle-1",
+      number: 14,
+      name: "Honda",
+    });
+  });
+});
+
+// The bug: comment.list accepted only { limit }, and its schema was not
+// strict — so comment.list({ issueId }) passed validation, had issueId
+// silently dropped, and returned workspace-wide comments that look like an
+// answer but aren't. comment.list must honor issueId and reject unknown
+// inputs.
+describe("linear comment.list issue scoping", () => {
+  const issueComments = {
+    nodes: [{ id: "c1", body: "on the issue" }],
+    pageInfo: { hasNextPage: false, endCursor: null },
+  };
+
+  it("scopes to the given issue instead of listing workspace-wide", async () => {
+    const action = getAction(makeLinear(), "comment.list");
+
+    mockLinear((body) => {
+      // must query the issue's comments, not the workspace comments root
+      assert.match(body.query, /issue\(id: \$id\)/);
+      assert.equal(body.variables?.id, "SHFT-394");
+      return { issue: { comments: issueComments } };
+    });
+
+    const result = await action.execute({ issueId: "SHFT-394" }, ctx());
+    assert.deepEqual(result, issueComments);
+  });
+
+  it("still lists workspace-wide when no issueId is given", async () => {
+    const action = getAction(makeLinear(), "comment.list");
+    const workspace = {
+      nodes: [{ id: "c9", body: "elsewhere" }],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    };
+
+    mockLinear((body) => {
+      assert.match(body.query, /comments\(/);
+      assert.equal(body.variables?.first, 10);
+      return { comments: workspace };
+    });
+
+    const result = await action.execute({ limit: 10 }, ctx());
+    assert.deepEqual(result, workspace);
+  });
+
+  it("rejects unknown input keys instead of silently dropping them", () => {
+    const action = getAction(makeLinear(), "comment.list");
+    assert.ok(isTypedInputSchema(action.inputSchema));
+    const validation = validateTypedInput(action.inputSchema, {
+      issueID: "SHFT-394", // typo'd key must fail loudly, not return garbage
+    });
+    assert.equal(validation.ok, false);
+  });
+
+  it("allows scoped connections to list comments for an in-scope issue", async () => {
+    const action = getAction(makeLinear(), "comment.list");
+
+    mockLinearSequence([
+      (body) => {
+        // scope check resolves the issue's labels first
+        assert.match(body.query, /labels/);
+        return {
+          issue: {
+            id: "uuid-1",
+            identifier: "SHFT-394",
+            labels: { nodes: [{ id: "label-allowed", name: "agent" }] },
+          },
+        };
+      },
+      (body) => {
+        assert.match(body.query, /issue\(id: \$id\)/);
+        return { issue: { comments: issueComments } };
+      },
+    ]);
+
+    const result = await action.execute(
+      { issueId: "SHFT-394" },
+      ctx({ scopeLabelIds: "label-allowed" }),
+    );
+    assert.deepEqual(result, issueComments);
+  });
+});

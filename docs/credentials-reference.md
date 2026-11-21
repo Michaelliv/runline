@@ -1,6 +1,6 @@
 # Credentials Reference
 
-This page lists the request helpers, call fields, failure helpers, error codes, and declaration values of runline's credential layer. See [Credentials](credentials.md) for how to declare a credential and which declaration fits an API.
+This page lists the request helpers, call fields, failure helpers, error codes, and declaration values of codemode's credential layer. See [Credentials](credentials.md) for how to declare a credential and which declaration fits an API.
 
 ## Request helpers
 
@@ -122,7 +122,7 @@ The same plugin signs in two places, and the declaration serves both:
 |---|---|---|
 | Who holds the secret | this process, in the connection's flat config | the host, outside this process |
 | Static secret | the `local` fields (`apiKey`, …) | the host's structured `credential` field |
-| OAuth | `clientId`, `clientSecret`, `refreshToken`, `accessToken`, `accessTokenExpiresAt`, as `runline auth` stores them; renewals are written back flat | the host's grant |
+| OAuth | `clientId`, `clientSecret`, `refreshToken`, `accessToken`, `accessTokenExpiresAt`, as `codemode auth` stores them; renewals are written back flat | the host's grant |
 | AWS | `accessKeyId`, `secretAccessKey`, `sessionToken`, or `awsProfile`; an assumed role's session in `awsSession` | the host's key and session |
 | Cookie session | the jar in `cookieSession` | the host's jar |
 | The plugin's config | everything | public settings only (a region, a host, `authenticated: true`) |

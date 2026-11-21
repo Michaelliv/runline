@@ -1,27 +1,27 @@
 # Run Code
 
-`runline exec` runs JavaScript that calls actions. The same code works through the SDK's `execute()` method and the `execute_runline` tool in Pi, so this page applies to all three.
+`codemode exec` runs JavaScript that calls actions. The same code works through the SDK's `execute()` method, so this page applies to both.
 
-If you have not installed runline or added a connection yet, follow the [Quickstart](quickstart.md).
+If you have not installed codemode or added a connection yet, follow the [Quickstart](quickstart.md).
 
 ## Write the code
 
-Runline runs the code as the body of an async function. Use `await` for action calls and `return` for the result:
+Codemode runs the code as the body of an async function. Use `await` for action calls and `return` for the result:
 
 ```bash
-runline exec 'return await github.issue.get({ owner: "nodejs", repo: "node", issueNumber: 1 })'
+codemode exec 'return await github.issue.get({ owner: "nodejs", repo: "node", issueNumber: 1 })'
 ```
 
-Code can also be a single arrow function, which runline calls:
+Code can also be a single arrow function, which codemode calls:
 
 ```bash
-runline exec 'async () => { return await node.os.platform(); }'
+codemode exec 'async () => { return await node.os.platform(); }'
 ```
 
 Use `--file` or `-f` to run a file instead of an inline string:
 
 ```bash
-runline exec -f ./scripts/triage.js
+codemode exec -f ./scripts/triage.js
 ```
 
 ## Call actions
@@ -40,9 +40,9 @@ return issue.number;
 
 `actions.github.issue.create(input)` is the same call. Every action returns a promise.
 
-When an action declares a TypeBox schema, runline validates the input before the action runs and rejects an invalid call with the validation errors. An action declared with the older field-map schema receives its input unvalidated, so check it with `actions.check()` first. An action that fails rejects with the plugin's error message, which code can catch.
+When an action declares a TypeBox schema, codemode validates the input before the action runs and rejects an invalid call with the validation errors. An action declared with the older field-map schema receives its input unvalidated, so check it with `actions.check()` first. An action that fails rejects with the plugin's error message, which code can catch.
 
-In `runline exec`, a bundled plugin is loaded only when a connection names it. Code that uses a plugin without a connection fails with `<plugin> is not defined`. Plugins from your `plugins` folders and from packages are always loaded.
+In `codemode exec`, a bundled plugin is loaded only when a connection names it. Code that uses a plugin without a connection fails with `<plugin> is not defined`. Plugins from your `plugins` folders and from packages are always loaded.
 
 ## Discover actions
 
@@ -59,7 +59,7 @@ The `actions` object describes what is loaded. Use it instead of guessing names 
 `actions.check()` validates input against the action's schema and does not call the action:
 
 ```bash
-runline exec 'return actions.check("github.issue.create", { owner: "acme" })'
+codemode exec 'return actions.check("github.issue.create", { owner: "acme" })'
 ```
 
 `actions.describe()` throws for an unknown path and names the closest matches. `actions.check()` returns `ok: false` with `suggestions` instead.
@@ -68,14 +68,14 @@ A reliable order is `find`, then `describe`, then `check`, then the call.
 
 ## Read results and logs
 
-`runline exec` prints the returned value to stdout. Strings print as they are, and other values print as indented JSON. A run that returns nothing prints nothing.
+`codemode exec` prints the returned value to stdout. Strings print as they are, and other values print as indented JSON. A run that returns nothing prints nothing.
 
 Calls to `console.log`, `console.warn`, `console.error`, `console.info`, and `console.debug` are captured and printed to stderr, each prefixed with its level.
 
 Add `--json` for one machine-readable object:
 
 ```bash
-runline exec 'console.log("checking"); return { ok: true }' --json
+codemode exec 'console.log("checking"); return { ok: true }' --json
 ```
 
 ```json
@@ -89,12 +89,12 @@ A failed run prints `{ "error", "logs" }` and exits with status 1. Results are c
 
 ## List actions without running code
 
-`runline actions` prints every action that runline can load, with its access label and inputs. This includes bundled plugins that have no connection:
+`codemode actions` prints every action that codemode can load, with its access label and inputs. This includes bundled plugins that have no connection:
 
 ```bash
-runline actions
-runline actions --connected
-runline actions --json
+codemode actions
+codemode actions --connected
+codemode actions --json
 ```
 
 `--connected` limits the list to plugins with a connection. `--json` includes each action's input schema.
@@ -113,6 +113,6 @@ Code runs in a Node.js worker thread, not in the process that runs actions.
 | `process.env` | Empty. The host's environment is not passed to the worker |
 | `process.exit()` | Throws. Return a value instead |
 
-Runline stops a run after `timeoutMs`, 30 seconds by default, and when it exceeds `memoryLimitBytes`, 64 MB by default. Set either in [`config.json`](configuration.md#settings).
+Codemode stops a run after `timeoutMs`, 30 seconds by default, and when it exceeds `memoryLimitBytes`, 64 MB by default. Set either in [`config.json`](configuration.md#settings).
 
 The worker is a convenient place to run code, not a security boundary. Code can load `node:fs` and `node:child_process` through `require`. Add a connection for the bundled `node` plugin when code should reach the filesystem, processes, or the network through labeled actions such as `node.fs.readFile` and `node.fetch`. See [Security](security.md).

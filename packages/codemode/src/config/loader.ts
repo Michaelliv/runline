@@ -1,0 +1,147 @@
+import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+import { connectionFields } from "../plugin/schema.js";
+import type { ConnectionConfig, ConnectionSchema } from "../plugin/types.js";
+import { legacyName } from "../utils/deprecation.js";
+import { readConnectionFile, updateConnectionFile } from "./store.js";
+import { type CodemodeConfig, DEFAULT_CONFIG } from "./types.js";
+
+const CONFIG_DIR_NAME = ".codemode";
+const LEGACY_CONFIG_DIR_NAME = ".runline";
+const CONFIG_FILE = "config.json";
+
+/** What a codemode folder may be called: its name, and its runline name. */
+export const CONFIG_DIR_NAMES = [CONFIG_DIR_NAME, LEGACY_CONFIG_DIR_NAME];
+
+/** The codemode folder in `dir`: `.codemode`, else a `.runline` left to rename. */
+export function configDirIn(dir: string): string | null {
+  const current = join(dir, CONFIG_DIR_NAME);
+  if (existsSync(current)) return current;
+  const legacy = join(dir, LEGACY_CONFIG_DIR_NAME);
+  if (!existsSync(legacy)) return null;
+  legacyName(legacy, `${current} (rename the folder)`);
+  return legacy;
+}
+
+/** The user's own codemode folder: `~/.codemode`. */
+export function userConfigDir(): string {
+  return configDirIn(homedir()) ?? join(homedir(), CONFIG_DIR_NAME);
+}
+
+/** The nearest `.codemode` folder at or above `from`. */
+export function findConfigDir(from: string = process.cwd()): string | null {
+  let dir = resolve(from);
+  while (true) {
+    const candidate = configDirIn(dir);
+    if (candidate) return candidate;
+    const parent = join(dir, "..");
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+function configPath(): string {
+  return join(
+    findConfigDir() ?? join(process.cwd(), CONFIG_DIR_NAME),
+    CONFIG_FILE,
+  );
+}
+
+export function loadConfigFrom(path: string): CodemodeConfig {
+  return { ...DEFAULT_CONFIG, ...readConnectionFile(path) };
+}
+
+export function loadConfig(): CodemodeConfig {
+  return loadConfigFrom(configPath());
+}
+
+/** Replace the entire config, fencing handles bound to its previous accounts. */
+export async function saveConfig(config: CodemodeConfig): Promise<void> {
+  const replacement = structuredClone(config);
+  await updateConnectionFile(configPath(), (data) => {
+    for (const key of Object.keys(data)) delete data[key];
+    Object.assign(data, replacement, {
+      connections: replacement.connections.map((entry) => ({
+        ...entry,
+        generation: randomUUID(),
+      })),
+    });
+    return { result: undefined, write: true };
+  });
+}
+
+/** A new generation fences handles from an earlier login with the same name. */
+export async function addConnection(
+  name: string,
+  plugin: string,
+  configValues: Record<string, unknown>,
+  options: {
+    /** The plugin's owner (`PluginSourceInfo.owner`), binding the connection to it. */
+    owner?: string;
+  } = {},
+): Promise<void> {
+  const conn = {
+    name,
+    plugin,
+    config: structuredClone(configValues),
+    ...(options.owner === undefined ? {} : { owner: options.owner }),
+    generation: randomUUID(),
+  };
+  await updateConnectionFile(configPath(), (data) => {
+    const existing = data.connections.findIndex((c) => c.name === name);
+    if (existing >= 0) data.connections[existing] = conn;
+    else data.connections.push(conn);
+    return { result: undefined, write: true };
+  });
+}
+
+export async function removeConnection(name: string): Promise<boolean> {
+  return updateConnectionFile(configPath(), (data) => {
+    const idx = data.connections.findIndex((c) => c.name === name);
+    if (idx < 0) return { result: false, write: false };
+    data.connections.splice(idx, 1);
+    return { result: true, write: true };
+  });
+}
+
+/** Administrative patch. Plugin refreshes use their resolved connection handle. */
+export async function updateConnectionConfig(
+  name: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const copy = structuredClone(patch);
+  await updateConnectionFile(configPath(), (data) => {
+    const current = data.connections.find((entry) => entry.name === name);
+    if (!current) throw new Error(`Connection not found: ${name}`);
+    current.config = { ...current.config, ...copy };
+    return { result: undefined, write: true };
+  });
+}
+
+export function getConnection(
+  plugin: string,
+  name?: string,
+): ConnectionConfig | undefined {
+  const config = loadConfig();
+  return config.connections.find(
+    (c) => c.plugin === plugin && (name === undefined || c.name === name),
+  );
+}
+
+export function applyEnvOverrides(
+  conn: ConnectionConfig,
+  schema?: ConnectionSchema,
+): ConnectionConfig {
+  if (!schema) return conn;
+  const config = { ...conn.config };
+  for (const [key, field] of Object.entries(connectionFields(schema))) {
+    if (field.env && config[key] == null) {
+      const envVal = process.env[field.env];
+      if (envVal) config[key] = envVal;
+    }
+  }
+  return { ...conn, config };
+}

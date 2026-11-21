@@ -1,12 +1,12 @@
 # Command Line
 
-This page documents the `runline` command, its subcommands, and their options.
+This page documents the `codemode` command, its subcommands, and their options.
 
 ```text
-runline [options] <command> [arguments]
+codemode [options] <command> [arguments]
 ```
 
-Run `runline --help` or `runline <command> --help` for the same information in the terminal.
+Run `codemode --help` or `codemode <command> --help` for the same information in the terminal.
 
 ## Global options
 
@@ -17,14 +17,14 @@ Run `runline --help` or `runline <command> --help` for the same information in t
 | `--no-color` | Disable colored output |
 | `-v`, `--version` | Print the version and exit |
 
-Runline reads the nearest `.runline` folder at or above the working directory. See [Configuration](configuration.md).
+Codemode reads the nearest `.codemode` folder at or above the working directory. See [Configuration](configuration.md).
 
 ## Run code
 
 ```sh
-runline exec 'return await github.issue.get({ owner: "nodejs", repo: "node", issueNumber: 1 })'
-runline exec -f ./scripts/triage.js
-runline actions --connected
+codemode exec 'return await github.issue.get({ owner: "nodejs", repo: "node", issueNumber: 1 })'
+codemode exec -f ./scripts/triage.js
+codemode actions --connected
 ```
 
 See [Run Code](usage.md) for the calling conventions and the runtime.
@@ -47,8 +47,8 @@ See [Run Code](usage.md) for the calling conventions and the runtime.
 ## Connections
 
 ```sh
-runline connection add gh --plugin github --set token=$GITHUB_TOKEN
-runline auth gmail
+codemode connection add gh --plugin github --set token=$GITHUB_TOKEN
+codemode auth gmail
 ```
 
 See [Connections](connections.md) for environment variables, OAuth setup, and storage.
@@ -66,16 +66,16 @@ See [Connections](connections.md) for environment variables, OAuth setup, and st
 - `auth -n`, `--name <name>`<br>
   Names the connection. The default is the plugin name.
 - `auth --client-id <id>`, `--client-secret <secret>`<br>
-  Supply the OAuth client. Without them, runline reads the plugin's environment variables and then prompts.
+  Supply the OAuth client. Without them, codemode reads the plugin's environment variables and then prompts.
 
 <a id="package-commands"></a>
 
 ## Packages
 
 ```sh
-runline install npm:@example/runline-orders@1.2.0
-runline list --outdated
-runline update
+codemode install npm:@example/codemode-orders@1.2.0
+codemode list --outdated
+codemode update
 ```
 
 See [Packages](packages.md) for sources, versions, and the package format.
@@ -83,7 +83,7 @@ See [Packages](packages.md) for sources, versions, and the package format.
 - `install <source>`<br>
   Fetches a package, shows its plugins, action counts, and credential targets, and records it after confirmation. Install scripts do not run.
 - `install -l`, `--local`<br>
-  Records the package in the project's `.runline` folder instead of `~/.runline`, and trusts the project.
+  Records the package in the project's `.codemode` folder instead of `~/.codemode`, and trusts the project.
 - `install -y`, `--yes`<br>
   Installs without asking. Required when there is no terminal.
 - `remove <source>`, alias `uninstall`<br>
@@ -93,14 +93,14 @@ See [Packages](packages.md) for sources, versions, and the package format.
 - `list`, alias `ls`<br>
   Lists configured packages. Add `--outdated` to show the ones with newer versions.
 - `search [terms]`<br>
-  Searches npm for packages with the `runline-plugin` keyword.
+  Searches npm for packages with the `codemode-plugin` keyword.
 
 A source is `npm:<name>[@version]`, `git:<host>/<path>[@ref]`, a git URL, or a local path.
 
 ## Plugins
 
 ```sh
-runline plugin list
+codemode plugin list
 ```
 
 See [Plugins](plugins.md) for how plugins load.
@@ -108,21 +108,21 @@ See [Plugins](plugins.md) for how plugins load.
 - `plugin list`<br>
   Lists loaded plugins with their versions, action counts, and the folder or package each came from.
 - `plugin install <source>`<br>
-  Installs a package into the project without asking. Add `-g`, `--global` to install into `~/.runline`.
+  Installs a package into the project without asking. Add `-g`, `--global` to install into `~/.codemode`.
 - `plugin remove <source>`<br>
-  Removes a package from the project, or from `~/.runline` when the project does not have it.
+  Removes a package from the project, or from `~/.codemode` when the project does not have it.
 
 ## Projects
 
 ```sh
-runline init
-runline trust
+codemode init
+codemode trust
 ```
 
 - `init`<br>
-  Creates `.runline/config.json` and `.runline/plugins/` in the working directory and trusts the new project.
+  Creates `.codemode/config.json` and `.codemode/plugins/` in the working directory and trusts the new project.
 - `trust [dir]`<br>
-  Allows the plugins and packages of a project's `.runline` folder to load. The default is the nearest one. Your own `~/.runline` folder needs no trust and is refused.
+  Allows the plugins and packages of a project's `.codemode` folder to load. The default is the nearest one. Your own `~/.codemode` folder needs no trust and is refused.
 - `trust --revoke`<br>
   Withdraws that trust.
 

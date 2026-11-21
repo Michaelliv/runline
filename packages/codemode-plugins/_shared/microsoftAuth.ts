@@ -1,0 +1,212 @@
+import {
+  type ActionContext,
+  AuthError,
+  brokerFor,
+  type Downloaded,
+  type DownloadTo,
+  type HttpMethod,
+  jsonAnswer,
+  type OAuthConfig,
+  presignedRequest,
+  rangedDownload,
+  responseFailed,
+} from "@shiftlabs/codemode";
+import {
+  MICROSOFT_GRANT,
+  type MicrosoftAuthConfig,
+  microsoftCredential,
+  microsoftEndpoint,
+  microsoftUserBase,
+} from "./microsoftCredentials.js";
+
+export type { MicrosoftAuthConfig } from "./microsoftCredentials.js";
+export {
+  microsoftCredential,
+  microsoftDriveBase,
+} from "./microsoftCredentials.js";
+
+export function userBase(ctx: ActionContext): string {
+  return microsoftUserBase(ctx.connection.config as MicrosoftAuthConfig);
+}
+
+export async function microsoftProbe(
+  ctx: ActionContext,
+  plugin: string,
+  scopes: string[],
+) {
+  return brokerFor(ctx, microsoftCredential(plugin, scopes)).probe();
+}
+
+/**
+ * One Graph request under the plugin's credential. `accept` is JSON
+ * unless the caller reads raw bytes, such as an attachment's `$value`.
+ */
+export async function graphResponse(
+  ctx: ActionContext,
+  plugin: string,
+  scopes: string[],
+  method: string,
+  path: string,
+  body?: string | Uint8Array,
+  contentType?: string,
+  accept = "application/json",
+): Promise<Response> {
+  if (!path.startsWith("/") || path.startsWith("//"))
+    throw new AuthError("request_not_allowed");
+  return brokerFor(ctx, microsoftCredential(plugin, scopes)).request({
+    target: "graph",
+    path: path.slice(1),
+    method: method as HttpMethod,
+    headers: {
+      Accept: accept,
+      ...(contentType ? { "Content-Type": contentType } : {}),
+    },
+    body,
+  });
+}
+
+/**
+ * A failed Graph response, by its status and Graph's `error.code`
+ * (`ErrorItemNotFound`, `ErrorAccessDenied`); Graph's message is never read.
+ */
+export function graphFailed(
+  plugin: string,
+  response: Response,
+): Promise<Error & { status: number }> {
+  return responseFailed(plugin, response, (body) => ({
+    code: (body as { error?: { code?: unknown } } | undefined)?.error?.code,
+  }));
+}
+
+/**
+ * A Graph JSON request that must succeed; its answer is read by
+ * `jsonAnswer`. JSON and binary requests share the same destination,
+ * renewal and replay policy through `graphResponse`.
+ */
+export async function graphRequest<T = unknown>(
+  ctx: ActionContext,
+  plugin: string,
+  scopes: string[],
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const res = await graphResponse(
+    ctx,
+    plugin,
+    scopes,
+    method,
+    path,
+    body === undefined ? undefined : JSON.stringify(body),
+    body === undefined ? undefined : "application/json",
+  );
+  if (!res.ok) throw await graphFailed(plugin, res);
+  return jsonAnswer<T>(res);
+}
+
+/**
+ * The content behind a Graph-issued signed download URL, fetched by byte
+ * ranges. The URL carries its own authority, never a bearer header.
+ */
+export async function microsoftDownload(
+  plugin: string,
+  value: unknown,
+  to: DownloadTo,
+): Promise<Downloaded & { bytes?: Buffer }> {
+  if (typeof value !== "string") throw new AuthError("invalid_response");
+  let url: URL;
+  try {
+    url = new URL(value);
+    const domains = [
+      "sharepoint.com",
+      "1drv.com",
+      "storage.live.com",
+      "onedrive.com",
+    ];
+    if (
+      url.port ||
+      !domains.some(
+        (domain) =>
+          url.hostname === domain || url.hostname.endsWith(`.${domain}`),
+      )
+    )
+      throw new Error();
+  } catch {
+    throw new AuthError("request_not_allowed");
+  }
+  return rangedDownload(
+    {
+      plugin,
+      request: (range) =>
+        presignedRequest(value, {
+          allowedOrigins: [url.origin],
+          fetch: globalThis.fetch,
+          headers: { Range: range },
+        }),
+      // No status on the error: a refused link is the link expiring, not
+      // the connection's credential.
+      failed: (response) =>
+        new Error(`${plugin}: download failed (HTTP ${response.status})`),
+    },
+    to,
+  );
+}
+
+/** Where Graph's Outlook attachment upload sessions live, as Microsoft documents them. */
+const OUTLOOK_UPLOAD_ORIGIN = "https://outlook.office.com";
+
+/**
+ * One request to an Outlook attachment upload session's `uploadUrl`. The
+ * URL carries its own authority, so the request has no bearer token; a
+ * URL on any other origin is refused.
+ */
+export function outlookUpload(
+  uploadUrl: unknown,
+  init: {
+    method: "PUT" | "DELETE";
+    headers?: Record<string, string>;
+    body?: Uint8Array;
+  },
+): Promise<Response> {
+  if (typeof uploadUrl !== "string") throw new AuthError("invalid_response");
+  return presignedRequest(uploadUrl, {
+    allowedOrigins: [OUTLOOK_UPLOAD_ORIGIN],
+    fetch: globalThis.fetch,
+    ...init,
+  });
+}
+
+/**
+ * A Microsoft Graph plugin's OAuth declaration: the multi-tenant endpoints,
+ * `offline_access` for a refresh token, the grant every Graph plugin
+ * shares, and setup steps naming the Graph permissions it needs
+ * (`permissions`, e.g. "Calendars.Read").
+ */
+export function microsoftOAuth(
+  scopes: string[],
+  permissions: string,
+): OAuthConfig {
+  return {
+    grant: MICROSOFT_GRANT,
+    authUrl: microsoftEndpoint("common", "authorize"),
+    tokenUrl: microsoftEndpoint("common", "token"),
+    scopes: [...scopes, "offline_access"],
+    setupHelp: setupHelp(permissions),
+  };
+}
+
+/** The OAuth wizard's steps for a Microsoft plugin. */
+function setupHelp(permissions: string): string[] {
+  return [
+    `You need a Microsoft Entra (Azure AD) app registration. One-time, ~5 minutes.`,
+    "",
+    "1. Register an app: https://entra.microsoft.com → App registrations → New registration.",
+    "   Supported account types: your org (single tenant) is fine.",
+    "2. Add a Web redirect URI (Authentication → Add platform → Web):",
+    "     {{redirectUri}}",
+    "3. Certificates & secrets → New client secret → copy the VALUE (not the Secret ID).",
+    `4. API permissions → Add → Microsoft Graph → Delegated → add the ${permissions} scopes,`,
+    "   then 'Grant admin consent'.",
+    "5. Paste the Application (client) ID and the client secret VALUE below.",
+  ];
+}

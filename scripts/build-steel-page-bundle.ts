@@ -3,7 +3,7 @@
  * Bundle the Steel page bridge into a single self-contained IIFE and
  * commit it as a TypeScript string constant.
  *
- * Why a committed artifact rather than a build step: `runline-plugins`
+ * Why a committed artifact rather than a build step: `codemode-plugins`
  * builds with `tsc --noCheck`, which transpiles but does not bundle, and
  * the page bridge must reach the browser as *one* expression for CDP
  * `Runtime.evaluate`. Generating here and committing the result keeps the
@@ -20,7 +20,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const pageDir = join(root, "packages/runline-plugins/steel/src/page");
+const pageDir = join(root, "packages/codemode-plugins/steel/src/page");
 const outFile = join(pageDir, "bundle.generated.ts");
 
 const built = await Bun.build({
