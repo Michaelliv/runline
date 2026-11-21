@@ -1,156 +1,200 @@
 # Packages
 
-A runline package is an ordinary npm package or git repository that carries one or more plugins. Anyone can publish one; a person installs it with one command, and runline loads its plugins next to the bundled ones.
+Packages install and distribute runline plugins through npm or git. Use a package when a plugin should be shared with other people or projects, or when several plugins belong together.
 
-Package management is a library. The `runline` CLI is one consumer of `PackageManager`; a host that embeds runline is another, with its own storage, folders, process runner and trust policy.
+A package is an ordinary npm package or directory. It names its plugin modules under the `runline` key in `package.json` and carries its own runtime dependencies.
 
-## Install and manage
+## Install and manage packages
+
+Install from npm, git, or a local path:
 
 ```bash
-runline install npm:@acme/runline-orders@1.2.0      # pinned
-runline install npm:@acme/runline-orders            # follows latest
-runline install git:github.com/acme/runline-tools@v1
-runline install https://github.com/acme/runline-tools
-runline install ./tools/orders                      # loaded in place, never copied
-
-runline list                  # configured packages, per scope
-runline list --outdated       # newer versions for unpinned packages
-runline update [source]       # move unpinned packages
-runline remove <source>       # entry and installed files
-runline search orders         # npm packages with the runline-plugin keyword
-runline exec -e npm:@acme/runline-orders '…'   # load for one run only
+runline install npm:@example/runline-orders@1.2.0
+runline install git:github.com/example/runline-tools@v1
+runline install ./tools/orders
 ```
 
-Before recording a package, `runline install` shows each plugin, how many of its actions read and write, and which hosts its credential reaches, then asks. `--yes` skips the question.
+Before recording a package, runline lists its plugins, how many of their actions read and write, and the hosts their credentials are sent to, then asks for confirmation. Add `--yes` or `-y` to skip the question. Without a terminal, `--yes` is required.
 
-Installs go to `~/.runline` by default. `--local` (`-l`) records the package in the project's `.runline` instead; that also trusts the project. A project's packages load only once the project is trusted: `runline trust [dir]`, `runline trust --revoke`.
-
-`runline plugin install` is `install --yes` into the project (`--global` for `~/.runline`); `plugin remove` removes from the project, else from `~/.runline`. Plugins that `plugin install` recorded in `plugins.json` up to runline 0.44 still load; remove them by editing that file.
-
-## Sources
-
-| Source | Example | Identity |
-|---|---|---|
-| npm | `npm:@acme/orders@1.2.0` | `npm:@acme/orders` |
-| git | `git:github.com/acme/tools@v1`, `https://…`, `ssh://…`, `git@host:o/r`, `file://…` | `git:github.com/acme/tools` |
-| local | `./tools/orders`, `/abs/path`, `~/x` | the absolute path |
-
-The ref is not part of a package's identity: installing `@v2` of a package that is configured at `@v1` replaces the entry. The same package in the user and project config loads once, from the project.
-
-| Source | `runline update` |
+| Task | Command |
 |---|---|
-| `npm:pkg@1.2.0` | stays (exact versions are pinned) |
-| `npm:pkg@^1.2.0` | newest matching the range; nothing is installed when none is newer |
-| `npm:pkg` | latest |
-| `git:…@<tag or commit>` | stays |
-| `git:…@<branch>`, `git:…` | the branch's head |
-| local | never touched |
+| Install a package | `runline install <source>` |
+| List configured packages | `runline list` |
+| Show packages with newer versions | `runline list --outdated` |
+| Update all packages, or one | `runline update [source]` |
+| Remove a package and its entry | `runline remove <source>` |
+| Find packages on npm | `runline search [terms]` |
 
-## Configuration
+Personal installs are recorded in `~/.runline/config.json`. Add `--local` or `-l` to record the package in the project's `.runline/config.json` instead. Runline loads a project's packages only after the project is trusted, and `install --local` trusts the project it installs into. See [Project Trust](trust.md).
 
-Packages are recorded under `"packages"` in `config.json`, next to connections:
+Use `--package` or `-e` to load a package for one invocation without recording it:
+
+```bash
+runline exec -e npm:@example/runline-orders 'return await orders.list({})'
+```
+
+`runline plugin install <source>` is `runline install --local --yes`; add `--global` for a personal install.
+
+## Choose a source
+
+| Source | Example | Behavior |
+|---|---|---|
+| npm | `npm:@example/runline-orders@1.2.0` | Installed under `packages/npm` in the scope's `.runline` folder |
+| git | `git:github.com/example/runline-tools@v1` | Cloned under `packages/git` and reconciled to the selected ref |
+| URL | `https://github.com/example/runline-tools` | Treated as a git source; `ssh://`, `git://`, and `file://` also work |
+| Local | `./tools/orders` | Loaded from the resolved path without copying |
+
+Exact npm versions are pinned. A range such as `^1.2.0` moves to the newest version inside it, and a bare name follows `latest`. A git source follows its ref: a branch moves, while a tag or commit stays where it is.
+
+Runline treats an npm package as missing when its installed version is outside the configured version or range. The CLI installs it again on the next run.
+
+Relative local paths resolve from the `.runline` folder whose configuration records them. A file path loads one plugin module. A directory follows the package rules below.
+
+## Create a package
+
+Name each plugin module under the `runline` key:
 
 ```json
 {
-  "connections": [],
-  "packages": [
-    "npm:@acme/runline-orders@1.2.0",
-    { "source": "git:github.com/acme/tools@v3", "plugins": ["!legacy"] }
-  ]
-}
-```
-
-The object form narrows which of a package's plugins load (`!name` excludes one); it cannot load a plugin the package does not declare.
-
-Files live in managed folders, never in a plugin folder:
-
-```text
-~/.runline/packages/npm/            private package.json, node_modules/<package>
-~/.runline/packages/git/<host>/<path>
-<project>/.runline/packages/…       the same, for project scope
-```
-
-`RUNLINE_PACKAGE_MANAGER` (or `"packageManager"` in `~/.runline/config.json`) picks `npm` (default), `pnpm` or `bun`. `RUNLINE_OFFLINE=1` turns every network step off.
-
-## Writing a package
-
-```json
-{
-  "name": "@acme/runline-orders",
+  "name": "@example/runline-orders",
   "version": "1.2.0",
   "type": "module",
   "keywords": ["runline-plugin"],
-  "runline": { "plugins": ["./dist/orders.js", "./dist/billing.js"] },
+  "runline": {
+    "plugins": ["./dist/orders.js", "./dist/billing.js"]
+  },
   "peerDependencies": { "runline": "*" },
   "dependencies": { "fast-xml-parser": "^5.0.0" }
 }
 ```
 
-- `runline.plugins` lists plugin modules relative to the package root. Globs (`*`, `**`) and `!exclusions` work; a path that leaves the package, through `..` or a symlink, is refused. Without the key, runline loads `main`, then `index.{ts,js}`, then `src/index.{ts,js}`.
-- Each plugin module default-exports a plugin function or definition, as in [Writing a Plugin](../README.md#writing-a-plugin), and **declares its name**. A packaged plugin may not take a bundled plugin's name: the name selects the connection, and so the credentials. Two packages declaring one name: the second is refused.
-- runline supplies `runline` (with `runline/utils/cli` and `runline/utils/http`) and `typebox` to every plugin. List them in `peerDependencies` with `"*"`; never in `dependencies`, which draws a warning. A narrower peer range (`">=0.45"`) is checked against the runline that loads the package: outside it, the package still loads, with a warning that names both versions. Other runtime imports go in `dependencies`; each package resolves only its own.
-- Install scripts never run (`--ignore-scripts`). Publish built files.
-- The `runline-plugin` keyword makes the package show up in `runline search`.
+Paths are relative to the package root. The array accepts `*`, `**`, and `?` patterns and `!` exclusions; patterns skip dot-prefixed entries and `node_modules`. Runline refuses a path that leaves the package, including through a symlink.
 
-## Connections
+Without `runline.plugins`, runline loads the module named by `main`, then `index.ts` or `index.js`, then `src/index.ts` or `src/index.js`.
 
-A connection belongs to the plugin source it was made for. `runline connection add` and `runline auth` record that source as the connection's `owner`: `builtin`, `local`, or the package's identity (`npm:@acme/runline-orders`, the same across versions).
+Each module default-exports a plugin, as described in [Writing a Plugin](../README.md#writing-a-plugin). A packaged plugin must set its name and register at least one action. Runline does not fall back to the file name, because two packages would both become `index`.
 
-- A package's plugin uses only connections made for that package. One made for another package, or for a bundled or local plugin of the same name, is refused with both named.
-- Removing a package leaves its connections; a different package with a plugin of the same name does not inherit them.
-- A bundled or local plugin keeps using a connection that records no owner.
+Runline loads TypeScript and JavaScript modules directly. It never runs install scripts, so a package that needs a build step must publish the built files.
 
-A host that stores connections itself returns `owner` from its `ConnectionProvider` for plugins that came from packages; `ConnectionRequest.owner` carries the asking plugin's owner.
+The `runline-plugin` keyword makes an npm package appear in `runline search`.
 
-## The library
+## Declare dependencies
 
-```ts
-import { FilePackageStore, PackageManager, Runline } from "runline";
+Put packages that a plugin imports at runtime in `dependencies`. Runline installs them when it installs an npm or git source. It does not install or modify a local package, so that package's dependencies remain its author's responsibility.
 
-const pm = new PackageManager({
-  roots: { user: "/data/runline", project: "/work/.runline" },
-  store: new FilePackageStore({ user: "/data/runline/config.json" }),
-  trust: async (projectRoot) => false,
-  onMissing: "skip",                  // "install" | "skip" | "error" | (source, scope) => …
-  onEvent: (event) => log(event),     // start / complete / error per source
-});
+Runline supplies these modules to every plugin from its own copy:
 
-const staged = await pm.fetch("npm:@acme/runline-orders@1.2.0");
-const report = await pm.inspect(staged);   // plugins, read/write actions, credential targets, problems
-if (acceptable(report)) await pm.commit(staged);
-else await pm.discard(staged);
+- `runline`, `runline/utils/cli`, and `runline/utils/http`
+- `typebox`, `typebox/value`, and `typebox/compile`
 
-const { plugins, problems } = await pm.load();
-const runline = Runline.create({ plugins, connectionProvider });
+Declare `runline` and `typebox` in `peerDependencies` with a `"*"` range. Runline does not install peers.
+
+Do not list them in `dependencies`. An installed copy gives the plugin its own credential transport and error classes, separate from the ones runline uses, and runline reports a warning when it finds one.
+
+A narrower peer range, such as `">=0.45"`, is compared with the runline that loads the package. Outside the range the package still loads, and runline reports a warning naming both versions.
+
+## Select package plugins
+
+The object form in `config.json` narrows which plugins load from a package:
+
+```json
+{
+  "packages": [
+    "npm:@example/runline-orders@1.2.0",
+    { "source": "git:github.com/example/runline-tools@v1", "plugins": ["!legacy"] }
+  ]
+}
 ```
 
-| Method | Does |
+- Omit `plugins` to load every plugin the package declares.
+- List names to load only those plugins.
+- Use `!name` to leave one plugin out.
+
+The filter narrows the package. It cannot load a plugin the package does not declare.
+
+## Understand names and connections
+
+A plugin's name selects its connection, and so its credentials. Runline therefore decides who may hold a name:
+
+- A packaged plugin cannot take the name of a bundled plugin. Runline reports it and does not load it.
+- When two packages declare the same name, the first one keeps it. Runline reports the second and names both sources.
+- A plugin file in a `plugins` folder takes precedence over a packaged plugin with the same name.
+
+A connection belongs to the plugin source it was made for. `runline connection add` and `runline auth` record that source as the connection's `owner`: `builtin`, `local`, or the package identity.
+
+A packaged plugin uses only connections made for its package. Runline refuses a connection made for another package, or for a bundled or local plugin with the same name, and names both in the error. Add the connection again to use it with the new plugin. Removing a package leaves its connections in place.
+
+This keeps a connection with the plugin it was made for. It is not a sandbox: plugin code runs inside the runline process with that process's permissions.
+
+## Understand scope and identity
+
+The same package can appear in personal and project configuration. Runline loads it once, from the project entry when the project is trusted.
+
+Runline identifies npm packages by name, git packages by host and repository path without the ref, and local packages by resolved absolute path. SSH and HTTPS URLs for one repository are the same package. Installing another version or ref of a configured package replaces its entry.
+
+Files are kept in managed folders that runline never scans for plugins:
+
+```text
+~/.runline/packages/npm/              one private npm project per scope
+~/.runline/packages/git/<host>/<path>
+<project>/.runline/packages/          the same layout, for project installs
+```
+
+Set `packageManager` in `~/.runline/config.json`, or `RUNLINE_PACKAGE_MANAGER`, to `npm`, `pnpm`, or `bun`. The default is `npm`. Set `RUNLINE_OFFLINE=1` to disable every network step.
+
+## Embed the package manager
+
+`PackageManager` is the library behind the commands above. Use it when a host installs or loads packages itself:
+
+```typescript
+import { FilePackageStore, PackageManager, Runline } from "runline";
+
+const packages = new PackageManager({
+  roots: { user: "/data/runline" },
+  store: new FilePackageStore({ user: "/data/runline/config.json" }),
+});
+
+const staged = await packages.fetch("npm:@example/runline-orders@1.2.0");
+const report = await packages.inspect(staged);
+if (report.problems.some((problem) => problem.level === "error")) {
+  await packages.discard(staged);
+} else {
+  await packages.commit(staged);
+}
+
+const { plugins, problems } = await packages.load();
+const runline = Runline.create({ plugins });
+```
+
+`fetch()` installs the package without recording it. `inspect()` imports its plugin modules and returns what the installation prompt shows. `commit()` records the package, and `discard()` removes it or restores the version the scope already records.
+
+The manager reads no folder it was not given, and it never prompts, prints, or exits. Each boundary can be supplied explicitly:
+
+- `roots` names the `.runline` folders for the `user` and `project` scopes.
+- `store` reads and writes package entries. `FilePackageStore` keeps them in `config.json`; `MemoryPackageStore` keeps them in memory.
+- `runner` runs npm and git. Replace it to run them in a sandbox or to refuse them.
+- `packageManager` selects `npm`, `pnpm`, or `bun`.
+- `trust` decides whether the project scope can install and load. Without it, the project scope is refused.
+- `onMissing` decides what `load()` does with a configured package that is not installed. The default is `"skip"`, so a host never installs unless it asks.
+- `reservedNames` replaces the set of names packages cannot declare. Include `bundledPluginNames()` to keep the bundled names reserved.
+- `onEvent`, `offline`, `fetch`, `registry`, and `loadPlugin` report progress, disable network steps, and replace the registry client and module loader.
+
+`PackageManager.forRunlineFolders()` builds a manager over folders laid out as the CLI keeps them. `Runline.fromProject()` uses it to load configured packages without installing any.
+
+| Method | Result |
 |---|---|
-| `fetch(source, { scope })` | Fetch into the scope's managed folder without recording it |
-| `inspect(staged \| source)` | What the package carries and asks for |
-| `commit(staged)` / `discard(staged)` | Record it, or remove its files |
-| `install(source, { scope })` | `fetch` + `commit` |
-| `remove(source, { scope })` | Entry and managed files, matched by identity |
-| `update(source?)` / `checkUpdates()` | Move unpinned packages / say what would move |
-| `list()` | Configured packages and what is on disk |
-| `load({ temporary? })` | `{ plugins, problems }`, each plugin with `sourceInfo` (source, scope, and its package identity as `owner`); never throws for a bad package |
-| `search(terms)` | npm packages with the keyword |
+| `fetch(source, { scope })` | A staged package on disk, not yet recorded |
+| `inspect(staged)` | Plugins, action counts, credential targets, and problems |
+| `commit(staged)`, `discard(staged)` | Record the staged package, or undo the fetch |
+| `install(source, { scope })` | `fetch()` followed by `commit()` |
+| `remove(source, { scope })` | Whether an entry and its files were removed |
+| `update(source?)`, `checkUpdates()` | Versions before and after, or the updates available |
+| `list()` | Configured packages and what is installed |
+| `load({ temporary })` | Loaded plugins and the problems found |
+| `search(terms)` | npm packages with the `runline-plugin` keyword |
 
-Methods that fetch, run npm or git, or load plugins take `{ signal }`. Failures are `PackageError` with a `code` (`invalid_source`, `not_found`, `missing_path`, `install_failed`, `registry_failed`, `invalid_manifest`, `invalid_config`, `load_failed`, `name_reserved`, `name_conflict`, `untrusted`, `offline`, `aborted`, `unsafe_path`); `isPackageError` recognises one from any copy of runline.
+`load()` does not throw for a broken package. It returns the plugins that loaded and a `problems` array for the rest. Each loaded plugin carries `sourceInfo` with its package source, scope, and identity.
 
-`discard` puts back the version or ref the scope records when the fetch replaced it. An npm package whose installed version is outside its entry's version or range counts as missing on `load`. A temporary local source must be absolute.
+Other failures are `PackageError` values with a `code`, such as `invalid_source`, `install_failed`, `untrusted`, or `offline`. Use `isPackageError()` to recognize one. Methods that install or load accept an `AbortSignal` as `signal`.
 
-| Option | Default | Replace it to |
-|---|---|---|
-| `roots` | none: the library reads no folder it is not given | point at a tenant's or workspace's data folder |
-| `store` | — (`FilePackageStore` over config.json, `MemoryPackageStore`) | keep entries in your own database |
-| `runner` | argv spawns through `node:child_process` | run npm and git in a sandbox, or refuse them |
-| `packageManager` | `npm` | use `pnpm` or `bun` |
-| `trust` | refuse project scope | apply your own policy |
-| `onMissing` | `"skip"`: a host never installs unless it asks | install on load, as the CLI does |
-| `reservedNames` | the bundled plugins' names | reserve your host's own plugin names too: pass `[...bundledPluginNames(), ...yours]` (the option replaces the default) |
-| `offline`, `fetch`, `registry`, `loadPlugin` | — | — |
-
-`PackageManager.forRunlineFolders({ roots, ...options })` builds a manager over folders laid out as the CLI keeps them (entries in each root's `config.json`); the CLI and `Runline.fromProject` both use it.
-
-`Runline.fromProject(dir, { trust, userDir, packages })` loads configured packages too, never installing; project packages only when `trust` allows. Every plugin `discoverPlugins` returns carries `sourceInfo` (`origin`: `builtin`, `local` or `package`), and `Runline.plugins()` reports it.
+A host that stores connections itself returns `owner` from its `ConnectionProvider` for plugins that came from packages. `ConnectionRequest.owner` carries the owner of the plugin that is asking.

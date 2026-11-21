@@ -407,9 +407,13 @@ export default function orders(rl: RunlinePluginAPI) {
 
 **[docs/credentials.md](docs/credentials.md)** is the full guide: which declaration fits your API (a key, several parts, an optional key, a host from config, OAuth with or without a person, AWS, a web app's cookie session), the request and path helpers, reporting failures without leaking provider text, what each `AuthError` code means, and where the secret lives when signing locally or under a host.
 
-Custom plugins are discovered from the nearest project `.runline/plugins/` directory first, then `.runline/plugins.json`, then `~/.runline/plugins`, then installed [packages](docs/packages.md), then the bundled built-ins named by configured connections. The first plugin with a name keeps it; duplicates discovered later are skipped and reported on stderr. A bundled plugin's name is the exception, because the name selects the connection: a package's plugin may never take it, and a local plugin takes it only when `config.json` lists the bundled plugin under `replaceableBuiltins`.
+Runline discovers plugins in this order: a trusted project's `.runline/plugins/` folder and `.runline/plugins.json`, your `~/.runline/plugins/` folder, installed [packages](docs/packages.md), and the bundled plugins named by configured connections. The first plugin with a name keeps it, and runline reports later duplicates on stderr.
 
-To share plugins, publish them as a package: see **[docs/packages.md](docs/packages.md)** for `runline install`, the `runline.plugins` manifest, and the `PackageManager` library hosts embed.
+A project's plugin files load only after the project is trusted. `runline init` trusts the project it creates; run `runline trust` in a project created another way. See [Project Trust](docs/trust.md).
+
+A bundled plugin's name is protected, because the name selects the connection. A packaged plugin can never take it. A local plugin takes it only when `config.json` lists the bundled plugin under `replaceableBuiltins`.
+
+To share plugins, publish them as a package. See [Packages](docs/packages.md) for `runline install`, the `runline.plugins` manifest, and the `PackageManager` library that hosts embed.
 
 Supported local layouts:
 
@@ -498,7 +502,7 @@ const result = await rl.execute(`
 console.log(result.result);  // [{ hex: "#635BFF", type: "accent", brightness: 116 }]
 ```
 
-Installed packages are a library too: `PackageManager` fetches, inspects, records and loads them with storage, folders, process runner and trust supplied by the host. See [docs/packages.md](docs/packages.md#the-library).
+`PackageManager` installs and loads plugin packages for a host, with storage, folders, the process runner, and trust supplied by the host. See [Embed the package manager](docs/packages.md#embed-the-package-manager).
 
 ### Host-signed requests
 
@@ -516,7 +520,7 @@ runline remove <source> [-l]           # remove a package
 runline update [source]                # update unpinned packages
 runline list [--outdated]              # configured packages
 runline search [terms]                 # npm packages with the runline-plugin keyword
-runline trust [dir] [--revoke]         # let a project's packages load
+runline trust [dir] [--revoke]         # let a project's plugins and packages load
 runline exec -e <source> "<code>"      # load a package for one run
 runline plugin list                    # loaded plugins and their packages
 runline connection add <n> -p <plugin> -s key=val  # add connection
@@ -540,7 +544,9 @@ runline init                           # create .runline/ directory
 }
 ```
 
-`"replaceableBuiltins": ["github"]` names bundled plugins that a local plugin of the same name replaces; without it, such a local plugin is not loaded. A connection added through the CLI records where its plugin comes from (`owner`): a plugin of the same name from somewhere else does not inherit it.
+Add `"replaceableBuiltins": ["github"]` to let a local plugin named `github` replace the bundled one. Without it, runline does not load that local plugin.
+
+A connection added through the CLI records the source of its plugin as `owner`. A plugin with the same name from another source does not inherit the connection. See [Packages](docs/packages.md#understand-names-and-connections).
 
 Env vars override config values. Plugins declare env var names in their connection schema (e.g. `GITHUB_TOKEN`).
 
