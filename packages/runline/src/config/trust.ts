@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { userConfigDir } from "./loader.js";
 
@@ -11,6 +11,20 @@ import { userConfigDir } from "./loader.js";
 
 function trustFile(userDir: string): string {
   return join(userDir, "trust.json");
+}
+
+/**
+ * A folder's one name: symlinks resolved, so a project reached through a
+ * linked path is the project that was trusted. A folder that does not exist
+ * keeps its absolute path.
+ */
+function canonical(path: string): string {
+  const absolute = resolve(path);
+  try {
+    return realpathSync(absolute);
+  } catch {
+    return absolute;
+  }
 }
 
 /** The project `.runline` folders trusted in `userDir`. */
@@ -29,7 +43,7 @@ export function isProjectTrusted(
   projectRoot: string,
   userDir: string = userConfigDir(),
 ): boolean {
-  return trustedProjects(userDir).includes(resolve(projectRoot));
+  return trustedProjects(userDir).includes(canonical(projectRoot));
 }
 
 /** Record or withdraw trust in a project's `.runline` folder. */
@@ -38,7 +52,7 @@ export function setProjectTrusted(
   trusted: boolean,
   userDir: string = userConfigDir(),
 ): void {
-  const root = resolve(projectRoot);
+  const root = canonical(projectRoot);
   const others = trustedProjects(userDir).filter((p) => p !== root);
   mkdirSync(userDir, { recursive: true });
   writeFileSync(

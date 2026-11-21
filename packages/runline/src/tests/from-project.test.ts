@@ -13,7 +13,13 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
@@ -171,6 +177,43 @@ describe("Runline.fromProject", () => {
       assert.deepEqual(revoked?.plugins(), []);
     } finally {
       console.error = original;
+    }
+  });
+
+  it("recognizes a trusted project reached through a symlink", async () => {
+    const runlineDir = writeRunlineDir({ connections: [] });
+    mkdirSync(join(runlineDir, "plugins"), { recursive: true });
+    writeFileSync(
+      join(runlineDir, "plugins", "localOnly.js"),
+      `export default function localOnly(api) {
+        api.setName("localOnly");
+        api.registerAction("ping", { execute: () => "pong" });
+      }`,
+    );
+    const userDir = join(tempDir, "home", ".runline");
+    const linked = `${tempDir}-link`;
+    symlinkSync(tempDir, linked);
+    try {
+      // Trusted under one path, opened under the other: one project.
+      setProjectTrusted(join(linked, ".runline"), true, userDir);
+      const direct = await Runline.fromProject(tempDir, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(
+        direct?.plugins().map((p) => p.name),
+        ["localOnly"],
+      );
+      const throughLink = await Runline.fromProject(linked, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(
+        throughLink?.plugins().map((p) => p.name),
+        ["localOnly"],
+      );
+    } finally {
+      rmSync(linked, { force: true });
     }
   });
 
