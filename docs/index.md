@@ -29,7 +29,7 @@ If runline is already installed, choose what you want to do:
 
 ## Find reference information
 
-Use the reference pages to look up [commands and options](cli.md) and [files, settings, and environment variables](configuration.md).
+Use the reference pages to look up [commands and options](cli.md), [files, settings, and environment variables](configuration.md), and the [credential helpers, fields, and error codes](credentials-reference.md).
 
 ## Work safely
 

@@ -43,7 +43,7 @@ runline exec 'return actions.find("create issue")'
 runline exec 'return actions.describe("github.issue.create")'
 ```
 
-See the [documentation](docs/index.md) for the [quickstart](docs/quickstart.md), the guides, and the [command](docs/cli.md) and [configuration](docs/configuration.md) reference.
+See the [documentation](docs/index.md) for the [quickstart](docs/quickstart.md), the guides, and the [command](docs/cli.md), [configuration](docs/configuration.md), and [credentials](docs/credentials-reference.md) reference.
 
 ## Permissions
 

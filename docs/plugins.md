@@ -139,7 +139,7 @@ export default function orders(rl: RunlinePluginAPI) {
 
 The declaration states what the secret is, how it is placed, and the HTTPS targets that may receive it. Runline refuses any request outside those targets. A host that keeps credentials elsewhere signs the same requests without the plugin changing.
 
-[Credentials](credentials.md) covers every kind of declaration, including OAuth, AWS, and cookie sessions, and the request and error helpers.
+[Credentials](credentials.md) covers every kind of declaration, including OAuth, AWS, and cookie sessions. [Credentials Reference](credentials-reference.md) lists the request and error helpers.
 
 ## Understand how plugins load
 

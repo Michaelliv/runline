@@ -168,7 +168,12 @@ const runline = Runline.create({
 
 Runline calls the function once per action call of a plugin that declares its credential and passes the result to the action as `ctx.credentials`. The plugin then sends every request through it, and its connection config holds public settings only.
 
-The broker authorizes and signs. Take the credential declaration from the plugin definition the host loaded, never from the calling process. See [Sign requests from a host](credentials.md#sign-requests-from-a-host) for the signing primitives.
+A broker follows these rules:
+
+- **Authorize, then sign.** The broker is the authority: plugin code chooses the request, so decide from `context` and `action` before signing.
+- **Sign with what you loaded.** Take the selection from `plugin.credential(config)` on the plugin definition the host loaded itself: its types, targets, token endpoints, scopes, application and roles. Never take any of it from the plugin's process.
+- **Do the signing with the same primitives.** `CredentialRegistry` validates and holds types; `CredentialTransport` signs, renews and stores against a `CredentialBinding` (type, method, a `ConnectionHandle`, identity, application, resource owner, JWT identity, AWS role). Its options are the egress `fetch` (enforce DNS and IP policy there), `timeoutMs` (default 20 s), `maxRequestBytes` (1 MiB), `maxResponseBytes` (8 MiB), and the ceilings a target may raise them to: `maxTargetTimeoutMs` (10 min) and `maxTargetResponseBytes` (256 MiB).
+- **Run the consent.** `buildAuthUrl`, `generatePKCE` and `exchangeAuthCode` drive the authorization-code flow for a plugin's `setOAuth` config where `runOAuth`'s local callback server cannot run; `buildOAuth2AuthorizationUrl`, `exchangeOAuth2Code`, `refreshOAuth2Token`, `acquireOAuth2ClientToken`, `acquireOAuth2PasswordToken` and `acquireOAuth2JwtToken` are the protocol primitives under them.
 
 ## Observe action calls
 
