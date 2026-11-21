@@ -19,7 +19,10 @@ export async function auth(
     quiet?: boolean;
   },
 ): Promise<void> {
-  await loadAllPlugins({ packages: cliPackageManager({ quiet: true }) });
+  await loadAllPlugins({
+    builtinAllowlist: new Set([plugin]),
+    packages: cliPackageManager({ quiet: true, onMissing: "skip" }),
+  });
   const def = registry.getPlugin(plugin);
   if (!def) {
     printError(`Plugin "${plugin}" not found. Run \`runline plugin list\`.`);

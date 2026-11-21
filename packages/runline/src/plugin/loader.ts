@@ -1,9 +1,13 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
-import { findConfigDir, loadConfigFrom } from "../config/loader.js";
+import {
+  findConfigDir,
+  loadConfigFrom,
+  userConfigDir,
+} from "../config/loader.js";
+import { isProjectTrusted } from "../config/trust.js";
 import type { PackageManager } from "../packages/manager.js";
 import {
   HOST_MODULE_SPECIFIERS,
@@ -127,19 +131,23 @@ function isPluginFile(entry: string): boolean {
   );
 }
 
+/** The name a plugins-folder entry goes by: a folder's name, a file's without its extension. */
+function entryName(entry: string, isDirectory: boolean): string {
+  return isDirectory ? entry : entry.replace(/\.(ts|js)$/, "");
+}
+
 /**
  * The plugins a folder holds, by the names of its entries and without
- * loading any: each plugin folder and each plugin file. The bundled plugins
- * are named for their folders, so this is their names.
+ * loading any: each plugin folder and each plugin file. A bundled plugin
+ * declares the name of its folder (`lint:access` enforces it), so for the
+ * bundled folder these are the plugins' names.
  */
 export function pluginEntryNames(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     if (entry.isDirectory())
       return isPrivatePluginDirectory(entry.name) ? [] : [entry.name];
-    return isPluginFile(entry.name)
-      ? [entry.name.replace(/\.(ts|js)$/, "")]
-      : [];
+    return isPluginFile(entry.name) ? [entryName(entry.name, false)] : [];
   });
 }
 
@@ -159,7 +167,11 @@ function isLegacyInstallDirectory(fullPath: string, entry: string): boolean {
 
 async function loadFromDirectory(
   dir: string,
-  options: { skipLegacyInstallDirs?: boolean } = {},
+  options: {
+    skipLegacyInstallDirs?: boolean;
+    /** Load only the entries with these names; the rest are never imported. */
+    only?: Set<string>;
+  } = {},
 ): Promise<PluginDef[]> {
   const plugins: PluginDef[] = [];
   if (!existsSync(dir)) return plugins;
@@ -169,6 +181,8 @@ async function loadFromDirectory(
   for (const entry of entries) {
     const fullPath = join(dir, entry);
     const stat = statSync(fullPath);
+    if (options.only && !options.only.has(entryName(entry, stat.isDirectory())))
+      continue;
 
     if (stat.isFile() && isPluginFile(entry)) {
       try {
@@ -275,15 +289,25 @@ export async function loadPluginsFromConfig(
 export interface DiscoverOptions {
   /**
    * When supplied, only built-in plugins whose name is in this set
-   * are loaded. Plugins discovered in the project dir, `plugins.json`,
-   * or `~/.runline/plugins` are not gated — users put them there
-   * deliberately — but the bundled builtins are, so agents don't see
-   * every possible action regardless of configuration.
+   * are loaded; the others are never imported. Plugins discovered in the
+   * project dir, `plugins.json`, or `~/.runline/plugins` are not gated
+   * this way — users put them there deliberately — but the bundled
+   * builtins are, so agents don't see every possible action regardless
+   * of configuration.
    *
    * Omit to load every builtin (CLI default: `runline actions` etc.
    * surfaces the full catalog).
    */
   builtinAllowlist?: Set<string> | null;
+
+  /**
+   * Whether the project's `.runline` folder may contribute plugins: the
+   * files under `plugins/` and the entries of `plugins.json`, which run as
+   * code when loaded. Default: whether `<userDir>/trust.json` lists the
+   * folder (`runline trust`). Pass the same decision to the package
+   * manager, which asks it for the project's packages.
+   */
+  trust?: (projectRoot: string) => boolean | Promise<boolean>;
 
   /**
    * Override the directory where bundled plugins live. Default is
@@ -321,10 +345,10 @@ export function defaultBuiltinDir(): string {
 
 /**
  * Discover and return all plugins from a config directory and global dir,
- * each with its `sourceInfo`. Local plugins come first, then packages, then
- * the bundled plugins; the first plugin with a name keeps it, except that a
- * local plugin never takes a bundled plugin's name unless that plugin is
- * listed as replaceable.
+ * each with its `sourceInfo`. A trusted project's plugins come first, then
+ * the user's, then packages, then the bundled plugins; the first plugin
+ * with a name keeps it, except that a local plugin never takes a bundled
+ * plugin's name unless that plugin is listed as replaceable.
  * Does NOT mutate any global state.
  */
 export async function discoverPlugins(
@@ -335,8 +359,7 @@ export async function discoverPlugins(
   const result: PluginDef[] = [];
 
   const builtinDir = options.builtinDir ?? defaultBuiltinDir();
-  const builtinPlugins = await loadFromDirectory(builtinDir);
-  const builtinNames = new Set(builtinPlugins.map((p) => p.name));
+  const builtinNames = new Set(pluginEntryNames(builtinDir));
   const replaceable = new Set(options.replaceableBuiltins);
   const replaced = new Set<string>();
 
@@ -379,26 +402,36 @@ export async function discoverPlugins(
     }
   }
 
-  if (configDir) {
-    const projectPluginsDir = join(configDir, "plugins");
-    addLocal(
-      await loadFromDirectory(projectPluginsDir, {
-        skipLegacyInstallDirs: true,
-      }),
-      projectPluginsDir,
-      "project",
-    );
-    addLocal(
-      await loadPluginsFromConfig(configDir),
-      join(configDir, "plugins.json"),
-      "project",
-    );
+  const userDir = resolve(options.userDir ?? userConfigDir());
+  // A project is a `.runline` other than the user's own; its code waits
+  // for trust, and nothing of it is imported without it.
+  const projectDir =
+    configDir && resolve(configDir) !== userDir ? resolve(configDir) : null;
+  if (projectDir) {
+    const projectPluginsDir = join(projectDir, "plugins");
+    const pluginsJson = join(projectDir, "plugins.json");
+    const trust =
+      options.trust ?? ((root: string) => isProjectTrusted(root, userDir));
+    if (await trust(projectDir)) {
+      addLocal(
+        await loadFromDirectory(projectPluginsDir, {
+          skipLegacyInstallDirs: true,
+        }),
+        projectPluginsDir,
+        "project",
+      );
+      addLocal(await loadPluginsFromConfig(projectDir), pluginsJson, "project");
+    } else if (
+      pluginEntryNames(projectPluginsDir).length ||
+      existsSync(pluginsJson)
+    ) {
+      console.error(
+        `[runline] The plugins in ${projectDir} were not loaded: the project is not trusted. Run \`runline trust\` there to load them.`,
+      );
+    }
   }
 
-  const globalDir = join(
-    options.userDir ?? join(homedir(), ".runline"),
-    "plugins",
-  );
+  const globalDir = join(userDir, "plugins");
   addLocal(
     await loadFromDirectory(globalDir, { skipLegacyInstallDirs: true }),
     globalDir,
@@ -417,10 +450,9 @@ export async function discoverPlugins(
       addIfNew(p, p.sourceInfo?.source ?? "a package");
   }
 
-  for (const p of builtinPlugins) {
-    if (options.builtinAllowlist && !options.builtinAllowlist.has(p.name)) {
-      continue;
-    }
+  for (const p of await loadFromDirectory(builtinDir, {
+    only: options.builtinAllowlist ?? undefined,
+  })) {
     p.sourceInfo = sourceInfo(p, {
       source: "builtin",
       origin: "builtin",

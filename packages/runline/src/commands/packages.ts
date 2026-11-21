@@ -1,11 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
-import { findConfigDir } from "../config/loader.js";
+import {
+  findConfigDir,
+  loadConfigFrom,
+  userConfigDir,
+} from "../config/loader.js";
+import { isProjectTrusted, setProjectTrusted } from "../config/trust.js";
 import { isPackageError } from "../packages/errors.js";
 import {
+  type MissingAction,
   PackageManager,
   type PackageManagerName,
   type PackageReport,
@@ -20,45 +25,13 @@ import {
   printWarn,
 } from "../utils/output.js";
 
-/** The CLI's user folder: `~/.runline`. */
-function userRoot(): string {
-  return join(homedir(), ".runline");
-}
-
-function trustFile(): string {
-  return join(userRoot(), "trust.json");
-}
-
-function readTrusted(): string[] {
-  try {
-    const data = JSON.parse(readFileSync(trustFile(), "utf8"));
-    return Array.isArray(data?.trusted)
-      ? data.trusted.filter((p: unknown) => typeof p === "string")
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeTrusted(paths: string[]): void {
-  mkdirSync(userRoot(), { recursive: true });
-  writeFileSync(
-    trustFile(),
-    `${JSON.stringify({ trusted: [...new Set(paths)].sort() }, null, 2)}\n`,
-  );
-}
-
-function isProjectTrusted(projectRoot: string): boolean {
-  return readTrusted().includes(resolve(projectRoot));
-}
-
+/** `RUNLINE_PACKAGE_MANAGER`, else `packageManager` in the user's config. */
 function configuredPackageManager(): PackageManagerName | undefined {
-  const fromEnv = process.env.RUNLINE_PACKAGE_MANAGER;
-  let value: unknown = fromEnv;
+  let value: unknown = process.env.RUNLINE_PACKAGE_MANAGER;
   if (!value) {
     try {
-      value = JSON.parse(
-        readFileSync(join(userRoot(), "config.json"), "utf8"),
+      value = loadConfigFrom(
+        join(userConfigDir(), "config.json"),
       ).packageManager;
     } catch {}
   }
@@ -73,13 +46,18 @@ function configuredPackageManager(): PackageManagerName | undefined {
  * entries in each folder's config.json.
  */
 export function cliPackageManager(
-  options: { quiet?: boolean; trustProject?: boolean } = {},
+  options: {
+    quiet?: boolean;
+    trustProject?: boolean;
+    /** A configured package missing on disk. Default: install it. */
+    onMissing?: MissingAction;
+  } = {},
 ): PackageManager {
   return PackageManager.forRunlineFolders({
-    roots: { user: userRoot(), project: findConfigDir() ?? undefined },
+    roots: { user: userConfigDir(), project: findConfigDir() ?? undefined },
     packageManager: configuredPackageManager(),
     trust: (root) => options.trustProject === true || isProjectTrusted(root),
-    onMissing: "install",
+    onMissing: options.onMissing ?? "install",
     offline: process.env.RUNLINE_OFFLINE === "1",
     onEvent: options.quiet
       ? undefined
@@ -204,8 +182,7 @@ export async function packageInstall(
       }
     }
     await pm.commit(staged);
-    if (scope === "project" && project)
-      writeTrusted([...readTrusted(), resolve(project)]);
+    if (scope === "project" && project) setProjectTrusted(project, true);
     if (options.json) printJson({ ok: true, scope, ...report });
     else
       printSuccess(`Installed ${chalk.bold(report.name ?? source)} (${scope})`);
@@ -308,7 +285,7 @@ export async function packageTrust(
   dir: string | undefined,
   options: { revoke?: boolean; json?: boolean },
 ): Promise<void> {
-  // Trust is recorded for a project's .runline folder, the root packages see.
+  // Trust is recorded for a project's .runline folder.
   const target = dir
     ? basename(resolve(dir)) === ".runline"
       ? resolve(dir)
@@ -317,8 +294,7 @@ export async function packageTrust(
   if (!target || !existsSync(target))
     fail(new Error("No .runline folder to trust here"), options.json);
   const path = resolve(target);
-  const trusted = readTrusted().filter((p) => p !== path);
-  writeTrusted(options.revoke ? trusted : [...trusted, path]);
+  setProjectTrusted(path, !options.revoke);
   if (options.json) printJson({ ok: true, path, trusted: !options.revoke });
   else
     printSuccess(

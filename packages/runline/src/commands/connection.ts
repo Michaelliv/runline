@@ -29,10 +29,11 @@ export async function connectionAdd(
   }
 
   // The connection is bound to where the plugin comes from today, so a
-  // plugin of the same name from elsewhere does not inherit it.
+  // plugin of the same name from elsewhere does not inherit it. Finding
+  // that out imports one bundled plugin at most and installs nothing.
   await loadAllPlugins({
     builtinAllowlist: new Set([options.plugin]),
-    packages: cliPackageManager({ quiet: true }),
+    packages: cliPackageManager({ quiet: true, onMissing: "skip" }),
   });
   const owner = registry.getPlugin(options.plugin)?.sourceInfo?.owner;
   await addConnection(name, options.plugin, configValues, { owner });

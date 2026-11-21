@@ -1,6 +1,10 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
-import { findConfigDir, loadConfigFrom } from "./config/loader.js";
+import {
+  findConfigDir,
+  loadConfigFrom,
+  userConfigDir,
+} from "./config/loader.js";
+import { isProjectTrusted } from "./config/trust.js";
 import type { RunlineConfig } from "./config/types.js";
 import { DEFAULT_CONFIG } from "./config/types.js";
 import { FileConnectionProvider } from "./connections/file.js";
@@ -206,14 +210,15 @@ export class Runline {
    * Load runline from a project directory.
    *
    * Discovers the `.runline/` config and registers:
-   *   - every plugin dropped into `.runline/plugins/` (one named like a
-   *     bundled plugin only when `config.replaceableBuiltins` lists it),
-   *   - every plugin listed in `.runline/plugins.json`,
+   *   - when the project is trusted, every plugin dropped into
+   *     `.runline/plugins/` (one named like a bundled plugin only when
+   *     `config.replaceableBuiltins` lists it) and every plugin listed in
+   *     `.runline/plugins.json`,
    *   - every plugin in `~/.runline/plugins/`,
-   *   - every configured package (`~/.runline` and, when `trust` allows,
-   *     this project), never installing a missing one,
-   *   - and — from the 188 builtins shipped with the package — only
-   *     the ones named in `config.connections[].plugin`.
+   *   - every configured package (`~/.runline` and, when trusted, this
+   *     project), never installing a missing one,
+   *   - and, of the bundled plugins, only the ones named in
+   *     `config.connections[].plugin`.
    *
    * Gating the builtins keeps `runline.actions()` scoped to what the
    * project actually configured. Without this, a project with a
@@ -237,7 +242,10 @@ export class Runline {
        * `false` loads none.
        */
       packages?: PackageManager | false;
-      /** Whether this project's packages may load. Default: no. */
+      /**
+       * Whether this project's plugin files and packages may load.
+       * Default: whether `<userDir>/trust.json` lists it (`runline trust`).
+       */
       trust?: (projectRoot: string) => boolean | Promise<boolean>;
       /** The user's runline folder. Default: `~/.runline`. */
       userDir?: string;
@@ -248,20 +256,23 @@ export class Runline {
 
     const config = loadConfigFrom(join(configDir, "config.json"));
     const builtinAllowlist = new Set(config.connections.map((c) => c.plugin));
-    const userDir = options.userDir ?? join(homedir(), ".runline");
+    const userDir = options.userDir ?? userConfigDir();
+    const trust =
+      options.trust ?? ((root: string) => isProjectTrusted(root, userDir));
     const packages =
       options.packages === false
         ? undefined
         : (options.packages ??
           PackageManager.forRunlineFolders({
             roots: { user: userDir, project: configDir },
-            trust: options.trust,
+            trust,
             onMissing: "skip",
           }));
     const plugins = await discoverPlugins(configDir, {
       builtinAllowlist,
       builtinDir: options.builtinDir,
       replaceableBuiltins: config.replaceableBuiltins,
+      trust,
       packages,
       userDir,
     });

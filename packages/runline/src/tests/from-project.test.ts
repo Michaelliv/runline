@@ -3,9 +3,8 @@
  * builtins named by `.runline/config.json` connections — never the full
  * bundled catalog.
  *
- * Regression test for the "agent sees all 188 plugins" bug: before
- * builtins were gated, `rl.actions()` returned every action shipped
- * with the package regardless of what a workspace had configured.
+ * Ungated, `rl.actions()` would return every action shipped with the
+ * package regardless of what a workspace had configured.
  *
  * These tests don't rely on the real bundled plugins (which only
  * exist under `dist/` after a build). They stand up a fake builtin
@@ -18,6 +17,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { setProjectTrusted } from "../config/trust.js";
 import { Runline } from "../sdk.js";
 
 describe("Runline.fromProject", () => {
@@ -53,9 +53,13 @@ describe("Runline.fromProject", () => {
     if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
   });
 
-  /** The fake builtins, and an empty folder in place of the real `~/.runline`. */
+  /** The fake builtins, an empty folder in place of the real `~/.runline`, and a trusted project. */
   function isolated() {
-    return { builtinDir, userDir: join(tempDir, "home", ".runline") };
+    return {
+      builtinDir,
+      userDir: join(tempDir, "home", ".runline"),
+      trust: () => true,
+    };
   }
 
   function writeRunlineDir(cfg: object) {
@@ -97,6 +101,77 @@ describe("Runline.fromProject", () => {
       "empty connections should yield no builtins",
     );
     assert.equal(rl.actions().length, 0);
+  });
+
+  it("imports no bundled plugin the connections do not name", async () => {
+    // A bundled plugin that is not asked for is not even imported.
+    writeFileSync(join(builtinDir, "gamma.js"), `throw new Error("imported");`);
+    writeRunlineDir({
+      connections: [{ name: "alpha", plugin: "alpha", config: {} }],
+    });
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    try {
+      const rl = await Runline.fromProject(tempDir, isolated());
+      assert.deepEqual(
+        rl?.plugins().map((p) => p.name),
+        ["alpha"],
+      );
+    } finally {
+      console.error = original;
+    }
+    assert.deepEqual(errors, []);
+  });
+
+  it("loads a project's plugin files only once the project is trusted", async () => {
+    const runlineDir = writeRunlineDir({ connections: [] });
+    const marker = join(tempDir, "imported");
+    mkdirSync(join(runlineDir, "plugins"), { recursive: true });
+    writeFileSync(
+      join(runlineDir, "plugins", "localOnly.js"),
+      `import { writeFileSync } from "node:fs";
+      writeFileSync(${JSON.stringify(marker)}, "");
+      export default function localOnly(api) {
+        api.setName("localOnly");
+        api.registerAction("ping", { execute: () => "pong" });
+      }`,
+    );
+    const userDir = join(tempDir, "home", ".runline");
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    try {
+      // No decision recorded: nothing of the project is imported.
+      const untrusted = await Runline.fromProject(tempDir, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(untrusted?.plugins(), []);
+      assert.equal(existsSync(marker), false);
+      assert.match(errors.join("\n"), /not loaded: the project is not trusted/);
+
+      // The decision `runline trust` records in the user's folder.
+      setProjectTrusted(runlineDir, true, userDir);
+      const trusted = await Runline.fromProject(tempDir, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(
+        trusted?.plugins().map((p) => p.name),
+        ["localOnly"],
+      );
+      assert.equal(existsSync(marker), true);
+
+      setProjectTrusted(runlineDir, false, userDir);
+      const revoked = await Runline.fromProject(tempDir, {
+        builtinDir,
+        userDir,
+      });
+      assert.deepEqual(revoked?.plugins(), []);
+    } finally {
+      console.error = original;
+    }
   });
 
   it("still loads project-local plugins regardless of allowlist", async () => {

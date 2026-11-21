@@ -28,7 +28,13 @@ export {
   removeConnection,
   saveConfig,
   updateConnectionConfig,
+  userConfigDir,
 } from "./config/loader.js";
+export {
+  isProjectTrusted,
+  setProjectTrusted,
+  trustedProjects,
+} from "./config/trust.js";
 export type { RunlineConfig } from "./config/types.js";
 export { DEFAULT_CONFIG } from "./config/types.js";
 export { FileConnectionProvider } from "./connections/file.js";

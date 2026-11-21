@@ -906,12 +906,42 @@ describe("discovery with packages", () => {
       const plugins = await discoverPlugins(runlineDir, {
         builtinDir,
         userDir: join(tmp, "home", ".runline"),
+        trust: () => true,
       });
       assert.deepEqual(plugins, []);
     } finally {
       console.error = original;
     }
     assert.match(errors.join("\n"), /leaves the package/);
+  });
+
+  it("treats the user's own folder as the user's, not as a project", async () => {
+    // Running where the nearest .runline is ~/.runline: its plugins load
+    // once, as the user's, and no trust decision is asked.
+    const userDir = join(tmp, "home", ".runline");
+    mkdirSync(join(userDir, "plugins"), { recursive: true });
+    writeFileSync(join(userDir, "plugins", "mine.js"), pluginSource("mine"));
+    const builtinDir = join(tmp, "builtins");
+    mkdirSync(builtinDir);
+    const errors: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      const plugins = await discoverPlugins(userDir, {
+        builtinDir,
+        userDir,
+        trust: () => {
+          throw new Error("asked");
+        },
+      });
+      assert.deepEqual(
+        plugins.map((p) => [p.name, p.sourceInfo?.scope]),
+        [["mine", "user"]],
+      );
+    } finally {
+      console.error = original;
+    }
+    assert.deepEqual(errors, []);
   });
 
   it("supplies typebox to a package that has no node_modules of its own", async () => {
@@ -964,7 +994,11 @@ export default function (api) {
         join(runlineDir, "config.json"),
         JSON.stringify({ connections }),
       );
-      const rl = await Runline.fromProject(project, { builtinDir, userDir });
+      const rl = await Runline.fromProject(project, {
+        builtinDir,
+        userDir,
+        trust: () => true,
+      });
       try {
         return await rl?.execute(code);
       } finally {

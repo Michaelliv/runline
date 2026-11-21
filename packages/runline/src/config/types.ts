@@ -1,3 +1,4 @@
+import type { PackageManagerName } from "../packages/manager.js";
 import type { PackageEntry } from "../packages/store.js";
 import type { ConnectionConfig } from "../plugin/types.js";
 
@@ -15,6 +16,8 @@ export interface RunlineConfig {
   maxRunsPerWorker?: number;
   /** Installed plugin packages; `PackageManager` reads and writes them. */
   packages?: PackageEntry[];
+  /** What the CLI installs packages with. Read from the user's config. Default: npm. */
+  packageManager?: PackageManagerName;
   /**
    * Bundled plugins a local plugin of the same name replaces. Without its
    * name here, a local plugin named like a bundled one is not loaded.

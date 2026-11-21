@@ -223,7 +223,7 @@ program
 
 program
   .command("trust [dir]")
-  .description("Allow a project's .runline packages to install and load")
+  .description("Allow a project's .runline plugins and packages to load")
   .option("--revoke", "Stop trusting it")
   .action(async (dir, opts, cmd) => {
     const globals = cmd.optsWithGlobals();

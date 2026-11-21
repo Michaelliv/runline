@@ -1,6 +1,12 @@
 #!/usr/bin/env bun
 /**
- * Lint the `access` label on every bundled plugin action.
+ * Lint every bundled plugin: its name, and the `access` label on each
+ * of its actions.
+ *
+ * A bundled plugin declares the name of its folder. Discovery and the
+ * package manager read the bundled names from the folder listing without
+ * importing 200-odd modules, so a plugin named otherwise would be loaded,
+ * gated and reserved under the wrong name.
  *
  * Hosts gate actions on `access`: a `read` action may run where writes
  * are refused, so a mislabelled mutation is a permission hole. Two rules:
@@ -103,6 +109,10 @@ for (const dir of dirs) {
     problems.push(`${dir}: does not load (${(error as Error).message})`);
     continue;
   }
+  if (plugin.name !== dir)
+    problems.push(
+      `${dir}: declares the name "${plugin.name}", not its folder's`,
+    );
   for (const action of plugin.actions) {
     actions++;
     const path = `${plugin.name}.${action.name}`;

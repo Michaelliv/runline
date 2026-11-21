@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { connectionFields } from "../plugin/schema.js";
 import type { ConnectionConfig, ConnectionSchema } from "../plugin/types.js";
@@ -8,6 +9,11 @@ import { DEFAULT_CONFIG, type RunlineConfig } from "./types.js";
 
 const CONFIG_DIR_NAME = ".runline";
 const CONFIG_FILE = "config.json";
+
+/** The user's own runline folder: `~/.runline`. */
+export function userConfigDir(): string {
+  return join(homedir(), CONFIG_DIR_NAME);
+}
 
 /** The nearest `.runline` folder at or above `from`. */
 export function findConfigDir(from: string = process.cwd()): string | null {

@@ -45,9 +45,13 @@ describe("custom plugin lifecycle", () => {
     if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
   });
 
-  /** The fake builtins, and an empty folder in place of the real `~/.runline`. */
+  /** The fake builtins, an empty folder in place of the real `~/.runline`, and a trusted project. */
   function isolated() {
-    return { builtinDir, userDir: join(tempDir, "home", ".runline") };
+    return {
+      builtinDir,
+      userDir: join(tempDir, "home", ".runline"),
+      trust: () => true,
+    };
   }
 
   function writeConfig(connections: object[] = []) {
