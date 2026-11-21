@@ -19,14 +19,18 @@ import {
 } from "node:path";
 import lockfile from "proper-lockfile";
 import { gt, maxSatisfying, rcompare, satisfies } from "semver";
-import { defaultBuiltinDir, loadPluginFromPath } from "../plugin/loader.js";
+import {
+  defaultBuiltinDir,
+  loadPluginFromPath,
+  pluginEntryNames,
+} from "../plugin/loader.js";
 import type { PluginDef } from "../plugin/types.js";
 import {
   isPackageError,
   PackageError,
   type PackageErrorCode,
 } from "./errors.js";
-import { readPackageManifest } from "./manifest.js";
+import { type PackageManifest, readPackageManifest } from "./manifest.js";
 import {
   type CommandResult,
   type CommandRunner,
@@ -208,6 +212,20 @@ function assertNotAborted(signal?: AbortSignal): void {
     throw new PackageError("aborted", "Package operation aborted");
 }
 
+/** The runtime dependencies a checkout's package.json declares. */
+function dependencyNames(path: string): string[] {
+  try {
+    const { dependencies } = JSON.parse(
+      readFileSync(join(path, "package.json"), "utf8"),
+    );
+    return dependencies && typeof dependencies === "object"
+      ? Object.keys(dependencies)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function readVersion(path: string): string | undefined {
   try {
     const pkg = JSON.parse(readFileSync(join(path, "package.json"), "utf8"));
@@ -217,32 +235,16 @@ function readVersion(path: string): string | undefined {
   }
 }
 
-let bundledNames: Set<string> | undefined;
+let bundledNames: string[] | undefined;
 
-/** The bundled plugins' names: the plugin folders shipped in runline's `dist/plugins`. */
+/** The bundled plugins' names, read from runline's plugin folder without loading them. */
 export function bundledPluginNames(
   builtinDir = defaultBuiltinDir(),
 ): Set<string> {
-  if (builtinDir === defaultBuiltinDir() && bundledNames)
-    return new Set(bundledNames);
-  let names: Set<string>;
-  try {
-    names = new Set(
-      readdirSync(builtinDir, { withFileTypes: true })
-        .filter(
-          (e) =>
-            e.isDirectory() &&
-            !e.name.startsWith("_") &&
-            !e.name.startsWith(".") &&
-            e.name !== "icons",
-        )
-        .map((e) => e.name),
-    );
-  } catch {
-    names = new Set();
-  }
-  if (builtinDir === defaultBuiltinDir()) bundledNames = names;
-  return new Set(names);
+  if (builtinDir !== defaultBuiltinDir())
+    return new Set(pluginEntryNames(builtinDir));
+  bundledNames ??= pluginEntryNames(builtinDir);
+  return new Set(bundledNames);
 }
 
 /**
@@ -508,10 +510,14 @@ export class PackageManager {
           ? await this.gitHead(path)
           : readVersion(path)
         : undefined;
+      // An npm package inside its configured version or range moves only
+      // to a newer version inside it; one outside it is reinstalled.
       if (
         parsed.type === "npm" &&
         from !== undefined &&
-        !(await this.npmNeedsUpdate(parsed, from, options.signal))
+        this.installed(parsed, path) &&
+        (parsed.pinned ||
+          !(await this.npmHasNewer(parsed, from, options.signal)))
       ) {
         results.push({ source: s, scope, from, to: from, changed: false });
         continue;
@@ -713,20 +719,27 @@ export class PackageManager {
           AbortSignal.timeout(NETWORK_TIMEOUT_MS),
         ])
       : AbortSignal.timeout(NETWORK_TIMEOUT_MS);
-    const response = await doFetch(url, {
-      signal,
-      headers: { accept: "application/json" },
-    });
-    if (!response.ok)
-      throw new PackageError(
-        "registry_failed",
-        `npm search failed: HTTP ${response.status}`,
-      );
-    const body = (await response.json()) as {
+    let body: {
       objects?: Array<{
         package?: { name?: string; version?: string; description?: string };
       }>;
     };
+    try {
+      const response = await doFetch(url, {
+        signal,
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      body = (await response.json()) as typeof body;
+    } catch (error) {
+      if (options.signal?.aborted)
+        throw new PackageError("aborted", "Package operation aborted");
+      throw new PackageError(
+        "registry_failed",
+        `npm search failed: ${(error as Error).message}`,
+        { cause: error },
+      );
+    }
     return (body.objects ?? [])
       .map((o) => o.package)
       .filter(
@@ -885,7 +898,7 @@ export class PackageManager {
       }
     | undefined
   > {
-    let manifest: ReturnType<typeof readPackageManifest>;
+    let manifest: PackageManifest;
     try {
       manifest = readPackageManifest(root, source);
     } catch (error) {
@@ -1159,16 +1172,15 @@ export class PackageManager {
   }
 
   /**
-   * Whether `update` has anything to install: a pinned version that is not
-   * the installed one, or a newer version inside the range. A failed lookup
-   * counts as yes, so an unreachable registry surfaces from the install.
+   * Whether the registry has a version newer than `installed` inside the
+   * source's range. A failed lookup counts as yes, so an unreachable
+   * registry surfaces from the install that follows.
    */
-  private async npmNeedsUpdate(
+  private async npmHasNewer(
     source: NpmSource,
     installed: string,
     signal?: AbortSignal,
   ): Promise<boolean> {
-    if (source.pinned) return installed !== source.version;
     try {
       const latest = await this.npmLatest(source, signal);
       return latest === undefined || gt(latest, installed);
@@ -1367,20 +1379,9 @@ export class PackageManager {
   }
 
   private missingDependencies(target: string): boolean {
-    try {
-      const pkg = JSON.parse(
-        readFileSync(join(target, "package.json"), "utf8"),
-      );
-      const deps =
-        pkg.dependencies && typeof pkg.dependencies === "object"
-          ? Object.keys(pkg.dependencies)
-          : [];
-      return deps.some(
-        (name) => !existsSync(join(target, "node_modules", name)),
-      );
-    } catch {
-      return false;
-    }
+    return dependencyNames(target).some(
+      (name) => !existsSync(join(target, "node_modules", name)),
+    );
   }
 
   private async installGitDependencies(
@@ -1388,14 +1389,7 @@ export class PackageManager {
     signal: AbortSignal | undefined,
     source: string,
   ): Promise<void> {
-    try {
-      const pkg = JSON.parse(
-        readFileSync(join(target, "package.json"), "utf8"),
-      );
-      if (!pkg.dependencies || !Object.keys(pkg.dependencies).length) return;
-    } catch {
-      return;
-    }
+    if (!dependencyNames(target).length) return;
     await this.run(this.pm, this.dependencyInstallArgs(), {
       cwd: target,
       signal,
@@ -1499,7 +1493,7 @@ export class PackageManager {
       );
       throw new PackageError(
         "install_failed",
-        `${command} ${verb ?? ""} failed (exit ${result.code})${detail ? `: ${detail}` : ""}`,
+        `${[command, verb].filter(Boolean).join(" ")} failed (exit ${result.code})${detail ? `: ${detail}` : ""}`,
         {
           source: options.source,
         },

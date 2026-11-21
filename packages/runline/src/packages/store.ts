@@ -70,12 +70,8 @@ function validEntries(value: unknown, where: string): PackageEntry[] {
 export class FilePackageStore implements PackageStore {
   constructor(private readonly files: Partial<Record<PackageScope, string>>) {}
 
-  private file(scope: PackageScope): string | undefined {
-    return this.files[scope];
-  }
-
   async read(scope: PackageScope): Promise<PackageEntry[]> {
-    const path = this.file(scope);
+    const path = this.files[scope];
     if (!path) return [];
     return validEntries(readConnectionFile(path).packages, path);
   }
@@ -87,7 +83,7 @@ export class FilePackageStore implements PackageStore {
       result: T;
     },
   ): Promise<T> {
-    const path = this.file(scope);
+    const path = this.files[scope];
     if (!path)
       throw new PackageError(
         "not_found",

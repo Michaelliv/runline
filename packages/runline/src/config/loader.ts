@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { connectionFields } from "../plugin/schema.js";
 import type { ConnectionConfig, ConnectionSchema } from "../plugin/types.js";
 import { readConnectionFile, updateConnectionFile } from "./store.js";
@@ -9,8 +9,9 @@ import { DEFAULT_CONFIG, type RunlineConfig } from "./types.js";
 const CONFIG_DIR_NAME = ".runline";
 const CONFIG_FILE = "config.json";
 
-export function findConfigDir(): string | null {
-  let dir = process.cwd();
+/** The nearest `.runline` folder at or above `from`. */
+export function findConfigDir(from: string = process.cwd()): string | null {
+  let dir = resolve(from);
   while (true) {
     const candidate = join(dir, CONFIG_DIR_NAME);
     if (existsSync(candidate)) return candidate;

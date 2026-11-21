@@ -28,18 +28,28 @@ export interface CommandRunner {
 
 const OUTPUT_LIMIT = 1024 * 1024;
 
-function quoteForCmd(arg: string): string {
-  return /^[A-Za-z0-9_\-./:@=^~+]+$/.test(arg)
-    ? arg
-    : `"${arg.replace(/"/g, '""')}"`;
+/**
+ * One argument for cmd.exe, quoted. Inside double quotes cmd still expands
+ * `%VAR%` and ends the quote at `"`, so an argument carrying either (or a
+ * line break) is refused rather than escaped.
+ */
+export function quoteForCmd(arg: string): string {
+  if (/[%"\r\n]/.test(arg))
+    throw new Error(`Argument cannot be passed through cmd.exe: ${arg}`);
+  return /^[A-Za-z0-9_\-./:@=~+]+$/.test(arg) ? arg : `"${arg}"`;
 }
 
-/** The default runner: `node:child_process` `spawn`, no shell (Windows needs one for `.cmd` shims). */
+/**
+ * The default runner: `node:child_process` `spawn` with an argument list and
+ * no shell. On Windows npm, pnpm and bun are `.cmd` shims that only a shell
+ * can start, so those (never git) go through cmd.exe with every argument
+ * quoted by `quoteForCmd`.
+ */
 export const nodeCommandRunner: CommandRunner = {
   run(command, args, options = {}) {
     return new Promise((resolve, reject) => {
-      const windows = process.platform === "win32";
-      const child = windows
+      const viaCmd = process.platform === "win32" && command !== "git";
+      const child = viaCmd
         ? spawn([command, ...args].map(quoteForCmd).join(" "), {
             cwd: options.cwd,
             shell: true,
@@ -50,6 +60,7 @@ export const nodeCommandRunner: CommandRunner = {
             cwd: options.cwd,
             shell: false,
             signal: options.signal,
+            windowsHide: true,
           });
       let stdout = "";
       let stderr = "";

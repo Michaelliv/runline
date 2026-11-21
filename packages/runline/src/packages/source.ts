@@ -59,14 +59,13 @@ function parseNpm(source: string): NpmSource {
       source,
     });
   }
+  const range = version ? validRange(version) : null;
   return {
     type: "npm",
     spec: version ? `${name}@${version}` : name,
     name,
     version,
-    ...(version && validRange(version)
-      ? { range: validRange(version) as string }
-      : {}),
+    ...(range ? { range } : {}),
     pinned: isExactVersion(version),
   };
 }

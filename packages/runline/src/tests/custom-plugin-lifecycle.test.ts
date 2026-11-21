@@ -45,6 +45,11 @@ describe("custom plugin lifecycle", () => {
     if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
   });
 
+  /** The fake builtins, and an empty folder in place of the real `~/.runline`. */
+  function isolated() {
+    return { builtinDir, userDir: join(tempDir, "home", ".runline") };
+  }
+
   function writeConfig(connections: object[] = []) {
     writeFileSync(
       join(runlineDir, "config.json"),
@@ -86,7 +91,7 @@ export default function inspector(api: RunlinePluginAPI) {
 `,
     );
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     assert.deepEqual(rl.plugins(), [
       {
@@ -192,7 +197,7 @@ export default function ledger(api) {
       return Response.json({ id: "e 1", amount: 7 });
     });
     try {
-      const rl = await Runline.fromProject(tempDir, { builtinDir });
+      const rl = await Runline.fromProject(tempDir, isolated());
       assert.ok(rl);
       const signed = await rl.execute(
         `return await ledger.entry.get({ id: "e 1" })`,
@@ -267,7 +272,7 @@ export default function ledger(api) {
     assert.equal((await loadPluginFromPath(packageDir)).name, "packagePlugin");
 
     writeConfig([]);
-    const discovered = await discoverPlugins(runlineDir, { builtinDir });
+    const discovered = await discoverPlugins(runlineDir, isolated());
     assert.ok(discovered.some((p) => p.name === "packagePlugin"));
   });
 
@@ -292,7 +297,7 @@ export default function ledger(api) {
       );
     }
 
-    const plugins = await discoverPlugins(runlineDir, { builtinDir });
+    const plugins = await discoverPlugins(runlineDir, isolated());
     assert.deepEqual(
       plugins.map((p) => p.name).sort(),
       layouts.map(([name]) => name).sort(),
@@ -327,7 +332,7 @@ export default function ledger(api) {
       }),
     );
 
-    const plugins = await discoverPlugins(runlineDir, { builtinDir });
+    const plugins = await discoverPlugins(runlineDir, isolated());
     assert.ok(plugins.some((p) => p.name === "configured"));
     assert.ok(plugins.some((p) => p.name === "configuredString"));
   });
@@ -351,7 +356,7 @@ export default function ledger(api) {
 
     const stderr = captureStderr();
     try {
-      const plugins = await discoverPlugins(runlineDir, { builtinDir });
+      const plugins = await discoverPlugins(runlineDir, isolated());
       assert.ok(plugins.some((p) => p.name === "configuredGood"));
     } finally {
       stderr.restore();
@@ -378,7 +383,7 @@ export default function ledger(api) {
 
     const stderr = captureStderr();
     try {
-      const plugins = await discoverPlugins(runlineDir, { builtinDir });
+      const plugins = await discoverPlugins(runlineDir, isolated());
       assert.ok(plugins.some((p) => p.name === "good"));
     } finally {
       stderr.restore();
@@ -422,7 +427,7 @@ export default function ledger(api) {
 `,
     );
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
 
     const valid = await rl.execute(`return await typed.strict({ count: 2 })`);
@@ -456,7 +461,7 @@ export default function ledger(api) {
 
     const stderr = captureStderr();
     try {
-      const plugins = await discoverPlugins(runlineDir, { builtinDir });
+      const plugins = await discoverPlugins(runlineDir, isolated());
       assert.ok(plugins.some((p) => p.name === "healthyPackage"));
     } finally {
       stderr.restore();
@@ -480,7 +485,7 @@ export default function ledger(api) {
 
     const stderr = captureStderr();
     try {
-      const plugins = await discoverPlugins(runlineDir, { builtinDir });
+      const plugins = await discoverPlugins(runlineDir, isolated());
       assert.equal(plugins.filter((p) => p.name === "dupe").length, 1);
     } finally {
       stderr.restore();
@@ -521,7 +526,7 @@ export default function ledger(api) {
 
     const stderr = captureStderr();
     try {
-      const plugins = await discoverPlugins(runlineDir, { builtinDir });
+      const plugins = await discoverPlugins(runlineDir, isolated());
       assert.deepEqual(
         plugins.map((p) => [p.name, p.sourceInfo?.origin]),
         [
@@ -565,7 +570,7 @@ export default function ledger(api) {
 
     const stderr = captureStderr();
     try {
-      const kept = await discoverPlugins(runlineDir, { builtinDir });
+      const kept = await discoverPlugins(runlineDir, isolated());
       assert.deepEqual(
         kept.map((p) => [p.name, p.sourceInfo?.origin, p.actions[0].name]),
         [["mail", "builtin", "bundled"]],
@@ -581,7 +586,7 @@ export default function ledger(api) {
     const quiet = captureStderr();
     try {
       const replaced = await discoverPlugins(runlineDir, {
-        builtinDir,
+        ...isolated(),
         replaceableBuiltins: ["mail"],
       });
       assert.deepEqual(
@@ -592,15 +597,6 @@ export default function ledger(api) {
       quiet.restore();
     }
     assert.deepEqual(quiet.lines, []);
-
-    // config.json carries the same list for Runline.fromProject and the CLI.
-    writeFileSync(
-      join(runlineDir, "config.json"),
-      JSON.stringify({ connections: [], replaceableBuiltins: ["mail"] }),
-    );
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
-    assert.deepEqual(rl?.plugins()[0].sourceInfo?.origin, "local");
-    rl?.dispose();
   });
 
   it("drops a sourceInfo a plugin module declares for itself", async () => {
@@ -616,7 +612,7 @@ export default function ledger(api) {
     );
     const direct = await loadPluginFromPath(join(pluginsDir, "forged.js"));
     assert.equal(direct.sourceInfo, undefined);
-    const [plugin] = await discoverPlugins(runlineDir, { builtinDir });
+    const [plugin] = await discoverPlugins(runlineDir, isolated());
     assert.equal(plugin.sourceInfo?.owner, "local");
     assert.equal(plugin.sourceInfo?.scope, "project");
     assert.match(plugin.sourceInfo?.path ?? "", /forged\.js$/);

@@ -121,12 +121,7 @@ connCmd
   .command("add <name>")
   .description("Add a connection")
   .requiredOption("-p, --plugin <plugin>", "Plugin name")
-  .option(
-    "-s, --set <key=value...>",
-    "Config values",
-    (v: string, prev: string[]) => [...prev, v],
-    [],
-  )
+  .option("-s, --set <key=value...>", "Config values", collect, [])
   .action(async (name, opts, cmd) => {
     const globals = cmd.optsWithGlobals();
     await connectionAdd(name, {

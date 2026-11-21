@@ -53,6 +53,11 @@ describe("Runline.fromProject", () => {
     if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
   });
 
+  /** The fake builtins, and an empty folder in place of the real `~/.runline`. */
+  function isolated() {
+    return { builtinDir, userDir: join(tempDir, "home", ".runline") };
+  }
+
   function writeRunlineDir(cfg: object) {
     const dir = join(tempDir, ".runline");
     mkdirSync(dir, { recursive: true });
@@ -61,7 +66,7 @@ describe("Runline.fromProject", () => {
   }
 
   it("returns null when no .runline directory is present", async () => {
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.equal(rl, null);
   });
 
@@ -70,7 +75,7 @@ describe("Runline.fromProject", () => {
       connections: [{ name: "alpha", plugin: "alpha", config: {} }],
     });
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl, "expected Runline instance");
 
     const names = new Set(rl.plugins().map((p) => p.name));
@@ -84,7 +89,7 @@ describe("Runline.fromProject", () => {
 
   it("registers no builtins when connections are empty", async () => {
     writeRunlineDir({ connections: [] });
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     assert.equal(
       rl.plugins().length,
@@ -108,7 +113,7 @@ describe("Runline.fromProject", () => {
       }`,
     );
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     const names = rl.plugins().map((p) => p.name);
     assert.deepEqual(names, ["localOnly"]);
@@ -128,7 +133,7 @@ describe("Runline.fromProject", () => {
       }`,
     );
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     const names = new Set(rl.plugins().map((p) => p.name));
     assert.ok(names.has("alpha"));
@@ -154,7 +159,7 @@ describe("Runline.fromProject", () => {
       }`,
     );
 
-    const rl = await Runline.fromProject(tempDir, { builtinDir });
+    const rl = await Runline.fromProject(tempDir, isolated());
     assert.ok(rl);
     const alpha = rl.plugins().find((p) => p.name === "alpha");
     assert.ok(alpha);
@@ -180,7 +185,7 @@ describe("Runline.fromProject", () => {
     const errors: string[] = [];
     console.error = (...args: unknown[]) => errors.push(args.join(" "));
     try {
-      const rl = await Runline.fromProject(tempDir, { builtinDir });
+      const rl = await Runline.fromProject(tempDir, isolated());
       const alpha = rl?.plugins().find((p) => p.name === "alpha");
       assert.equal(alpha?.sourceInfo?.origin, "builtin");
       assert.notEqual(alpha?.version, "9.9.9");

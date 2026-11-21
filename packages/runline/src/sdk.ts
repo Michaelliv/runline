@@ -1,7 +1,6 @@
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-import { loadConfigFrom } from "./config/loader.js";
+import { join } from "node:path";
+import { findConfigDir, loadConfigFrom } from "./config/loader.js";
 import type { RunlineConfig } from "./config/types.js";
 import { DEFAULT_CONFIG } from "./config/types.js";
 import { FileConnectionProvider } from "./connections/file.js";
@@ -244,8 +243,7 @@ export class Runline {
       userDir?: string;
     } = {},
   ): Promise<Runline | null> {
-    const dir = cwd ?? process.cwd();
-    const configDir = findRunlineDir(dir);
+    const configDir = findConfigDir(cwd);
     if (!configDir) return null;
 
     const config = loadConfigFrom(join(configDir, "config.json"));
@@ -283,15 +281,4 @@ export class Runline {
 
     return rl;
   }
-}
-
-function findRunlineDir(from: string): string | null {
-  let dir = resolve(from);
-  while (true) {
-    if (existsSync(join(dir, ".runline"))) return join(dir, ".runline");
-    const parent = join(dir, "..");
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
 }

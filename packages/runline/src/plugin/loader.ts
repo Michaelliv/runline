@@ -119,6 +119,30 @@ function isPrivatePluginDirectory(entry: string): boolean {
   return entry.startsWith("_") || entry.startsWith(".");
 }
 
+function isPluginFile(entry: string): boolean {
+  return (
+    (entry.endsWith(".ts") || entry.endsWith(".js")) &&
+    !entry.endsWith(".d.ts") &&
+    !entry.endsWith(".test.ts")
+  );
+}
+
+/**
+ * The plugins a folder holds, by the names of its entries and without
+ * loading any: each plugin folder and each plugin file. The bundled plugins
+ * are named for their folders, so this is their names.
+ */
+export function pluginEntryNames(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.isDirectory())
+      return isPrivatePluginDirectory(entry.name) ? [] : [entry.name];
+    return isPluginFile(entry.name)
+      ? [entry.name.replace(/\.(ts|js)$/, "")]
+      : [];
+  });
+}
+
 /**
  * `npm/` and `git/` under a plugins folder hold what `runline plugin
  * install` wrote up to runline 0.44. plugins.json points into them; they
@@ -146,12 +170,7 @@ async function loadFromDirectory(
     const fullPath = join(dir, entry);
     const stat = statSync(fullPath);
 
-    if (
-      stat.isFile() &&
-      (entry.endsWith(".ts") || entry.endsWith(".js")) &&
-      !entry.endsWith(".d.ts") &&
-      !entry.endsWith(".test.ts")
-    ) {
+    if (stat.isFile() && isPluginFile(entry)) {
       try {
         plugins.push(await loadPluginFromPath(fullPath));
       } catch (err) {
@@ -257,9 +276,9 @@ export interface DiscoverOptions {
   /**
    * When supplied, only built-in plugins whose name is in this set
    * are loaded. Plugins discovered in the project dir, `plugins.json`,
-   * or `~/.runline/plugins` are always loaded — users put them there
-   * deliberately — but the 188 bundled builtins are gated so agents
-   * don't see every possible action regardless of configuration.
+   * or `~/.runline/plugins` are not gated — users put them there
+   * deliberately — but the bundled builtins are, so agents don't see
+   * every possible action regardless of configuration.
    *
    * Omit to load every builtin (CLI default: `runline actions` etc.
    * surfaces the full catalog).

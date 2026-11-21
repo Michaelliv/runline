@@ -15,13 +15,16 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { isPackageError, PackageError } from "../packages/errors.js";
 import {
+  bundledPluginNames,
   PackageManager,
   type PackageManagerOptions,
 } from "../packages/manager.js";
 import { readPackageManifest } from "../packages/manifest.js";
-import type { CommandRunner } from "../packages/runner.js";
+import { type CommandRunner, quoteForCmd } from "../packages/runner.js";
 import { packageIdentity, parseSource } from "../packages/source.js";
 import { FilePackageStore, MemoryPackageStore } from "../packages/store.js";
+import { discoverPlugins } from "../plugin/loader.js";
+import { Runline } from "../sdk.js";
 
 let tmp: string;
 
@@ -682,7 +685,7 @@ ${pluginSource(
     assert.equal(listed.version, "1.0.0");
   });
 
-  it("treats an npm package outside its configured range as missing", async () => {
+  it("treats an npm package outside its configured version or range as missing", async () => {
     const fixture = writePackage(
       join(tmp, "fixture"),
       { name: "orders", version: "1.0.0" },
@@ -692,11 +695,15 @@ ${pluginSource(
     const pm = manager({ store, runner: fakeNpm({ orders: fixture }, []) });
     await pm.install("npm:orders@^1.0.0");
     assert.deepEqual((await pm.load()).problems, []);
-    await store.update("user", () => ({
-      entries: ["npm:orders@^2.0.0"],
-      result: undefined,
-    }));
-    assert.equal((await pm.load()).problems[0].code, "missing");
+    for (const outside of ["npm:orders@^2.0.0", "npm:orders@1.5.0"]) {
+      await store.update("user", () => ({
+        entries: [outside],
+        result: undefined,
+      }));
+      const { plugins, problems } = await pm.load();
+      assert.deepEqual(plugins, []);
+      assert.equal(problems[0].code, "missing");
+    }
     // A dist-tag is not a range: whatever is installed stands.
     await store.update("user", () => ({
       entries: ["npm:orders@beta"],
@@ -724,6 +731,19 @@ ${pluginSource(
       "nothing newer in range: no install",
     );
     assert.deepEqual(await pm.checkUpdates(), []);
+
+    // Installed 1.4.0 but configured ^2: outside the range, so reinstalled
+    // even though the registry lists nothing newer.
+    const store = new MemoryPackageStore({ user: ["npm:orders@^2.0.0"] });
+    calls.length = 0;
+    await manager({
+      store,
+      runner: fakeNpm({ orders: fixture }, calls),
+    }).update();
+    assert.deepEqual(
+      calls.map((c) => c[1]),
+      ["install"],
+    );
   });
 
   it("warns when a package's peer range excludes this runline", async () => {
@@ -750,25 +770,6 @@ ${pluginSource(
       problems[0].message,
       /needs runline >=999\.0\.0; this is runline \d/,
     );
-  });
-
-  it("treats a pinned npm package at another version as missing", async () => {
-    const fixture = writePackage(
-      join(tmp, "fixture"),
-      { name: "orders", version: "1.0.0" },
-      { "index.js": pluginSource("orders") },
-    );
-    const calls: string[][] = [];
-    const store = new MemoryPackageStore();
-    const pm = manager({ store, runner: fakeNpm({ orders: fixture }, calls) });
-    await pm.install("npm:orders@1.0.0");
-    await store.update("user", () => ({
-      entries: ["npm:orders@1.5.0"],
-      result: undefined,
-    }));
-    const { plugins, problems } = await pm.load();
-    assert.deepEqual(plugins, []);
-    assert.equal(problems[0].code, "missing");
   });
 
   it("refuses a relative temporary local source", async () => {
@@ -831,12 +832,44 @@ ${pluginSource(
       decodeURIComponent(requested),
       /text=keywords:runline-plugin orders/,
     );
+
+    const down = manager({
+      fetch: (async () => {
+        throw new TypeError("fetch failed");
+      }) as unknown as typeof fetch,
+    });
+    await assert.rejects(down.search("orders"), { code: "registry_failed" });
+    const refused = manager({
+      fetch: (async () =>
+        new Response("", { status: 503 })) as unknown as typeof fetch,
+    });
+    await assert.rejects(refused.search("orders"), {
+      code: "registry_failed",
+      message: /HTTP 503/,
+    });
+  });
+
+  it("names bundled plugins by their folders and files, skipping private ones", () => {
+    const dir = join(tmp, "builtins");
+    mkdirSync(join(dir, "gmail"), { recursive: true });
+    mkdirSync(join(dir, "_shared"));
+    writeFileSync(join(dir, "alpha.js"), "");
+    writeFileSync(join(dir, "alpha.d.ts"), "");
+    writeFileSync(join(dir, "notes.md"), "");
+    assert.deepEqual([...bundledPluginNames(dir)].sort(), ["alpha", "gmail"]);
+  });
+
+  it("quotes arguments for cmd.exe and refuses the ones quoting cannot make safe", () => {
+    assert.equal(quoteForCmd("--prefix"), "--prefix");
+    assert.equal(quoteForCmd("pkg@>=1.2.0"), '"pkg@>=1.2.0"');
+    assert.equal(quoteForCmd("C:\\Program Files\\x"), '"C:\\Program Files\\x"');
+    for (const bad of ["%PATH%", 'a"b', "a\nb"])
+      assert.throws(() => quoteForCmd(bad), /cmd\.exe/);
   });
 });
 
 describe("discovery with packages", () => {
   it("skips the npm folder `runline plugin install` wrote up to 0.44", async () => {
-    const { discoverPlugins } = await import("../plugin/loader.js");
     mkdirSync(join(tmp, "home", ".runline", "plugins", "npm", "node_modules"), {
       recursive: true,
     });
@@ -857,7 +890,6 @@ describe("discovery with packages", () => {
   });
 
   it("holds a plugins-folder package to the manifest rules", async () => {
-    const { discoverPlugins } = await import("../plugin/loader.js");
     const runlineDir = join(tmp, "work", ".runline");
     writePackage(join(tmp, "outside"), {}, { "x.js": pluginSource("outside") });
     writePackage(
@@ -907,7 +939,6 @@ export default function (api) {
   });
 
   it("binds a connection to the plugin source it was made for", async () => {
-    const { Runline } = await import("../sdk.js");
     const pkg = writePackage(
       join(tmp, "orderspkg"),
       {},
@@ -989,7 +1020,6 @@ export default function (api) {
   });
 
   it("Runline.fromProject loads user packages and skips an untrusted project's", async () => {
-    const { Runline } = await import("../sdk.js");
     const userPkg = writePackage(
       join(tmp, "userpkg"),
       {},
