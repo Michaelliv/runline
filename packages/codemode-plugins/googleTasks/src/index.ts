@@ -1,0 +1,427 @@
+/**
+ * Google Tasks plugin for codemode.
+ *
+ * OAuth2 user flow, same shape as the rest of the Google plugins.
+ * Scope: `auth/tasks` (full read/write).
+ *
+ * Surface area:
+ *
+ *   taskList.create / taskList.get / taskList.list /
+ *   taskList.update / taskList.delete
+ *
+ *   task.create / task.get / task.list / task.update / task.delete
+ *   task.move        (reorder / reparent within a list)
+ *   task.clear       (hide all completed tasks in a list)
+ *
+ * Dates passed via `due`, `completed`, `completedMin/Max`,
+ * `dueMin/Max`, `updatedMin` may be ISO strings (`"2024-12-25"`,
+ * `"2024-12-25T10:00:00Z"`) or already-RFC3339-formatted strings.
+ * Google's Tasks API is strict about RFC3339 with a timezone — we
+ * normalize ISO input via `Date.toISOString()` when detected.
+ */
+
+import {
+  type ActionContext,
+  type CodemodePluginAPI,
+  pathSegment,
+} from "@shiftlabs/codemode";
+import * as t from "typebox";
+import {
+  googleCredential,
+  googleJsonRequest,
+  googleListAll,
+  googleOAuth,
+} from "../../_shared/googleAuth.js";
+import {
+  GoogleTimestamp,
+  googleConnection,
+  Id,
+} from "../../_shared/googleSchemas.js";
+import { atLeastOne, STRICT, stringEnum } from "../../_shared/schemas.js";
+
+// ─── Types ───────────────────────────────────────────────────────
+
+type Ctx = ActionContext;
+
+// ─── Request ─────────────────────────────────────────────────────
+
+const API_BASE = "https://tasks.googleapis.com/tasks/v1";
+
+async function tasksRequest(
+  ctx: Ctx,
+  method: string,
+  path: string,
+  body?: Record<string, unknown>,
+  qs?: Record<string, unknown>,
+): Promise<unknown> {
+  return googleJsonRequest(
+    ctx,
+    "googleTasks",
+    SCOPES,
+    method,
+    `${API_BASE}${path}`,
+    body,
+    qs,
+  );
+}
+
+function paginateAll(
+  ctx: Ctx,
+  path: string,
+  qs: Record<string, unknown>,
+): Promise<Record<string, unknown>[]> {
+  return googleListAll(
+    (query) => tasksRequest(ctx, "GET", path, undefined, query),
+    "items",
+    { ...qs, maxResults: qs.maxResults ?? 100 },
+  );
+}
+
+// ─── Helpers ────────────────────────────────────────────────────
+
+/**
+ * Normalize a date/time value for the Tasks API. Accepts ISO strings,
+ * epoch numbers, or already-RFC3339 strings. Google demands RFC3339
+ * with a timezone (`Z` or `+01:00`) on `due`, `completed`, and the
+ * `completedMin/Max`/`dueMin/Max`/`updatedMin` filters.
+ */
+function toRFC3339(v: string | number | undefined): string | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v === "number") return new Date(v).toISOString();
+  // If it already looks like RFC3339 (ends with Z or a numeric offset), pass through.
+  if (/Z$|[+-]\d{2}:?\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error(`googleTasks: invalid date "${v}"`);
+  }
+  return d.toISOString();
+}
+
+// ─── Plugin ──────────────────────────────────────────────────────
+
+const SCOPES = ["https://www.googleapis.com/auth/tasks"];
+
+const taskStatusSchema = stringEnum(["needsAction", "completed"] as const);
+const pageSizeSchema = t.Integer({ minimum: 1, maximum: 100 });
+
+export default function googleTasks(rl: CodemodePluginAPI) {
+  rl.setName("googleTasks");
+  rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleTasks", SCOPES));
+
+  rl.setOAuth(googleOAuth("googleTasks", SCOPES, "GOOGLE_TASKS"));
+
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_TASKS")));
+
+  // ── Task lists ────────────────────────────────────────
+
+  rl.registerAction("taskList.list", {
+    access: "read",
+    description: "List the authenticated user's task lists",
+    inputSchema: t.Object(
+      {
+        returnAll: t.Optional(t.Boolean()),
+        maxResults: t.Optional(pageSizeSchema),
+        pageToken: t.Optional(Id),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      if (p.pageToken) qs.pageToken = p.pageToken;
+      if (p.returnAll) return paginateAll(ctx, "/users/@me/lists", qs);
+      if (p.maxResults) qs.maxResults = p.maxResults;
+      const res = (await tasksRequest(
+        ctx,
+        "GET",
+        "/users/@me/lists",
+        undefined,
+        qs,
+      )) as {
+        items?: unknown[];
+      };
+      return res.items ?? [];
+    },
+  });
+
+  rl.registerAction("taskList.get", {
+    access: "read",
+    description: "Get a task list by ID",
+    inputSchema: t.Object({ tasklist: Id }, STRICT),
+    async execute(p, ctx) {
+      return tasksRequest(
+        ctx,
+        "GET",
+        `/users/@me/lists/${pathSegment(p.tasklist)}`,
+      );
+    },
+  });
+
+  rl.registerAction("taskList.create", {
+    access: "write",
+    description: "Create a new task list",
+    inputSchema: t.Object({ title: t.String() }, STRICT),
+    async execute(p, ctx) {
+      return tasksRequest(ctx, "POST", "/users/@me/lists", { title: p.title });
+    },
+  });
+
+  rl.registerAction("taskList.update", {
+    access: "write",
+    description: "Update a task list (currently only `title` is writable).",
+    inputSchema: t.Object(
+      {
+        tasklist: Id,
+        title: t.String(),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return tasksRequest(
+        ctx,
+        "PATCH",
+        `/users/@me/lists/${pathSegment(p.tasklist)}`,
+        {
+          title: p.title,
+        },
+      );
+    },
+  });
+
+  rl.registerAction("taskList.delete", {
+    access: "write",
+    description: "Delete a task list and all its tasks",
+    inputSchema: t.Object({ tasklist: Id }, STRICT),
+    async execute(p, ctx) {
+      await tasksRequest(
+        ctx,
+        "DELETE",
+        `/users/@me/lists/${pathSegment(p.tasklist)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  // ── Tasks ─────────────────────────────────────────────
+
+  rl.registerAction("task.create", {
+    access: "write",
+    description: "Create a task in a list",
+    inputSchema: t.Object(
+      {
+        tasklist: Id,
+        title: t.String(),
+        notes: t.Optional(t.String()),
+        due: t.Optional(GoogleTimestamp),
+        status: t.Optional(taskStatusSchema),
+        completed: t.Optional(GoogleTimestamp),
+        deleted: t.Optional(t.Boolean()),
+        parent: t.Optional(
+          t.String({
+            minLength: 1,
+            description: "Parent task ID (nests this task under another)",
+          }),
+        ),
+        previous: t.Optional(
+          t.String({
+            minLength: 1,
+            description:
+              "Insert after this task ID; omit to place at top of level",
+          }),
+        ),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = { title: p.title };
+      if (p.notes) body.notes = p.notes;
+      if (p.status) body.status = p.status;
+      if (p.deleted !== undefined) body.deleted = p.deleted;
+      const due = toRFC3339(p.due);
+      if (due) body.due = due;
+      const completed = toRFC3339(p.completed);
+      if (completed) body.completed = completed;
+
+      const qs: Record<string, unknown> = {};
+      if (p.parent) qs.parent = p.parent;
+      if (p.previous) qs.previous = p.previous;
+
+      return tasksRequest(
+        ctx,
+        "POST",
+        `/lists/${pathSegment(p.tasklist)}/tasks`,
+        body,
+        qs,
+      );
+    },
+  });
+
+  rl.registerAction("task.get", {
+    access: "read",
+    description: "Get a single task",
+    inputSchema: t.Object(
+      {
+        tasklist: Id,
+        task: Id,
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return tasksRequest(
+        ctx,
+        "GET",
+        `/lists/${pathSegment(p.tasklist)}/tasks/${pathSegment(p.task)}`,
+      );
+    },
+  });
+
+  rl.registerAction("task.list", {
+    access: "read",
+    description:
+      "List tasks in a list. Filters: dueMin/dueMax, completedMin/completedMax, updatedMin, showCompleted/showDeleted/showHidden.",
+    inputSchema: t.Object(
+      {
+        tasklist: Id,
+        showCompleted: t.Optional(
+          t.Boolean({ description: "Include completed tasks (default: true)" }),
+        ),
+        showDeleted: t.Optional(t.Boolean()),
+        showHidden: t.Optional(t.Boolean()),
+        dueMin: t.Optional(GoogleTimestamp),
+        dueMax: t.Optional(GoogleTimestamp),
+        completedMin: t.Optional(GoogleTimestamp),
+        completedMax: t.Optional(GoogleTimestamp),
+        updatedMin: t.Optional(GoogleTimestamp),
+        returnAll: t.Optional(t.Boolean()),
+        maxResults: t.Optional(pageSizeSchema),
+        pageToken: t.Optional(Id),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {
+        showCompleted: p.showCompleted ?? true,
+        showDeleted: p.showDeleted ?? false,
+        showHidden: p.showHidden ?? false,
+      };
+      for (const k of [
+        "dueMin",
+        "dueMax",
+        "completedMin",
+        "completedMax",
+        "updatedMin",
+      ] as const) {
+        const v = toRFC3339(p[k]);
+        if (v) qs[k] = v;
+      }
+      if (p.pageToken) qs.pageToken = p.pageToken;
+      const path = `/lists/${pathSegment(p.tasklist)}/tasks`;
+      if (p.returnAll) return paginateAll(ctx, path, qs);
+      if (p.maxResults) qs.maxResults = p.maxResults;
+      const res = (await tasksRequest(ctx, "GET", path, undefined, qs)) as {
+        items?: unknown[];
+      };
+      return res.items ?? [];
+    },
+  });
+
+  const taskChanges = {
+    title: t.Optional(t.String()),
+    notes: t.Optional(t.String()),
+    due: t.Optional(GoogleTimestamp),
+    status: t.Optional(taskStatusSchema),
+    completed: t.Optional(GoogleTimestamp),
+    deleted: t.Optional(t.Boolean()),
+  };
+  rl.registerAction("task.update", {
+    access: "write",
+    description:
+      "Patch a task. Only supplied fields are sent. Set status=completed (and optionally `completed` timestamp) to mark done.",
+    inputSchema: t.Object(
+      { tasklist: Id, task: Id, ...taskChanges },
+      {
+        ...STRICT,
+        ...atLeastOne(taskChanges),
+      },
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = {};
+      if (p.title !== undefined) body.title = p.title;
+      if (p.notes !== undefined) body.notes = p.notes;
+      if (p.status !== undefined) body.status = p.status;
+      if (p.deleted !== undefined) body.deleted = p.deleted;
+      const due = toRFC3339(p.due);
+      if (due) body.due = due;
+      const completed = toRFC3339(p.completed);
+      if (completed) body.completed = completed;
+      return tasksRequest(
+        ctx,
+        "PATCH",
+        `/lists/${pathSegment(p.tasklist)}/tasks/${pathSegment(p.task)}`,
+        body,
+      );
+    },
+  });
+
+  rl.registerAction("task.delete", {
+    access: "write",
+    description: "Delete a task",
+    inputSchema: t.Object(
+      {
+        tasklist: Id,
+        task: Id,
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      await tasksRequest(
+        ctx,
+        "DELETE",
+        `/lists/${pathSegment(p.tasklist)}/tasks/${pathSegment(p.task)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  rl.registerAction("task.move", {
+    access: "write",
+    description:
+      "Move a task within its list (reorder or reparent). `parent` nests under another task; `previous` places it after a sibling.",
+    inputSchema: t.Object(
+      {
+        tasklist: Id,
+        task: Id,
+        parent: t.Optional(Id),
+        previous: t.Optional(Id),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      if (p.parent) qs.parent = p.parent;
+      if (p.previous) qs.previous = p.previous;
+      return tasksRequest(
+        ctx,
+        "POST",
+        `/lists/${pathSegment(p.tasklist)}/tasks/${pathSegment(p.task)}/move`,
+        undefined,
+        qs,
+      );
+    },
+  });
+
+  rl.registerAction("task.clear", {
+    access: "write",
+    description:
+      "Hide all completed tasks in a list from the default view. They remain accessible via task.list with showHidden=true.",
+    inputSchema: t.Object({ tasklist: Id }, STRICT),
+    async execute(p, ctx) {
+      await tasksRequest(
+        ctx,
+        "POST",
+        `/lists/${pathSegment(p.tasklist)}/clear`,
+      );
+      return { success: true };
+    },
+  });
+}

@@ -18,10 +18,9 @@ jobs:
       # The Steel page tools are tested against a real browser over real
       # CDP; a mocked protocol would only ever agree with itself.
       - run: bunx playwright install --with-deps chromium
-      - run: bun --filter runline build
-      # Plugins and pi-runline resolve runline through its built types.
+      - run: bun --filter @shiftlabs/codemode build
+      # The plugins and the runline package resolve codemode through its built types.
       - run: bun run typecheck
-      - run: bun --filter runline test
-      # Lint/format across the whole monorepo — catches issues in
-      # pi-runline and runline-plugins that the runline filter misses.
+      - run: bun --filter @shiftlabs/codemode test
+      # Lint and format across the whole monorepo, codemode-plugins included.
       - run: bun run check

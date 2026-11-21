@@ -22,7 +22,8 @@ Thumbs.db
 .vscode/
 *.swp
 
-# runline local workspaces
+# Local workspaces, under either name
+.codemode/
 .runline/
 
 # dotenv

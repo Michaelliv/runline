@@ -1,0 +1,289 @@
+import {
+  AuthError,
+  type CredentialDeclaration,
+  type CredentialProbe,
+  type CredentialTarget,
+  type CredentialType,
+  grantSchema,
+  type OAuthJwtIdentity,
+} from "@shiftlabs/codemode";
+
+/** The grant every Google plugin's consent belongs to. */
+export const GOOGLE_GRANT = "google";
+/**
+ * Google's fixed token endpoint: a JSON credential's token_uri never
+ * selects egress.
+ */
+export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+export type GoogleAuthConfig = {
+  authMethod?: "delegated" | "serviceAccount";
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+  serviceAccountJson?: string;
+  serviceAccountEmail?: string;
+  serviceAccountPrivateKey?: string;
+  serviceAccountSubject?: string;
+  accessToken?: string;
+  accessTokenExpiresAt?: number;
+};
+
+/** Only legacy storage infers a method; host bindings always select it explicitly. */
+export function googleMethod(
+  cfg: GoogleAuthConfig,
+): "delegated" | "serviceAccount" {
+  if (cfg.authMethod !== undefined) {
+    if (cfg.authMethod !== "delegated" && cfg.authMethod !== "serviceAccount")
+      throw new AuthError("invalid_credentials");
+    return cfg.authMethod;
+  }
+  return cfg.serviceAccountJson ||
+    cfg.serviceAccountEmail ||
+    cfg.serviceAccountPrivateKey
+    ? "serviceAccount"
+    : "delegated";
+}
+
+export function googleIdentity(cfg: GoogleAuthConfig): OAuthJwtIdentity {
+  try {
+    const parsed = cfg.serviceAccountJson
+      ? JSON.parse(cfg.serviceAccountJson)
+      : {
+          client_email: cfg.serviceAccountEmail,
+          private_key: cfg.serviceAccountPrivateKey,
+        };
+    if (
+      !parsed ||
+      typeof parsed.client_email !== "string" ||
+      !parsed.client_email ||
+      typeof parsed.private_key !== "string" ||
+      !parsed.private_key
+    )
+      throw new Error();
+    return {
+      issuer: parsed.client_email,
+      privateKey: parsed.private_key.replace(/\\n/g, "\n"),
+      ...(cfg.serviceAccountSubject === undefined
+        ? {}
+        : { subject: cfg.serviceAccountSubject }),
+    };
+  } catch {
+    throw new AuthError("invalid_credentials");
+  }
+}
+
+/**
+ * The Google Ads API version every googleAds path starts with. Google
+ * sunsets each major version about a year after its release.
+ */
+export const GOOGLE_ADS_VERSION = "v26";
+
+const API_BASES: Record<string, string> = {
+  // The origin alone: Ads paths begin with a method (`customers:list…`),
+  // which a path directly beneath a base would read as a URL scheme.
+  ads: "https://googleads.googleapis.com/",
+  analyticsData: "https://analyticsdata.googleapis.com/v1beta/",
+  analyticsAdmin: "https://analyticsadmin.googleapis.com/v1beta/",
+  drive: "https://www.googleapis.com/drive/v3/",
+  upload: "https://www.googleapis.com/upload/drive/v3/",
+  docs: "https://docs.googleapis.com/v1/",
+  sheets: "https://sheets.googleapis.com/v4/",
+  slides: "https://slides.googleapis.com/v1/",
+  script: "https://script.googleapis.com/v1/",
+  tasks: "https://tasks.googleapis.com/tasks/v1/",
+  people: "https://people.googleapis.com/",
+  calendar: "https://www.googleapis.com/calendar/v3/",
+  gmail: "https://gmail.googleapis.com/gmail/v1/users/me/",
+};
+/** The Cloud Console service each API base belongs to, to enable it by. */
+const API_SERVICES: Record<string, string> = {
+  ads: "googleads.googleapis.com",
+  analyticsData: "analyticsdata.googleapis.com",
+  analyticsAdmin: "analyticsadmin.googleapis.com",
+  drive: "drive.googleapis.com",
+  upload: "drive.googleapis.com",
+  docs: "docs.googleapis.com",
+  sheets: "sheets.googleapis.com",
+  slides: "slides.googleapis.com",
+  script: "script.googleapis.com",
+  tasks: "tasks.googleapis.com",
+  people: "people.googleapis.com",
+  calendar: "calendar-json.googleapis.com",
+  gmail: "gmail.googleapis.com",
+};
+/**
+ * What a target allows beyond plain JSON calls: Ads names the manager
+ * account a call acts through, and Drive content is downloaded by byte
+ * ranges and uploaded in resumable sessions.
+ */
+const TARGET_EXTRAS: Record<string, Partial<CredentialTarget>> = {
+  ads: { allowedHeaders: ["login-customer-id"] },
+  drive: { allowedHeaders: ["Range"] },
+  upload: {
+    allowedHeaders: [
+      "X-Upload-Content-Type",
+      "X-Upload-Content-Length",
+      "Content-Range",
+    ],
+    resumableUpload: true,
+  },
+};
+const PLUGIN_TARGETS: Record<string, string[]> = {
+  googleAds: ["ads"],
+  googleAnalytics: ["analyticsData", "analyticsAdmin"],
+  googleDrive: ["drive", "upload", "docs"],
+  googleDocs: ["docs", "drive"],
+  googleSheets: ["sheets", "drive"],
+  googleSlides: ["slides"],
+  googleAppsScript: ["script", "drive"],
+  googleTasks: ["tasks"],
+  googleContacts: ["people"],
+  googleCalendar: ["calendar"],
+  gmail: ["gmail"],
+};
+
+/** The API bases a builtin Google plugin calls; any other name is refused. */
+function targetNames(plugin: string): string[] {
+  if (!Object.hasOwn(PLUGIN_TARGETS, plugin))
+    throw new AuthError("request_not_allowed");
+  return PLUGIN_TARGETS[plugin];
+}
+
+/** The Cloud Console services a plugin calls, each to be enabled once. */
+export function googleServices(plugin: string): string[] {
+  return [...new Set(targetNames(plugin).map((name) => API_SERVICES[name]))];
+}
+
+/** Builtin routing policy, never derived from action input or a returned URL. */
+export function googleResources(plugin: string): {
+  targets: Record<string, CredentialTarget>;
+  probe?: CredentialProbe;
+} {
+  const names = targetNames(plugin);
+  const targets = Object.fromEntries(
+    names.map((name) => [
+      name,
+      {
+        baseUrl: API_BASES[name],
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+        ...TARGET_EXTRAS[name],
+      },
+    ]),
+  ) as Record<string, CredentialTarget>;
+  const probes: Record<string, [string, string]> = {
+    googleAds: [
+      "ads",
+      `${GOOGLE_ADS_VERSION}/customers:listAccessibleCustomers`,
+    ],
+    googleAnalytics: ["analyticsAdmin", "accountSummaries?pageSize=1"],
+    googleDrive: ["drive", "files?pageSize=1&fields=files(id)"],
+    googleTasks: ["tasks", "users/@me/lists?maxResults=1"],
+    googleContacts: [
+      "people",
+      "v1/people/me/connections?pageSize=1&personFields=names",
+    ],
+    googleCalendar: ["calendar", "users/me/calendarList?maxResults=1"],
+    gmail: ["gmail", "profile"],
+    googleAppsScript: ["drive", "files?pageSize=1&fields=files(id)"],
+  };
+  const probe = probes[plugin];
+  // Docs/Sheets/Slides have no fixed scoped document to probe. Do not guess an ID
+  // or require broader Drive permissions merely to manufacture a successful check.
+  return {
+    targets,
+    ...(probe
+      ? {
+          probe: {
+            target: probe[0],
+            path: probe[1],
+            method: "GET" as const,
+            acceptedStatuses: [200],
+          },
+        }
+      : {}),
+  };
+}
+
+/**
+ * A Google plugin's credential declaration: its own targets and the scopes
+ * it signs service-account requests for, the method its config selects,
+ * and — for a service account whose key the config holds — the JWT
+ * identity, subject included. A host that keeps the key supplies the
+ * identity itself.
+ */
+export function googleCredential(
+  plugin: string,
+  scopes: string[],
+): CredentialDeclaration {
+  return (config) => {
+    const cfg = config as GoogleAuthConfig;
+    const method = googleMethod(cfg);
+    return {
+      type: googleCredentialType(scopes, plugin),
+      method,
+      application: {
+        clientId: cfg.clientId as string,
+        clientSecret: cfg.clientSecret,
+      },
+      ...(method === "serviceAccount" &&
+      (cfg.serviceAccountJson || cfg.serviceAccountPrivateKey)
+        ? { jwtIdentity: googleIdentity(cfg) }
+        : {}),
+    };
+  };
+}
+
+export function googleCredentialType(
+  scopes: string[],
+  plugin: string,
+): CredentialType {
+  const { targets, probe } = googleResources(plugin);
+  return {
+    id: "google.oauth",
+    methods: {
+      delegated: {
+        schema: grantSchema,
+        authentication: {
+          kind: "oauth2",
+          field: "grant",
+          renewal: "refresh",
+          grant: GOOGLE_GRANT,
+          definition: {
+            id: "google.oauth",
+            provider: "google",
+            refresh: {
+              url: GOOGLE_TOKEN_URL,
+              clientAuthentication: "client_secret_post",
+            },
+          },
+        },
+        targets,
+        probe,
+      },
+      ...(scopes.length
+        ? {
+            serviceAccount: {
+              schema: grantSchema,
+              authentication: {
+                kind: "oauth2",
+                field: "grant",
+                renewal: "jwtBearer",
+                scopes,
+                definition: {
+                  id: "google.serviceAccount",
+                  provider: "google",
+                  jwtBearer: {
+                    url: GOOGLE_TOKEN_URL,
+                    clientAuthentication: "none",
+                  },
+                },
+              },
+              targets,
+              probe,
+            },
+          }
+        : {}),
+    },
+  };
+}

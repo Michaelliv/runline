@@ -1,0 +1,343 @@
+/**
+ * Replicate image generation for codemode.
+ *
+ *   await replicate.image.create({ prompt: "a samurai under cherry blossoms" })
+ *   await replicate.image.create({
+ *     prompt: "studio portrait, soft lighting",
+ *     model: "stability-ai/stable-diffusion-3.5-large",
+ *     size: "1024x1024",
+ *   })
+ *
+ * Default model is black-forest-labs/flux-dev. Any text-to-image
+ * Replicate model that accepts `prompt` / `width` / `height` /
+ * `num_outputs` works the same way.
+ *
+ * Predictions are created with `Prefer: wait` so simple jobs return
+ * synchronously; anything still processing is polled until terminal
+ * or until `timeoutMs` elapses (default: 5 minutes). Output URLs are
+ * downloaded to local files so callers can deliver them directly.
+ */
+
+import { Buffer } from "node:buffer";
+import {
+  type ActionContext,
+  credentialJson,
+  pathSegments,
+  pathWithin,
+  type CodemodePluginAPI,
+} from "@shiftlabs/codemode";
+import {
+  readImageInput,
+  type SavedMedia,
+  SEND_FILE_NOTE,
+  writeMediaFile,
+} from "../../_shared/mediaFile.js";
+import { parseSize } from "../../_shared/parseSize.js";
+import { replicateCredential } from "./credentials.js";
+
+const POLL_INTERVAL_MS = 2_000;
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+
+interface CreateInput {
+  prompt: string;
+  model?: string;
+  size?: string;
+  n?: number;
+  timeoutMs?: number;
+  saveDir?: string;
+}
+
+interface EditInput {
+  prompt: string;
+  imagePath: string;
+  model?: string;
+  imageInputKey?: string;
+  timeoutMs?: number;
+  saveDir?: string;
+}
+
+interface Prediction {
+  status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
+  output?: string | string[];
+  error?: unknown;
+  urls: { get: string };
+}
+
+function stringifyError(err: unknown): string {
+  if (err == null) return "unknown error";
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+/**
+ * Create a prediction for `model`, wait for it to reach a terminal
+ * state (Prefer: wait + polling), download the output URL(s), and
+ * write them to disk. Shared by image.create and image.edit — the
+ * only thing that differs between them is the prediction `input`.
+ */
+async function runPrediction(opts: {
+  ctx: ActionContext;
+  model: string;
+  input: Record<string, unknown>;
+  timeoutMs: number;
+  saveDir?: string;
+}): Promise<{
+  images: SavedMedia[];
+  failures: Array<{ url: string; reason: string }>;
+}> {
+  const { ctx, model, input, timeoutMs, saveDir } = opts;
+  const deadline = Date.now() + timeoutMs;
+
+  let prediction = (await credentialJson(
+    ctx,
+    replicateCredential,
+    "replicate",
+    {
+      target: "api",
+      path: `models/${pathSegments(model)}/predictions`,
+      method: "POST",
+      headers: { Prefer: "wait" },
+      json: { input },
+    },
+  )) as Prediction;
+  while (
+    prediction.status !== "succeeded" &&
+    prediction.status !== "failed" &&
+    prediction.status !== "canceled"
+  ) {
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Replicate generation timed out after ${timeoutMs}ms (still ${prediction.status})`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    prediction = (await credentialJson(ctx, replicateCredential, "replicate", {
+      target: "api",
+      path: pathWithin(ctx, replicateCredential, "api", prediction.urls.get),
+    })) as Prediction;
+  }
+
+  if (prediction.status !== "succeeded") {
+    throw new Error(
+      `Replicate generation ${prediction.status}: ${stringifyError(prediction.error)}`,
+    );
+  }
+
+  // Output is either a single URL or an array of them. Download
+  // each to disk so the caller gets file paths, not
+  // pre-signed URLs that expire. Track per-URL failures and
+  // surface them: silent partial success would let an agent
+  // think it got 3 images when one 404'd.
+  const outputs = Array.isArray(prediction.output)
+    ? prediction.output
+    : prediction.output
+      ? [prediction.output]
+      : [];
+
+  const images: SavedMedia[] = [];
+  const failures: Array<{ url: string; reason: string }> = [];
+  const stamp = Date.now();
+  for (const url of outputs) {
+    if (typeof url !== "string") {
+      failures.push({ url: String(url), reason: "non-string output" });
+      continue;
+    }
+    const imgRes = await fetch(url);
+    if (!imgRes.ok) {
+      failures.push({
+        url,
+        reason: `download failed (${imgRes.status})`,
+      });
+      continue;
+    }
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    const contentType = (imgRes.headers.get("content-type") ?? "image/webp")
+      .split(";")[0]
+      .trim();
+    images.push(
+      writeMediaFile({
+        bytes: buf,
+        mimeType: contentType,
+        provider: "replicate",
+        index: images.length,
+        saveDir,
+        stamp,
+      }),
+    );
+  }
+
+  if (images.length === 0 && outputs.length > 0) {
+    const detail = failures.map((f) => `${f.url}: ${f.reason}`).join("; ");
+    throw new Error(
+      `Replicate succeeded but all ${outputs.length} output URLs failed to download — ${detail}`,
+    );
+  }
+
+  return { images, failures };
+}
+
+export default function replicate(rl: CodemodePluginAPI) {
+  rl.setName("replicate");
+  rl.setVersion("0.1.0");
+  rl.setCredential(replicateCredential);
+
+  rl.setConnectionSchema({
+    apiToken: {
+      type: "string",
+      required: true,
+      description: "Replicate API token",
+      env: "REPLICATE_API_TOKEN",
+    },
+  });
+
+  rl.registerAction("image.create", {
+    access: "write",
+    description:
+      "Generate an image via Replicate. Default model is black-forest-labs/flux-dev. Writes the image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
+    inputSchema: {
+      prompt: {
+        type: "string",
+        required: true,
+        description: "Detailed description of the image",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+      },
+      model: {
+        type: "string",
+        required: false,
+        description:
+          "Replicate model id, e.g. black-forest-labs/flux-dev (default), black-forest-labs/flux-schnell, stability-ai/stable-diffusion-3.5-large",
+      },
+      size: {
+        type: "string",
+        required: false,
+        description: "WxH (default: 1024x1024)",
+      },
+      n: {
+        type: "number",
+        required: false,
+        description: "Number of images (default: 1, max: 4)",
+      },
+      timeoutMs: {
+        type: "number",
+        required: false,
+        description:
+          "Max ms to wait for the prediction to finish (default: 300000 = 5 minutes)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as CreateInput;
+      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
+        throw new Error("replicate: prompt is required");
+      }
+
+      const model = p.model ?? "black-forest-labs/flux-dev";
+      const { width, height } = parseSize(p.size, "replicate");
+
+      const { images, failures } = await runPrediction({
+        ctx,
+        model,
+        input: {
+          prompt: p.prompt,
+          width,
+          height,
+          num_outputs: Math.min(p.n ?? 1, 4),
+        },
+        timeoutMs: p.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        saveDir: p.saveDir,
+      });
+
+      const result: {
+        provider: "replicate";
+        model: string;
+        images: SavedMedia[];
+        note: string;
+        failures?: Array<{ url: string; reason: string }>;
+      } = { provider: "replicate", model, images, note: SEND_FILE_NOTE };
+      if (failures.length > 0) result.failures = failures;
+      return result;
+    },
+  });
+
+  rl.registerAction("image.edit", {
+    access: "write",
+    description:
+      "Edit a local image via Replicate: give the file path and describe the change. Default model is black-forest-labs/flux-kontext-pro (input key `input_image`); other models may name their image input differently — override with `imageInputKey` (e.g. google/nano-banana uses `image_input`, which is sent as an array). Writes the edited image(s) to disk and returns their file `path`s — not base64. Deliver each with send_file using its `path`.",
+    inputSchema: {
+      prompt: {
+        type: "string",
+        required: true,
+        description: "Instruction describing the edit to apply",
+      },
+      imagePath: {
+        type: "string",
+        required: true,
+        description:
+          "Path to the source image file (jpeg/png/gif/webp). Sent as a data URI — Replicate recommends hosted URLs for files over ~256 KB, so very large images may be rejected.",
+      },
+      saveDir: {
+        type: "string",
+        required: false,
+        description:
+          "Directory to write the image file(s) into. Defaults to the OS temp dir.",
+      },
+      model: {
+        type: "string",
+        required: false,
+        description:
+          "Edit-capable Replicate model id, e.g. black-forest-labs/flux-kontext-pro (default), black-forest-labs/flux-kontext-max, google/nano-banana",
+      },
+      imageInputKey: {
+        type: "string",
+        required: false,
+        description:
+          "Name of the model's image input field (default: input_image). Keys ending in `_input` are sent as an array.",
+      },
+      timeoutMs: {
+        type: "number",
+        required: false,
+        description:
+          "Max ms to wait for the prediction to finish (default: 300000 = 5 minutes)",
+      },
+    },
+    async execute(input, ctx) {
+      const p = (input ?? {}) as EditInput;
+      if (typeof p.prompt !== "string" || p.prompt.length === 0) {
+        throw new Error("replicate: prompt is required");
+      }
+      const img = await readImageInput(p.imagePath, "replicate");
+
+      const model = p.model ?? "black-forest-labs/flux-kontext-pro";
+      const imageKey = p.imageInputKey ?? "input_image";
+
+      const { images, failures } = await runPrediction({
+        ctx,
+        model,
+        input: {
+          prompt: p.prompt,
+          [imageKey]: imageKey.endsWith("_input") ? [img.dataUri] : img.dataUri,
+        },
+        timeoutMs: p.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        saveDir: p.saveDir,
+      });
+
+      const result: {
+        provider: "replicate";
+        model: string;
+        images: SavedMedia[];
+        note: string;
+        failures?: Array<{ url: string; reason: string }>;
+      } = { provider: "replicate", model, images, note: SEND_FILE_NOTE };
+      if (failures.length > 0) result.failures = failures;
+      return result;
+    },
+  });
+}

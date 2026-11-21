@@ -1,0 +1,2095 @@
+/**
+ * Google Drive plugin for codemode.
+ *
+ * Authentication mirrors gmail / googleCalendar: OAuth2 user flow,
+ * seeded via `codemode auth googleDrive`. Token refresh is lazy
+ * (60 s skew) and cached on the connection.
+ *
+ * Surface area:
+ *
+ *   file.upload / file.createFromText / file.download /
+ *   file.copy / file.move / file.update / file.delete /
+ *   file.share / file.get
+ *
+ *   folder.create / folder.delete / folder.share
+ *
+ *   fileFolder.search            (unified search with filter sugar)
+ *
+ *   drive.create / drive.get / drive.list / drive.update / drive.delete
+ *     (Shared Drives / Team Drives)
+ *
+ *   comment.list / comment.get / comment.create / comment.update /
+ *   comment.delete / comment.resolve / comment.reopen
+ *   reply.list / reply.create / reply.update / reply.delete
+ *
+ *   revision.list / revision.get / revision.download /
+ *   revision.update / revision.delete / revision.restore
+ *     (Office-file comments live inside the bytes; revision.* is the
+ *      recovery path when file.update overwrites a working draft.)
+ *
+ *   changes.getStartPageToken / changes.list / changes.watch / changes.stop
+ *     (Drive change feed.)
+ *
+ *   permission.update — patch an existing share role / expiration.
+ *   accessProposal.list / accessProposal.resolve — Drive's "Request access" flow.
+ *   about.get — current user, quota, export formats.
+ *   file.export — native-doc export wrapper.
+ *   file.list — raw files.list (the wrapper is fileFolder.search).
+ *
+ * Binary content conventions — every upload/download surface
+ * speaks base64 or filesystem paths:
+ *
+ *   • upload / createFromText / update accept either:
+ *       contentBase64  — base64-encoded bytes
+ *       contentPath    — filesystem path, read at call time
+ *       content        — utf-8 string (createFromText only)
+ *
+ *   • download returns { name, mimeType, contentBase64 } by default,
+ *     or writes to disk when `savePath` is provided and returns the
+ *     path it wrote to.
+ *
+ * Content of any size moves in bounded requests. Uploads up to 5 MiB go
+ * in one request (`uploadType=multipart`, or `media` without metadata);
+ * larger ones in a resumable session of 2 MiB chunks, a file's read as
+ * they are sent. Downloads are fetched by byte ranges; exports of
+ * Google-native files, which Drive caps at 10 MB and serves whole, in one.
+ */
+
+import { randomUUID } from "node:crypto";
+import { createReadStream, statSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  type ActionContext,
+  type CodemodePluginAPI,
+  jsonAnswer,
+  pathSegment,
+  rangedDownload,
+} from "@shiftlabs/codemode";
+import * as t from "typebox";
+import { standardBase64 } from "../../_shared/base64.js";
+import { downloadTo } from "../../_shared/download.js";
+import {
+  googleCredential,
+  googleFailed,
+  googleJsonRequest,
+  googleListAll,
+  googleOAuth,
+  googleResponse,
+} from "../../_shared/googleAuth.js";
+import {
+  googleConnection,
+  Id,
+  NonEmptyString,
+  RawGoogleObject,
+  StringMap,
+  StringOrStringArray,
+} from "../../_shared/googleSchemas.js";
+import { readLocalFile } from "../../_shared/localFile.js";
+import {
+  atLeastOne,
+  exactlyOne,
+  rfc3339,
+  STRICT,
+  stringEnum,
+} from "../../_shared/schemas.js";
+
+// ─── Types ───────────────────────────────────────────────────────
+
+type Ctx = ActionContext;
+
+const PermissionRole = stringEnum([
+  "owner",
+  "organizer",
+  "fileOrganizer",
+  "writer",
+  "commenter",
+  "reader",
+] as const);
+const PermissionType = stringEnum([
+  "user",
+  "group",
+  "domain",
+  "anyone",
+] as const);
+const AccessProposalRole = stringEnum([
+  "writer",
+  "commenter",
+  "reader",
+] as const);
+/** A colour as Drive takes one: `#rrggbb`. */
+const ColorRgb = t.String({ pattern: "^#?[0-9A-Fa-f]{6}$" });
+const PageSize100 = t.Integer({ minimum: 1, maximum: 100 });
+const PageSize1000 = t.Integer({ minimum: 1, maximum: 1000 });
+const QuotedFileContent = t.Object(
+  {
+    value: NonEmptyString,
+    mimeType: t.Optional(NonEmptyString),
+  },
+  STRICT,
+);
+
+// ─── MIME constants ──────────────────────────────────────────────
+
+const DRIVE = {
+  FOLDER: "application/vnd.google-apps.folder",
+  DOCUMENT: "application/vnd.google-apps.document",
+  SPREADSHEET: "application/vnd.google-apps.spreadsheet",
+  PRESENTATION: "application/vnd.google-apps.presentation",
+  DRAWING: "application/vnd.google-apps.drawing",
+  FORM: "application/vnd.google-apps.form",
+  AUDIO: "application/vnd.google-apps.audio",
+  VIDEO: "application/vnd.google-apps.video",
+  PHOTO: "application/vnd.google-apps.photo",
+  MAP: "application/vnd.google-apps.map",
+  SITES: "application/vnd.google-apps.sites",
+  APP_SCRIPTS: "application/vnd.google-apps.script",
+  SDK: "application/vnd.google-apps.drive-sdk",
+  FILE: "application/vnd.google-apps.file",
+  FUSIONTABLE: "application/vnd.google-apps.fusiontable",
+  UNKNOWN: "application/vnd.google-apps.unknown",
+} as const;
+
+// ─── Auth ────────────────────────────────────────────────────────
+
+function driveResponse(
+  ctx: Ctx,
+  url: string,
+  init: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string | Uint8Array;
+  } = {},
+) {
+  return googleResponse(ctx, "googleDrive", SCOPES, url, init);
+}
+
+// ─── Request ─────────────────────────────────────────────────────
+
+const API_BASE = "https://www.googleapis.com";
+
+function uploadSession(value: string | null): string {
+  if (
+    !value ||
+    !/^https:\/\/www\.googleapis\.com\/upload\/drive\/v3\/files(?:\/[a-zA-Z0-9_-]+)?\?/.test(
+      value,
+    )
+  )
+    throw new Error("googleDrive: invalid resumable session Location");
+  return value;
+}
+
+async function driveRequest(
+  ctx: Ctx,
+  method: string,
+  path: string,
+  body?: Record<string, unknown>,
+  qs?: Record<string, unknown>,
+): Promise<unknown> {
+  return googleJsonRequest(
+    ctx,
+    "googleDrive",
+    SCOPES,
+    method,
+    `${API_BASE}${path}`,
+    body,
+    qs,
+  );
+}
+
+/**
+ * Paginate any Drive list endpoint by repeatedly following
+ * `nextPageToken`. Works for `/drive/v3/files`, `/drive/v3/drives`,
+ * etc. Returns the concatenated `key` arrays.
+ */
+function paginateAll(
+  ctx: Ctx,
+  path: string,
+  key: string,
+  qs: Record<string, unknown>,
+): Promise<Record<string, unknown>[]> {
+  return googleListAll(
+    (query) => driveRequest(ctx, "GET", path, undefined, query),
+    key,
+    { ...qs, pageSize: qs.pageSize ?? 100 },
+  );
+}
+
+// ─── Binary I/O helpers ─────────────────────────────────────────
+
+/** The most one upload request carries; larger content goes up in a resumable session. */
+const SIMPLE_UPLOAD_BYTES = 5 * 1024 * 1024;
+/** A resumable session's chunk: a multiple of 256 KiB, as Drive requires. */
+const UPLOAD_CHUNK_BYTES = 2 * 1024 * 1024;
+
+/** Content to upload: bytes held in memory, or a file read as it is sent. */
+interface Content {
+  buffer?: Buffer;
+  path?: string;
+  size: number;
+  mimeType?: string;
+  fileName?: string;
+}
+
+/**
+ * Whichever of `contentBase64` / `contentPath` / `content` the caller
+ * provided, with a best-guess filename and mimeType. A file larger than
+ * one upload request stays a path, so it is never held whole in memory.
+ */
+async function resolveContent(p: {
+  contentBase64?: string;
+  content?: string;
+  contentPath?: string;
+  mimeType?: string;
+  name?: string;
+}): Promise<Content> {
+  if (p.contentBase64 !== undefined) {
+    const base64 = standardBase64(p.contentBase64);
+    if (base64 === undefined)
+      throw new Error("googleDrive: contentBase64 is not valid base64");
+    const buf = Buffer.from(base64, "base64");
+    return {
+      buffer: buf,
+      size: buf.byteLength,
+      mimeType: p.mimeType,
+      fileName: p.name,
+    };
+  }
+  if (p.content !== undefined) {
+    const buf = Buffer.from(p.content, "utf-8");
+    return {
+      buffer: buf,
+      size: buf.byteLength,
+      mimeType: p.mimeType ?? "text/plain",
+      fileName: p.name,
+    };
+  }
+  if (p.contentPath !== undefined) {
+    const stat = statSync(p.contentPath);
+    const fileName = p.name ?? p.contentPath.split("/").pop();
+    if (stat.size <= SIMPLE_UPLOAD_BYTES) {
+      const buffer = await readLocalFile(p.contentPath, {
+        subject: "googleDrive: contentPath",
+        maxBytes: SIMPLE_UPLOAD_BYTES,
+        oversize:
+          "googleDrive: contentPath grew while reading; retry the upload",
+      });
+      return {
+        buffer,
+        size: buffer.byteLength,
+        mimeType: p.mimeType,
+        fileName,
+      };
+    }
+    return {
+      path: p.contentPath,
+      size: stat.size,
+      mimeType: p.mimeType,
+      fileName,
+    };
+  }
+  throw new Error(
+    "googleDrive: provide one of contentBase64 / contentPath / content",
+  );
+}
+
+const MULTIPART_BOUNDARY = "codemode_drive_boundary";
+
+/**
+ * Build a multipart/related body for Drive's simple upload endpoint.
+ * Spec: https://developers.google.com/drive/api/guides/manage-uploads#multipart
+ */
+function buildMultipart(
+  metadata: Record<string, unknown>,
+  content: Buffer,
+  mimeType: string,
+): Buffer {
+  const boundary = MULTIPART_BOUNDARY;
+  const meta =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: ${mimeType}\r\n\r\n`;
+  const tail = `\r\n--${boundary}--`;
+  return Buffer.concat([
+    Buffer.from(meta, "utf-8"),
+    content,
+    Buffer.from(tail, "utf-8"),
+  ]);
+}
+
+/** `c`'s bytes in upload chunks; a file's are read as they are sent. */
+async function* contentChunks(c: Content): AsyncGenerator<Buffer> {
+  if (c.buffer) {
+    for (let at = 0; at < c.buffer.byteLength; at += UPLOAD_CHUNK_BYTES)
+      yield c.buffer.subarray(at, at + UPLOAD_CHUNK_BYTES);
+    return;
+  }
+  let pending: Buffer = Buffer.alloc(0);
+  for await (const piece of createReadStream(c.path as string, {
+    highWaterMark: UPLOAD_CHUNK_BYTES,
+  })) {
+    pending = Buffer.concat([pending, piece as Buffer]);
+    while (pending.byteLength >= UPLOAD_CHUNK_BYTES) {
+      yield pending.subarray(0, UPLOAD_CHUNK_BYTES);
+      pending = pending.subarray(UPLOAD_CHUNK_BYTES);
+    }
+  }
+  if (pending.byteLength > 0) yield pending;
+}
+
+/**
+ * Send content to Drive: a new file, or the bytes of `to.fileId`, with
+ * `to.metadata` when given. Up to 5 MiB held in memory goes in one
+ * request; anything else in a resumable session, so no request outgrows
+ * what a signer carries. Returns Drive's file resource.
+ * Spec: https://developers.google.com/workspace/drive/api/guides/manage-uploads
+ */
+async function uploadContent(
+  ctx: Ctx,
+  to: { fileId?: string; metadata?: Record<string, unknown> },
+  c: Content,
+  qs: Record<string, unknown> = {},
+): Promise<{ id: string } & Record<string, unknown>> {
+  const mimeType = c.mimeType ?? "application/octet-stream";
+  const method = to.fileId === undefined ? "POST" : "PATCH";
+  const url = new URL(
+    `${API_BASE}/upload/drive/v3/files${to.fileId === undefined ? "" : `/${pathSegment(to.fileId)}`}`,
+  );
+  url.searchParams.set("supportsAllDrives", "true");
+  for (const [k, v] of Object.entries(qs)) {
+    if (v !== undefined) url.searchParams.set(k, String(v));
+  }
+
+  if (c.buffer && c.size <= SIMPLE_UPLOAD_BYTES) {
+    url.searchParams.set("uploadType", to.metadata ? "multipart" : "media");
+    const res = await driveResponse(ctx, url.toString(), {
+      method,
+      headers: {
+        "Content-Type": to.metadata
+          ? `multipart/related; boundary=${MULTIPART_BOUNDARY}`
+          : mimeType,
+      },
+      body: new Uint8Array(
+        to.metadata
+          ? buildMultipart(to.metadata, c.buffer, mimeType)
+          : c.buffer,
+      ),
+    });
+    if (!res.ok) throw await googleFailed("googleDrive", res);
+    return jsonAnswer(res);
+  }
+
+  url.searchParams.set("uploadType", "resumable");
+  const initRes = await driveResponse(ctx, url.toString(), {
+    method,
+    headers: {
+      ...(to.metadata
+        ? { "Content-Type": "application/json; charset=UTF-8" }
+        : {}),
+      "X-Upload-Content-Type": mimeType,
+      "X-Upload-Content-Length": String(c.size),
+    },
+    ...(to.metadata ? { body: JSON.stringify(to.metadata) } : {}),
+  });
+  if (!initRes.ok) throw await googleFailed("googleDrive", initRes);
+  const session = uploadSession(initRes.headers.get("location"));
+
+  let offset = 0;
+  for await (const chunk of contentChunks(c)) {
+    const res = await driveResponse(ctx, session, {
+      method: "PUT",
+      headers: {
+        "Content-Range": `bytes ${offset}-${offset + chunk.byteLength - 1}/${c.size}`,
+      },
+      body: new Uint8Array(chunk),
+    });
+    offset += chunk.byteLength;
+    // 308 acknowledges a chunk; the last one answers the file resource.
+    if (res.status === 200 || res.status === 201) {
+      if (offset !== c.size) break;
+      return jsonAnswer(res);
+    }
+    if (res.status !== 308) throw await googleFailed("googleDrive", res);
+  }
+  throw new Error("googleDrive: resumable upload did not complete");
+}
+
+/**
+ * A blob's bytes (`alt=media`), fetched by byte ranges: written to
+ * `savePath`, or answered in memory when there is none. `md5` is Drive's
+ * checksum of the content, checked against what arrived.
+ */
+async function downloadMedia(
+  ctx: Ctx,
+  url: string,
+  savePath: string | undefined,
+  md5?: string,
+): Promise<{ size: number; headers: Headers; bytes?: Buffer }> {
+  return rangedDownload(
+    {
+      plugin: "googleDrive",
+      request: (range) =>
+        driveResponse(ctx, url, { headers: { Range: range } }),
+      failed: (response) => googleFailed("googleDrive", response),
+    },
+    downloadTo("googleDrive", savePath),
+    md5 === undefined ? {} : { md5 },
+  );
+}
+
+/**
+ * A Google-native file as `mimeType`, whole: Drive caps an export at 10 MB
+ * and serves no ranges of one.
+ */
+async function exported(
+  ctx: Ctx,
+  fileId: string,
+  mimeType: string,
+): Promise<{ bytes: Buffer; contentType: string }> {
+  const url = new URL(
+    `${API_BASE}/drive/v3/files/${pathSegment(fileId)}/export`,
+  );
+  url.searchParams.set("mimeType", mimeType);
+  const res = await driveResponse(ctx, url.toString());
+  if (!res.ok) throw await googleFailed("googleDrive", res);
+  return {
+    bytes: Buffer.from(await res.arrayBuffer()),
+    contentType: res.headers.get("content-type") ?? mimeType,
+  };
+}
+
+// ─── Shared helpers ─────────────────────────────────────────────
+
+function toStringArray(v: string | string[] | undefined): string[] | undefined {
+  if (v === undefined || Array.isArray(v)) return v;
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * Apply the "My Drive / shared drive / folder" scoping rules on
+ * file/folder list & search queries. A non-default `driveId`
+ * narrows corpora to that drive; otherwise we list the user's
+ * corpus.
+ */
+function applyDriveScopes(qs: Record<string, unknown>, driveId?: string): void {
+  if (driveId) {
+    qs.driveId = driveId;
+    qs.corpora = "drive";
+    qs.includeItemsFromAllDrives = true;
+    qs.supportsAllDrives = true;
+  } else {
+    qs.corpora = "user";
+    qs.spaces = "drive";
+    qs.includeItemsFromAllDrives = false;
+    qs.supportsAllDrives = false;
+  }
+}
+
+function resolveParent(folderId?: string, driveId?: string): string {
+  if (folderId && folderId !== "root") return folderId;
+  if (driveId) return driveId;
+  return "root";
+}
+
+/** Where an upload's content comes from. */
+const uploadSources = {
+  contentBase64: t.Optional(t.String()),
+  contentPath: t.Optional(NonEmptyString),
+  content: t.Optional(t.String()),
+};
+
+/** Who a share is for, and what it tells them. */
+const shareFields = {
+  role: PermissionRole,
+  type: PermissionType,
+  emailAddress: t.Optional(NonEmptyString),
+  domain: t.Optional(NonEmptyString),
+  allowFileDiscovery: t.Optional(t.Boolean()),
+  emailMessage: t.Optional(t.String()),
+  sendNotificationEmail: t.Optional(t.Boolean()),
+  transferOwnership: t.Optional(t.Boolean()),
+  moveToNewOwnersRoot: t.Optional(t.Boolean()),
+  useDomainAdminAccess: t.Optional(t.Boolean()),
+};
+/** A user or group is named by email, a domain by its name, anyone by neither. */
+const SHARE_RULE = {
+  oneOf: [
+    {
+      properties: { type: { const: "user" } },
+      required: ["emailAddress"],
+      not: { required: ["domain"] },
+    },
+    {
+      properties: { type: { const: "group" } },
+      required: ["emailAddress"],
+      not: { required: ["domain"] },
+    },
+    {
+      properties: { type: { const: "domain" } },
+      required: ["domain"],
+      not: { required: ["emailAddress"] },
+    },
+    {
+      properties: { type: { const: "anyone" } },
+      not: {
+        anyOf: [{ required: ["emailAddress"] }, { required: ["domain"] }],
+      },
+    },
+  ],
+};
+
+/** Add a permission to a file or a folder. */
+function share(
+  ctx: Ctx,
+  id: string,
+  p: t.Static<t.TObject<typeof shareFields>>,
+): Promise<unknown> {
+  const {
+    role,
+    type,
+    emailAddress,
+    domain,
+    allowFileDiscovery,
+    emailMessage,
+    ...notification
+  } = p;
+  // Fields left undefined drop out of the body and the query.
+  return driveRequest(
+    ctx,
+    "POST",
+    `/drive/v3/files/${pathSegment(id)}/permissions`,
+    { role, type, emailAddress, domain, allowFileDiscovery },
+    {
+      supportsAllDrives: true,
+      ...notification,
+      emailMessage: emailMessage || undefined,
+    },
+  );
+}
+
+/** Trash a file or a folder, or erase it for good. */
+async function remove(
+  ctx: Ctx,
+  id: string,
+  permanently: boolean | undefined,
+): Promise<{ id: string; success: true }> {
+  const path = `/drive/v3/files/${pathSegment(id)}`;
+  if (permanently)
+    await driveRequest(ctx, "DELETE", path, undefined, {
+      supportsAllDrives: true,
+    });
+  else
+    await driveRequest(
+      ctx,
+      "PATCH",
+      path,
+      { trashed: true },
+      { supportsAllDrives: true },
+    );
+  return { id, success: true };
+}
+
+// ─── Plugin ──────────────────────────────────────────────────────
+
+const SCOPES = ["https://www.googleapis.com/auth/drive"];
+
+export default function googleDrive(rl: CodemodePluginAPI) {
+  rl.setName("googleDrive");
+  rl.setVersion("0.1.0");
+  rl.setCredential(googleCredential("googleDrive", SCOPES));
+
+  rl.setOAuth(googleOAuth("googleDrive", SCOPES, "GOOGLE_DRIVE"));
+
+  rl.setConnectionSchema(t.Object(googleConnection("GOOGLE_DRIVE")));
+
+  // ── File ──────────────────────────────────────────────
+
+  rl.registerAction("file.upload", {
+    access: "write",
+    description:
+      "Upload a file to Drive. Supply one of contentBase64 / contentPath / content. Content up to 5 MiB goes in one request, larger content in a resumable session of 2 MiB chunks; use contentPath for large files so they are read as they are sent.",
+    inputSchema: t.Object(
+      {
+        name: t.Optional(NonEmptyString),
+        folderId: t.Optional(Id),
+        driveId: t.Optional(Id),
+        mimeType: t.Optional(NonEmptyString),
+        ...uploadSources,
+        properties: t.Optional(StringMap),
+        appProperties: t.Optional(StringMap),
+        keepRevisionForever: t.Optional(t.Boolean()),
+        ocrLanguage: t.Optional(NonEmptyString),
+        useContentAsIndexableText: t.Optional(t.Boolean()),
+        fields: t.Optional(NonEmptyString),
+      },
+      {
+        ...STRICT,
+        ...exactlyOne(uploadSources),
+      },
+    ),
+    async execute(p, ctx) {
+      const content = await resolveContent(p);
+      const metadata: Record<string, unknown> = {
+        name: content.fileName ?? "Untitled",
+        parents: [resolveParent(p.folderId, p.driveId)],
+      };
+      if (p.mimeType) metadata.mimeType = p.mimeType;
+      if (p.properties) metadata.properties = p.properties;
+      if (p.appProperties) metadata.appProperties = p.appProperties;
+      const uploaded = await uploadContent(ctx, { metadata }, content);
+
+      // The multipart upload endpoint returns a minimal resource
+      // (id, name, mimeType) and doesn't honor the `keepRevisionForever`
+      // / `ocrLanguage` / `useContentAsIndexableText` family, so
+      // we follow every upload with a PATCH to apply those and to
+      // project the full resource.
+      const qs: Record<string, unknown> = {
+        supportsAllDrives: true,
+        fields: p.fields ?? "*",
+      };
+      if (p.keepRevisionForever) qs.keepRevisionForever = p.keepRevisionForever;
+      if (p.ocrLanguage) qs.ocrLanguage = p.ocrLanguage;
+      if (p.useContentAsIndexableText)
+        qs.useContentAsIndexableText = p.useContentAsIndexableText;
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${pathSegment(uploaded.id)}`,
+        {},
+        qs,
+      );
+    },
+  });
+
+  rl.registerAction("file.createFromText", {
+    access: "write",
+    description:
+      "Create a text file from inline content. Set convertToGoogleDocument=true to convert to a Google Doc.",
+    inputSchema: t.Object(
+      {
+        name: t.Optional(NonEmptyString),
+        content: t.String(),
+        folderId: t.Optional(Id),
+        driveId: t.Optional(Id),
+        convertToGoogleDocument: t.Optional(t.Boolean()),
+        properties: t.Optional(StringMap),
+        appProperties: t.Optional(StringMap),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const name = p.name || "Untitled";
+      const asDoc = p.convertToGoogleDocument === true;
+      const mimeType = asDoc ? DRIVE.DOCUMENT : "text/plain";
+      const metadata: Record<string, unknown> = {
+        name,
+        mimeType,
+        parents: [resolveParent(p.folderId, p.driveId)],
+      };
+      if (p.properties) metadata.properties = p.properties;
+      if (p.appProperties) metadata.appProperties = p.appProperties;
+
+      if (asDoc) {
+        // For docs: create the file then fill it via docs.batchUpdate,
+        // Drive's upload would upload the raw text as an attachment
+        // instead of populating the document body.
+        const doc = (await driveRequest(
+          ctx,
+          "POST",
+          "/drive/v3/files",
+          metadata,
+          {
+            supportsAllDrives: true,
+          },
+        )) as { id: string };
+
+        await googleJsonRequest(
+          ctx,
+          "googleDrive",
+          SCOPES,
+          "POST",
+          `https://docs.googleapis.com/v1/documents/${pathSegment(doc.id)}:batchUpdate`,
+          {
+            requests: [
+              {
+                insertText: {
+                  text: p.content,
+                  endOfSegmentLocation: { segmentId: "" },
+                },
+              },
+            ],
+          },
+        );
+        return { id: doc.id };
+      }
+
+      // Plain text: uploaded as it is.
+      const buffer = Buffer.from(p.content, "utf-8");
+      return uploadContent(
+        ctx,
+        { metadata },
+        { buffer, size: buffer.byteLength, mimeType },
+      );
+    },
+  });
+
+  rl.registerAction("file.download", {
+    access: "write",
+    description:
+      "Download a file. Google-native docs are exported to the chosen format (Drive caps an export at 10 MB); regular files are downloaded as-is, at any size when savePath is set. Returns base64 by default (files up to 64 MiB), or writes to disk when savePath is set.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        savePath: t.Optional(NonEmptyString),
+        googleDocFormat: t.Optional(NonEmptyString),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const fileId = p.fileId;
+      const meta = (await driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/files/${pathSegment(fileId)}`,
+        undefined,
+        { fields: "mimeType,name,md5Checksum", supportsAllDrives: true },
+      )) as { mimeType: string; name: string; md5Checksum?: string };
+      const savePath = p.savePath;
+
+      const isGoogleNative = meta.mimeType?.includes("vnd.google-apps");
+      let contentType = meta.mimeType;
+      let size: number;
+      let bytes: Buffer | undefined;
+      if (isGoogleNative) {
+        const type = meta.mimeType.split(".")[2];
+        const defaults: Record<string, string> = {
+          document:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          spreadsheet:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          presentation:
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          drawing: "image/jpeg",
+        };
+        contentType = p.googleDocFormat ?? defaults[type] ?? "application/pdf";
+        ({ bytes } = await exported(ctx, fileId, contentType));
+        size = bytes.byteLength;
+        if (savePath !== undefined) writeFileSync(savePath, bytes);
+      } else {
+        const u = new URL(`${API_BASE}/drive/v3/files/${pathSegment(fileId)}`);
+        u.searchParams.set("alt", "media");
+        u.searchParams.set("supportsAllDrives", "true");
+        ({ size, bytes } = await downloadMedia(
+          ctx,
+          u.toString(),
+          savePath,
+          meta.md5Checksum,
+        ));
+      }
+
+      if (savePath !== undefined) {
+        return { path: savePath, name: meta.name, mimeType: contentType, size };
+      }
+      return {
+        name: meta.name,
+        mimeType: contentType,
+        size,
+        contentBase64: (bytes as Buffer).toString("base64"),
+      };
+    },
+  });
+
+  rl.registerAction("file.copy", {
+    access: "write",
+    description: "Copy a file",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        name: t.Optional(NonEmptyString),
+        folderId: t.Optional(Id),
+        driveId: t.Optional(Id),
+        description: t.Optional(t.String()),
+        copyRequiresWriterPermission: t.Optional(t.Boolean()),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = {};
+      if (p.name) body.name = p.name;
+      if (p.description) body.description = p.description;
+      if (p.copyRequiresWriterPermission !== undefined) {
+        body.copyRequiresWriterPermission = p.copyRequiresWriterPermission;
+      }
+      if (p.folderId || p.driveId) {
+        body.parents = [resolveParent(p.folderId, p.driveId)];
+      }
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${pathSegment(p.fileId)}/copy`,
+        body,
+        { supportsAllDrives: true },
+      );
+    },
+  });
+
+  rl.registerAction("file.move", {
+    access: "write",
+    description:
+      "Move a file to another folder. Resolves current parents and swaps them in a single PATCH.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        folderId: t.Optional(Id),
+        driveId: t.Optional(Id),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const current = (await driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/files/${pathSegment(p.fileId)}`,
+        undefined,
+        { fields: "parents", supportsAllDrives: true },
+      )) as { parents?: string[] };
+      const removeParents = (current.parents ?? []).join(",");
+      const addParents = resolveParent(p.folderId, p.driveId);
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${pathSegment(p.fileId)}`,
+        undefined,
+        {
+          supportsAllDrives: true,
+          addParents,
+          removeParents,
+        },
+      );
+    },
+  });
+
+  const fileChanges = {
+    name: t.Optional(NonEmptyString),
+    mimeType: t.Optional(NonEmptyString),
+    trashed: t.Optional(t.Boolean()),
+    properties: t.Optional(StringMap),
+    appProperties: t.Optional(StringMap),
+    contentBase64: t.Optional(t.String()),
+    contentPath: t.Optional(NonEmptyString),
+  };
+  rl.registerAction("file.update", {
+    access: "write",
+    description:
+      "Patch file metadata and/or replace its bytes. Supply content{Base64,Path} to update bytes.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        keepRevisionForever: t.Optional(t.Boolean()),
+        ocrLanguage: t.Optional(NonEmptyString),
+        useContentAsIndexableText: t.Optional(t.Boolean()),
+        fields: t.Optional(NonEmptyString),
+        ...fileChanges,
+      },
+      {
+        ...STRICT,
+        allOf: [
+          { not: { required: ["contentBase64", "contentPath"] } },
+          ...[
+            "keepRevisionForever",
+            "ocrLanguage",
+            "useContentAsIndexableText",
+          ].map((field) => ({
+            anyOf: [
+              { not: { required: [field] } },
+              {
+                anyOf: [
+                  { required: ["contentBase64"] },
+                  { required: ["contentPath"] },
+                ],
+              },
+            ],
+          })),
+        ],
+        ...atLeastOne(fileChanges),
+      },
+    ),
+    async execute(p, ctx) {
+      const fileId = p.fileId;
+      const hasBytes =
+        p.contentBase64 !== undefined || p.contentPath !== undefined;
+
+      // Step 1: replace the bytes, on the upload endpoint.
+      if (hasBytes) {
+        const c = await resolveContent(p);
+        await uploadContent(
+          ctx,
+          { fileId },
+          { ...c, mimeType: c.mimeType ?? p.mimeType },
+          {
+            keepRevisionForever: p.keepRevisionForever,
+            ocrLanguage: p.ocrLanguage,
+            useContentAsIndexableText: p.useContentAsIndexableText,
+          },
+        );
+      }
+
+      // Step 2: metadata patch
+      const body: Record<string, unknown> = {};
+      if (p.name !== undefined) body.name = p.name;
+      if (p.mimeType !== undefined) body.mimeType = p.mimeType;
+      if (p.trashed !== undefined) body.trashed = p.trashed;
+      if (p.properties !== undefined) body.properties = p.properties;
+      if (p.appProperties !== undefined) body.appProperties = p.appProperties;
+
+      if (Object.keys(body).length === 0) {
+        if (hasBytes && p.fields) {
+          return driveRequest(
+            ctx,
+            "GET",
+            `/drive/v3/files/${pathSegment(fileId)}`,
+            undefined,
+            { supportsAllDrives: true, fields: p.fields },
+          );
+        }
+        return { id: fileId, success: true };
+      }
+
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${pathSegment(fileId)}`,
+        body,
+        {
+          supportsAllDrives: true,
+          fields: p.fields,
+        },
+      );
+    },
+  });
+
+  rl.registerAction("file.delete", {
+    access: "write",
+    description:
+      "Delete a file. Moves to trash by default; pass deletePermanently=true to erase.",
+    inputSchema: t.Object(
+      { fileId: Id, deletePermanently: t.Optional(t.Boolean()) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return remove(ctx, p.fileId, p.deletePermanently);
+    },
+  });
+
+  rl.registerAction("file.get", {
+    access: "read",
+    description: "Get file metadata",
+    inputSchema: t.Object(
+      { fileId: Id, fields: t.Optional(NonEmptyString) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/files/${pathSegment(p.fileId)}`,
+        undefined,
+        { supportsAllDrives: true, fields: p.fields ?? "*" },
+      );
+    },
+  });
+
+  rl.registerAction("file.share", {
+    access: "write",
+    description:
+      "Add a permission to a file. Create one permission per call; list the existing permissions via file.listPermissions.",
+    inputSchema: t.Object(
+      { fileId: Id, ...shareFields },
+      { ...STRICT, ...SHARE_RULE },
+    ),
+    async execute({ fileId, ...permission }, ctx) {
+      return share(ctx, fileId, permission);
+    },
+  });
+
+  rl.registerAction("file.listPermissions", {
+    access: "read",
+    description: "List permissions on a file",
+    inputSchema: t.Object(
+      { fileId: Id, useDomainAdminAccess: t.Optional(t.Boolean()) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/files/${pathSegment(p.fileId)}/permissions`,
+        undefined,
+        {
+          supportsAllDrives: true,
+          useDomainAdminAccess: p.useDomainAdminAccess,
+          fields: "*",
+        },
+      );
+    },
+  });
+
+  rl.registerAction("file.deletePermission", {
+    access: "write",
+    description: "Revoke a permission on a file",
+    inputSchema: t.Object({ fileId: Id, permissionId: Id }, STRICT),
+    async execute(p, ctx) {
+      await driveRequest(
+        ctx,
+        "DELETE",
+        `/drive/v3/files/${pathSegment(p.fileId)}/permissions/${pathSegment(p.permissionId)}`,
+        undefined,
+        { supportsAllDrives: true },
+      );
+      return { success: true };
+    },
+  });
+
+  // ── Folder ────────────────────────────────────────────
+
+  rl.registerAction("folder.create", {
+    access: "write",
+    description: "Create a folder",
+    inputSchema: t.Object(
+      {
+        name: t.Optional(NonEmptyString),
+        folderId: t.Optional(Id),
+        driveId: t.Optional(Id),
+        folderColorRgb: t.Optional(ColorRgb),
+        fields: t.Optional(NonEmptyString),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = {
+        name: p.name || "Untitled",
+        mimeType: DRIVE.FOLDER,
+        parents: [resolveParent(p.folderId, p.driveId)],
+      };
+      if (p.folderColorRgb) body.folderColorRgb = p.folderColorRgb;
+      const qs: Record<string, unknown> = {
+        supportsAllDrives: true,
+        fields: p.fields ?? "*",
+      };
+      return driveRequest(ctx, "POST", "/drive/v3/files", body, qs);
+    },
+  });
+
+  rl.registerAction("folder.delete", {
+    access: "write",
+    description:
+      "Delete a folder. Moves to trash by default; pass deletePermanently=true to erase.",
+    inputSchema: t.Object(
+      { folderId: Id, deletePermanently: t.Optional(t.Boolean()) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return remove(ctx, p.folderId, p.deletePermanently);
+    },
+  });
+
+  rl.registerAction("folder.share", {
+    access: "write",
+    description: "Add a permission to a folder (same shape as file.share)",
+    inputSchema: t.Object(
+      { folderId: Id, ...shareFields },
+      { ...STRICT, ...SHARE_RULE },
+    ),
+    async execute({ folderId, ...permission }, ctx) {
+      return share(ctx, folderId, permission);
+    },
+  });
+
+  // ── File / folder search ──────────────────────────────
+
+  rl.registerAction("fileFolder.search", {
+    access: "read",
+    description:
+      "Search files and folders. `query` is passed directly; `name` wraps it as `name contains '…'`. Combine with folderId/driveId/whatToSearch/fileTypes filters.",
+    inputSchema: t.Object(
+      {
+        name: t.Optional(t.String()),
+        query: t.Optional(t.String()),
+        folderId: t.Optional(Id),
+        driveId: t.Optional(Id),
+        whatToSearch: t.Optional(
+          stringEnum(["all", "files", "folders"] as const),
+        ),
+        fileTypes: t.Optional(StringOrStringArray),
+        includeTrashed: t.Optional(t.Boolean()),
+        fields: t.Optional(StringOrStringArray),
+        returnAll: t.Optional(t.Boolean()),
+        maxResults: t.Optional(PageSize1000),
+        pageToken: t.Optional(NonEmptyString),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const clauses: string[] = [];
+      if (p.query) {
+        clauses.push(p.query);
+      } else if (p.name) {
+        // Drive expects single-quoted strings with \' escaping.
+        const escaped = p.name.replace(/'/g, "\\'");
+        clauses.push(`name contains '${escaped}'`);
+      }
+      if (p.folderId && p.folderId !== "root") {
+        clauses.push(`'${p.folderId}' in parents`);
+      }
+      const whatToSearch = p.whatToSearch ?? "all";
+      if (whatToSearch === "folders") {
+        clauses.push(`mimeType = '${DRIVE.FOLDER}'`);
+      } else {
+        if (whatToSearch === "files") {
+          clauses.push(`mimeType != '${DRIVE.FOLDER}'`);
+        }
+        const types = toStringArray(p.fileTypes);
+        if (types && !types.includes("*")) {
+          const typeClause = types.map((t) => `mimeType = '${t}'`).join(" or ");
+          if (typeClause) clauses.push(`(${typeClause})`);
+        }
+      }
+      if (!p.includeTrashed) clauses.push("trashed = false");
+
+      const fieldsArr = toStringArray(p.fields);
+      const perFileFields =
+        fieldsArr && fieldsArr.length > 0
+          ? fieldsArr.includes("*")
+            ? "*"
+            : fieldsArr.join(", ")
+          : "id, name";
+      const qs: Record<string, unknown> = {
+        q: clauses.join(" and "),
+        fields: `nextPageToken, files(${perFileFields})`,
+      };
+      applyDriveScopes(qs, p.driveId);
+      if (p.pageToken) qs.pageToken = p.pageToken;
+
+      if (p.returnAll) return paginateAll(ctx, "/drive/v3/files", "files", qs);
+      if (p.maxResults) qs.pageSize = p.maxResults;
+      const res = (await driveRequest(
+        ctx,
+        "GET",
+        "/drive/v3/files",
+        undefined,
+        qs,
+      )) as {
+        files?: unknown[];
+      };
+      return res.files ?? [];
+    },
+  });
+
+  // ── Shared drive ──────────────────────────────────────
+
+  rl.registerAction("drive.create", {
+    access: "write",
+    description: "Create a shared drive. requestId is generated automatically.",
+    inputSchema: t.Object(
+      {
+        name: NonEmptyString,
+        colorRgb: t.Optional(ColorRgb),
+        hidden: t.Optional(t.Boolean()),
+        capabilities: t.Optional(RawGoogleObject),
+        restrictions: t.Optional(RawGoogleObject),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = { name: p.name };
+      for (const k of [
+        "colorRgb",
+        "hidden",
+        "capabilities",
+        "restrictions",
+      ] as const) {
+        if (p[k] !== undefined) body[k] = p[k];
+      }
+      return driveRequest(ctx, "POST", "/drive/v3/drives", body, {
+        requestId: randomUUID(),
+      });
+    },
+  });
+
+  rl.registerAction("drive.get", {
+    access: "read",
+    description: "Get a shared drive",
+    inputSchema: t.Object(
+      { driveId: Id, useDomainAdminAccess: t.Optional(t.Boolean()) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      if (p.useDomainAdminAccess !== undefined)
+        qs.useDomainAdminAccess = p.useDomainAdminAccess;
+      return driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/drives/${pathSegment(p.driveId)}`,
+        undefined,
+        qs,
+      );
+    },
+  });
+
+  rl.registerAction("drive.list", {
+    access: "read",
+    description: "List shared drives",
+    inputSchema: t.Object(
+      {
+        q: t.Optional(t.String()),
+        useDomainAdminAccess: t.Optional(t.Boolean()),
+        returnAll: t.Optional(t.Boolean()),
+        maxResults: t.Optional(PageSize100),
+        pageToken: t.Optional(NonEmptyString),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const qs: Record<string, unknown> = {};
+      if (p.q) qs.q = p.q;
+      if (p.useDomainAdminAccess !== undefined)
+        qs.useDomainAdminAccess = p.useDomainAdminAccess;
+      if (p.pageToken) qs.pageToken = p.pageToken;
+      if (p.returnAll)
+        return paginateAll(ctx, "/drive/v3/drives", "drives", qs);
+      if (p.maxResults) qs.pageSize = p.maxResults;
+      const res = (await driveRequest(
+        ctx,
+        "GET",
+        "/drive/v3/drives",
+        undefined,
+        qs,
+      )) as {
+        drives?: unknown[];
+      };
+      return res.drives ?? [];
+    },
+  });
+
+  const driveChanges = {
+    name: t.Optional(NonEmptyString),
+    colorRgb: t.Optional(ColorRgb),
+    restrictions: t.Optional(RawGoogleObject),
+  };
+  rl.registerAction("drive.update", {
+    access: "write",
+    description: "Patch a shared drive",
+    inputSchema: t.Object(
+      { driveId: Id, ...driveChanges },
+      {
+        ...STRICT,
+        ...atLeastOne(driveChanges),
+      },
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = {};
+      for (const k of ["name", "colorRgb", "restrictions"] as const) {
+        if (p[k] !== undefined) body[k] = p[k];
+      }
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/drives/${pathSegment(p.driveId)}`,
+        body,
+      );
+    },
+  });
+
+  rl.registerAction("drive.delete", {
+    access: "write",
+    description: "Delete a shared drive",
+    inputSchema: t.Object({ driveId: Id }, STRICT),
+    async execute(p, ctx) {
+      await driveRequest(
+        ctx,
+        "DELETE",
+        `/drive/v3/drives/${pathSegment(p.driveId)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  // ─── Comments ────────────────────────────────────────────────────
+  //
+  // Drive's `comments` and `replies` resources. The comments live on
+  // the Drive side for both Google-native docs and Office files, and
+  // are distinct from in-document comments stored inside .docx /
+  // .xlsx / .pptx bytes (those round-trip through `revisions`).
+
+  const COMMENT_FIELDS =
+    "kind,id,createdTime,modifiedTime,resolved,deleted," +
+    "author(displayName,emailAddress)," +
+    "quotedFileContent(value,mimeType)," +
+    "anchor,content,htmlContent," +
+    "replies(kind,id,createdTime,modifiedTime,deleted,author(displayName,emailAddress),action,content,htmlContent)";
+  const COMMENT_LIST_FIELDS = `kind,nextPageToken,comments(${COMMENT_FIELDS})`;
+  const REPLY_FIELDS =
+    "kind,id,createdTime,modifiedTime,deleted," +
+    "author(displayName,emailAddress),action,content,htmlContent";
+  const REPLY_LIST_FIELDS = `kind,nextPageToken,replies(${REPLY_FIELDS})`;
+
+  rl.registerAction("comment.list", {
+    access: "read",
+    description:
+      "List all comments on a Drive file, including each comment's replies. Returns an array sorted by Drive's default (most recent first).",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        includeDeleted: t.Optional(t.Boolean()),
+        pageSize: t.Optional(PageSize100),
+        startModifiedTime: t.Optional(rfc3339()),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const comments = await paginateAll(
+        ctx,
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments`,
+        "comments",
+        {
+          fields: COMMENT_LIST_FIELDS,
+          includeDeleted: p.includeDeleted ?? false,
+          pageSize: p.pageSize,
+          startModifiedTime: p.startModifiedTime,
+        },
+      );
+      return { fileId: p.fileId, count: comments.length, comments };
+    },
+  });
+
+  rl.registerAction("comment.get", {
+    access: "read",
+    description: "Fetch a single comment (with its replies) by ID.",
+    inputSchema: t.Object(
+      { fileId: Id, commentId: Id, includeDeleted: t.Optional(t.Boolean()) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}`,
+        undefined,
+        { fields: COMMENT_FIELDS, includeDeleted: p.includeDeleted ?? false },
+      );
+    },
+  });
+
+  rl.registerAction("comment.create", {
+    access: "write",
+    description:
+      "Create a new top-level comment on a file. Pass quotedFileContent.value (and optionally mimeType) to anchor the comment to a specific snippet.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        content: NonEmptyString,
+        quotedFileContent: t.Optional(QuotedFileContent),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = { content: p.content };
+      if (p.quotedFileContent) body.quotedFileContent = p.quotedFileContent;
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments`,
+        body,
+        { fields: COMMENT_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("comment.update", {
+    access: "write",
+    description:
+      "Edit the content of an existing comment. Caller must be the author or have edit rights.",
+    inputSchema: t.Object(
+      { fileId: Id, commentId: Id, content: NonEmptyString },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}`,
+        { content: p.content },
+        { fields: COMMENT_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("comment.delete", {
+    access: "write",
+    description: "Soft-delete a comment.",
+    inputSchema: t.Object({ fileId: Id, commentId: Id }, STRICT),
+    async execute(p, ctx) {
+      await driveRequest(
+        ctx,
+        "DELETE",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  rl.registerAction("comment.resolve", {
+    access: "write",
+    description:
+      "Resolve a comment thread by posting a resolution reply. `resolved` on a Comment is computed from replies; this is the canonical way to mark a thread done.",
+    inputSchema: t.Object(
+      { fileId: Id, commentId: Id, content: t.Optional(NonEmptyString) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}/replies`,
+        { action: "resolve", content: p.content ?? "Resolved." },
+        { fields: REPLY_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("comment.reopen", {
+    access: "write",
+    description:
+      "Re-open a previously resolved comment by posting a reopen reply.",
+    inputSchema: t.Object(
+      { fileId: Id, commentId: Id, content: t.Optional(NonEmptyString) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}/replies`,
+        { action: "reopen", content: p.content ?? "Reopened." },
+        { fields: REPLY_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("reply.list", {
+    access: "read",
+    description: "List replies on a specific comment.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        commentId: Id,
+        includeDeleted: t.Optional(t.Boolean()),
+        pageSize: t.Optional(PageSize100),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const replies = await paginateAll(
+        ctx,
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}/replies`,
+        "replies",
+        {
+          fields: REPLY_LIST_FIELDS,
+          includeDeleted: p.includeDeleted ?? false,
+          pageSize: p.pageSize,
+        },
+      );
+      return {
+        fileId: p.fileId,
+        commentId: p.commentId,
+        count: replies.length,
+        replies,
+      };
+    },
+  });
+
+  rl.registerAction("reply.create", {
+    access: "write",
+    description:
+      "Post a reply to a comment. Pass action: 'resolve' | 'reopen' to also flip the comment state.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        commentId: Id,
+        content: NonEmptyString,
+        action: t.Optional(stringEnum(["resolve", "reopen"] as const)),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = { content: p.content };
+      if (p.action) body.action = p.action;
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}/replies`,
+        body,
+        { fields: REPLY_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("reply.update", {
+    access: "write",
+    description: "Edit the content of a reply.",
+    inputSchema: t.Object(
+      { fileId: Id, commentId: Id, replyId: Id, content: NonEmptyString },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}/replies/${pathSegment(p.replyId)}`,
+        { content: p.content },
+        { fields: REPLY_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("reply.delete", {
+    access: "write",
+    description: "Soft-delete a reply.",
+    inputSchema: t.Object({ fileId: Id, commentId: Id, replyId: Id }, STRICT),
+    async execute(p, ctx) {
+      await driveRequest(
+        ctx,
+        "DELETE",
+        `/drive/v3/files/${pathSegment(p.fileId)}/comments/${pathSegment(p.commentId)}/replies/${pathSegment(p.replyId)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  // ─── Revisions ──────────────────────────────────────────────────
+  //
+  // Drive retains prior bytes of every file. For Google-native docs
+  // that means snapshots of the doc state; for Office files (.docx,
+  // .xlsx, .pptx) it means the actual byte history. Exposing this
+  // matters because in-document review comments on Office files live
+  // *inside* the file bytes (`word/comments.xml`), not in Drive's
+  // `comments` resource. A call to `file.update({ contentPath })`
+  // silently destroys those comments; the only programmatic recovery
+  // path is reading prior revision bytes through these actions.
+  //
+  // Default retention is ~30 days / 100 revisions for Office files;
+  // set `keepForever: true` via `revision.update` on a known-good
+  // revision before any risky in-place update.
+
+  const REVISION_FIELDS =
+    "id,mimeType,modifiedTime,keepForever,originalFilename,size,md5Checksum," +
+    "lastModifyingUser(displayName,emailAddress)," +
+    "published,publishAuto,publishedOutsideDomain,publishedLink";
+  const REVISION_LIST_FIELDS = `kind,nextPageToken,revisions(${REVISION_FIELDS})`;
+
+  rl.registerAction("revision.list", {
+    access: "read",
+    description:
+      "List every revision Drive retains for a file, oldest first. For Office files the per-revision bytes are what `revision.download` returns.",
+    inputSchema: t.Object(
+      { fileId: Id, pageSize: t.Optional(PageSize1000) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const revisions = await paginateAll(
+        ctx,
+        `/drive/v3/files/${pathSegment(p.fileId)}/revisions`,
+        "revisions",
+        { fields: REVISION_LIST_FIELDS, pageSize: p.pageSize ?? 200 },
+      );
+      return { fileId: p.fileId, count: revisions.length, revisions };
+    },
+  });
+
+  rl.registerAction("revision.get", {
+    access: "read",
+    description: "Fetch metadata for a single revision.",
+    inputSchema: t.Object({ fileId: Id, revisionId: Id }, STRICT),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/files/${pathSegment(p.fileId)}/revisions/${pathSegment(p.revisionId)}`,
+        undefined,
+        { fields: REVISION_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("revision.download", {
+    access: "write",
+    description:
+      "Download the bytes of a specific revision. Pass savePath to write to disk and get back the path (any size); otherwise returns { contentBase64, mimeType, size } for revisions up to 64 MiB. This is the recovery path when an in-place file.update has overwritten in-document comments on an Office file.",
+    inputSchema: t.Object(
+      { fileId: Id, revisionId: Id, savePath: t.Optional(NonEmptyString) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const fileId = p.fileId;
+      const revisionId = p.revisionId;
+      const url = new URL(
+        `${API_BASE}/drive/v3/files/${pathSegment(fileId)}/revisions/${pathSegment(revisionId)}`,
+      );
+      url.searchParams.set("alt", "media");
+      const savePath = p.savePath;
+      const { size, bytes, headers } = await downloadMedia(
+        ctx,
+        url.toString(),
+        savePath,
+      );
+      const mimeType =
+        headers.get("content-type") ?? "application/octet-stream";
+      if (savePath !== undefined) {
+        return { fileId, revisionId, mimeType, size, savedTo: savePath };
+      }
+      return {
+        fileId,
+        revisionId,
+        mimeType,
+        size,
+        contentBase64: (bytes as Buffer).toString("base64"),
+      };
+    },
+  });
+
+  const revisionChanges = {
+    keepForever: t.Optional(t.Boolean()),
+    published: t.Optional(t.Boolean()),
+    publishAuto: t.Optional(t.Boolean()),
+    publishedOutsideDomain: t.Optional(t.Boolean()),
+  };
+  rl.registerAction("revision.update", {
+    access: "write",
+    description:
+      "Patch revision metadata. The most useful flag is keepForever — without it Drive can garbage-collect revisions after 30 days / 100 versions on Office files. Set keepForever=true on the head revision before any risky file.update so prior bytes are guaranteed recoverable.",
+    inputSchema: t.Object(
+      { fileId: Id, revisionId: Id, ...revisionChanges },
+      {
+        ...STRICT,
+        ...atLeastOne(revisionChanges),
+      },
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = {};
+      for (const k of [
+        "keepForever",
+        "published",
+        "publishAuto",
+        "publishedOutsideDomain",
+      ] as const) {
+        if (p[k] !== undefined) body[k] = p[k];
+      }
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${pathSegment(p.fileId)}/revisions/${pathSegment(p.revisionId)}`,
+        body,
+        { fields: REVISION_FIELDS },
+      );
+    },
+  });
+
+  rl.registerAction("revision.delete", {
+    access: "write",
+    description:
+      "Permanently delete a revision (head revision cannot be deleted).",
+    inputSchema: t.Object({ fileId: Id, revisionId: Id }, STRICT),
+    async execute(p, ctx) {
+      await driveRequest(
+        ctx,
+        "DELETE",
+        `/drive/v3/files/${pathSegment(p.fileId)}/revisions/${pathSegment(p.revisionId)}`,
+      );
+      return { success: true };
+    },
+  });
+
+  rl.registerAction("revision.restore", {
+    access: "write",
+    description:
+      "Restore an older revision as the head of the file. Downloads the revision bytes and re-uploads them so the head moves to that content. Drive's REST API has no native restore endpoint for binary files; this performs the equivalent. Returns the new head file resource.",
+    inputSchema: t.Object(
+      { fileId: Id, revisionId: Id, mimeType: t.Optional(NonEmptyString) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const fileId = p.fileId;
+      const revisionId = p.revisionId;
+      // 1. Pull the chosen revision's bytes into a scratch file, so a large
+      //    revision is never held whole in memory.
+      const scratch = await mkdtemp(join(tmpdir(), "codemode-drive-"));
+      try {
+        const contentPath = join(scratch, "revision");
+        const { headers } = await downloadMedia(
+          ctx,
+          `${API_BASE}/drive/v3/files/${pathSegment(fileId)}/revisions/${pathSegment(revisionId)}?alt=media`,
+          contentPath,
+        );
+        const mimeType =
+          p.mimeType ??
+          headers.get("content-type") ??
+          "application/octet-stream";
+
+        // 2. Send them as the new head of the same file.
+        const head = await uploadContent(
+          ctx,
+          { fileId, metadata: { mimeType } },
+          await resolveContent({ contentPath, mimeType }),
+          {
+            fields:
+              "id,name,mimeType,modifiedTime,size,headRevisionId,webViewLink",
+          },
+        );
+        return { fileId, restoredFromRevisionId: revisionId, head };
+      } finally {
+        await rm(scratch, { recursive: true, force: true });
+      }
+    },
+  });
+
+  // ─── Changes feed ───────────────────────────────────────────────
+  //
+  // Drive's change feed. Without these the agent has to poll comment.list
+  // per file. With them, a sensor can wake on any file change in the user's
+  // corpus or in a specific shared drive.
+
+  rl.registerAction("changes.getStartPageToken", {
+    access: "read",
+    description:
+      "Get the current Drive change-feed start page token. Use as the seed `pageToken` for the first `changes.list` call.",
+    inputSchema: t.Object(
+      {
+        driveId: t.Optional(Id),
+        supportsAllDrives: t.Optional(t.Boolean()),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(
+        ctx,
+        "GET",
+        `/drive/v3/changes/startPageToken`,
+        undefined,
+        {
+          driveId: p.driveId,
+          supportsAllDrives: p.supportsAllDrives ?? true,
+        },
+      );
+    },
+  });
+
+  rl.registerAction("changes.list", {
+    access: "read",
+    description:
+      "List changes to files and Shared Drives since the given `pageToken`. Returns `{ changes, newStartPageToken, nextPageToken? }`. Drive does not surface comment-level changes here — use this for file metadata/content changes; pair with comments.list for review activity.",
+    inputSchema: t.Object(
+      {
+        pageToken: NonEmptyString,
+        driveId: t.Optional(Id),
+        spaces: t.Optional(NonEmptyString),
+        includeRemoved: t.Optional(t.Boolean()),
+        includeItemsFromAllDrives: t.Optional(t.Boolean()),
+        supportsAllDrives: t.Optional(t.Boolean()),
+        restrictToMyDrive: t.Optional(t.Boolean()),
+        pageSize: t.Optional(PageSize1000),
+        fields: t.Optional(NonEmptyString),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      return driveRequest(ctx, "GET", `/drive/v3/changes`, undefined, {
+        pageToken: p.pageToken,
+        driveId: p.driveId,
+        spaces: p.spaces,
+        includeRemoved: p.includeRemoved,
+        includeItemsFromAllDrives: p.includeItemsFromAllDrives ?? true,
+        supportsAllDrives: p.supportsAllDrives ?? true,
+        restrictToMyDrive: p.restrictToMyDrive,
+        pageSize: p.pageSize ?? 100,
+        fields:
+          p.fields ??
+          "kind,nextPageToken,newStartPageToken,changes(kind,removed,fileId,driveId,changeType,time,file(id,name,mimeType,modifiedTime,trashed,parents))",
+      });
+    },
+  });
+
+  rl.registerAction("changes.watch", {
+    access: "write",
+    description:
+      "Subscribe to push notifications on the change feed. Drive will POST to `address` whenever a change in this corpus is recorded. Returns a channel resource; pair with `channels.stop` (`changes.stop`) when done.",
+    inputSchema: t.Object(
+      {
+        pageToken: NonEmptyString,
+        address: t.String({ pattern: "^https://" }),
+        channelId: t.Optional(Id),
+        token: t.Optional(t.String()),
+        expiration: t.Optional(t.Integer({ minimum: 0 })),
+        driveId: t.Optional(Id),
+        supportsAllDrives: t.Optional(t.Boolean()),
+        includeItemsFromAllDrives: t.Optional(t.Boolean()),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = {
+        id: p.channelId ?? randomUUID(),
+        type: "web_hook",
+        address: p.address,
+      };
+      if (p.token) body.token = p.token;
+      if (p.expiration) body.expiration = String(p.expiration);
+      return driveRequest(ctx, "POST", `/drive/v3/changes/watch`, body, {
+        pageToken: p.pageToken,
+        driveId: p.driveId,
+        supportsAllDrives: p.supportsAllDrives ?? true,
+        includeItemsFromAllDrives: p.includeItemsFromAllDrives ?? true,
+      });
+    },
+  });
+
+  rl.registerAction("changes.stop", {
+    access: "write",
+    description:
+      "Stop a previously-subscribed change channel. Pass the same `channelId` and `resourceId` returned by `changes.watch`.",
+    inputSchema: t.Object({ channelId: Id, resourceId: Id }, STRICT),
+    async execute(p, ctx) {
+      await driveRequest(ctx, "POST", `/drive/v3/channels/stop`, {
+        id: p.channelId,
+        resourceId: p.resourceId,
+      });
+      return { success: true };
+    },
+  });
+
+  // ─── Permission update ──────────────────────────────────────────
+  //
+  // Patch an existing permission. The bundled `file.share` creates a new
+  // permission, and `file.deletePermission` removes one — but to promote a
+  // commenter to writer (or expire a permission) without re-sharing, you
+  // need the PATCH endpoint.
+
+  rl.registerAction("permission.update", {
+    access: "write",
+    description:
+      "Patch an existing file/folder permission. Use to change the role on an existing share, set an expiration time, or transfer ownership.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        permissionId: Id,
+        role: t.Optional(PermissionRole),
+        expirationTime: t.Optional(rfc3339()),
+        transferOwnership: t.Optional(t.Boolean()),
+        removeExpiration: t.Optional(t.Boolean()),
+        useDomainAdminAccess: t.Optional(t.Boolean()),
+        supportsAllDrives: t.Optional(t.Boolean()),
+      },
+      {
+        ...STRICT,
+        anyOf: [
+          { required: ["role"] },
+          { required: ["expirationTime"] },
+          {
+            properties: { removeExpiration: { const: true } },
+            required: ["removeExpiration"],
+          },
+        ],
+      },
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = {};
+      if (p.role) body.role = p.role;
+      if (p.expirationTime) body.expirationTime = p.expirationTime;
+      const qs: Record<string, unknown> = {
+        supportsAllDrives: p.supportsAllDrives ?? true,
+      };
+      if (p.transferOwnership) qs.transferOwnership = true;
+      if (p.removeExpiration) qs.removeExpiration = true;
+      if (p.useDomainAdminAccess) qs.useDomainAdminAccess = true;
+      return driveRequest(
+        ctx,
+        "PATCH",
+        `/drive/v3/files/${pathSegment(p.fileId)}/permissions/${pathSegment(p.permissionId)}`,
+        body,
+        qs,
+      );
+    },
+  });
+
+  // ─── Access proposals ───────────────────────────────────────────
+  //
+  // Drive's "Request access" flow. When a user clicks "Request access" on a
+  // file they can't open, Drive records an access proposal which the file's
+  // owner can resolve (accept and grant, or deny). These actions let the
+  // agent triage and resolve those requests programmatically.
+
+  rl.registerAction("accessProposal.list", {
+    access: "read",
+    description: "List access proposals (Request-access entries) on a file.",
+    inputSchema: t.Object(
+      { fileId: Id, pageSize: t.Optional(PageSize100) },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const accessProposals = await paginateAll(
+        ctx,
+        `/drive/v3/files/${pathSegment(p.fileId)}/accessproposals`,
+        "accessProposals",
+        { pageSize: p.pageSize },
+      );
+      return {
+        fileId: p.fileId,
+        count: accessProposals.length,
+        accessProposals,
+      };
+    },
+  });
+
+  rl.registerAction("accessProposal.resolve", {
+    access: "write",
+    description:
+      "Resolve an access proposal. `action` is one of 'ACCEPT' or 'DENY'. When accepting, pass `role` (default 'reader') to grant.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        proposalId: Id,
+        action: stringEnum(["ACCEPT", "DENY"] as const),
+        role: t.Optional(AccessProposalRole),
+        view: t.Optional(NonEmptyString),
+        sendNotification: t.Optional(t.Boolean()),
+      },
+      {
+        ...STRICT,
+        oneOf: [
+          { properties: { action: { const: "ACCEPT" } } },
+          {
+            properties: { action: { const: "DENY" } },
+            not: { anyOf: [{ required: ["role"] }, { required: ["view"] }] },
+          },
+        ],
+      },
+    ),
+    async execute(p, ctx) {
+      const body: Record<string, unknown> = { action: p.action };
+      if (p.action === "ACCEPT") {
+        body.role = [p.role ?? "reader"];
+        if (p.view) body.view = p.view;
+      }
+      if (p.sendNotification !== undefined)
+        body.sendNotification = p.sendNotification;
+      return driveRequest(
+        ctx,
+        "POST",
+        `/drive/v3/files/${pathSegment(p.fileId)}/accessproposals/${pathSegment(p.proposalId)}:resolve`,
+        body,
+      );
+    },
+  });
+
+  // ─── About ───────────────────────────────────────────────────────
+
+  rl.registerAction("about.get", {
+    access: "read",
+    description:
+      "Current user info: storage quota, export formats, max upload size, importable mime types. Useful for healthchecks and conversion planning.",
+    inputSchema: t.Object({ fields: t.Optional(NonEmptyString) }, STRICT),
+    async execute(p, ctx) {
+      return driveRequest(ctx, "GET", `/drive/v3/about`, undefined, {
+        fields:
+          p.fields ??
+          "user(displayName,emailAddress,permissionId,photoLink),storageQuota,maxUploadSize,canCreateDrives,exportFormats,importFormats",
+      });
+    },
+  });
+
+  // ─── File export (ergonomic wrapper) ────────────────────────────
+
+  rl.registerAction("file.export", {
+    access: "write",
+    description:
+      "Export a Google-native file (Doc/Sheet/Slide/Drawing/Form) to a non-native mimeType. Wrapper around the export endpoint; pass `savePath` to write to disk and get the path back, otherwise returns base64.",
+    inputSchema: t.Object(
+      {
+        fileId: Id,
+        mimeType: NonEmptyString,
+        savePath: t.Optional(NonEmptyString),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const { bytes, contentType } = await exported(ctx, p.fileId, p.mimeType);
+      if (p.savePath !== undefined) {
+        writeFileSync(p.savePath, bytes);
+        return {
+          path: p.savePath,
+          mimeType: contentType,
+          size: bytes.byteLength,
+        };
+      }
+      return {
+        mimeType: contentType,
+        size: bytes.byteLength,
+        contentBase64: bytes.toString("base64"),
+      };
+    },
+  });
+
+  // ─── Raw file.list ──────────────────────────────────────────────
+
+  rl.registerAction("file.list", {
+    access: "read",
+    description:
+      "Raw Drive `files.list`. Pass Drive search-syntax `q` and any combination of corpora / driveId / spaces / orderBy. `fileFolder.search` is the friendlier wrapper; reach for `file.list` only when you need the unwrapped surface.",
+    inputSchema: t.Object(
+      {
+        q: t.Optional(t.String()),
+        corpora: t.Optional(
+          stringEnum(["user", "domain", "drive", "allDrives"] as const),
+        ),
+        driveId: t.Optional(Id),
+        spaces: t.Optional(NonEmptyString),
+        orderBy: t.Optional(NonEmptyString),
+        pageSize: t.Optional(PageSize1000),
+        pageToken: t.Optional(NonEmptyString),
+        includeItemsFromAllDrives: t.Optional(t.Boolean()),
+        supportsAllDrives: t.Optional(t.Boolean()),
+        fields: t.Optional(NonEmptyString),
+        returnAll: t.Optional(t.Boolean()),
+      },
+      STRICT,
+    ),
+    async execute(p, ctx) {
+      const baseQs: Record<string, unknown> = {
+        q: p.q,
+        corpora: p.corpora,
+        driveId: p.driveId,
+        spaces: p.spaces,
+        orderBy: p.orderBy,
+        pageSize: p.pageSize ?? 100,
+        includeItemsFromAllDrives: p.includeItemsFromAllDrives ?? true,
+        supportsAllDrives: p.supportsAllDrives ?? true,
+        fields:
+          p.fields ??
+          "kind,nextPageToken,files(id,name,mimeType,parents,modifiedTime,size,owners(emailAddress),driveId,webViewLink)",
+      };
+      if (p.returnAll) {
+        return paginateAll(ctx, "/drive/v3/files", "files", baseQs);
+      }
+      return driveRequest(ctx, "GET", `/drive/v3/files`, undefined, {
+        ...baseQs,
+        pageToken: p.pageToken,
+      });
+    },
+  });
+}

@@ -1,14 +1,14 @@
 # SDK
 
-The `runline` package embeds runline in a Node.js or Bun process. It provides the engine, plugin loading, connection storage, credential signing, and package management that the command-line interface uses.
+The `codemode` package embeds codemode in a Node.js or Bun process. It provides the engine, plugin loading, connection storage, credential signing, and package management that the command-line interface uses.
 
 Use the SDK when an application runs code for its own users or agents. The host supplies plugins and connections explicitly, so nothing is read from disk or the environment unless the host asks.
 
 ```typescript
-import { Runline, type RunlinePluginAPI } from "runline";
+import { Codemode, type CodemodePluginAPI } from "@shiftlabs/codemode";
 import * as t from "typebox";
 
-function greeter(rl: RunlinePluginAPI) {
+function greeter(rl: CodemodePluginAPI) {
   rl.setName("greeter");
   rl.setVersion("1.0.0");
   rl.registerAction("hello", {
@@ -19,15 +19,15 @@ function greeter(rl: RunlinePluginAPI) {
   });
 }
 
-const runline = Runline.create({ plugins: [greeter] });
+const codemode = Codemode.create({ plugins: [greeter] });
 
 try {
-  const { result, error, logs } = await runline.execute(
+  const { result, error, logs } = await codemode.execute(
     'return await greeter.hello({ name: "Ada" })',
   );
   console.log(error ?? result, logs);
 } finally {
-  runline.dispose();
+  codemode.dispose();
 }
 ```
 
@@ -35,7 +35,7 @@ This registers one plugin, keeps its connection in memory, and runs the code in 
 
 ## Instance lifecycle
 
-`Runline.create()` returns an instance that owns a plugin registry, a connection provider, and one pooled worker thread.
+`Codemode.create()` returns an instance that owns a plugin registry, a connection provider, and one pooled worker thread.
 
 | Option | Purpose |
 |---|---|
@@ -68,7 +68,7 @@ Pass `timeoutMs` or `memoryLimitBytes` to override the instance defaults for one
 Pass `context` to deliver a value to every action called during the run:
 
 ```typescript
-const outcome = await runline.execute(code, {
+const outcome = await codemode.execute(code, {
   context: { userId: "u_123" },
 });
 ```
@@ -79,31 +79,31 @@ Concurrent calls to `execute()` run in separate workers. See [Run Code](usage.md
 
 ## Load plugins
 
-Pass plugin functions directly when the host bundles them. To load the plugins that ship with runline, use `discoverPlugins()` and name the ones you want:
+Pass plugin functions directly when the host bundles them. To load the plugins that ship with codemode, use `discoverPlugins()` and name the ones you want:
 
 ```typescript
-import { discoverPlugins, Runline } from "runline";
+import { discoverPlugins, Codemode } from "@shiftlabs/codemode";
 
 const plugins = await discoverPlugins(null, {
   builtinAllowlist: new Set(["github", "slack"]),
 });
 
-const runline = Runline.create({
+const codemode = Codemode.create({
   plugins,
   connections: [{ name: "gh", plugin: "github", config: { token } }],
 });
 ```
 
-`discoverPlugins(configDir, options)` returns plugins from a project's `.runline` folder when one is given and trusted, from the user's `~/.runline/plugins/` folder, from configured packages when `packages` is supplied, and from the bundled set. Bundled plugins outside `builtinAllowlist` are not imported. Pass `userDir` to read a folder other than `~/.runline`.
+`discoverPlugins(configDir, options)` returns plugins from a project's `.codemode` folder when one is given and trusted, from the user's `~/.codemode/plugins/` folder, from configured packages when `packages` is supplied, and from the bundled set. Bundled plugins outside `builtinAllowlist` are not imported. Pass `userDir` to read a folder other than `~/.codemode`.
 
 Each discovered plugin carries `sourceInfo` with its module path, origin, scope, and owner. Plugins the host constructs itself have none.
 
 ## Load a project
 
-`Runline.fromProject(dir)` builds an instance from the nearest `.runline` folder at or above `dir`, as the command-line interface does. It returns `null` when there is none.
+`Codemode.fromProject(dir)` builds an instance from the nearest `.codemode` folder at or above `dir`, as the command-line interface does. It returns `null` when there is none.
 
 ```typescript
-const runline = await Runline.fromProject(process.cwd());
+const codemode = await Codemode.fromProject(process.cwd());
 ```
 
 It registers the project's plugin files and packages when the project is trusted, the user's plugins and packages, and the bundled plugins that the project's connections name. Connections are read from and written to the project's `config.json`. It never installs a missing package.
@@ -111,7 +111,7 @@ It registers the project's plugin files and packages when the project is trusted
 | Option | Purpose |
 |---|---|
 | `trust` | Decides whether the project's plugins and packages load. The default reads `trust.json` in `userDir` |
-| `userDir` | The user's runline folder. The default is `~/.runline` |
+| `userDir` | The user's codemode folder. The default is `~/.codemode` |
 | `packages` | A `PackageManager` to load packages with, or `false` to load none |
 
 See [Supply trust from a host](security.md#supply-trust-from-a-host).
@@ -121,7 +121,7 @@ See [Supply trust from a host](security.md#supply-trust-from-a-host).
 A `ConnectionProvider` resolves the connection for each action call. Implement one when connections live in the host's own storage or differ per user:
 
 ```typescript
-import type { ConnectionProvider } from "runline";
+import type { ConnectionProvider } from "@shiftlabs/codemode";
 
 const provider: ConnectionProvider = {
   async resolve({ plugin, context }) {
@@ -138,16 +138,16 @@ const provider: ConnectionProvider = {
   },
 };
 
-const runline = Runline.create({ plugins, connectionProvider: provider });
+const codemode = Codemode.create({ plugins, connectionProvider: provider });
 ```
 
-`resolve()` receives the plugin name, the action, the plugin's connection schema, the plugin's `owner`, and the run's `context`. Throw from it to refuse the call. Runline does not fall back to environment variables or files.
+`resolve()` receives the plugin name, the action, the plugin's connection schema, the plugin's `owner`, and the run's `context`. Throw from it to refuse the call. Codemode does not fall back to environment variables or files.
 
 The returned handle stays bound to one connection. `read()` returns a snapshot. `update()` applies a patch, or runs an updater function against freshly read config while holding ownership of the connection, and returns the committed snapshot. Plugins use it to store renewed tokens, so coordinate it across every writer that shares the storage.
 
 An optional `failed(error)` method on the handle is called once when an action that used the connection throws. Use it to mark a connection whose credential was refused.
 
-Return `owner` on a connection made for a plugin from a package. Runline refuses a connection whose owner differs from the plugin's. See [Understand names and connections](packages.md#understand-names-and-connections).
+Return `owner` on a connection made for a plugin from a package. Codemode refuses a connection whose owner differs from the plugin's. See [Understand names and connections](packages.md#understand-names-and-connections).
 
 `MemoryConnectionProvider` and `FileConnectionProvider` are the two built-in implementations. Only `FileConnectionProvider` fills missing fields from environment variables.
 
@@ -156,7 +156,7 @@ Return `owner` on a connection made for a plugin from a package. Runline refuses
 By default a plugin signs requests with the secret in its connection. A host that keeps secrets outside the process running plugin code passes `credentialBroker`:
 
 ```typescript
-const runline = Runline.create({
+const codemode = Codemode.create({
   plugins,
   connectionProvider: provider,
   credentialBroker: ({ plugin, action, context }) => ({
@@ -166,7 +166,7 @@ const runline = Runline.create({
 });
 ```
 
-Runline calls the function once per action call of a plugin that declares its credential and passes the result to the action as `ctx.credentials`. The plugin then sends every request through it, and its connection config holds public settings only.
+Codemode calls the function once per action call of a plugin that declares its credential and passes the result to the action as `ctx.credentials`. The plugin then sends every request through it, and its connection config holds public settings only.
 
 A broker follows these rules:
 
@@ -180,7 +180,7 @@ A broker follows these rules:
 `onAction` runs in the host process after each action's `execute` function settles:
 
 ```typescript
-const runline = Runline.create({
+const codemode = Codemode.create({
   plugins,
   onAction: ({ path, durationMs, error }) => {
     metrics.record(path, durationMs, error === undefined);
@@ -196,4 +196,4 @@ It receives `plugin`, `action`, `path`, `durationMs`, and `error` when the actio
 
 ## Understand the limits
 
-The SDK runs plugin code in the host process and calling code in a worker thread of the same process. Neither is isolated from the host. To run untrusted code, isolate the process that embeds runline. See [Security](security.md).
+The SDK runs plugin code in the host process and calling code in a worker thread of the same process. Neither is isolated from the host. To run untrusted code, isolate the process that embeds codemode. See [Security](security.md).

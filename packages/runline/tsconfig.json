@@ -1,20 +1,14 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext"],
     "target": "esnext",
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "moduleDetection": "force",
-    "outDir": "dist",
-    "rootDir": "src",
-    "declaration": true,
+    "noEmit": true,
     "strict": true,
-    "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "allowJs": true
+    "allowJs": true,
+    "checkJs": false,
+    "types": []
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist", "plugins", "src/tests"]
+  "include": ["index.d.ts", "utils/cli.d.ts"]
 }
