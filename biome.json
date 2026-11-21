@@ -185,7 +185,6 @@
       "!packages/codemode-plugins/together",
       "!packages/codemode-plugins/travisci",
       "!packages/codemode-plugins/trello",
-      "!packages/codemode-plugins/twake",
       "!packages/codemode-plugins/twilio",
       "!packages/codemode-plugins/twist",
       "!packages/codemode-plugins/twitter",
