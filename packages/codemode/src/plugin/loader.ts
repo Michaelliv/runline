@@ -70,7 +70,8 @@ const jiti = createJiti(import.meta.url, {
 });
 
 /** A plugin module importing this package under its runline name. */
-const IMPORTS_RUNLINE = /\bfrom\s+["']runline(?:\/[^"']*)?["']/;
+const IMPORTS_RUNLINE =
+  /(?:\bfrom\s+|\brequire\(\s*|\bimport\(\s*)["']runline(?:\/[^"']*)?["']/;
 
 /**
  * Load one plugin module. A `sourceInfo` the module declares is dropped:
@@ -94,10 +95,10 @@ export async function loadPluginFromPath(
     absPath = found;
   }
 
-  // Plugins may live outside the project/package tree. Load them
-  // through Codemode's module context so documented imports like
-  // `from "@shiftlabs/codemode"` work without requiring a node_modules folder next
-  // to the plugin file.
+  // Plugins may live outside the project/package tree. Load them through
+  // codemode's module context so documented imports like
+  // `from "@shiftlabs/codemode"` work without a node_modules folder next to
+  // the plugin file.
   if (IMPORTS_RUNLINE.test(readFileSync(absPath, "utf8")))
     legacyName(`import from "runline" (${absPath})`, `"${OWN_MODULE}"`);
   const mod = (await jiti.import(absPath)) as { default?: unknown } | unknown;

@@ -87,7 +87,7 @@ Codemode supplies these modules to every plugin from its own copy:
 - `@shiftlabs/codemode` and `@shiftlabs/codemode/utils/cli`
 - `typebox`, `typebox/value`, and `typebox/compile`
 
-Declare `codemode` and `typebox` in `peerDependencies` with a `"*"` range. Codemode does not install peers.
+Declare `@shiftlabs/codemode` and `typebox` in `peerDependencies` with a `"*"` range. Codemode does not install peers.
 
 Do not list them in `dependencies`. An installed copy gives the plugin its own credential transport and error classes, separate from the ones codemode uses, and codemode reports a warning when it finds one.
 

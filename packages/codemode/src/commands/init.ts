@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import chalk from "chalk";
+import { configDirIn } from "../config/loader.js";
 import { updateConnectionFile } from "../config/store.js";
 import { setProjectTrusted } from "../config/trust.js";
 import { DEFAULT_CONFIG } from "../config/types.js";
@@ -12,11 +13,14 @@ export async function init(options: {
 }): Promise<void> {
   const dir = join(process.cwd(), ".codemode");
 
-  if (existsSync(dir)) {
+  // A `.runline` folder here is this project already: a new folder beside
+  // it would be used in its place, hiding its connections and plugins.
+  const existing = configDirIn(process.cwd());
+  if (existing) {
     if (options.json) {
-      printJson({ ok: true, exists: true, path: dir });
+      printJson({ ok: true, exists: true, path: existing });
     } else if (!options.quiet) {
-      printWarn(`${chalk.bold(".codemode/")} already exists`);
+      printWarn(`${chalk.bold(`${basename(existing)}/`)} already exists`);
     }
     return;
   }

@@ -13,20 +13,20 @@ import { PackageError } from "./errors.js";
 
 const require = createRequire(import.meta.url);
 
+/** This package's name, as plugins import it. */
+export const OWN_MODULE = "@shiftlabs/codemode";
+
 /**
  * Modules codemode supplies to every plugin it loads, from its own copy. A
  * package lists their packages as peerDependencies, never as dependencies.
  */
 export const HOST_MODULE_SPECIFIERS = [
-  "@shiftlabs/codemode",
-  "@shiftlabs/codemode/utils/cli",
+  OWN_MODULE,
+  `${OWN_MODULE}/utils/cli`,
   "typebox",
   "typebox/value",
   "typebox/compile",
 ] as const;
-
-/** This package's name, as plugins import it. */
-export const OWN_MODULE = "@shiftlabs/codemode";
 
 /**
  * The runline module names a plugin may still import, and the entry point

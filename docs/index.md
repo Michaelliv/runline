@@ -6,7 +6,7 @@ Use codemode to give an agent access to services such as GitHub, Slack, or Strip
 
 ## Start using codemode
 
-New to codemode? Follow the [Quickstart](quickstart.md) to install it, add a connection, and run your first action.
+New to codemode? Follow the [Quickstart](quickstart.md) to install it, add a connection, and run your first action. Coming from runline? Follow [Migrate from runline](migrating-from-runline.md).
 
 If codemode is already installed, choose what you want to do:
 
@@ -28,8 +28,6 @@ If codemode is already installed, choose what you want to do:
 - Use [`pi-runline`](https://github.com/Michaelliv/pi-runline) to add it to Pi as a single tool.
 
 ## Find reference information
-
-Coming from runline? Follow [Migrate from runline](migrating-from-runline.md).
 
 Use the reference pages to look up [commands and options](cli.md), [files, settings, and environment variables](configuration.md), and the [credential helpers, fields, and error codes](credentials-reference.md).
 

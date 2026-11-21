@@ -1,6 +1,6 @@
 # SDK
 
-The `codemode` package embeds codemode in a Node.js or Bun process. It provides the engine, plugin loading, connection storage, credential signing, and package management that the command-line interface uses.
+The `@shiftlabs/codemode` package embeds codemode in a Node.js or Bun process. It provides the engine, plugin loading, connection storage, credential signing, and package management that the command-line interface uses.
 
 Use the SDK when an application runs code for its own users or agents. The host supplies plugins and connections explicitly, so nothing is read from disk or the environment unless the host asks.
 

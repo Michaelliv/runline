@@ -12,8 +12,11 @@ const CONFIG_DIR_NAME = ".codemode";
 const LEGACY_CONFIG_DIR_NAME = ".runline";
 const CONFIG_FILE = "config.json";
 
+/** What a codemode folder may be called: its name, and its runline name. */
+export const CONFIG_DIR_NAMES = [CONFIG_DIR_NAME, LEGACY_CONFIG_DIR_NAME];
+
 /** The codemode folder in `dir`: `.codemode`, else a `.runline` left to rename. */
-function configDirIn(dir: string): string | null {
+export function configDirIn(dir: string): string | null {
   const current = join(dir, CONFIG_DIR_NAME);
   if (existsSync(current)) return current;
   const legacy = join(dir, LEGACY_CONFIG_DIR_NAME);

@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { userConfigDir } from "./loader.js";
+import { CONFIG_DIR_NAMES, userConfigDir } from "./loader.js";
 
 /**
  * Project trust: whether a project's `.codemode` folder may contribute code,
@@ -44,13 +44,18 @@ export function isProjectTrusted(
   userDir: string = userConfigDir(),
 ): boolean {
   const trusted = trustedProjects(userDir);
-  const root = canonical(projectRoot);
-  if (trusted.includes(root)) return true;
-  // A `.runline` folder trusted before it was renamed is the same project.
-  return (
-    basename(root) === ".codemode" &&
-    trusted.includes(join(dirname(root), ".runline"))
-  );
+  return names(canonical(projectRoot)).some((name) => trusted.includes(name));
+}
+
+/**
+ * The paths a project folder is recorded under: its own, and for a
+ * `.codemode` folder the `.runline` beside it, which is the same project
+ * under its runline name.
+ */
+function names(root: string): string[] {
+  return basename(root) === CONFIG_DIR_NAMES[0]
+    ? [root, join(dirname(root), CONFIG_DIR_NAMES[1])]
+    : [root];
 }
 
 /** Record or withdraw trust in a project's `.codemode` folder. */
@@ -60,7 +65,8 @@ export function setProjectTrusted(
   userDir: string = userConfigDir(),
 ): void {
   const root = canonical(projectRoot);
-  const others = trustedProjects(userDir).filter((p) => p !== root);
+  const own = names(root);
+  const others = trustedProjects(userDir).filter((p) => !own.includes(p));
   mkdirSync(userDir, { recursive: true });
   writeFileSync(
     trustFile(userDir),

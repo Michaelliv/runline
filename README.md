@@ -59,10 +59,9 @@ Codemode loads a project's plugins and packages only after you trust the project
 
 Codemode is a Bun workspace with three packages. It was called runline through 0.45; see [Migrate from runline](docs/migrating-from-runline.md).
 
-
 | Package | Contents |
 |---|---|
-| [`packages/codemode`](packages/codemode) | The library and command-line interface, published as `codemode` |
+| [`packages/codemode`](packages/codemode) | The library and command-line interface, published as `@shiftlabs/codemode` |
 | [`packages/codemode-plugins`](packages/codemode-plugins) | The bundled plugins, built into codemode's `dist` |
 | [`packages/runline`](packages/runline) | The `runline` package on npm, which forwards to codemode until 0.48.0 |
 

@@ -1,7 +1,7 @@
 {
   "name": "@shiftlabs/codemode",
   "version": "0.46.0",
-  "description": "Code mode for agents \u2014 turn any API or command into a callable action",
+  "description": "Code mode for agents — turn any API or command into a callable action",
   "type": "module",
   "main": "dist/index.js",
   "exports": {

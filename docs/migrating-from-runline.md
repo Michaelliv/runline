@@ -71,4 +71,4 @@ A host that passes folders itself, through `userDir` or `PackageManager` roots, 
 
 ## Understand what did not move
 
-`pi-runline`, the Pi extension, keeps its name and lives at [Michaelliv/pi-runline](https://github.com/Michaelliv/pi-runline).
+`pi-runline`, the Pi extension, keeps its name and lives at [Michaelliv/pi-runline](https://github.com/Michaelliv/pi-runline). It runs runline 0.45 and reads only `.runline` folders, so keep a project's folder named `.runline` while you use the project from Pi.

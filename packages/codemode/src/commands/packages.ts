@@ -3,6 +3,8 @@ import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import {
+  CONFIG_DIR_NAMES,
+  configDirIn,
   findConfigDir,
   loadConfigFrom,
   userConfigDir,
@@ -286,12 +288,13 @@ export async function packageTrust(
   dir: string | undefined,
   options: { revoke?: boolean; json?: boolean },
 ): Promise<void> {
-  // Trust is recorded for a project's .codemode folder.
-  const target = dir
-    ? basename(resolve(dir)) === ".codemode"
+  // Trust is recorded for a project's .codemode folder, named itself or
+  // by the directory that holds it.
+  const target = !dir
+    ? findConfigDir()
+    : CONFIG_DIR_NAMES.includes(basename(resolve(dir)))
       ? resolve(dir)
-      : join(resolve(dir), ".codemode")
-    : findConfigDir();
+      : configDirIn(resolve(dir));
   if (!target || !existsSync(target))
     fail(new Error("No .codemode folder to trust here"), options.json);
   const path = resolve(target);

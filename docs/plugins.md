@@ -46,7 +46,7 @@ export default function weather(rl: CodemodePluginAPI) {
 }
 ```
 
-Codemode loads the file directly, with no build step. The imports of `codemode` and `typebox` resolve to the copies codemode itself uses, so the plugin folder needs no `node_modules`.
+Codemode loads the file directly, with no build step. The imports of `@shiftlabs/codemode` and `typebox` resolve to the copies codemode itself uses, so the plugin folder needs no `node_modules`.
 
 Call the action:
 

@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { setProjectTrusted } from "../config/trust.js";
+import { isProjectTrusted, setProjectTrusted } from "../config/trust.js";
 import { isPackageError, PackageError } from "../packages/errors.js";
 import {
   bundledPluginNames,
@@ -1025,6 +1025,11 @@ export default function (api: RunlinePluginAPI) {
       ["fromNew"],
     );
     rl?.dispose();
+
+    // Revoking the project withdraws the trust it held under either name.
+    setProjectTrusted(join(project, ".codemode"), false, userDir);
+    assert.equal(isProjectTrusted(join(project, ".codemode"), userDir), false);
+    assert.equal(isProjectTrusted(join(project, ".runline"), userDir), false);
   });
 
   it("supplies typebox to a package that has no node_modules of its own", async () => {
